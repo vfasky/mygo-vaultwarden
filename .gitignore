@@ -1,0 +1,14 @@
+.DS_Store
+build/
+.mygo/
+macos/.build/
+macos/.swiftpm/
+*.xcuserstate
+xcuserdata/
+*.provisionprofile
+*.mobileprovision
+.env
+.env.local
+
+# Local notes and signing configuration (never commit)
+/.local/

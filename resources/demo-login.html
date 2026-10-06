@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyGo Vaultwarden · 自动填充测试</title>
+<style>
+:root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+body { max-width: 440px; margin: 12vh auto; padding: 24px; line-height: 1.6; }
+h1 { font-size: 26px; } p { color: light-dark(#555, #bbb); }
+label { display: block; margin: 18px 0 6px; }
+input, button { box-sizing: border-box; width: 100%; padding: 12px; border: 1px solid #8886; border-radius: 9px; font: inherit; }
+button { margin-top: 24px; color: white; background: #3869d4; cursor: pointer; }
+output { display: block; margin-top: 20px; }
+</style>
+<h1>自动填充测试</h1>
+<p>在 Safari 中使用 MyGo Vaultwarden 填充下面的表单。这是本机演示，不会连接 Vaultwarden，也不会提交表单内容。</p>
+<form id="login" autocomplete="on">
+  <label for="username">用户名</label>
+  <input id="username" name="username" type="email" autocomplete="username" required>
+  <label for="password">密码</label>
+  <input id="password" name="password" type="password" autocomplete="current-password" required>
+  <button type="submit">检查填充结果</button>
+</form>
+<output id="result" aria-live="polite">等待填充。</output>
+<script>
+let expected;
+fetch('/demo-credentials.json').then(r => {
+  if (!r.ok) throw new Error('fixture unavailable');
+  return r.json();
+}).then(items => { expected = items[0]; }).catch(() => {
+  document.getElementById('result').textContent = '测试数据读取失败，请重新打开本机测试页。';
+});
+document.getElementById('login').addEventListener('submit', event => {
+  event.preventDefault();
+  const result = document.getElementById('result');
+  if (!expected) { result.textContent = '测试数据尚未就绪。'; return; }
+  const matches = document.getElementById('username').value === expected.username &&
+    document.getElementById('password').value === expected.password;
+  result.dataset.matched = String(matches);
+  result.textContent = matches
+    ? '用户名和密码与演示数据一致。请同时确认它们由 MyGo Vaultwarden 系统扩展填入。'
+    : '内容与演示数据不一致，请从 MyGo Vaultwarden 的自动填充候选重新选择。';
+});
+</script>
+</html>
