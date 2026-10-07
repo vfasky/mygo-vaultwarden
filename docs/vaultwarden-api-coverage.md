@@ -1,6 +1,6 @@
 # Vaultwarden API 覆盖矩阵
 
-**INCOMPLETE：整卡未完成，未达到验收。** 本轮已把个人密码库写入接入原生界面，并保存完整加密 sync 文档；不是完整 Vaultwarden API 产品。协调者已批准阶段提交后继续同一卡，禁止据此启动 Review 或合并。
+**INCOMPLETE：整卡未完成，未达到验收。** 本轮进一步接入文件夹、可核对部分结果的批量操作和完整四类自定义字段控件；不是完整 Vaultwarden API 产品。协调者已批准阶段提交后继续同一卡，禁止据此启动 Review 或合并。
 
 固定服务器 **Vaultwarden 1.37.4**：tag 对象 `54a40806c990da2def7acd5a3152edc530c59b79`，commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档 SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。字段加密参考 Bitwarden clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的 `libs/common/src/vault/models/domain/{bank-account,drivers-license,passport,login-uri}.ts`。本轮从固定 commit 的 raw URL 成功读取这四份文件，未换用 main。
 
@@ -12,14 +12,14 @@
 |---|---|---|---|
 | 全量同步 | GET `/api/sync`；query `excludeDomains` 尚未开放 | `SyncWithCheckpoint`、`VaultData`；sync/session 测试及真实回环 | 顶栏「同步」。保留服务器原始加密响应及未知区段；个人八类型列表与最小 Login 填充分离；组织数据只保存不解密 |
 | 新增 | POST `/api/ciphers`；`/create`、`/admin` 未实现 | `CreatePersonalCipher`、`NewPersonalCipher`；八类型独立随机 item key 测试和真实回环 | 在八种分类选择「新增」；默认所有项目新增 Login。type-2 字段加密，item key 由用户 key 包装；未知 section/custom/URI 扩展拒绝跨新 key 写入；SSH 三项不能为空 |
-| 更新 | PUT `/api/ciphers/{id}`；POST 同路径 / admin 别名未调用 | `UpdatePersonalCipher`、`EncryptCipherDocument`；八类型、未知扩展、大整数、自定义字段、历史和 URI checksum 测试 | 「查看与编辑」→「保存」。保留同 item key/FIDO2/未知扩展；必须个人、edit/viewPassword、无 reprompt、源 revision 合法。支持名称/备注/类型标准字符串、多 URI、TOTP 秘钥、文本及隐藏自定义字段；已有布尔/关联字段原样保留或显式删除，无完整编辑器 |
+| 更新 | PUT `/api/ciphers/{id}`；POST 同路径 / admin 别名未调用 | `UpdatePersonalCipher`、`EncryptCipherDocument`；八类型、未知扩展、大整数、自定义字段、历史和 URI checksum 测试 | 「查看与编辑」→「保存」。保留同 item key/FIDO2/未知扩展；必须个人、edit/viewPassword、无 reprompt、源 revision 合法。支持名称/备注/类型标准字符串、多 URI、TOTP 秘钥、文本/隐藏/布尔/关联自定义字段；关联目标按类型限定，未知关联ID/扩展与null值保留。reprompt再次验证仍缺 |
 | 收藏 / 文件夹 metadata | PUT `/api/ciphers/{id}/partial`，POST 别名 | `SetCipherPersonalMetadata`，最小请求体 httptest | 收藏已接入完整编辑保存；partial 接口尚未直接接 UI，文件夹列表/管理及编辑器文件夹选择已接入 |
 | 软删除 | PUT `/api/ciphers/{id}/delete` | `ChangeCipherState(CipherTrash)`；方法断言、真实回环 | 编辑页「移入回收站」→确认；不使用 POST 同路径 |
 | 恢复 | PUT `/api/ciphers/{id}/restore` | `CipherRestore`；真实回环 | 回收站打开项目→恢复 |
 | 永久删除 | DELETE `/api/ciphers/{id}`；POST `/api/ciphers/{id}/delete` 为永久删除别名 | `CipherDeletePermanently`；仅 DELETE 已测试 | 回收站打开项目→永久删除→不可恢复提示→确认；顶栏清空回收站只选deleted再确认批量删除 |
 | 归档 / 取消 | PUT `/api/ciphers/{id}/archive`、`/unarchive` | `CipherArchive/CipherUnarchive`；真实回环，归档排除 AutoFill | 编辑页归档按钮；侧栏归档分类；完整 PUT 保留原 `archivedDate` |
 | 分类 | 本地过滤认证后的完整库元数据 | `PersonalEntries`、`filteredItems`；headless 测试 | 八类型、收藏、归档、回收站；未知格式/reprompt显示受保护占位标题，不能解密编辑；不是虚假的空分类 |
-| 密码历史 / URI 完整性 | 更新体的 passwordHistory、passwordRevisionDate、uriChecksum | 自动保留旧密码，URI SHA256 Base64 再 type-2 加密；单元与真实回环 | 改密码/网址时维护；历史查看/删除、URI 匹配策略编辑未完成，原 match 保留，新 URI 使用默认规则 |
+| 密码历史 / URI 完整性 | 更新体的 passwordHistory、passwordRevisionDate、uriChecksum | 自动保留旧密码，URI SHA256 Base64 再 type-2 加密；单元与真实回环 | 改密码/网址时维护；历史显式显示/隐藏已接入，历史删除未完成。URI默认及0–5策略可编辑，未知策略保留；起始/正则匹配当前仅保存，不进入AutoFill |
 | 完整离线数据 | 本地 `VaultData{version:1,scope,sync:base64}` | Go Documents 校验、Swift `SnapshotPayload.vault`、bridge、迁移与 checkpoint 测试 | 完整原始 sync 仅放 AES-GCM payload；认证主应用解锁才返回；状态/AutoFill lease不返回。旧 payload 无 vault 时可解锁，下次成功同步迁移 |
 
 实际 Cipher 类型是 1 Login、2 SecureNote、3 Card、4 Identity、5 SSHKey、6 BankAccount、7 DriversLicense、8 Passport。逐字段加密名单来自固定客户端源码，未递归加密所有字符串。`encryptedFor` 是当前稳定账号 UUID。源 `lastKnownRevisionDate` 原样提交；服务端只有约一秒容差的旧版本检测，可能返回 400，并非严格 CAS。当前不轮换用户 key；源中的 `encryptedByKeyId` 若存在原样保留，尚无完整 keyId 生命周期/轮换流程。

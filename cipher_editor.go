@@ -18,27 +18,32 @@ type editorField struct {
 	secret            bool
 }
 type editorURI struct {
-	source map[string]any
-	value  string
+	source    map[string]any
+	value     string
+	showMatch bool
 }
 
 type editorCustom struct {
 	source           map[string]any
 	name, value      string
 	hidden, editable bool
+	kind             string
+	linkedID         json.Number
+	showLinks        bool
 }
 
 type cipherEditor struct {
-	document  vaultwarden.CipherDocument
-	fields    vaultwarden.CipherFields
-	inputs    []editorField
-	notes     string
-	uris      []editorURI
-	custom    []editorCustom
-	uncertain bool
-	saved     bool
-	revision  string
-	confirm   vaultwarden.CipherAction
+	document    vaultwarden.CipherDocument
+	fields      vaultwarden.CipherFields
+	inputs      []editorField
+	notes       string
+	uris        []editorURI
+	custom      []editorCustom
+	uncertain   bool
+	saved       bool
+	revision    string
+	confirm     vaultwarden.CipherAction
+	showHistory bool
 }
 
 var cipherTypeNames = []string{"", "登录", "安全笔记", "支付卡", "身份", "SSH 密钥", "银行账户", "驾驶证", "护照"}
@@ -97,6 +102,18 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 		items = append(items, displayCredential{ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, FolderID: e.FolderID})
 	}
 	a.vault, a.items, a.folders = vault, items, folders
+	if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
+		found := false
+		for _, folder := range folders {
+			if a.category == "folder:"+folder.ID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			a.category = "folder:"
+		}
+	}
 	return nil
 }
 func (a *app) openCipherEditor(id string, kind int) {
@@ -139,7 +156,8 @@ func (a *app) openCipherEditor(id string, kind int) {
 		name, _ := field["name"].(string)
 		value, _ := field["value"].(string)
 		kind, _ := field["type"].(json.Number)
-		editor.custom = append(editor.custom, editorCustom{source: field, name: name, value: value, hidden: kind == "1", editable: kind == "0" || kind == "1"})
+		linked, _ := field["linkedId"].(json.Number)
+		editor.custom = append(editor.custom, editorCustom{source: field, name: name, value: value, hidden: kind == "1", editable: kind == "0" || kind == "1" || kind == "2" || kind == "3", kind: string(kind), linkedID: linked})
 	}
 	if editor.fields.Notes != nil {
 		editor.notes = *editor.fields.Notes
@@ -191,6 +209,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 							remove = i
 						}
 					})
+					a.uriMatchPicker(c, uri, a.pending != 0 || e.uncertain)
 				}
 				if remove >= 0 {
 					e.uris = append(e.uris[:remove], e.uris[remove+1:]...)
@@ -213,10 +232,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				field := &e.custom[i]
 				ui.Column(c).Key(fmt.Sprintf("custom-%d", i)).Gap(6).Children(func() {
 					ui.TextInput(c, &field.name).Label("字段名称").Disabled(a.pending != 0 || e.uncertain || !field.editable)
-					value := ui.TextInput(c, &field.value).Label("字段内容").Disabled(a.pending != 0 || e.uncertain || !field.editable)
-					if field.hidden {
-						value.Password()
-					}
+					a.customValueEditor(c, e, field)
 					if action(c, "删除字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
 						removeCustom = i
 					}
@@ -227,12 +243,21 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			}
 			ui.Row(c).Gap(8).Children(func() {
 				if action(c, "添加文本字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
-					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("0")}, editable: true})
+					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("0")}, editable: true, kind: "0"})
 				}
 				if action(c, "添加隐藏字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
-					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("1")}, hidden: true, editable: true})
+					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("1")}, hidden: true, editable: true, kind: "1"})
 				}
 			})
+			ui.Row(c).Gap(8).Children(func() {
+				if action(c, "添加布尔字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
+					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("2")}, value: "false", editable: true, kind: "2"})
+				}
+				if len(linkedFields[e.fields.Type]) > 0 && action(c, "添加关联字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
+					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("3")}, editable: true, kind: "3", linkedID: linkedFields[e.fields.Type][0].id})
+				}
+			})
+			a.passwordHistoryView(c, e)
 			ui.Text(c, "备注").FontSize(12)
 			ui.TextArea(c, &e.notes).Label("备注").MinHeight(100).Disabled(a.pending != 0 || e.uncertain)
 			if e.uncertain {
@@ -308,42 +333,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 		return
 	}
 	editor := a.editor
-	for _, f := range editor.inputs {
-		section := sectionFields(&editor.fields)
-		previous, _ := section[f.key].(string)
-		if previous != f.value {
-			section[f.key] = f.value
-		}
-	}
-	if editor.fields.Type == 1 && (editor.fields.Login["uris"] != nil || len(editor.uris) > 0) {
-		uris := make([]any, 0, len(editor.uris))
-		for _, uri := range editor.uris {
-			source := map[string]any{}
-			for key, value := range uri.source {
-				source[key] = value
-			}
-			source["uri"] = uri.value
-			uris = append(uris, source)
-		}
-		editor.fields.Login["uris"] = uris
-	}
-	if editor.fields.Fields != nil || len(editor.custom) > 0 {
-		fields := make([]map[string]any, 0, len(editor.custom))
-		for _, field := range editor.custom {
-			source := map[string]any{}
-			for key, value := range field.source {
-				source[key] = value
-			}
-			if field.editable {
-				source["name"], source["value"] = field.name, field.value
-			}
-			fields = append(fields, source)
-		}
-		editor.fields.Fields = fields
-	}
-	if editor.fields.Notes != nil || editor.notes != "" {
-		editor.fields.Notes = &editor.notes
-	}
+	editor.applyInputs()
 	scope, prior := *a.liveScope, a.snapshot
 	a.epoch++
 	epoch := a.epoch

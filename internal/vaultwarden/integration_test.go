@@ -160,7 +160,9 @@ func TestLiveVaultwarden(t *testing.T) {
 					}
 					fields.Name = "Updated " + fields.Name
 					fields.Fields[0]["value"] = "updated custom value"
+					fields.Fields = append(fields.Fields, map[string]any{"name": "fixture boolean", "value": "true", "type": json.Number("2")})
 					if kind == 1 {
+						fields.Fields = append(fields.Fields, map[string]any{"name": "fixture linked", "value": nil, "type": json.Number("3"), "linkedId": json.Number("101")})
 						fields.Login["password"] = "updated fixture password"
 						fields.Login["uris"] = []any{map[string]any{"uri": "https://example.invalid/", "match": 0}}
 					}
@@ -174,6 +176,12 @@ func TestLiveVaultwarden(t *testing.T) {
 					}
 					if verified.Fields[0]["value"] != "updated custom value" {
 						t.Fatal("custom field update lost")
+					}
+					if verified.Fields[1]["value"] != "true" || verified.Fields[1]["type"] != json.Number("2") {
+						t.Fatal("boolean custom field lost")
+					}
+					if kind == 1 && (verified.Fields[2]["linkedId"] != json.Number("101") || verified.Fields[2]["value"] != nil) {
+						t.Fatal("linked field lost")
 					}
 					if kind == 1 && (len(verified.PasswordHistory) != 1 || verified.PasswordHistory[0]["password"] != "initial fixture password" || verified.Login["uris"].([]any)[0].(map[string]any)["uriChecksum"] == nil) {
 						t.Fatal("password history or URI checksum lost")
