@@ -74,7 +74,7 @@ func TestPersonalSecretCopyRejectsStaleLockedAndBusyUI(t *testing.T) {
 		})
 	}
 }
-func TestRepromptEditorRequiresPasswordAndExpires(t *testing.T) {
+func repromptUIFixture(t *testing.T) (*app, *vaultwarden.Session) {
 	a := secretUIFixture(t)
 	var raw map[string]any
 	_ = json.Unmarshal(a.vault.Sync, &raw)
@@ -96,6 +96,11 @@ func TestRepromptEditorRequiresPasswordAndExpires(t *testing.T) {
 	}
 	a.session.Close()
 	a.session = session
+	return a, session
+}
+
+func TestRepromptEditorRequiresPasswordAndExpires(t *testing.T) {
+	a, session := repromptUIFixture(t)
 	a.openCipherEditor("login-1", 1)
 	if a.editor == nil || a.editor.repromptID != "login-1" || a.editor.fields.Name != "" {
 		t.Fatal("reauthentication bypass")

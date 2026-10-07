@@ -3,12 +3,55 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
+
+func TestCipherComparisonRepromptNeedsLatestGrant(t *testing.T) {
+	a, s := repromptUIFixture(t)
+	a.openCipherEditor("login-1", 1)
+	grant, err := s.AuthorizePersonalItem(context.Background(), a.vault, a.sessionRevision, "login-1", []byte("fixture-master"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.openCipherEditorAuthorized("login-1", 1, grant)
+	e := a.editor
+	e.fields.Name = "protected draft"
+	publishComparisonFixture(t, a, func(o map[string]any) { o["futureExtension"] = "remote" })
+	a.compareCipher(nil)
+	if !e.compareAuthorization || e.repromptID != "login-1" || e.comparison != nil || e.authorization != nil || e.fields.Name != "protected draft" {
+		t.Fatal("missing fresh auth form")
+	}
+	a.compareCipher(grant)
+	if e.comparison != nil {
+		t.Fatal("old grant accepted")
+	}
+	fresh, err := s.AuthorizePersonalItem(context.Background(), a.vault, a.sessionRevision, "login-1", []byte("fixture-master"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.compareCipher(fresh)
+	if e.comparison == nil || e.repromptID != "" || e.authorization != fresh || e.fields.Name != "protected draft" {
+		t.Fatal("fresh auth lost draft", a.status)
+	}
+	e.localChoices["name"] = true
+	a.applyCipherComparison(true)
+	if e.fields.Name != "protected draft" || e.authorization != fresh || e.fields.Reprompt != 1 || e.revision != a.sessionRevision || a.pending != 0 {
+		t.Fatal("new draft lost protected authority")
+	}
+	// A second server conflict keeps this new draft and disables repeat save.
+	a.pending = 1
+	_, cancel := context.WithCancel(context.Background())
+	a.completeCipherMutation(a.epoch, e, nil, storageReply{}, vaultwarden.ErrConflict, cancel)
+	a.saveCipher()
+	if !e.conflict || e.fields.Name != "protected draft" || a.pending != 0 {
+		t.Fatal("second conflict dispatched or lost draft")
+	}
+}
 
 func publishComparisonFixture(t *testing.T, a *app, mutate func(map[string]any)) {
 	t.Helper()

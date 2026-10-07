@@ -47,8 +47,8 @@ func cipherEditableValues(f CipherFields) map[string]any {
 }
 
 // ComparePersonalCipher never performs network IO. Call after a successful full
-// sync, binding its authenticated revision. Even if reprompt was removed remotely,
-// comparing a formerly protected draft requires fresh authorization of the item.
+// sync, binding its authenticated revision. Protected drafts require fresh
+// authorization of the latest item; a changed reprompt policy blocks rebasing.
 func (s *Session) ComparePersonalCipher(vault *VaultData, revision string, base CipherDocument, draft CipherFields, grant *ItemAuthorization) (*CipherRebase, []CipherChange, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

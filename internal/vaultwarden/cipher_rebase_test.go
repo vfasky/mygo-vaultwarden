@@ -238,7 +238,10 @@ func TestCipherRebaseConcurrentArraysRetainRemoteExtensions(t *testing.T) {
 	draft.Login["uris"] = []any{}
 	remote := rebaseRemote(t, base, key, func(o map[string]any) {
 		o["fields"].([]any)[0].(map[string]any)["future"] = "opaque"
-		o["login"].(map[string]any)["uris"].([]any)[0].(map[string]any)["future"] = "opaque URI"
+		uris := o["login"].(map[string]any)["uris"].([]any)
+		uris[0].(map[string]any)["future"] = "opaque URI"
+		o["login"].(map[string]any)["uris"] = append(uris, map[string]any{"uri": "https://remote-new.example.invalid", "future": "new opaque URI"})
+		o["fields"] = append(o["fields"].([]any), map[string]any{"name": "remote-added", "value": "new secret", "type": json.Number("1"), "future": "new opaque field"})
 	})
 	vault := rebaseVault(t, s, remote)
 	_ = s.BindSnapshotRevision(vault.Scope, "new")

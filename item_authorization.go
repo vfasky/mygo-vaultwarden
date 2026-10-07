@@ -55,6 +55,7 @@ func (a *app) authorizePersonalItem() {
 			defer cancel()
 			a.pending--
 			if a.epoch != epoch {
+				*e = cipherEditor{}
 				return
 			}
 			a.cancel = nil
@@ -62,7 +63,11 @@ func (a *app) authorizePersonalItem() {
 				a.status = err.Error()
 				return
 			}
-			if !a.sessionOwnsSnapshot() || a.sessionRevision != revision || a.editor != e || ctx.Err() != nil {
+			if a.editor != e {
+				*e = cipherEditor{}
+				return
+			}
+			if !a.sessionOwnsSnapshot() || a.sessionRevision != revision || ctx.Err() != nil {
 				return
 			}
 			if e.compareAuthorization {
