@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -72,7 +71,25 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 	permission := func(ro, hp bool) map[string]any {
 		return map[string]any{"id": collectionID, "readOnly": ro, "hidePasswords": hp, "manage": false}
 	}
-	request("POST", "/users/invite", map[string]any{"emails": []string{member.email}, "groups": []string{}, "type": 2, "collections": []any{permission(false, false)}})
+	ownerDirectory := func() (*VaultData, *MemberDirectory) {
+		synced, err := owner.Sync(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := owner.BindSnapshotRevision(synced.Scope, "member-management-"+fixtureUUID()); err != nil {
+			t.Fatal(err)
+		}
+		directory, err := owner.OrganizationMembers(ctx, synced.Vault, orgID, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return synced.Vault, directory
+	}
+	ownerVault, directory := ownerDirectory()
+	if err := owner.InviteOrganizationMember(ctx, ownerVault, directory, member.email, 2, nil); err != nil {
+		t.Fatal(err)
+	}
+	directory.Close()
 	accepted, err := member.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -99,11 +116,43 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 	if memberID == "" {
 		t.Fatal("member missing")
 	}
-	wrapped, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, public, orgKey, nil)
+	ownerVault, directory = ownerDirectory()
+	proof, err := owner.PrepareMemberConfirmation(ctx, ownerVault, directory, memberID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request("POST", "/users/"+memberID+"/confirm", map[string]any{"key": "3." + base64.StdEncoding.EncodeToString(wrapped)})
+	trustedDER, _ := x509.MarshalPKIXPublicKey(public)
+	trustedSPKI := base64.StdEncoding.EncodeToString(trustedDER)
+	if proof.PublicKey() != trustedSPKI {
+		t.Fatal("recipient key mismatch")
+	}
+	if err := owner.ConfirmOrganizationMember(ctx, ownerVault, proof, trustedSPKI, nil); err != nil {
+		t.Fatal(err)
+	}
+	proof.Close()
+	directory.Close()
+	ownerVault, directory = ownerDirectory()
+	collectionDraft, err := owner.CollectionDetails(ctx, ownerVault, orgID, collectionID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	accessDraft, err := owner.CollectionAccessDetails(ctx, ownerVault, collectionDraft, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range accessDraft.Access {
+		if accessDraft.Access[i].ID == memberID {
+			accessDraft.Access[i].Assigned = true
+			accessDraft.Access[i].ReadOnly = false
+			accessDraft.Access[i].HidePasswords = false
+		}
+	}
+	if err := owner.SaveCollection(ctx, ownerVault, accessDraft, func(SessionCheckpoint) error { return nil }, nil); err != nil {
+		t.Fatal(err)
+	}
+	collectionDraft.Close()
+	accessDraft.Close()
+	directory.Close()
 	sync, err := member.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -147,8 +196,49 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 	for key := range managerPermissions {
 		managerPermissions[key] = true
 	}
-	request("PUT", "/users/"+memberID, map[string]any{"type": 4, "permissions": managerPermissions, "groups": []string{}, "collections": []any{managerCollection}})
+	var retainedGroup struct{ ID string }
+	_ = json.Unmarshal(request("POST", "/groups", map[string]any{"name": "Retained membership group", "accessAll": false, "users": []string{memberID}, "collections": []any{}}), &retainedGroup)
+	if retainedGroup.ID == "" {
+		t.Fatal("group fixture")
+	}
+	ownerVault, directory = ownerDirectory()
+	roleDraft, err := owner.PrepareMemberRole(ctx, ownerVault, directory, memberID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	roleDraft.Role, roleDraft.ManageAllCollections = 4, true
+	consent := roleDraft.ConfirmCollectionReset()
+	if err := owner.SaveMemberRole(ctx, ownerVault, roleDraft, consent, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	consent.Close()
+	roleDraft.Close()
+	directory.Close()
 	testLiveCollections(t, ctx, member, managerSync.Scope, orgID)
+	ownerVault, directory = ownerDirectory()
+	roleDraft, err = owner.PrepareMemberRole(ctx, ownerVault, directory, memberID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roleDraft.collections) != 0 || len(roleDraft.groups) != 1 || roleDraft.groups[0] != retainedGroup.ID {
+		t.Fatal("access-all reset or group retention mismatch")
+	}
+	roleDraft.Role, roleDraft.ManageAllCollections = 2, false
+	if err = owner.SaveMemberRole(ctx, ownerVault, roleDraft, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	roleDraft.Close()
+	directory.Close()
+	ownerVault, directory = ownerDirectory()
+	roleDraft, err = owner.PrepareMemberRole(ctx, ownerVault, directory, memberID, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(roleDraft.collections) != 0 || len(roleDraft.groups) != 1 {
+		t.Fatal("downgrade invented old assignments")
+	}
+	roleDraft.Close()
+	directory.Close()
 	request("PUT", "/users/"+memberID, map[string]any{"type": 2, "groups": []string{}, "collections": []any{permission(false, false)}})
 	memberSync, err := member.Sync(ctx)
 	if err != nil {
@@ -252,7 +342,11 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 			t.Fatal("collection removal retained AutoFill")
 		}
 	}
-	request("PUT", "/users/"+memberID+"/revoke", nil)
+	ownerVault, directory = ownerDirectory()
+	if err := owner.ChangeOrganizationMember(ctx, ownerVault, directory, memberID, "revoke", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	directory.Close()
 	sync, err = member.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -266,7 +360,11 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 			t.Fatal("revoked projection resurrected")
 		}
 	}
-	request("PUT", "/users/"+memberID+"/restore", nil)
+	ownerVault, directory = ownerDirectory()
+	if err := owner.ChangeOrganizationMember(ctx, ownerVault, directory, memberID, "restore", nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	directory.Close()
 	sync, err = member.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)

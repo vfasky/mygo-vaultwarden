@@ -347,7 +347,7 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 					}
 				}
 				sectionLabel(c, "组织")
-				if navItem(c, "创建组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
+				if navItem(c, "创建或加入组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
 					a.openOrganizationEditor("")
 				}
 				if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {

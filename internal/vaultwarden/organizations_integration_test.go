@@ -131,6 +131,7 @@ func testLiveOrganizations(t *testing.T, ctx context.Context, s *Session, scope 
 		t.Fatal("authorized organization Login projection missing")
 	}
 	testLiveOrganizationMemberPermissions(t, ctx, s, org.ID, collections[0].ID, fields.ID, key)
+	testLiveMemberLifecycle(t, ctx, s, org.ID)
 	sync, err = s.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)

@@ -15,11 +15,22 @@ type organizationEditor struct {
 	owner, loaded, uncertain, isolated                            bool
 	collectionID                                                  string
 	collectionDraft                                               *vaultwarden.CollectionDraft
+	members                                                       *vaultwarden.MemberDirectory
+	memberProof                                                   *vaultwarden.MemberConfirmation
+	memberRole                                                    *vaultwarden.MemberRoleDraft
+	memberRoleConsent                                             *vaultwarden.MemberRoleConsent
+	memberID, inviteEmail, verifiedSPKI                           string
+	invitationLink, accountPublicKey                              string
+	inviteRole                                                    int
 }
 
 func (a *app) clearOrganizationEditor() {
 	if a.organizationEditor != nil {
 		a.organizationEditor.collectionDraft.Close()
+		a.organizationEditor.members.Close()
+		a.organizationEditor.memberProof.Close()
+		a.organizationEditor.memberRole.Close()
+		a.organizationEditor.memberRoleConsent.Close()
 		*a.organizationEditor = organizationEditor{}
 		a.organizationEditor = nil
 		a.secretInputVersion++
@@ -107,6 +118,9 @@ func (a *app) organizationEditorView(c *ui.Context) {
 			ui.Text(c, title).FontSize(23)
 			ui.Text(c, "同步会关闭此表单。组织名称与账单邮箱由服务器明文保存，集合名称端到端加密。").MaxLines(3)
 			disabled := a.pending != 0 || e.uncertain
+			if e.id == "" {
+				a.memberInvitationView(c, e, disabled)
+			}
 			if e.owner {
 				ui.TextInput(c, &e.name).Label("组织名称").Disabled(disabled || !e.loaded)
 				ui.TextInput(c, &e.email).Label("账单邮箱").Disabled(disabled || !e.loaded)
@@ -131,6 +145,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 			}
 			if e.id != "" && !e.isolated {
 				a.collectionManagementView(c, e, disabled)
+				a.memberManagementView(c, e, disabled)
 				if e.confirmation == "" {
 					if action(c, "退出组织", "", false, disabled).Key("organization-leave").Clicked() {
 						e.confirmation = "leave"
@@ -178,7 +193,7 @@ func (a *app) runOrganizationManagement(operation string) {
 	if a.pending != 0 || e == nil || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision || a.vault == nil {
 		return
 	}
-	if operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && operation != "collection-access" {
+	if operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) {
 		return
 	}
 	if (operation == "leave" || operation == "delete") && (e.confirmation != operation || e.id == "") {
@@ -205,12 +220,23 @@ func (a *app) runOrganizationManagement(operation string) {
 	if operation == "collection-save" && e.collectionDraft != nil && e.collectionDraft.AccessChanged() && e.confirmation != "collection-access-save" {
 		return
 	}
+	if memberManagementOperation(operation) && !a.validMemberOperation(e, operation) {
+		return
+	}
 	collectionID := e.collectionID
 	session, ok := a.session.(*vaultwarden.Session)
 	if !ok {
 		return
 	}
 	collectionDraft := e.collectionDraft.Clone()
+	members, memberProof := e.members.Clone(), e.memberProof.Clone()
+	memberRole := e.memberRole.Clone()
+	memberRoleConsent := e.memberRoleConsent.Clone()
+	memberID, inviteEmail, inviteRole, verifiedSPKI := e.memberID, e.inviteEmail, e.inviteRole, e.verifiedSPKI
+	invitationLink := e.invitationLink
+	if operation == "member-accept" {
+		e.invitationLink = ""
+	}
 	id, settings, vault := e.id, vaultwarden.OrganizationSettings{Name: e.name, BillingEmail: e.email, CollectionName: e.collection}, a.vault
 	password := []byte(e.password)
 	e.password = ""
@@ -225,6 +251,13 @@ func (a *app) runOrganizationManagement(operation string) {
 	go func() {
 		defer clear(password)
 		defer collectionDraft.Close()
+		defer members.Close()
+		defer memberProof.Close()
+		defer memberRole.Close()
+		defer memberRoleConsent.Close()
+		var loadedRole *vaultwarden.MemberRoleDraft
+		var loadedMembers *vaultwarden.MemberDirectory
+		var loadedProof *vaultwarden.MemberConfirmation
 		var loadedCollection *vaultwarden.CollectionDraft
 		var reply storageReply
 		var checkpoint *snapshotStatus
@@ -266,6 +299,22 @@ func (a *app) runOrganizationManagement(operation string) {
 			err = vaultwarden.ErrConflict
 		} else {
 			switch operation {
+			case "member-role-load":
+				loadedRole, err = session.PrepareMemberRole(ctx, vault, members, memberID, persist)
+			case "member-role-save":
+				err = session.SaveMemberRole(ctx, vault, memberRole, memberRoleConsent, isolate, persist)
+			case "member-accept":
+				err = session.AcceptOrganizationInvitation(ctx, vault, invitationLink, persist)
+			case "member-load":
+				loadedMembers, err = session.OrganizationMembers(ctx, vault, id, persist)
+			case "member-invite":
+				err = session.InviteOrganizationMember(ctx, vault, members, inviteEmail, inviteRole, persist)
+			case "member-prepare":
+				loadedProof, err = session.PrepareMemberConfirmation(ctx, vault, members, memberID, persist)
+			case "member-confirm":
+				err = session.ConfirmOrganizationMember(ctx, vault, memberProof, verifiedSPKI, persist)
+			case "member-reinvite", "member-revoke", "member-restore", "member-remove":
+				err = session.ChangeOrganizationMember(ctx, vault, members, memberID, operation[len("member-"):], isolate, persist)
 			case "collection-load":
 				loadedCollection, err = session.CollectionDetails(ctx, vault, id, collectionID, persist)
 			case "collection-access":
@@ -332,6 +381,35 @@ func (a *app) runOrganizationManagement(operation string) {
 				}
 			}
 			a.completeOrganizationManagement(epoch, e, operation, result, checkpoint, reply, err, cancel)
+			if loadedRole != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil {
+					e.memberRole.Close()
+					e.memberRole = loadedRole
+					a.status = "已加载成员角色及完整直接分配"
+				} else {
+					loadedRole.Close()
+				}
+			}
+			if loadedMembers != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil {
+					e.members.Close()
+					e.members = loadedMembers
+					e.inviteRole = 2
+					a.status = "成员列表已加载"
+				} else {
+					loadedMembers.Close()
+				}
+			}
+			if loadedProof != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil {
+					e.memberProof.Close()
+					e.memberProof = loadedProof
+					e.verifiedSPKI = ""
+					a.status = "请与受邀人通过可信渠道核验完整公钥"
+				} else {
+					loadedProof.Close()
+				}
+			}
 			if loadedCollection != nil {
 				if a.epoch == epoch && a.organizationEditor == e && err == nil {
 					e.collectionDraft.Close()
@@ -350,6 +428,10 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 	a.pending--
 	if a.epoch != epoch {
 		e.collectionDraft.Close()
+		e.members.Close()
+		e.memberProof.Close()
+		e.memberRole.Close()
+		e.memberRoleConsent.Close()
 		*e = organizationEditor{}
 		return
 	}
@@ -360,6 +442,11 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		return
 	}
 	if err != nil {
+		if operation == "member-role-save" {
+			e.memberRoleConsent.Close()
+			e.memberRoleConsent = nil
+			e.confirmation = ""
+		}
 		var unknown *vaultwarden.MutationUncertainError
 		e.uncertain = errors.As(err, &unknown)
 		a.syncFailed(reply, err)
@@ -373,7 +460,7 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		}
 		return
 	}
-	if operation == "collection-load" || operation == "collection-access" {
+	if operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
 		return
 	}
 	if operation == "restore" {
