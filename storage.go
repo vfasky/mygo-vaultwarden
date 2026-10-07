@@ -11,38 +11,43 @@ import (
 var errSnapshotTooLarge = errors.New("snapshot bridge size limit")
 
 type snapshotStatus struct {
-	Revision       string                            `json:"revision"`
-	Available      bool                              `json:"available"`
-	Count          int                               `json:"count"`
-	IndexPending   bool                              `json:"indexPending"`
-	CleanupPending bool                              `json:"cleanupPending"`
-	SnapshotID     string                            `json:"snapshotID,omitempty"`
-	Scope          *vaultwarden.Scope                `json:"scope,omitempty"`
-	UpdatedAt      int64                             `json:"updatedAt,omitempty"`
-	PasswordUnlock *vaultwarden.PasswordUnlockConfig `json:"passwordUnlock,omitempty"`
+	RecoveryPending bool                              `json:"recoveryPending"`
+	Revision        string                            `json:"revision"`
+	Available       bool                              `json:"available"`
+	Count           int                               `json:"count"`
+	IndexPending    bool                              `json:"indexPending"`
+	CleanupPending  bool                              `json:"cleanupPending"`
+	SnapshotID      string                            `json:"snapshotID,omitempty"`
+	Scope           *vaultwarden.Scope                `json:"scope,omitempty"`
+	UpdatedAt       int64                             `json:"updatedAt,omitempty"`
+	PasswordUnlock  *vaultwarden.PasswordUnlockConfig `json:"passwordUnlock,omitempty"`
 }
 
 type storageRequest struct {
-	ClearingPolicy   *vaultwarden.PendingPolicyMutation `json:"clearingPolicy,omitempty"`
-	PendingPolicy    *vaultwarden.PendingPolicyMutation `json:"pendingPolicy,omitempty"`
-	OrganizationID   string                             `json:"organizationID,omitempty"`
-	Operation        string                             `json:"operation"`
-	ExpectedRevision string                             `json:"expectedRevision,omitempty"`
-	Credentials      []vaultwarden.Credential           `json:"credentials"`
-	Scope            *vaultwarden.Scope                 `json:"scope,omitempty"`
-	PasswordUnlock   *vaultwarden.PasswordUnlock        `json:"passwordUnlock,omitempty"`
-	UnlockKey        []byte                             `json:"unlockKey,omitempty"`
-	Session          []byte                             `json:"session,omitempty"`
-	Vault            *vaultwarden.VaultData             `json:"vault,omitempty"`
-	Secret           string                             `json:"secret,omitempty"`
-	SecretProtocol   int                                `json:"secretProtocol,omitempty"`
-	SecretNotAfter   int64                              `json:"secretNotAfter,omitempty"`
+	RecoveryBinding    *accountRecoveryBinding            `json:"recoveryBinding,omitempty"`
+	RecoveryRecord     []byte                             `json:"recoveryRecord,omitempty"`
+	RecoveryPhase      string                             `json:"recoveryPhase,omitempty"`
+	RecoveryResolution *accountRecoveryResolution         `json:"recoveryResolution,omitempty"`
+	ClearingPolicy     *vaultwarden.PendingPolicyMutation `json:"clearingPolicy,omitempty"`
+	PendingPolicy      *vaultwarden.PendingPolicyMutation `json:"pendingPolicy,omitempty"`
+	OrganizationID     string                             `json:"organizationID,omitempty"`
+	Operation          string                             `json:"operation"`
+	ExpectedRevision   string                             `json:"expectedRevision,omitempty"`
+	Credentials        []vaultwarden.Credential           `json:"credentials"`
+	Scope              *vaultwarden.Scope                 `json:"scope,omitempty"`
+	PasswordUnlock     *vaultwarden.PasswordUnlock        `json:"passwordUnlock,omitempty"`
+	UnlockKey          []byte                             `json:"unlockKey,omitempty"`
+	Session            []byte                             `json:"session,omitempty"`
+	Vault              *vaultwarden.VaultData             `json:"vault,omitempty"`
+	Secret             string                             `json:"secret,omitempty"`
+	SecretProtocol     int                                `json:"secretProtocol,omitempty"`
+	SecretNotAfter     int64                              `json:"secretNotAfter,omitempty"`
 }
 
 // A zero-result sync is an explicit replacement, never an absent field.
 func (r storageRequest) MarshalJSON() ([]byte, error) {
 	type wireRequest storageRequest
-	if (r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess" || r.Operation == "restorePolicyAccess") && r.Credentials == nil {
+	if (r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess" || r.Operation == "restorePolicyAccess" || r.Operation == "accountRecoveryResolve") && r.Credentials == nil {
 		r.Credentials = []vaultwarden.Credential{}
 	}
 	return json.Marshal(wireRequest(r))
@@ -71,15 +76,16 @@ type displayCredential struct {
 }
 
 type storageReply struct {
-	OK        bool                   `json:"ok"`
-	Code      string                 `json:"code"`
-	Message   string                 `json:"message"`
-	State     *snapshotStatus        `json:"state,omitempty"`
-	Items     []displayCredential    `json:"items,omitempty"`
-	Truncated bool                   `json:"truncated,omitempty"`
-	DeviceID  string                 `json:"deviceID,omitempty"`
-	Session   []byte                 `json:"session,omitempty"`
-	Vault     *vaultwarden.VaultData `json:"vault,omitempty"`
+	Recovery  *accountRecoveryJournal `json:"recovery,omitempty"`
+	OK        bool                    `json:"ok"`
+	Code      string                  `json:"code"`
+	Message   string                  `json:"message"`
+	State     *snapshotStatus         `json:"state,omitempty"`
+	Items     []displayCredential     `json:"items,omitempty"`
+	Truncated bool                    `json:"truncated,omitempty"`
+	DeviceID  string                  `json:"deviceID,omitempty"`
+	Session   []byte                  `json:"session,omitempty"`
+	Vault     *vaultwarden.VaultData  `json:"vault,omitempty"`
 }
 
 func callStorage(request storageRequest) storageReply {

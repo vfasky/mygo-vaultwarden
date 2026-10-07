@@ -43,6 +43,7 @@ final class SnapshotStore {
         return try files.locked {
             var prior = try files.read()
             guard prior.revision == expected else { throw SnapshotError.stale }
+            guard prior.snapshot?.header.format != 2 else { throw SnapshotError.busy }
             if let existing = prior.snapshot, existing.header.scope != scope { throw SnapshotError.wrongScope }
             var vault = vault
             if clearingPolicy != nil && prior.snapshot?.passwordUnlock == nil { throw SnapshotError.invalidInput }
@@ -134,6 +135,7 @@ final class SnapshotStore {
             var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
             defer { key.resetBytes(in: 0..<key.count) }
             let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
+            guard payload.accountRecovery == nil else { throw SnapshotError.busy }
             guard var vault = payload.vault, let config = snapshot.passwordUnlock?.config else { throw SnapshotError.invalidInput }
             let object = try JSONSerialization.jsonObject(with: vault.sync) as? [String: Any]
             let profile = object?["profile"] as? [String: Any]
@@ -165,6 +167,7 @@ final class SnapshotStore {
         var key = try keys.read(id: encrypted.header.keyID, context: context, allowUI: allowUI)
         defer { key.resetBytes(in: 0..<key.count) }
         let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
+        guard payload.accountRecovery == nil else { throw SnapshotError.busy }
         let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
                                   expiresAt: clock() + 60, credentials: payload.safeCandidates, session: includeSession ? payload.session : nil,
                                   vault: includeSession ? payload.vault : nil)
@@ -182,6 +185,7 @@ final class SnapshotStore {
         var key = try unwrapSnapshotKey(encrypted, unlockKey: unlockKey)
         defer { key.resetBytes(in: 0..<key.count) }
         let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
+        guard payload.accountRecovery == nil else { throw SnapshotError.busy }
         let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
                                   expiresAt: clock() + 60, credentials: payload.safeCandidates, session: payload.session, vault: payload.vault)
         try withCurrentLease(lease) {}
@@ -201,6 +205,7 @@ final class SnapshotStore {
             var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
             defer { key.resetBytes(in: 0..<key.count) }
             let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
+            guard payload.accountRecovery == nil else { throw SnapshotError.busy }
             state.snapshot = try replacingSnapshotSession(snapshot, key: key, session: session)
             state.revision = UUID().uuidString
             try files.write(state)
@@ -216,6 +221,7 @@ final class SnapshotStore {
             guard current.revision == lease.revision, !current.signedOut,
                   current.snapshot?.header.id == lease.header.id,
                   current.snapshot?.header.scope == lease.header.scope else { throw SnapshotError.stale }
+            guard current.snapshot?.header.format != 2 || lease.recoveryOnly else { throw SnapshotError.busy }
             guard clock() < lease.expiresAt else { throw SnapshotError.expired }
             return try body()
         }
@@ -238,6 +244,7 @@ final class SnapshotStore {
         try files.locked {
             var state = try files.read()
             guard state.revision == expected else { throw SnapshotError.stale }
+            guard state.snapshot?.header.format != 2 else { throw SnapshotError.busy }
             if let keyID = state.snapshot?.header.keyID { state.retiredKeys.append(keyID) }
             state.snapshot = nil
             state.signedOut = true
@@ -260,6 +267,138 @@ final class SnapshotStore {
             try keys.delete(id: id)
             state.retiredKeys.removeAll { $0 == id }
             try files.write(state)
+        }
+    }
+
+    // Account mutations have their own authenticated transaction. No ordinary
+    // publication/checkpoint/logout can discard this record, including after lock.
+    func accountRecovery(operation: String, scope: SnapshotScope, expected: String, unlockKey: Data,
+                         binding: AccountRecoveryBinding?, record: Data? = nil, phase: String? = nil,
+                         resolution: AccountRecoveryResolution? = nil, credentials: [VaultCredential]? = nil,
+                         material: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil) throws -> (SnapshotLease, AccountRecoveryJournal?) {
+        defer { changed() }
+        return try files.locked {
+            var state = try files.read()
+            guard state.revision == expected else { throw SnapshotError.stale }
+            guard let snapshot = state.snapshot, !state.signedOut else { throw SnapshotError.unavailable }
+            guard snapshot.header.scope == scope else { throw SnapshotError.wrongScope }
+            var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
+            defer { key.resetBytes(in: 0..<key.count) }
+            let old = try openSnapshotPayload(snapshot, key: key, scope: scope)
+            guard let config = snapshot.passwordUnlock?.config else { throw SnapshotError.invalidInput }
+            let oldMaterial = PasswordUnlockMaterial(config: config, key: unlockKey)
+            var journal = old.accountRecovery
+            var nextCredentials: [VaultCredential] = []
+            var nextSession = old.session
+            var nextVault = old.vault
+            var nextMaterial = oldMaterial
+            if operation == "accountRecoveryBegin" {
+                guard journal == nil, let binding, binding.oldRevision == expected, let record else { throw SnapshotError.stale }
+                let proposed = AccountRecoveryJournal(version: 1, binding: binding, record: record, phase: "prepared")
+                try proposed.validate(scope: scope)
+                let original = try proposed.decodeRecord()
+                let originalVault = try snapshotDecode(VaultData.self, from: original.oldVault)
+                guard original.oldUnlock.config == config, original.oldUnlock.key == unlockKey,
+                      original.oldSession == old.session, let priorVault = old.vault,
+                      originalVault.scope == priorVault.scope, originalVault.version == priorVault.version,
+                      originalVault.sync == priorVault.sync,
+                      (originalVault.quarantinedOrganizations ?? []) == (priorVault.quarantinedOrganizations ?? []),
+                      (originalVault.pendingPolicyMutations ?? []) == (priorVault.pendingPolicyMutations ?? []) else { throw SnapshotError.invalidInput }
+                // Reject extensions on the outer VaultData that this writer cannot
+                // preserve; opaque sync and recovery record bytes remain verbatim.
+                let object = try JSONSerialization.jsonObject(with: original.oldVault) as? [String: Any]
+                guard let object, Set(object.keys).isSubset(of: ["version", "scope", "sync", "pendingPolicyMutations", "quarantinedOrganizations"]) else { throw SnapshotError.invalidInput }
+                journal = proposed
+            } else {
+                guard let existing = journal else { throw SnapshotError.unavailable }
+                if let binding { guard binding == existing.binding else { throw SnapshotError.stale } }
+                else if operation != "accountRecoveryQuery" { throw SnapshotError.invalidInput }
+                switch operation {
+                case "accountRecoveryQuery":
+                    let lease = SnapshotLease(revision: state.revision, header: snapshot.header, expiresAt: clock() + 60, credentials: [], recoveryOnly: true)
+                    return (lease, existing)
+                case "accountRecoveryResult":
+                    guard let phase, ["unknown", "confirmed", "not-dispatched"].contains(phase),
+                          existing.phase == "prepared" || existing.phase == phase else { throw SnapshotError.invalidInput }
+                    journal!.phase = phase
+                case "accountRecoveryCheckpoint":
+                    guard let session else { throw SnapshotError.invalidInput }
+                    try validateSessionData(session)
+                    // Keep the original old session; new login refreshes are a
+                    // separate encrypted recovery checkpoint and grant no lease.
+                    journal!.checkpoint = session
+                case "accountRecoveryResolve":
+                    guard let resolution, resolution.binding == existing.binding,
+                          resolution.userConfirmed, resolution.authorityVerified else { throw SnapshotError.invalidInput }
+                    let original = try existing.decodeRecord()
+                    if resolution.mode == "delete" {
+                        guard original.kind == "delete", existing.phase == "confirmed" else { throw SnapshotError.invalidInput }
+                        state.snapshot = nil
+                        state.signedOut = true
+                        state.revision = UUID().uuidString
+                        state.retiredKeys.append(snapshot.header.keyID)
+                        try files.write(state)
+                        try? cleanupLocked(&state)
+                        // Tombstone receipt is bound by revision by the bridge.
+                        return (SnapshotLease(revision: state.revision, header: snapshot.header, expiresAt: clock() + 60, credentials: []), nil)
+                    }
+                    guard resolution.mode == "verified", resolution.resourcesVerified,
+                          let vault, let material, let session, let credentials,
+                          resolution.vaultHash == recoveryDigest(vault.sync) else { throw SnapshotError.invalidInput }
+                    try vault.validate(scope: scope)
+                    try validateSessionData(session)
+                    guard material.config.valid, material.key.count == 32 else { throw SnapshotError.invalidInput }
+                    // Dedicated recovery is not an organization/policy recovery.
+                    // Preserve all unrelated local restrictions exactly.
+                    var merged = vault
+                    merged.quarantinedOrganizations = Array(Set((old.vault?.quarantinedOrganizations ?? []) + (vault.quarantinedOrganizations ?? []))).sorted()
+                    var pending = vault.pendingPolicyMutations ?? []
+                    for item in old.vault?.pendingPolicyMutations ?? [] {
+                        if let same = pending.first(where: { $0.organizationId == item.organizationId }) {
+                            guard same == item else { throw SnapshotError.invalidInput }
+                        } else { pending.append(item) }
+                    }
+                    merged.pendingPolicyMutations = pending
+                    merged.version = pending.isEmpty ? 1 : 2
+                    try merged.validate(scope: scope)
+                    nextVault = merged
+                    nextSession = session
+                    nextMaterial = material
+                    nextCredentials = scope == .demo ? try merged.excludingQuarantined(credentials) : merged.policyCandidates(credentials)
+                    journal = nil
+                default: throw SnapshotError.invalidInput
+                }
+            }
+            // One atomic envelope replacement activates the barrier together with
+            // its materials. No keychain write or second journal write precedes it.
+            var keyID = snapshot.header.keyID
+            if journal == nil {
+                // Track the new key before creation. Until the final replacement
+                // is committed, every failure still leaves the recovery barrier.
+                try cleanupLocked(&state)
+                guard state.retiredKeys.count < 500 else { throw SnapshotError.busy }
+                keyID = UUID().uuidString
+                key.resetBytes(in: 0..<key.count)
+                let status = key.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+                guard status == errSecSuccess else { throw SnapshotError.keychain(status) }
+                state.retiredKeys.append(keyID)
+                state.revision = UUID().uuidString
+                try files.write(state)
+                try keys.create(id: keyID, key: key)
+            }
+            let replacement = try sealSnapshot(credentials: nextCredentials, scope: scope,
+                keyID: keyID, key: key, passwordUnlock: nextMaterial,
+                session: nextSession, vault: nextVault, accountRecovery: journal)
+            state.snapshot = replacement
+            state.revision = UUID().uuidString
+            if journal == nil {
+                state.retiredKeys.removeAll { $0 == keyID }
+                state.retiredKeys.append(snapshot.header.keyID)
+            }
+            try files.write(state)
+            if journal == nil { try? cleanupLocked(&state) }
+            return (SnapshotLease(revision: state.revision, header: replacement.header, expiresAt: clock() + 60,
+                credentials: nextCredentials, vault: journal == nil ? nextVault : nil, recoveryOnly: journal != nil), journal)
         }
     }
 

@@ -122,7 +122,9 @@ struct SnapshotPayload: Codable {
     var session: Data? = nil
     // Absent on legacy Login-only snapshots; a successful sync migrates them.
     var vault: VaultData? = nil
+    var accountRecovery: AccountRecoveryJournal? = nil
     var safeCandidates: [VaultCredential] {
+        if accountRecovery != nil { return [] }
         if scope == .demo { return credentials }
         return vault?.policyCandidates(credentials) ?? []
     }
@@ -144,7 +146,7 @@ struct SnapshotState: Codable {
               Set(retiredKeys).count == retiredKeys.count else { throw SnapshotError.corrupt }
         if snapshot == nil && !signedOut { throw SnapshotError.corrupt }
         if let snapshot {
-            guard !signedOut, snapshot.header.format == 1,
+            guard !signedOut, [1, 2].contains(snapshot.header.format),
                   UUID(uuidString: snapshot.header.id) != nil,
                   UUID(uuidString: snapshot.header.keyID) != nil,
                   !retiredKeys.contains(snapshot.header.keyID),
@@ -167,6 +169,7 @@ struct SnapshotLease {
     // Only authenticated main-app unlocks opt in; AutoFill leases omit it.
     var session: Data? = nil
     var vault: VaultData? = nil
+    var recoveryOnly = false
 }
 
 enum SnapshotError: Error, Equatable {
@@ -233,15 +236,16 @@ func validateCredentials(_ credentials: [VaultCredential]) throws {
 }
 
 func sealSnapshot(credentials: [VaultCredential], scope: SnapshotScope, keyID: String, key: Data,
-                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil) throws -> EncryptedSnapshot {
+                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil,
+                  accountRecovery: AccountRecoveryJournal? = nil) throws -> EncryptedSnapshot {
     try validateCredentials(credentials)
     try validateSessionData(session)
     try vault?.validate(scope: scope)
     guard key.count == 32 else { throw SnapshotError.corrupt }
     // Round the timestamp before using the header as authenticated data.
     let now = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970))
-    let header = SnapshotHeader(format: 1, id: UUID().uuidString, keyID: keyID, scope: scope, createdAt: now, count: credentials.count)
-    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session, vault: vault))
+    let header = SnapshotHeader(format: accountRecovery == nil ? 1 : 2, id: UUID().uuidString, keyID: keyID, scope: scope, createdAt: now, count: credentials.count)
+    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session, vault: vault, accountRecovery: accountRecovery))
     guard plaintext.count <= SnapshotTransfer.maximumBytes else { throw SnapshotError.invalidInput }
     let box = try AES.GCM.seal(plaintext, using: SymmetricKey(data: key), authenticating: snapshotJSON(header))
     guard let combined = box.combined else { throw SnapshotError.corrupt }
@@ -275,6 +279,7 @@ func validateSessionData(_ session: Data?) throws {
 func replacingSnapshotSession(_ snapshot: EncryptedSnapshot, key: Data, session: Data) throws -> EncryptedSnapshot {
     try validateSessionData(session)
     var payload = try openSnapshotPayload(snapshot, key: key, scope: snapshot.header.scope)
+    guard payload.accountRecovery == nil else { throw SnapshotError.busy }
     payload.session = session
     let box = try AES.GCM.seal(snapshotJSON(payload), using: SymmetricKey(data: key), authenticating: snapshotJSON(snapshot.header))
     guard let combined = box.combined else { throw SnapshotError.corrupt }
@@ -293,7 +298,20 @@ func openSnapshotPayload(_ snapshot: EncryptedSnapshot, key: Data, scope: Snapsh
     do {
         let box = try AES.GCM.SealedBox(combined: snapshot.sealed)
         let data = try AES.GCM.open(box, using: SymmetricKey(data: key), authenticating: snapshotJSON(snapshot.header))
+        // Unknown envelope fields must never be silently discarded by a writer.
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(object.keys).isSubset(of: ["scope", "credentials", "session", "vault", "accountRecovery"]) else { throw SnapshotError.corrupt }
+        if let vaultObject = object["vault"] as? [String: Any] {
+            guard Set(vaultObject.keys).isSubset(of: ["version", "scope", "sync", "pendingPolicyMutations", "quarantinedOrganizations"]) else { throw SnapshotError.corrupt }
+        }
+        if let journalObject = object["accountRecovery"] as? [String: Any] {
+            guard Set(journalObject.keys).isSubset(of: ["version", "binding", "record", "phase", "checkpoint"]),
+                  let binding = journalObject["binding"] as? [String: Any],
+                  Set(binding.keys) == Set(["operationId", "oldRevision", "epoch", "recordHash"]) else { throw SnapshotError.corrupt }
+        }
         let payload = try snapshotDecode(SnapshotPayload.self, from: data)
+        guard (snapshot.header.format == 2) == (payload.accountRecovery != nil) else { throw SnapshotError.corrupt }
+        if let journal = payload.accountRecovery { try journal.validate(scope: scope) }
         guard payload.scope == scope, payload.credentials.count == snapshot.header.count else { throw SnapshotError.corrupt }
         try validateCredentials(payload.credentials)
         try validateSessionData(payload.session)

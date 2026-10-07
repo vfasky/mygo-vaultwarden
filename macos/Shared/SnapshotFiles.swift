@@ -89,7 +89,11 @@ final class SnapshotFiles {
         }
         guard fsync(fd) == 0, rename(temp.path, stateURL.path) == 0 else { throw SnapshotError.configuration }
         let directoryFD = Darwin.open(directory.path, O_RDONLY | O_CLOEXEC)
-        if directoryFD >= 0 { _ = fsync(directoryFD); Darwin.close(directoryFD) }
+        guard directoryFD >= 0 else { throw SnapshotError.configuration }
+        defer { Darwin.close(directoryFD) }
+        // A failed post-rename fsync is an unknown commit, never a durable
+        // success. Recovery callers query the same operation and do not POST.
+        guard fsync(directoryFD) == 0 else { throw SnapshotError.configuration }
     }
 }
 
