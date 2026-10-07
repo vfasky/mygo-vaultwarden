@@ -38,6 +38,35 @@ func clickUI(t *testing.T, tt *ui.Tester, label string) {
 	}
 }
 
+func TestDumpAlignment(t *testing.T) {
+	a := previewApp()
+	tt := ui.NewTester(a.view, 1280, 820)
+	tt.SetTitleBar(ui.TitleBar{Height: 52, Left: 88})
+	for _, s := range []string{"折叠侧栏", "所有项目", "8", "我的密码库", "登录", "只读", "可同步", "同步", "锁定"} {
+		if r, ok := tt.Find(s); ok {
+			t.Logf("%q x=%.1f y=%.1f w=%.1f h=%.1f cy=%.1f", s, r.X, r.Y, r.W, r.H, r.Y+r.H/2)
+		} else {
+			t.Logf("%q missing", s)
+		}
+	}
+	dir := os.Getenv("TMPDIR")
+	if dir == "" {
+		dir = t.TempDir()
+	}
+	path := filepath.Join(dir, "align-dump.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, tt.Image()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(path)
+}
+
 func TestVaultSidebarToggle(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1060, 700)
