@@ -67,7 +67,20 @@ func (c *Client) request(ctx context.Context, method, endpoint, contentType, bod
 		return 0, nil, ErrCancelled
 	}
 	u := *c.base
-	u.Path += endpoint
+	relative, err := url.Parse(endpoint)
+	if err != nil || !strings.HasPrefix(endpoint, "/") || relative.IsAbs() || relative.Host != "" || relative.User != nil || relative.Fragment != "" || relative.RawPath != "" || strings.Contains(relative.Path, "\\") {
+		return 0, nil, ErrProtocol
+	}
+	for _, segment := range strings.Split(relative.Path, "/") {
+		if segment == "." || segment == ".." {
+			return 0, nil, ErrProtocol
+		}
+	}
+	if _, err := url.ParseQuery(relative.RawQuery); err != nil {
+		return 0, nil, ErrProtocol
+	}
+	u.Path += relative.Path
+	u.RawQuery = relative.RawQuery
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), strings.NewReader(body))
 	if err != nil {
 		return 0, nil, ErrProtocol

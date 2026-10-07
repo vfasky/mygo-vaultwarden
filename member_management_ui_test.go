@@ -3,6 +3,7 @@ package main
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"testing"
 )
 
@@ -27,8 +28,12 @@ func TestMemberNativeAdminEntryAndInvitationConfirmation(t *testing.T) {
 	}
 	a.organizationEditor.invitationLink = "https://fixture.invalid/#/accept-organization/?token=sensitive"
 	tt.Frame()
-	clickUI(t, tt, "接受此邀请")
-	if a.pending != 0 || a.organizationEditor.confirmation != "member-accept" || !tt.HasText("确认接受邀请") {
+	if !tt.HasText("核验邀请策略") || tt.HasText("确认接受邀请") {
+		t.Fatal("accept appeared before policy read")
+	}
+	a.organizationEditor.invitationAcceptance = &vaultwarden.InvitationAcceptance{}
+	tt.Frame()
+	if a.pending != 0 || !tt.HasText("确认接受邀请") {
 		t.Fatal("accept omitted consent")
 	}
 	clickUI(t, tt, "取消接受邀请")
@@ -59,6 +64,10 @@ func TestMemberOperationsRequireExplicitConfirmationAndCurrentScope(t *testing.T
 		t.Fatal("accept without consent")
 	}
 	e.confirmation = "member-accept"
+	if a.validMemberOperation(e, "member-accept") {
+		t.Fatal("accept without policy draft")
+	}
+	e.invitationAcceptance = &vaultwarden.InvitationAcceptance{}
 	if !a.validMemberOperation(e, "member-accept") {
 		t.Fatal("explicit acceptance rejected")
 	}

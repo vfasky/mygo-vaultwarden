@@ -21,11 +21,14 @@ type organizationEditor struct {
 	memberRoleConsent                                             *vaultwarden.MemberRoleConsent
 	memberID, inviteEmail, verifiedSPKI                           string
 	invitationLink, accountPublicKey                              string
+	invitationAcceptance                                          *vaultwarden.InvitationAcceptance
+	trustedRecoveryKey, organizationRecoveryKey                   string
 	inviteRole                                                    int
 }
 
 func (a *app) clearOrganizationEditor() {
 	if a.organizationEditor != nil {
+		a.organizationEditor.invitationAcceptance.Close()
 		a.organizationEditor.collectionDraft.Close()
 		a.organizationEditor.members.Close()
 		a.organizationEditor.memberProof.Close()
@@ -144,6 +147,9 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				}
 			}
 			if e.id != "" && !e.isolated {
+				if e.owner {
+					a.organizationRecoveryKeyView(c, e, disabled)
+				}
 				a.collectionManagementView(c, e, disabled)
 				a.memberManagementView(c, e, disabled)
 				if e.confirmation == "" {
@@ -193,7 +199,10 @@ func (a *app) runOrganizationManagement(operation string) {
 	if a.pending != 0 || e == nil || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision || a.vault == nil {
 		return
 	}
-	if operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) {
+	if operation != "recovery-key-load" && operation != "recovery-key-create" && operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) {
+		return
+	}
+	if (operation == "recovery-key-load" || operation == "recovery-key-create") && (!e.owner || e.id == "" || (operation == "recovery-key-create" && e.confirmation != operation)) {
 		return
 	}
 	if (operation == "leave" || operation == "delete") && (e.confirmation != operation || e.id == "") {
@@ -234,6 +243,8 @@ func (a *app) runOrganizationManagement(operation string) {
 	memberRoleConsent := e.memberRoleConsent.Clone()
 	memberID, inviteEmail, inviteRole, verifiedSPKI := e.memberID, e.inviteEmail, e.inviteRole, e.verifiedSPKI
 	invitationLink := e.invitationLink
+	invitationAcceptance := e.invitationAcceptance.Clone()
+	trustedRecoveryKey := e.trustedRecoveryKey
 	if operation == "member-accept" {
 		e.invitationLink = ""
 	}
@@ -249,12 +260,15 @@ func (a *app) runOrganizationManagement(operation string) {
 	a.pending++
 	a.status = "正在处理组织请求…"
 	go func() {
+		defer invitationAcceptance.Close()
 		defer clear(password)
 		defer collectionDraft.Close()
 		defer members.Close()
 		defer memberProof.Close()
 		defer memberRole.Close()
 		defer memberRoleConsent.Close()
+		var loadedInvitation *vaultwarden.InvitationAcceptance
+		var recoveryPublicKey string
 		var loadedRole *vaultwarden.MemberRoleDraft
 		var loadedMembers *vaultwarden.MemberDirectory
 		var loadedProof *vaultwarden.MemberConfirmation
@@ -299,12 +313,16 @@ func (a *app) runOrganizationManagement(operation string) {
 			err = vaultwarden.ErrConflict
 		} else {
 			switch operation {
+			case "recovery-key-load", "recovery-key-create":
+				recoveryPublicKey, err = session.OrganizationRecoveryPublicKey(ctx, vault, id, operation == "recovery-key-create", persist)
+			case "invitation-load":
+				loadedInvitation, err = session.PrepareInvitationAcceptance(ctx, vault, invitationLink, persist)
 			case "member-role-load":
 				loadedRole, err = session.PrepareMemberRole(ctx, vault, members, memberID, persist)
 			case "member-role-save":
 				err = session.SaveMemberRole(ctx, vault, memberRole, memberRoleConsent, isolate, persist)
 			case "member-accept":
-				err = session.AcceptOrganizationInvitation(ctx, vault, invitationLink, persist)
+				err = session.AcceptPreparedInvitation(ctx, vault, invitationAcceptance, invitationAcceptance.RecoveryRequired(), trustedRecoveryKey, persist)
 			case "member-load":
 				loadedMembers, err = session.OrganizationMembers(ctx, vault, id, persist)
 			case "member-invite":
@@ -381,6 +399,28 @@ func (a *app) runOrganizationManagement(operation string) {
 				}
 			}
 			a.completeOrganizationManagement(epoch, e, operation, result, checkpoint, reply, err, cancel)
+			if loadedInvitation != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil && checkpoint != nil {
+					// Publishing a refresh checkpoint advances the bound revision.
+					// Do not present a consent draft from the previous revision.
+					loadedInvitation.Close()
+					e.invitationLink = invitationLink
+					a.status = "登录凭据已安全更新，请重新核验邀请策略"
+				} else if a.epoch == epoch && a.organizationEditor == e && err == nil {
+					e.invitationAcceptance.Close()
+					e.invitationAcceptance = loadedInvitation
+					e.invitationLink, e.trustedRecoveryKey = "", ""
+					a.secretInputVersion++
+					a.status = "已核验邀请策略，请确认是否接受"
+				} else {
+					loadedInvitation.Close()
+				}
+			}
+			if (operation == "recovery-key-load" || operation == "recovery-key-create") && a.epoch == epoch && a.organizationEditor == e && err == nil {
+				e.organizationRecoveryKey = recoveryPublicKey
+				e.confirmation = ""
+				a.status = "组织恢复公钥已核验；公钥为空时可初始化"
+			}
 			if loadedRole != nil {
 				if a.epoch == epoch && a.organizationEditor == e && err == nil {
 					e.memberRole.Close()
@@ -427,6 +467,7 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {
+		e.invitationAcceptance.Close()
 		e.collectionDraft.Close()
 		e.members.Close()
 		e.memberProof.Close()
@@ -442,6 +483,11 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		return
 	}
 	if err != nil {
+		if operation == "member-accept" {
+			e.invitationAcceptance.Close()
+			e.invitationAcceptance = nil
+			e.trustedRecoveryKey, e.confirmation = "", ""
+		}
 		if operation == "member-role-save" {
 			e.memberRoleConsent.Close()
 			e.memberRoleConsent = nil
@@ -460,7 +506,7 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		}
 		return
 	}
-	if operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
+	if operation == "invitation-load" || operation == "recovery-key-load" || operation == "recovery-key-create" || operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
 		return
 	}
 	if operation == "restore" {

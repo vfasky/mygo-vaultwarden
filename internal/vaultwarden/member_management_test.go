@@ -215,6 +215,14 @@ func TestMemberInvitationSingleEmailAndLinkBinding(t *testing.T) {
 	var accepted, invited int
 	var s *Session
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/accounts/profile" {
+			writePendingInvitationProfile(w)
+			return
+		}
+		if r.URL.Path == "/api/organizations/new-org/policies/token" {
+			_, _ = w.Write([]byte(`{"data":[],"continuationToken":null}`))
+			return
+		}
 		if r.Method == "GET" {
 			writeMembers(w, memberRows())
 			return

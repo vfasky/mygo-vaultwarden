@@ -8,14 +8,17 @@ import (
 
 func memberManagementOperation(operation string) bool {
 	switch operation {
-	case "member-role-load", "member-role-save", "member-accept", "member-load", "member-invite", "member-prepare", "member-confirm", "member-reinvite", "member-revoke", "member-restore", "member-remove":
+	case "member-role-load", "member-role-save", "invitation-load", "member-accept", "member-load", "member-invite", "member-prepare", "member-confirm", "member-reinvite", "member-revoke", "member-restore", "member-remove":
 		return true
 	}
 	return false
 }
 func (a *app) validMemberOperation(e *organizationEditor, operation string) bool {
+	if operation == "invitation-load" {
+		return e.id == "" && e.invitationLink != ""
+	}
 	if operation == "member-accept" {
-		return e.id == "" && e.invitationLink != "" && e.confirmation == operation
+		return e.id == "" && e.invitationAcceptance != nil && e.confirmation == operation && (!e.invitationAcceptance.RecoveryRequired() || e.trustedRecoveryKey == e.invitationAcceptance.RecoveryPublicKey())
 	}
 	admin := false
 	for _, org := range a.organizations {
@@ -48,18 +51,30 @@ func (a *app) validMemberOperation(e *organizationEditor, operation string) bool
 }
 func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disabled bool) {
 	ui.Text(c, "接受组织邀请").FontSize(18)
-	ui.Text(c, "粘贴当前服务器发给此账号的邀请链接。接受后仍需管理员核验您的公钥并确认；尚不支持要求自动加入账号恢复的邀请。").MaxLines(4)
-	ui.TextInput(c, &e.invitationLink).Label("邮件邀请链接").Password().Disabled(disabled)
-	if action(c, "接受此邀请", "", true, disabled || e.invitationLink == "").Key("member-accept").Clicked() {
-		e.confirmation = "member-accept"
+	ui.Text(c, "粘贴当前服务器发给此账号的邀请链接，先核验邀请策略。接受后仍需管理员核验您的公钥并确认。").MaxLines(4)
+	if e.invitationAcceptance == nil {
+		ui.TextInput(c, &e.invitationLink).Label("邮件邀请链接").Password().Disabled(disabled)
+		if action(c, "核验邀请策略", "", true, disabled || e.invitationLink == "").Key("member-accept").Clicked() {
+			a.runOrganizationManagement("invitation-load")
+		}
 	}
-	if e.confirmation == "member-accept" {
-		ui.Text(c, "请确认邮件来自您信任的组织。邀请令牌只发送给当前已登录服务器；此操作不会提供组织的解密密钥。").MaxLines(3)
-		if action(c, "确认接受邀请", "", true, disabled).Key("member-accept-confirm").Clicked() {
+	if e.invitationAcceptance != nil {
+		ui.Text(c, "请确认邮件来自您信任的组织。邀请令牌只发送给当前已登录服务器；接受后仍需管理员确认组织访问。").MaxLines(3)
+		label := "确认接受邀请"
+		if e.invitationAcceptance.RecoveryRequired() {
+			ui.Text(c, "此组织要求加入账号恢复。继续会将您的账号解密密钥用组织公钥加密交给组织；拥有组织恢复私钥的管理员将能够恢复账号并访问您的个人密码库。请通过独立可信渠道向组织所有者核验完整公钥。").MaxLines(8)
+			ui.TextInput(c, &e.trustedRecoveryKey).Label("可信渠道取得的组织恢复公钥（完整 DER/SPKI）").Disabled(disabled)
+			label = "同意账号恢复并接受邀请"
+		}
+		if action(c, label, "", true, disabled || (e.invitationAcceptance.RecoveryRequired() && e.trustedRecoveryKey != e.invitationAcceptance.RecoveryPublicKey())).Key("member-accept-confirm").Clicked() {
+			e.confirmation = "member-accept"
 			a.runOrganizationManagement("member-accept")
 		}
 		if action(c, "取消接受邀请", "", false, disabled).Clicked() {
-			e.confirmation = ""
+			e.invitationAcceptance.Close()
+			e.invitationAcceptance = nil
+			e.confirmation, e.invitationLink, e.trustedRecoveryKey = "", "", ""
+			a.secretInputVersion++
 		}
 	}
 	if action(c, "查看我的共享公钥", "", false, disabled).Key("member-own-public-key").Clicked() {

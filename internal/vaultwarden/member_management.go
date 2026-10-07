@@ -152,6 +152,10 @@ func (s *Session) freshMemberLocked(ctx context.Context, org Organization, direc
 	return current, nil
 }
 func (s *Session) memberWriteLocked(ctx context.Context, method, path string, payload any, persist func(SessionCheckpoint) error) error {
+	return s.memberWriteGuardedLocked(ctx, method, path, payload, persist, s.organizationManagementGuardLocked(s.authorizationRevision))
+}
+
+func (s *Session) memberWriteGuardedLocked(ctx context.Context, method, path string, payload any, persist func(SessionCheckpoint) error, guard func() error) error {
 	encoded := ""
 	if payload != nil {
 		body, err := json.Marshal(payload)
@@ -160,7 +164,7 @@ func (s *Session) memberWriteLocked(ctx context.Context, method, path string, pa
 		}
 		encoded = string(body)
 	}
-	status, body, err := s.authenticatedGuardedLocked(ctx, method, path, "application/json", encoded, persist, s.organizationManagementGuardLocked(s.authorizationRevision))
+	status, body, err := s.authenticatedGuardedLocked(ctx, method, path, "application/json", encoded, persist, guard)
 	if err != nil {
 		return err
 	}

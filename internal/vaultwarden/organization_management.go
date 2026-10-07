@@ -135,6 +135,11 @@ func (s *Session) SaveOrganization(ctx context.Context, vault *VaultData, orgID 
 		if err != nil {
 			return OrganizationProfile{}, err
 		}
+		pair, err := makeOrganizationKeyPair(key)
+		if err != nil {
+			return OrganizationProfile{}, err
+		}
+		body["keys"] = pair
 		body["key"], body["collectionName"], body["planType"] = "3."+base64.StdEncoding.EncodeToString(encrypted), collection, 0
 		method, path = http.MethodPost, "/api/organizations"
 	} else {
