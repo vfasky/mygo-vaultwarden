@@ -1,6 +1,20 @@
 # 组织密钥、权限与原生读写
 
-整卡仍为 **INCOMPLETE**。本阶段提供已有组织的读取、组织项目新增/编辑、个人项目共享和组织 Login 的安全填充投影。组织自身创建/修改/退出/删除、成员/集合/群组/策略管理仍未接产品；集成测试的这些 fixture 操作不能算作产品完成。
+整卡仍为 **INCOMPLETE**。本阶段提供已有组织的读取、组织项目新增/编辑、个人项目共享和组织 Login 的安全填充投影。组织自身创建/资料修改/退出/删除现已接原生产品；成员/集合/群组/策略管理仍未接产品，其集成fixture不能算作完成。生命周期和本机隔离详见下节。
+
+## 组织生命周期与持久隔离（第九轮）
+
+侧栏「创建组织」输入组织名称、账单邮箱和默认集合名；已有组织→「管理当前组织」，owner可读取并修改资料，普通成员仅退出。创建使用新的随机64字节org key，以当前账户经验证的RSA公钥OAEP SHA256包装；默认集合名用type2加密。组织名和账单邮箱按服务器协议明文保存。创建的可选组织RSA恢复key对尚未生成；没有将这一点伪装为服务器不支持。Owner删除需危险确认和当前主密码，由已认证的KDF参数计算masterPasswordHash，服务端最终验证。退出由服务器实时检查最后owner，不能以离线成员计数替代。组织创建政策/权限拒绝仍由服务器强制；客户端完整策略管理尚缺。
+
+`LeaveOrganization/DeleteOrganization`要求独立isolate回调，先借用SessionCheckpoint中的unlock key在Swift存储层提交本机组织隔离，再发HTTP。隔离失败、旧revision、错误scope或取消在dispatch前阻止请求；所以此路径无需以全账号logout作为正常处理，也不会宣称服务器已操作。请求发出后错误、取消/Close及非200均不能盲重试，未知/非事务失败保持隔离。原生取消使用「取消并锁定密码库」，调用现有锁定屏障；迟到回调不能恢复界面。
+
+新增可选 `VaultData.quarantinedOrganizations`，仅存在认证AES-GCM payload内，旧快照缺字段按空处理。它按当前scope与组织ID持久隔离；服务器原始sync字节（含opaque大整数、新旧profile组织字段、集合与cipher）不做JSON重编码，不产生跨字段不一致的半删除。Go读取Documents/organizationVault时统一排除对应文档、组织key和集合；恢复列表只给组织名，组织已不存在时给普通占位名。Swift按原始cipher.organizationId剔除对应Login投影，在文件锁/CAS下原子写新payload、新snapshot ID与revision，保留其他组织/个人条目和当前session，旧lease及候选身份失效。旧组织密钥与cipher仍是不可经产品读取的服务器密文，隔离不是安全擦除磁盘历史。
+
+普通publish必须认证旧快照，合并已持久隔离标记；即使服务器暂时返回旧成员授权，普通同步也不能撤标记。saveSession保留payload和标记。主应用采用Swift规范化后返回的vault；独立AutoFill解锁只收到已过滤credentials，不收到完整vault/session。`publish`默认不返回vault，bridge主应用路径显式includeVault。主密码包装损坏时不能悄悄覆盖旧快照而擦除隔离，需显式本机撤销；未来KDF/key轮换需提供旧unlock授权，当前Swift测试覆盖，Go用户key轮换尚未实现。
+
+侧栏「重新核验：组织名」→明确确认→新GET sync，经Go验证当前confirmed/enabled成员、全局用户ID/memberID分离、RSA组织密钥链后，调用专用恢复发布。Swift在同scope/expectedRevision下再次检查当前成员身份，移除指定组织标记，其他标记保持。网络失败、accepted、错误用户或member/account混淆不得恢复。恢复不会再次发送原退出/删除；已经成功退出/删除仍无当前授权，保持隔离；重新邀请确认后可在用户同意下恢复。全账号显式logout会删除整个快照和标记，后续登录从服务器重建。
+
+本轮证据：Go management/isolation单测，Swift52测试（新增持久隔离与恢复、独立store重新打开、模拟扩展读取、旧lease、checkpoint/普通sync保留），headless创建/成员确认取消/隔离保留个人与session/迟到回调/恢复入口；隔离1.37.4真实创建、资料GET/PUT、最后owner拒绝、普通成员退出、密码删除。测试未安装系统扩展，未运行真实窗口/Touch ID/Keychain；存储测试用MemoryKeys，不是平台认证实测。中途Swift三项旧测试失败后修正：publish默认继续省略vault，换包装key需旧key授权，损坏包装需明确撤销后重建。最终结果见交接。
 
 ## 密钥和身份
 
