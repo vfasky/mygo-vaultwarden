@@ -1,0 +1,23 @@
+[
+ {"name":"domain-zero","roles":[2],"values":[0],"expected":0},
+ {"name":"host-one","roles":[2],"values":[1],"expected":1},
+ {"name":"prefix-two","roles":[2],"values":[2],"expected":2},
+ {"name":"exact-three","roles":[2],"values":[3],"expected":3},
+ {"name":"regex-four","roles":[2],"values":[4],"expected":4},
+ {"name":"never-five","roles":[2],"values":[5],"expected":5},
+ {"name":"owner-exempt","roles":[0],"values":[5],"expected":0},
+ {"name":"admin-exempt","roles":[1],"values":[5],"expected":0},
+ {"name":"manager-applies","roles":[4],"values":[3],"expected":3},
+ {"name":"first-policy-order","roles":[2,2],"values":[1,5],"expected":1},
+ {"name":"reverse-policy-order","roles":[2,2],"values":[5,1],"expected":5},
+ {"name":"exemption-before-first","roles":[0,2],"values":[5,3],"expected":3},
+ {"name":"disabled-before-first","roles":[2,2],"values":[5,1],"disabledFirst":true,"expected":1},
+ {"name":"null-first-no-fallthrough","roles":[2,2],"values":[null,5],"expected":0},
+ {"name":"invalid-first-no-fallthrough","roles":[2,2],"values":[6,5],"expected":0},
+ {"name":"text-invalid","roles":[2],"values":["3"],"expected":0},
+ {"name":"fraction-invalid","roles":[2],"values":[1.5],"expected":0},
+ {"name":"integer-exponent","roles":[2],"values":[1e0],"expected":1},
+ {"name":"integer-decimal","roles":[2],"values":[3.0],"expected":3},
+ {"name":"disabled-organization-no-exemption","roles":[2],"values":[5],"organizationDisabled":true,"expected":5},
+ {"name":"accepted-new-array-only","roles":[2],"values":[5],"acceptedOnly":true,"expected":0}
+]

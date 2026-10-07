@@ -19,6 +19,8 @@ type encryptedCipher struct {
 	Type           int     `json:"type"`
 	OrganizationID *string `json:"organizationId"`
 	DeletedDate    *string `json:"deletedDate"`
+	ArchivedDate   *string `json:"archivedDate"`
+	ViewPassword   *bool   `json:"viewPassword"`
 	Reprompt       int     `json:"reprompt"`
 	Name           *string `json:"name"`
 	Key            *string `json:"key"`
@@ -78,15 +80,31 @@ func NormalizeURI(value string, match int) (URI, string, error) {
 	return URI{URI: u.String(), Match: match, BaseDomain: base, IncludeSubdomains: subdomains}, host, nil
 }
 
-func decryptSync(data syncReply, key []byte) (SyncResult, error) {
+// Production sync always supplies policies parsed from the authenticated reply.
+func decryptSyncWithPolicies(data syncReply, key []byte, policies *operationPolicies) (SyncResult, error) {
 	result := SyncResult{Credentials: make([]Credential, 0)}
+	if policies == nil {
+		return result, ErrPermission
+	}
 	if len(data.Ciphers) > 100000 {
 		return result, ErrProtocol
 	}
 	seen := make(map[string]bool)
 	for _, item := range data.Ciphers {
+		if policies.restricts(item.OrganizationID, item.Type) {
+			result.Summary.Restricted++
+			continue
+		}
 		if item.DeletedDate != nil {
 			result.Summary.Deleted++
+			continue
+		}
+		if item.ArchivedDate != nil {
+			result.Summary.Archived++
+			continue
+		}
+		if item.ViewPassword != nil && !*item.ViewPassword {
+			result.Summary.Restricted++
 			continue
 		}
 		if item.OrganizationID != nil && *item.OrganizationID != "" {
@@ -105,7 +123,7 @@ func decryptSync(data syncReply, key []byte) (SyncResult, error) {
 			return result, ErrProtocol
 		}
 		seen[item.ID] = true
-		credential, skipped, err := decryptCipher(item, key)
+		credential, skipped, err := decryptCipher(item, key, policies.defaultURIMatch)
 		if err != nil {
 			return SyncResult{}, err
 		}
@@ -118,7 +136,7 @@ func decryptSync(data syncReply, key []byte) (SyncResult, error) {
 	}
 	return result, nil
 }
-func decryptCipher(item encryptedCipher, userKey []byte) (Credential, int, error) {
+func decryptCipher(item encryptedCipher, userKey []byte, defaultMatch ...int) (Credential, int, error) {
 	key := userKey
 	if item.Key != nil && *item.Key != "" {
 		var err error
@@ -148,12 +166,15 @@ func decryptCipher(item encryptedCipher, userKey []byte) (Credential, int, error
 		return Credential{}, 0, ErrProtocol
 	}
 	skipped := 0
-	for _, entry := range item.Login.URIs {
+	for index, entry := range item.Login.URIs {
 		value, err := decryptText(entry.URI, key)
 		if err != nil {
 			return Credential{}, 0, err
 		}
 		match := 0
+		if len(defaultMatch) == 1 {
+			match = defaultMatch[0]
+		}
 		if entry.Match != nil {
 			match = *entry.Match
 		}
@@ -162,6 +183,7 @@ func decryptCipher(item encryptedCipher, userKey []byte) (Credential, int, error
 			skipped++
 			continue
 		}
+		rule.SourceIndex = &index
 		credential.URIs = append(credential.URIs, rule)
 		credential.Hosts = append(credential.Hosts, host)
 		if credential.URL == "" {

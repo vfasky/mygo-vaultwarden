@@ -147,9 +147,96 @@ func TestLiveVaultwarden(t *testing.T) {
 					t.Fatal("server roundtrip did not decrypt expected fixture")
 				}
 			}
-			// Force token refresh and repeat the read with the renewed session.
+			if tc.name == "pbkdf2" {
+				testLiveOrganizations(t, ctx, session, result.Scope, password)
+				testLiveCipherComparison(t, ctx, session, result.Scope)
+				testLiveProtectedItem(t, ctx, session, result.Scope, password)
+				testLiveBackups(t, ctx, session, result.Scope, email, password)
+				testLiveFoldersAndBulk(t, ctx, session, result.Scope)
+				for kind := 1; kind <= 8; kind++ {
+					created, err := session.CreatePersonalCipher(ctx, result.Scope, CipherFields{Type: kind, Name: fmt.Sprintf("Writable type %d", kind), Login: map[string]any{"password": "initial fixture password"}, Fields: []map[string]any{{"name": "fixture custom", "value": "initial custom value", "type": 0}}, SSHKey: map[string]any{"privateKey": "fixture private", "publicKey": "fixture public", "keyFingerprint": "fixture fingerprint"}}, nil)
+					if err != nil {
+						t.Fatalf("create type %d: %v", kind, err)
+					}
+					fields, err := DecryptCipherDocument(created, key)
+					if err != nil {
+						t.Fatal(err)
+					}
+					fields.Name = "Updated " + fields.Name
+					fields.Fields[0]["value"] = "updated custom value"
+					fields.Fields = append(fields.Fields, map[string]any{"name": "fixture boolean", "value": "true", "type": json.Number("2")})
+					if kind == 1 {
+						fields.Fields = append(fields.Fields, map[string]any{"name": "fixture linked", "value": nil, "type": json.Number("3"), "linkedId": json.Number("101")})
+						fields.Login["password"] = "updated fixture password"
+						fields.Login["uris"] = []any{map[string]any{"uri": "https://example.invalid/", "match": 0}}
+					}
+					updated, err := session.UpdatePersonalCipher(ctx, result.Scope, created, fields, nil)
+					if err != nil {
+						t.Fatalf("update type %d: %v", kind, err)
+					}
+					verified, err := DecryptCipherDocument(updated, key)
+					if err != nil || verified.Name != fields.Name {
+						t.Fatalf("verify type %d: %v", kind, err)
+					}
+					if verified.Fields[0]["value"] != "updated custom value" {
+						t.Fatal("custom field update lost")
+					}
+					if verified.Fields[1]["value"] != "true" || verified.Fields[1]["type"] != json.Number("2") {
+						t.Fatal("boolean custom field lost")
+					}
+					if kind == 1 && (verified.Fields[2]["linkedId"] != json.Number("101") || verified.Fields[2]["value"] != nil) {
+						t.Fatal("linked field lost")
+					}
+					if kind == 1 && (len(verified.PasswordHistory) != 1 || verified.PasswordHistory[0]["password"] != "initial fixture password" || verified.Login["uris"].([]any)[0].(map[string]any)["uriChecksum"] == nil) {
+						t.Fatal("password history or URI checksum lost")
+					}
+					copied, err := session.CopyPersonalCipher(ctx, result.Scope, updated, verified, nil)
+					if err != nil {
+						t.Fatalf("copy type %d: %v", kind, err)
+					}
+					copyFields, err := DecryptCipherDocument(copied, key)
+					if err != nil || copyFields.ID == verified.ID || copyFields.Name != verified.Name || len(copyFields.PasswordHistory) != len(verified.PasswordHistory) {
+						t.Fatalf("copy roundtrip type %d: %v", kind, err)
+					}
+					if kind == 1 && (copyFields.PasswordHistory[0]["password"] != "initial fixture password" || copyFields.Login["uris"].([]any)[0].(map[string]any)["uriChecksum"] == nil) {
+						t.Fatal("copy lost history/checksum")
+					}
+					if kind == 1 {
+						verified.PasswordHistory = nil
+						withoutHistory, err := session.UpdatePersonalCipher(ctx, result.Scope, updated, verified, nil)
+						if err != nil {
+							t.Fatal("delete password history", err)
+						}
+						cleared, err := DecryptCipherDocument(withoutHistory, key)
+						if err != nil || len(cleared.PasswordHistory) != 0 || cleared.Login["password"] != "updated fixture password" {
+							t.Fatal("history deletion damaged current password", err)
+						}
+					}
+					if err := session.ChangeCipherState(ctx, result.Scope, copyFields.ID, CipherDeletePermanently, nil); err != nil {
+						t.Fatal(err)
+					}
+					for _, action := range []CipherAction{CipherArchive, CipherUnarchive, CipherTrash, CipherRestore, CipherDeletePermanently} {
+						if err := session.ChangeCipherState(ctx, result.Scope, fields.ID, action, nil); err != nil {
+							t.Fatalf("state type %d %s: %v", kind, action, err)
+						}
+						if kind == 1 && action == CipherArchive {
+							snapshot, err := session.Sync(ctx)
+							if err != nil {
+								t.Fatal(err)
+							}
+							for _, credential := range snapshot.Credentials {
+								if credential.ID == fields.ID {
+									t.Fatal("archived cipher entered AutoFill")
+								}
+							}
+						}
+					}
+				}
+			}
+			// Force token refresh and acknowledge its persistence in this isolated
+			// fixture; application persistence is covered by the Swift store tests.
 			session.expires = time.Now().Add(-time.Minute)
-			if _, err := session.Sync(ctx); err != nil {
+			if _, err := session.SyncWithCheckpoint(ctx, func(SessionCheckpoint) error { return nil }); err != nil {
 				t.Fatalf("refresh/sync: %v", err)
 			}
 			if dir := os.Getenv("MYGO_VW_FIXTURE_DIR"); dir != "" && !tc.mfa {

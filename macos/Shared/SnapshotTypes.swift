@@ -70,10 +70,62 @@ struct EncryptedSnapshot: Codable {
     var passwordUnlock: PasswordWrappedSnapshotKey? = nil
 }
 
+struct PendingPolicyMutation: Codable, Equatable {
+    let organizationId: String
+    let policyType: Int
+    let mutationId: String
+}
+
+struct VaultData: Codable, Equatable {
+    var version: Int
+    let scope: SnapshotScope
+    let sync: Data
+    var pendingPolicyMutations: [PendingPolicyMutation]? = nil
+    var quarantinedOrganizations: [String]? = nil
+
+    func excludingQuarantined(_ credentials: [VaultCredential]) throws -> [VaultCredential] {
+        guard let ids = quarantinedOrganizations, !ids.isEmpty else { return credentials }
+        try validate(scope: scope)
+        let object = try JSONSerialization.jsonObject(with: sync) as! [String: Any]
+        let ciphers = object["ciphers"] as! [[String: Any]]
+        let forbidden = Set(ciphers.filter { ids.contains($0["organizationId"] as? String ?? "") }.compactMap { $0["id"] as? String })
+        return credentials.filter { !forbidden.contains($0.id) }
+    }
+
+    func validate(scope expected: SnapshotScope) throws {
+        guard (version == 1 || version == 2), (version == 2) == !(pendingPolicyMutations ?? []).isEmpty, scope == expected, !sync.isEmpty, sync.count <= 32 * 1024 * 1024,
+              let object = try JSONSerialization.jsonObject(with: sync) as? [String: Any],
+              let profile = object["profile"] as? [String: Any], profile["id"] as? String == scope.account,
+              let ciphers = object["ciphers"] as? [[String: Any]], ciphers.count <= 100000 else { throw SnapshotError.invalidInput }
+        if let isolated = quarantinedOrganizations {
+            guard isolated.count <= 1024, Set(isolated).count == isolated.count,
+                  isolated.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 128 && $0.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 }) }) else { throw SnapshotError.invalidInput }
+        }
+        if let pending = pendingPolicyMutations {
+            let types = Set([0,1,2,3,5,6,7,8,14,15,16,20])
+            func validID(_ id: String) -> Bool { !id.isEmpty && id.utf8.count <= 128 && id.utf8.allSatisfy { (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 } }
+            guard pending.count <= 1024, Set(pending.map(\.organizationId)).count == pending.count, Set(pending.map(\.mutationId)).count == pending.count,
+                  pending.allSatisfy({ validID($0.organizationId) && validID($0.mutationId) && types.contains($0.policyType) }) else { throw SnapshotError.invalidInput }
+        }
+        var ids = Set<String>()
+        for cipher in ciphers {
+            guard let id = cipher["id"] as? String, !id.isEmpty, id.utf8.count <= 128,
+                  id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 }),
+                  ids.insert(id).inserted else { throw SnapshotError.invalidInput }
+        }
+    }
+}
+
 struct SnapshotPayload: Codable {
     let scope: SnapshotScope
     let credentials: [VaultCredential]
     var session: Data? = nil
+    // Absent on legacy Login-only snapshots; a successful sync migrates them.
+    var vault: VaultData? = nil
+    var safeCandidates: [VaultCredential] {
+        if scope == .demo { return credentials }
+        return vault?.policyCandidates(credentials) ?? []
+    }
 }
 
 struct SnapshotState: Codable {
@@ -113,6 +165,7 @@ struct SnapshotLease {
     let credentials: [VaultCredential]
     // Only authenticated main-app unlocks opt in; AutoFill leases omit it.
     var session: Data? = nil
+    var vault: VaultData? = nil
 }
 
 enum SnapshotError: Error, Equatable {
@@ -179,14 +232,15 @@ func validateCredentials(_ credentials: [VaultCredential]) throws {
 }
 
 func sealSnapshot(credentials: [VaultCredential], scope: SnapshotScope, keyID: String, key: Data,
-                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil) throws -> EncryptedSnapshot {
+                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil) throws -> EncryptedSnapshot {
     try validateCredentials(credentials)
     try validateSessionData(session)
+    try vault?.validate(scope: scope)
     guard key.count == 32 else { throw SnapshotError.corrupt }
     // Round the timestamp before using the header as authenticated data.
     let now = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970))
     let header = SnapshotHeader(format: 1, id: UUID().uuidString, keyID: keyID, scope: scope, createdAt: now, count: credentials.count)
-    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session))
+    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session, vault: vault))
     let box = try AES.GCM.seal(plaintext, using: SymmetricKey(data: key), authenticating: snapshotJSON(header))
     guard let combined = box.combined else { throw SnapshotError.corrupt }
     var snapshot = EncryptedSnapshot(header: header, sealed: combined)
@@ -227,7 +281,8 @@ func replacingSnapshotSession(_ snapshot: EncryptedSnapshot, key: Data, session:
 }
 
 func openSnapshot(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope) throws -> [VaultCredential] {
-    try openSnapshotPayload(snapshot, key: key, scope: scope).credentials
+    let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
+    return payload.safeCandidates
 }
 
 func openSnapshotPayload(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope) throws -> SnapshotPayload {
@@ -240,6 +295,10 @@ func openSnapshotPayload(_ snapshot: EncryptedSnapshot, key: Data, scope: Snapsh
         guard payload.scope == scope, payload.credentials.count == snapshot.header.count else { throw SnapshotError.corrupt }
         try validateCredentials(payload.credentials)
         try validateSessionData(payload.session)
+        try payload.vault?.validate(scope: scope)
+        if let vault = payload.vault {
+            guard try vault.excludingQuarantined(payload.credentials).count == payload.credentials.count else { throw SnapshotError.corrupt }
+        }
         return payload
     } catch { throw SnapshotError.corrupt }
 }

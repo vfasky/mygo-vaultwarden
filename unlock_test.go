@@ -128,8 +128,8 @@ func TestUnlockReceiptsCannotRevealStaleOrWrongAccountMetadata(t *testing.T) {
 					t.Fatal("pending operation was not settled")
 				}
 				if scenario == "success" {
-					if !a.unlocked() || len(a.items) != 1 || a.sessionOwnsSnapshot() {
-						t.Fatal("offline unlock did not restore metadata or granted online authority")
+					if !a.unlocked() || len(a.items) != 0 || a.sessionOwnsSnapshot() {
+						t.Fatal("legacy unlock exposed unfiltered candidates or granted online authority")
 					}
 				} else if a.unlocked() || len(a.items) != 0 {
 					t.Fatal("failed or superseded authentication exposed metadata")

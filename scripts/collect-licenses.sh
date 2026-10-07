@@ -8,6 +8,12 @@ go_bin="$(bash scripts/resolve-go.sh)"
 mkdir -p "$destination"
 cp LICENSE "$destination/MyGoVaultwarden-GPL-3.0.txt"
 cp THIRD_PARTY_NOTICES.md "$destination/THIRD_PARTY_NOTICES.md"
+# The estimator is embedded from the source tree rather than a Go module.
+# Preserve the notice's relative paths and all bundled runtime license copies.
+strength_licenses="$destination/internal/passwordstrength/third_party"
+mkdir -p "$strength_licenses/zxcvbn" "$strength_licenses/licenses"
+cp internal/passwordstrength/third_party/zxcvbn/LICENSE.txt "$strength_licenses/zxcvbn/LICENSE.txt"
+cp internal/passwordstrength/third_party/licenses/*.txt "$strength_licenses/licenses/"
 cp "$("$go_bin" env GOROOT)/LICENSE" "$destination/Go-LICENSE.txt"
 # Collect modules actually linked into the app, not unrelated dependency tests.
 modules="$("$go_bin" list -deps -f '{{if .Module}}{{.Module.Path}}|{{.Module.Dir}}{{end}}' . | LC_ALL=C sort -u)"

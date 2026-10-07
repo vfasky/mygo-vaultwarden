@@ -41,8 +41,11 @@ final class VaultURITests: XCTestCase {
         let rule = CredentialURI(uri: "https://example.com/", match: 0, baseDomain: "example.com", includeSubdomains: true)
         let item = VaultCredential(id: "entry", title: "login", username: "u", password: "p", hosts: ["example.com"], url: rule.uri, uris: [rule])
         let key = Data(repeating: 7, count: 32)
-        let encrypted = try sealSnapshot(credentials: [item], scope: scope, keyID: UUID().uuidString, key: key)
-        XCTAssertEqual(try openSnapshot(encrypted, key: key, scope: scope), [item])
+        let encrypted = try sealSnapshot(credentials: [item], scope: scope, keyID: UUID().uuidString, key: key, vault: policyVaultFixture(scope: scope, ids: [item.id]))
+        let migrated = try openSnapshot(encrypted, key: key, scope: scope)
+        XCTAssertEqual(migrated.count, 1)
+        XCTAssertEqual(migrated.first?.uris, []) // old projection lacks sourceIndex
+        XCTAssertFalse(migrated[0].matches(serviceIdentifier: "https://example.com/", isURL: true))
         XCTAssertThrowsError(try openSnapshot(encrypted, key: key, scope: .demo))
     }
     func testPublicSuffixCannotBecomeQuickSuggestion() {

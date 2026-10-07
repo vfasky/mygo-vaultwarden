@@ -2,7 +2,7 @@
 
 ## 范围
 
-共享加密快照保存 Vaultwarden 的个人登录条目。`SnapshotScope` 绑定规范化服务器地址与稳定账号 ID；旧演示 scope 仅保留兼容识别，不再提供演示数据发布入口。主密码输入和只读同步的边界见 [Vaultwarden 只读接入](vaultwarden-readonly.md)。
+共享加密快照保存完整的服务器加密sync文档，并单独保存最小个人Login填充投影。`SnapshotScope` 绑定规范化服务器地址与稳定账号 ID；旧演示 scope 仅保留兼容识别，不再提供演示数据发布入口。登录与同步边界见 [接入说明](vaultwarden-readonly.md)，产品完成度见 [API覆盖矩阵](vaultwarden-api-coverage.md)。
 
 主应用与扩展各自可以打开共享存储，不通过主应用进程提供解密服务。主应用退出后，扩展继续使用自己的 Swift 代码和系统 Keychain。
 
@@ -23,9 +23,9 @@ libSnapshotBridge.dylib
    └── Data Protection Keychain：受 userPresence 保护的随机密钥
 ```
 
-快照接口向 Go 返回操作状态、版本、条目数和清理状态。只有经过认证且 revision/scope 仍有效的 `list` / `listPassword` 主应用解锁操作，才返回显示元数据和加密 payload 内保存的登录会话；不会返回密码库条目的密码或随机快照密钥。会话包含在线同步所需的 refresh token、用户密钥和包装密钥，Go 验证账号、服务器、邮箱、设备标识和包装配置后恢复，并清理传输缓冲。状态查询、索引操作及 AutoFill 的默认 lease 均不返回该会话。
+快照接口向 Go 返回操作状态、版本、条目数和清理状态。只有经过认证且 revision/scope 仍有效的 `list` / `listPassword` 主应用解锁操作，才返回显示元数据、完整服务器加密文档和加密 payload 内保存的登录会话；不会直接返回密码库条目的明文密码或随机快照密钥。会话包含在线同步所需的 refresh token、用户密钥和包装密钥，Go 验证账号、服务器、邮箱、设备标识和包装配置后恢复，并清理传输缓冲。状态查询、索引操作及 AutoFill 的默认 lease 均不返回该会话或完整文档。Go主应用在认证后用恢复的用户key解密个人文档；列表只保留显示元数据，表单独立持有临时秘密。
 
-原始主密码和 TOTP 仅交给 Go 登录/解锁任务，不经过快照 C ABI，也不进入命令行或日志。主密码解锁只向桥接传入域分离派生的临时包装密钥；会话保存只在已认证的进程内通过有界 JSON/C ABI 传输。C 函数不在返回后保留 Go 缓冲区；敏感输入的生命周期与撤销隔离见 [只读接入说明](vaultwarden-readonly.md)。
+原始主密码和 TOTP 仅交给 Go 登录/解锁任务，不经过快照 C ABI，也不进入命令行或日志。主密码解锁只向桥接传入域分离派生的临时包装密钥；会话保存只在已认证的进程内通过有界 JSON/C ABI 传输。C 函数不在返回后保留 Go 缓冲区；敏感输入的生命周期与撤销隔离见 [接入说明](vaultwarden-readonly.md)。
 
 主应用通过动态库执行快照发布和撤销；扩展直接编译共享 Swift 源码。动态库放在应用 `Contents/Frameworks`，参与 Xcode 的嵌套签名和 Developer ID 导出，不以临时 helper 或命令行参数传递秘密。
 
@@ -52,6 +52,8 @@ libSnapshotBridge.dylib
 ## 密文格式与写入
 
 `snapshot-v1.json` 包括控制状态、待清理 key ID、候选索引确认 token，以及可选的加密快照。服务端/账号身份、版本、条目数及主密码解锁用的邮箱、KDF 参数是公开控制元数据；凭据标题、用户名、域名、密码，以及可选的恢复登录会话均位于加密 payload 内。会话内容不出现在 header 或状态元数据中，上限为 64 KiB。
+
+完整文档独立存为 `vault: {version:1, scope, sync:base64}`，不塞入session；sync原始JSON字节保留未知区段、组织加密材料、folders、policies、domains等。Go与Swift均校验scope/profile账号、ciphers数组及唯一ID，文档跟随同一AES-GCM认证和本地revision撤销。`saveSession`只换会话，保留vault；AutoFill lease省略vault，只返回过滤后的credentials。旧payload没有vault时继续解锁，下次成功同步自动迁移；失败不替换旧库。现有C ABI总请求/响应上限仍为4 MiB（包含base64开销），超限明确报错；大库传输扩展仍是未完成项，附件不得塞入该JSON通道。
 
 每次发布替换快照都生成新的 256-bit 随机 AES 密钥和新的 snapshot ID。CryptoKit AES-GCM 使用新的 nonce，header 作为认证附加数据；header 包含格式、scope、snapshot ID、key ID、创建时间和条目数。解密同时验证账号/服务器 scope、AEAD 标签、payload schema 和条目数量。
 

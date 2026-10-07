@@ -67,7 +67,20 @@ func (c *Client) request(ctx context.Context, method, endpoint, contentType, bod
 		return 0, nil, ErrCancelled
 	}
 	u := *c.base
-	u.Path += endpoint
+	relative, err := url.Parse(endpoint)
+	if err != nil || !strings.HasPrefix(endpoint, "/") || relative.IsAbs() || relative.Host != "" || relative.User != nil || relative.Fragment != "" || relative.RawPath != "" || strings.Contains(relative.Path, "\\") {
+		return 0, nil, ErrProtocol
+	}
+	for _, segment := range strings.Split(relative.Path, "/") {
+		if segment == "." || segment == ".." {
+			return 0, nil, ErrProtocol
+		}
+	}
+	if _, err := url.ParseQuery(relative.RawQuery); err != nil {
+		return 0, nil, ErrProtocol
+	}
+	u.Path += relative.Path
+	u.RawQuery = relative.RawQuery
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), strings.NewReader(body))
 	if err != nil {
 		return 0, nil, ErrProtocol
@@ -96,6 +109,9 @@ func (c *Client) request(ctx context.Context, method, endpoint, contentType, bod
 		return resp.StatusCode, nil, ErrServer
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
+	if ctx.Err() != nil {
+		return 0, nil, ErrCancelled
+	}
 	if err != nil || len(data) > maxResponse {
 		return 0, nil, ErrProtocol
 	}
@@ -266,9 +282,24 @@ type Session struct {
 	expires                                  time.Time
 	closed                                   bool
 	checkpointPending                        bool
+	operationMu                              sync.Mutex
+	cancelOperation                          context.CancelFunc
+	stopping                                 bool
+	authorizationRevision                    string
+	authorizationEpoch                       uint64
+	writePolicies                            *operationPolicies
+	pendingPolicyMutations                   []PendingPolicyMutation
+	offlinePolicies                          *snapshotPolicies
+	checkpointPolicies                       *snapshotPolicies
 }
 
 func (s *Session) Close() {
+	s.operationMu.Lock()
+	s.stopping = true
+	if s.cancelOperation != nil {
+		s.cancelOperation()
+	}
+	s.operationMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	clear(s.key)
@@ -280,6 +311,11 @@ func (s *Session) Close() {
 	s.access = ""
 	s.refresh = ""
 	s.closed = true
+	s.authorizationEpoch++
+	s.authorizationRevision = ""
+	s.writePolicies = nil
+	s.offlinePolicies = nil
+	s.checkpointPolicies = nil
 	s.client.http.CloseIdleConnections()
 }
 func (s *Session) refreshLocked(ctx context.Context) error {
@@ -292,7 +328,7 @@ func (s *Session) refreshLocked(ctx context.Context) error {
 		return ErrExpired
 	}
 	if status != 200 {
-		return ErrNetwork
+		return statusError(status)
 	}
 	var token tokenReply
 	if json.Unmarshal(data, &token) != nil || !validToken(token) {
@@ -304,6 +340,14 @@ func (s *Session) refreshLocked(ctx context.Context) error {
 	s.access = token.AccessToken
 	s.refresh = token.RefreshToken
 	s.expires = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+	// Preserve only a currently valid policy context for a same-content durable
+	// checkpoint receipt. Reads and item grants are revoked during rotation.
+	s.checkpointPolicies = nil
+	if p := s.offlinePolicies; p != nil && p.epoch == s.authorizationEpoch && p.revision == s.authorizationRevision {
+		s.checkpointPolicies = p
+	}
+	s.offlinePolicies = nil
+	s.authorizationEpoch++
 	return nil
 }
 func (s *Session) Sync(ctx context.Context) (SyncResult, error) {
@@ -313,50 +357,26 @@ func (s *Session) Sync(ctx context.Context) (SyncResult, error) {
 func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCheckpoint) error) (SyncResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return SyncResult{}, ErrExpired
-	}
-	// A failed checkpoint must be retried before any further server request.
-	if s.checkpointPending && persist != nil {
-		if err := s.checkpointLocked(persist); err != nil {
-			return SyncResult{}, err
-		}
-		s.checkpointPending = false
-	}
-	refresh := func() error {
-		if err := s.refreshLocked(ctx); err != nil {
-			return err
-		}
-		s.checkpointPending = true
-		if err := s.checkpointLocked(persist); err != nil {
-			return err
-		}
-		s.checkpointPending = false
-		return nil
-	}
-	if time.Until(s.expires) < 30*time.Second {
-		if err := refresh(); err != nil {
-			return SyncResult{}, err
-		}
-	}
-	status, data, err := s.client.request(ctx, "GET", "/api/sync", "", "", s.access)
+	ctx, finish, err := s.beginOperationLocked(ctx)
 	if err != nil {
 		return SyncResult{}, err
 	}
-	if status == 401 {
-		if err = refresh(); err != nil {
-			return SyncResult{}, err
-		}
-		status, data, err = s.client.request(ctx, "GET", "/api/sync", "", "", s.access)
-		if err != nil {
-			return SyncResult{}, err
-		}
+	defer finish()
+	return s.syncLocked(ctx, persist)
+}
+
+func (s *Session) syncLocked(ctx context.Context, persist func(SessionCheckpoint) error) (SyncResult, error) {
+	// Starting a replacement sync revokes the previous offline authority even
+	// when download, identity validation or policy migration subsequently fails.
+	s.offlinePolicies = nil
+	s.checkpointPolicies = nil
+	s.authorizationEpoch++
+	status, data, err := s.authenticatedLocked(ctx, http.MethodGet, "/api/sync", "", "", persist)
+	if err != nil {
+		return SyncResult{}, err
 	}
-	if status == 401 || status == 403 {
-		return SyncResult{}, ErrExpired
-	}
-	if status != 200 {
-		return SyncResult{}, ErrNetwork
+	if status != http.StatusOK {
+		return SyncResult{}, statusError(status)
 	}
 	var syncData syncReply
 	if json.Unmarshal(data, &syncData) != nil || syncData.Ciphers == nil {
@@ -368,7 +388,16 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	if syncData.Profile.Key != s.wrapped {
 		return SyncResult{}, ErrExpired
 	}
-	result, err := decryptSync(syncData, s.key)
+	policies, err := parseOperationPolicies(data, Scope{Server: s.client.base.String(), Account: syncData.Profile.ID}, s.email, s.wrapped)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	if err := validateSnapshotOrganizationIdentity(data, syncData.Profile.ID); err != nil {
+		return SyncResult{}, err
+	}
+	applyPendingPolicies(policies, s.pendingPolicyMutations)
+	// Parsing and filtering must precede every credential decryption.
+	result, err := decryptSyncWithPolicies(syncData, s.key, policies)
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -377,6 +406,19 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	}
 	s.account = syncData.Profile.ID
 	result.Scope = Scope{Server: s.client.base.String(), Account: s.account}
+	result.Vault = &VaultData{Version: 1, Scope: result.Scope, Sync: append([]byte(nil), data...)}
+	if _, err := result.Vault.Documents(result.Scope); err != nil {
+		return SyncResult{}, err
+	}
+	if err := s.appendOrganizationCredentialsLocked(&result, policies); err != nil {
+		return SyncResult{}, err
+	}
+	if ctx.Err() != nil {
+		return SyncResult{}, ErrCancelled
+	}
+	if err := s.recoveryCandidateLocked(&result); err != nil {
+		return SyncResult{}, err
+	}
 	if s.passwordUnlock != nil {
 		result.PasswordUnlock = &PasswordUnlock{Config: s.passwordUnlock.Config, Key: append([]byte(nil), s.passwordUnlock.Key...)}
 		result.Session, err = s.savedLocked()

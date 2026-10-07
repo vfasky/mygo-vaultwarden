@@ -20,6 +20,16 @@ type app struct {
 	serverURL, email, query, status, deviceID string
 	snapshot                                  *snapshotStatus
 	items                                     []displayCredential
+	vault                                     *vaultwarden.VaultData
+	editor                                    *cipherEditor
+	isolatedOrganizations                     []vaultwarden.Organization
+	organizations                             []vaultwarden.Organization
+	collections                               []vaultwarden.Collection
+	folders                                   []vaultwarden.Folder
+	organizationEditor                        *organizationEditor
+	folderEditor                              *folderEditor
+	bulkEditor                                *bulkEditor
+	backupEditor                              *backupEditor
 	itemsRevision                             string
 	pending                                   int
 	epoch                                     uint64
@@ -31,6 +41,7 @@ type app struct {
 	secretInputVersion                        uint64
 	showVerification                          bool
 	loginChallenge                            *loginChallenge
+	secretClipboardOwned                      bool
 }
 
 func (a *app) lockInterface() {
@@ -105,8 +116,12 @@ func (a *app) completeStorage(request storageRequest, epoch uint64, reply storag
 		return
 	}
 	if isUnlock {
-		a.restoreUnlockedSession(reply)
-		a.items = reply.Items
+		a.items = nil
+		if a.restoreUnlockedSession(reply) {
+			if err := a.adoptVault(reply.Vault); err != nil {
+				a.status = err.Error()
+			}
+		}
 		a.itemsRevision = reply.State.Revision
 		a.showSettings, a.showLogin = false, false
 		return
@@ -131,6 +146,7 @@ func main() {
 		mygo.Power.OnLockScreen(func() { a.window.Update(func() { a.runStorage("lock") }) })
 		mygo.Power.OnSuspend(func() { a.window.Update(func() { a.runStorage("lock") }) })
 	})
+	mygo.App.OnWillQuit(func(_ *mygo.QuitEvent) { a.clearSecretClipboard() })
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}

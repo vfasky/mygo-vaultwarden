@@ -123,7 +123,7 @@ func TestRestoredSessionRefreshesAndPersistsBeforeSyncIncludingNetworkFailure(t 
 				w.WriteHeader(503)
 				return
 			}
-			_ = json.NewEncoder(w).Encode(map[string]any{"profile": map[string]string{"id": "account-a", "email": "fixture@example.invalid", "key": "fixture-wrapped-user-key"}, "ciphers": []any{}})
+			_ = json.NewEncoder(w).Encode(emptyPolicySyncFixture())
 		default:
 			t.Error("restoration attempted a password login")
 			w.WriteHeader(404)
@@ -183,7 +183,7 @@ func TestRefreshCheckpointFailureStopsDownloadAndIsRetried(t *testing.T) {
 			return
 		}
 		syncs.Add(1)
-		_ = json.NewEncoder(w).Encode(map[string]any{"profile": map[string]string{"id": "account-a", "email": "fixture@example.invalid", "key": "fixture-wrapped-user-key"}, "ciphers": []any{}})
+		_ = json.NewEncoder(w).Encode(emptyPolicySyncFixture())
 	}))
 	defer server.Close()
 	session, _ := resumableFixture(t, server.URL)

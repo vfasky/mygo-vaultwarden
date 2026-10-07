@@ -7,6 +7,7 @@ import (
 	"crypto/cipher"
 	"crypto/hkdf"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
 	"strings"
@@ -121,6 +122,34 @@ func DecryptString(encoded string, key []byte) ([]byte, error) {
 	result := append([]byte(nil), plaintext[:len(plaintext)-padding]...)
 	clear(plaintext)
 	return result, nil
+}
+
+// EncryptString emits the authenticated type-2 format used by Vaultwarden
+// 1.37.4 clients. Every invocation gets an independent cryptographic random IV.
+func EncryptString(plaintext, key []byte) (string, error) {
+	if len(key) != 64 || len(plaintext) > 1024*1024 {
+		return "", ErrEncryption
+	}
+	iv := make([]byte, aes.BlockSize)
+	if _, err := rand.Read(iv); err != nil {
+		return "", ErrEncryption
+	}
+	padding := aes.BlockSize - len(plaintext)%aes.BlockSize
+	data := make([]byte, len(plaintext)+padding)
+	copy(data, plaintext)
+	for i := len(plaintext); i < len(data); i++ {
+		data[i] = byte(padding)
+	}
+	defer clear(data)
+	block, err := aes.NewCipher(key[:32])
+	if err != nil {
+		return "", ErrEncryption
+	}
+	cipher.NewCBCEncrypter(block, iv).CryptBlocks(data, data)
+	mac := hmac.New(sha256.New, key[32:])
+	mac.Write(iv)
+	mac.Write(data)
+	return "2." + base64.StdEncoding.EncodeToString(iv) + "|" + base64.StdEncoding.EncodeToString(data) + "|" + base64.StdEncoding.EncodeToString(mac.Sum(nil)), nil
 }
 
 func decryptText(encoded *string, key []byte) (string, error) {
