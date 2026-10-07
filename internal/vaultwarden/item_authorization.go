@@ -110,11 +110,30 @@ func (s *Session) personalDocumentLocked(vault *VaultData, id string) (CipherDoc
 // snapshot's domain-separated key. KDF runs without holding the session mutex,
 // so Close can revoke immediately. No password or verifier is kept in a grant.
 func (s *Session) AuthorizePersonalItem(ctx context.Context, vault *VaultData, revision, id string, password []byte) (*ItemAuthorization, error) {
+	return s.authorizeItem(ctx, vault, revision, id, password, false)
+}
+
+func (s *Session) AuthorizeOrganizationItem(ctx context.Context, vault *VaultData, revision, id string, password []byte) (*ItemAuthorization, error) {
+	return s.authorizeItem(ctx, vault, revision, id, password, true)
+}
+
+func (s *Session) authorizeItem(ctx context.Context, vault *VaultData, revision, id string, password []byte, organization bool) (*ItemAuthorization, error) {
 	if len(password) == 0 || len(password) > 4096 {
 		return nil, ErrValidation
 	}
 	s.mu.Lock()
-	document, err := s.personalDocumentLocked(vault, id)
+	var document CipherDocument
+	var err error
+	if organization {
+		var data *organizationVault
+		data, err = s.organizationVaultLocked(vault)
+		if err == nil {
+			document, _, err = s.organizationDocumentLocked(vault, id, data)
+			data.close()
+		}
+	} else {
+		document, err = s.personalDocumentLocked(vault, id)
+	}
 	if err != nil {
 		s.mu.Unlock()
 		return nil, err

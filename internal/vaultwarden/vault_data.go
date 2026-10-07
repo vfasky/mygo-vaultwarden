@@ -44,6 +44,9 @@ func (v *VaultData) Documents(scope Scope) ([]CipherDocument, error) {
 }
 
 type VaultEntry struct {
+	OrganizationID                        string
+	CollectionIDs                         []string
+	Readable                              bool
 	ID, Title, Username, URL              string
 	FolderID                              string
 	Type                                  int

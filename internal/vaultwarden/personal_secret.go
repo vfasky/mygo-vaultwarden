@@ -11,9 +11,30 @@ import (
 // or call back into Session. Lock order: Session.mu -> Swift main (already on UI)
 // -> snapshot file lease. Workers must never use this callback to wait on UI.
 func (s *Session) WithPersonalSecret(vault *VaultData, revision, id, kind string, grant *ItemAuthorization, use func(secret string, unlockKey []byte, expires time.Time) error) error {
+	return s.withItemSecret(vault, revision, id, kind, grant, use, false)
+}
+
+func (s *Session) WithOrganizationSecret(vault *VaultData, revision, id, kind string, grant *ItemAuthorization, use func(secret string, unlockKey []byte, expires time.Time) error) error {
+	return s.withItemSecret(vault, revision, id, kind, grant, use, true)
+}
+
+func (s *Session) withItemSecret(vault *VaultData, revision, id, kind string, grant *ItemAuthorization, use func(secret string, unlockKey []byte, expires time.Time) error, organization bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	document, err := s.personalDocumentLocked(vault, id)
+	var document CipherDocument
+	var err error
+	ownerKey := s.key
+	if organization {
+		var data *organizationVault
+		data, err = s.organizationVaultLocked(vault)
+		if err != nil {
+			return err
+		}
+		defer data.close()
+		document, ownerKey, err = s.organizationDocumentLocked(vault, id, data)
+	} else {
+		document, err = s.personalDocumentLocked(vault, id)
+	}
 	if err != nil {
 		return err
 	}
@@ -27,7 +48,7 @@ func (s *Session) WithPersonalSecret(vault *VaultData, revision, id, kind string
 	if metadata.Reprompt != 0 && !s.validItemAuthorizationLocked(grant, document) {
 		return ErrPermission
 	}
-	fields, err := DecryptCipherDocument(document, s.key)
+	fields, err := DecryptCipherDocument(document, ownerKey)
 	if err != nil {
 		return err
 	}
@@ -61,5 +82,8 @@ func (s *Session) WithPersonalSecret(vault *VaultData, revision, id, kind string
 	}
 	key := append([]byte(nil), s.passwordUnlock.Key...)
 	defer clear(key)
+	if !s.itemSessionActiveLocked() {
+		return ErrExpired
+	}
 	return use(secret, key, deadline)
 }

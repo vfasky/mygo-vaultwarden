@@ -364,6 +364,12 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	if _, err := result.Vault.Documents(result.Scope); err != nil {
 		return SyncResult{}, err
 	}
+	if err := s.appendOrganizationCredentialsLocked(&result); err != nil {
+		return SyncResult{}, err
+	}
+	if ctx.Err() != nil {
+		return SyncResult{}, ErrCancelled
+	}
 	if s.passwordUnlock != nil {
 		result.PasswordUnlock = &PasswordUnlock{Config: s.passwordUnlock.Config, Key: append([]byte(nil), s.passwordUnlock.Key...)}
 		result.Session, err = s.savedLocked()

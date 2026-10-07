@@ -148,6 +148,7 @@ func TestLiveVaultwarden(t *testing.T) {
 				}
 			}
 			if tc.name == "pbkdf2" {
+				testLiveOrganizations(t, ctx, session, result.Scope, password)
 				testLiveCipherComparison(t, ctx, session, result.Scope)
 				testLiveProtectedItem(t, ctx, session, result.Scope, password)
 				testLiveBackups(t, ctx, session, result.Scope, email, password)
