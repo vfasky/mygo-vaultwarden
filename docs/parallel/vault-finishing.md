@@ -108,6 +108,18 @@ Go 保留非空合法 UTF-8 原始前缀，不给予 host/baseDomain/快捷候�
 
 过程中确实出现并修正了失败，未把失败记为通过：legacy fixture 的 v1 multipart 需要显式空 key 字段；服务端附件包含已知 `object:"attachment"`；服务端派生 URI alias 造成恢复/import 比较误报；FIDO 测试期望值被 fixture 自身加密修改；旧 CLI helper 漏了每次 Sync 后的 Go-only receipt；新增 UI fixture 漏 custom type；一次编译期 unused import/同名常量。修正后重新运行相关回环与全量检查。
 
+## Review #35 后的资源表单续接修复
+
+本次仅针对 `10cb58f` 的 P1 回归增量，保留上文迁移成果。协调者明确批准 `network.go` 的最小同步续接接线及可注入 dispatcher/storage 的 controller 测试入口；生产仍使用原生 `window.Update` 和 `callStorage`。未改附件协议、Swift、账号或主导航。
+
+- 在 UI 线程发起同步时捕获现有资源表单、不可变资源计划、具体 Session、账号 scope、原 revision/snapshot ID 和 epoch。只有原生命周期有效、既有存储发布回执检查及 `AcceptAuthenticatedSnapshot` 成功、应用正式采用新 vault 后，`reconcileImport` 才消费该续接。裸 reconciliation/status、发布失败、旧计划、锁定、换账号/Session/表单、迟到回调均不授予新 revision。已认证且同 snapshot 的 token checkpoint 单独经既有 adopter 续接，不把 checkpoint 当文件核验。
+- 保留 SourceID→TargetID、已知附件 ID、未知/待同步/已核验阶段；同步不会创建 metadata、上传文件或把待核验变成已核验。续接清除密码输入及旧导出 grants。每次显式文件操作仍重新读取当前个人目标、校验归属/权限/policy，并为 reprompt 取得新授权；权限错误显示在对应文件行，不被随后全局同步状态掩盖。
+- controller 自身拒绝重复上传已执行/未知结果的行，不能只依赖按钮 disabled。没有附件 ID 时不会核验；用户明确核对 ID 后才下载校验。授权阶段尚未调用上传的失败不伪装成已上传。
+- 永久 `backup_resource_controller_test.go` 使用真实 Session 和 HTTP 测试服务器、排队 UI dispatcher、模拟 CAS 存储回执，执行真实 `importBackup` / 完整 copy / `runResourceRestore` / `syncVault` / `reconcileImport` controller。个人创建（含 token checkpoint）→采用 sync→第一个上传→采用 sync→下载校验→第二文件完整链，重新打开仅恢复和复制均覆盖。另覆盖未知结果/ID/不重放、真实表单继续/取消/错误显示、发布失败、清除或失效计划、epoch/账号/Session/外部变化、锁定迟到回调，以及目标缺失/组织迁移/只读/隐藏/reprompt 的重新检查。
+- 本次执行：`go test -race . -run 'TestResourceController|TestResourceForm|TestNativeEditor|TestReprompt|TestStale|TestRefreshCheckpoint' -count=1`；`go test ./...`；`go vet ./...`；`go build -o "$TMPDIR/board13-resource-fix" .`。所有最终检查通过。测试最初暴露重新解锁 Session 尚未完成首次 online sync 的夹具错误，已改为恢复表单从已接纳 online sync 开始；个人 metadata 导入另保留首次 token checkpoint 覆盖。测试没有把模拟存储当作真实 Keychain/Swift 端到端验证。
+
+本增量未重新执行无关 CLI、Vaultwarden 容器及 Swift 全套，未新增平台或硬件支持声明；上述旧轮次证据仍仅代表旧轮次实际执行。
+
 ## 尚未声称的结果与最终集成边界
 
 - 真实窗口/Open/Save 视觉、Keychain/Touch ID、签名安装、系统 AutoFill 实填及硬件 passkey 均未实测。headless、Swift 测试存储与 Go-only receipt 不替代这些平台验收；#14 还需注册组织新组件和真实 lease/持久化/刷新回调。

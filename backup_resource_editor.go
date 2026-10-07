@@ -15,6 +15,7 @@ import (
 type backupResourceRow struct {
 	resource                    vaultwarden.BackupResource
 	target, attachmentID, state string
+	problem                     string
 }
 type backupResourceEditor struct {
 	plan         *vaultwarden.ResourceImportPlan
@@ -223,6 +224,9 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 			row.target = m.targets[row.resource.CipherID]
 		}
 		ui.Text(c, fmt.Sprintf("%s · 来源 %s/%s · %s", row.resource.FileName, row.resource.CipherID, row.resource.AttachmentID, row.state)).MaxLines(3)
+		if row.problem != "" {
+			ui.Text(c, row.problem).MaxLines(3)
+		}
 		ui.TextInput(c, &row.target).Label("明确选择的目标项目编号").Disabled(busy || row.state == "已核验")
 		ui.TextInput(c, &row.attachmentID).Label("核对的目标附件编号（上传回执或同步后填写）").Disabled(busy || row.state == "已核验")
 		if action(c, "确认向此目标上传一次", "", false, busy || row.target == "" || row.state != "未执行").Clicked() {
@@ -267,6 +271,12 @@ func resourceTrashTarget(m *backupResourceEditor, source string) (string, bool) 
 	return target, target != ""
 }
 func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
+	a.runResourceRestoreWith(index, verify, trashSource, a.window.Update, callStorage, func() { a.syncVault(false) })
+}
+
+// Explicit side effects keep the native form controller testable with a queued
+// UI dispatcher and an in-memory bridge, while retaining real Session checks.
+func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string, dispatch func(func()), storage func(storageRequest) storageReply, refresh func()) {
 	e := a.backupEditor
 	if e == nil || e.resources == nil || a.pending != 0 || !a.backupCurrent(e, a.epoch) {
 		return
@@ -288,6 +298,14 @@ func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
 		}
 	}
 	if target == "" || (verify && attachment == "") {
+		a.status = "请先明确目标项目及待核验的附件编号；不会自动重发上传。"
+		return
+	}
+	if trashSource == "" && ((!verify && m.rows[index].state != "未执行") || m.rows[index].state == "已核验") {
+		a.status = "此文件已执行过操作，请同步后按明确附件编号核验；不会重复上传。"
+		return
+	}
+	if trashSource != "" && (m.trashPending[trashSource] || m.finalized[trashSource]) {
 		return
 	}
 	password := []byte(m.password)
@@ -318,7 +336,7 @@ func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
 		defer clear(password)
 		var checkpoint *snapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
-			reply, err := saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err := saveSessionCheckpoint(prior, cp, storage)
 			if err == nil {
 				prior, checkpoint = reply.State, reply.State
 			}
@@ -327,7 +345,7 @@ func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
 		var grant *vaultwarden.ItemAuthorization
 		var result vaultwarden.AttachmentUploadResult
 		var err error
-		state := callStorage(storageRequest{Operation: "status"})
+		state := storage(storageRequest{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			err = vaultwarden.ErrConflict
 		}
@@ -338,6 +356,7 @@ func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
 		if err == nil {
 			_, _, err = session.ReadPersonalCipherAuthorized(vault, target, grant)
 		}
+		attempted := false
 		if err == nil {
 			if trashSource != "" {
 				for _, file := range finalFiles {
@@ -355,10 +374,11 @@ func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
 			} else if verify {
 				err = session.VerifyRestoredResource(ctx, vault, target, attachment, plan, index, grant, persist)
 			} else {
+				attempted = true
 				result, err = session.UploadResource(ctx, vault, target, plan, index, true, grant, persist)
 			}
 		}
-		a.window.Update(func() {
+		dispatch(func() {
 			a.pending--
 			defer cancel()
 			if a.backupEditor != e || a.epoch != epoch {
@@ -367,7 +387,7 @@ func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
 			}
 			m.plan = plan
 			a.cancel = nil
-			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
+			if checkpoint != nil && !a.adoptBackupCheckpoint(e, checkpoint) {
 				a.stopNetwork()
 				a.status = vaultwarden.ErrIdentity.Error()
 				return
@@ -379,16 +399,18 @@ func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
 				if err == nil {
 					m.rows[index].state = "已核验"
 				}
-			} else {
+			} else if attempted {
 				m.rows[index].state = "待同步核对"
 				m.rows[index].attachmentID = result.AttachmentID
 			}
 			a.status = "附件操作结束；请同步核对，未知结果不会自动重发。"
+			m.rows[index].problem = ""
 			if err != nil {
+				m.rows[index].problem = err.Error()
 				a.status = err.Error() + " " + a.status
 			}
-			if !verify && a.sessionOwnsSnapshot() {
-				a.syncVault(false)
+			if !verify && (attempted || trashSource != "") && a.sessionOwnsSnapshot() {
+				refresh()
 			}
 		})
 	}()

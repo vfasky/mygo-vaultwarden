@@ -394,6 +394,10 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 	a.status = "明文备份已安全写入新文件，请妥善保管并在不再需要时删除。"
 }
 func (a *app) importBackup() {
+	a.importBackupWith(a.window.Update, callStorage, func() { a.syncVault(false) })
+}
+
+func (a *app) importBackupWith(dispatch func(func()), storage func(storageRequest) storageReply, refresh func()) {
 	e := a.backupEditor
 	if a.pending != 0 || e == nil || !e.importing || e.plan == nil || e.submitted || !a.backupCurrent(e, a.epoch) {
 		return
@@ -417,14 +421,14 @@ func (a *app) importBackup() {
 		var checkpoint *snapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			reply, err = saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err = saveSessionCheckpoint(prior, cp, storage)
 			if err == nil {
 				prior = reply.State
 				checkpoint = reply.State
 			}
 			return err
 		}
-		state := callStorage(storageRequest{Operation: "status"})
+		state := storage(storageRequest{Operation: "status"})
 		var result vaultwarden.ImportResult
 		var err error
 		if !state.OK || !backupLease(state.State, scope, prior.Revision) || ctx.Err() != nil {
@@ -432,14 +436,14 @@ func (a *app) importBackup() {
 		} else {
 			result, err = session.ImportPersonalBackup(ctx, scope, plan, persist)
 		}
-		a.window.Update(func() {
+		dispatch(func() {
 			a.pending--
 			defer cancel()
 			if a.epoch != epoch || a.backupEditor != e {
 				return
 			}
 			a.cancel = nil
-			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
+			if checkpoint != nil && !a.adoptBackupCheckpoint(e, checkpoint) {
 				a.stopNetwork()
 				a.status = vaultwarden.ErrIdentity.Error()
 				return
@@ -458,13 +462,16 @@ func (a *app) importBackup() {
 			}
 			if a.backupEditor == e && a.sessionOwnsSnapshot() {
 				a.status = "导入操作已结束，正在同步核对已知项目；结果未知时请人工核对。"
-				a.syncVault(false)
+				refresh()
 			}
 		})
 	}()
 }
-func (a *app) reconcileImport() {
+func (a *app) reconcileImport(continuations ...*backupContinuation) {
 	e := a.backupEditor
+	if len(continuations) == 1 {
+		continuations[0].resume(a)
+	}
 	if e != nil && e.recovery != nil && a.sessionOwnsSnapshot() {
 		e.revision = a.sessionRevision
 		return

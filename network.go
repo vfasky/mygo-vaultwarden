@@ -99,6 +99,10 @@ func (a *app) stopNetwork() {
 }
 
 func (a *app) syncVault(login bool) {
+	a.syncVaultWith(login, a.window.Update, callStorage)
+}
+
+func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(storageRequest) storageReply) {
 	if a.pending != 0 || a.snapshot == nil {
 		return
 	}
@@ -165,6 +169,9 @@ func (a *app) syncVault(login bool) {
 	if !login {
 		a.status = "正在同步密码库…"
 	}
+	// Capture on the UI thread; only the successful authenticated publication
+	// below may consume this continuation. Status observations cannot mint one.
+	backupContinuation := a.captureBackupContinuation(epoch)
 	go func() {
 		defer clear(password)
 		var session vaultSession = existing
@@ -175,7 +182,7 @@ func (a *app) syncVault(login bool) {
 		var checkpointState *snapshotStatus
 		if login {
 			// Revoke the previous account before prompting, including offline copies.
-			reply = callStorage(storageRequest{Operation: "logout", ExpectedRevision: expected})
+			reply = storage(storageRequest{Operation: "logout", ExpectedRevision: expected})
 			if !reply.OK || reply.State == nil {
 				workErr = reply.failure()
 				if reply.OK {
@@ -196,7 +203,7 @@ func (a *app) syncVault(login bool) {
 						// The raw master password is unnecessary while waiting for MFA.
 						clear(password)
 						attempt++
-						return a.requestLoginCode(ctx, epoch, attempt, a.window.Update)
+						return a.requestLoginCode(ctx, epoch, attempt, dispatch)
 					})
 					if workErr == nil {
 						session = loggedIn
@@ -214,7 +221,7 @@ func (a *app) syncVault(login bool) {
 				prior := initialSnapshot
 				persist = func(checkpoint vaultwarden.SessionCheckpoint) error {
 					var err error
-					reply, err = saveSessionCheckpoint(prior, checkpoint, callStorage)
+					reply, err = saveSessionCheckpoint(prior, checkpoint, storage)
 					if err == nil {
 						checkpointState, prior = reply.State, reply.State
 						expected = reply.State.Revision
@@ -229,7 +236,7 @@ func (a *app) syncVault(login bool) {
 			for _, item := range result.Credentials {
 				metadata = append(metadata, displayCredential{ID: item.ID, Title: item.Title, Username: item.Username, URL: item.URL})
 			}
-			reply = callStorage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
+			reply = storage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
 			if reply.OK && reply.Vault != nil {
 				result.Vault = reply.Vault
 			}
@@ -267,7 +274,7 @@ func (a *app) syncVault(login bool) {
 		}
 		result.Credentials = nil
 		if errors.Is(workErr, vaultwarden.ErrExpired) || errors.Is(workErr, vaultwarden.ErrIdentity) {
-			reply = callStorage(storageRequest{Operation: "logout", ExpectedRevision: expected})
+			reply = storage(storageRequest{Operation: "logout", ExpectedRevision: expected})
 			if session != nil {
 				session.Close()
 			}
@@ -275,7 +282,7 @@ func (a *app) syncVault(login bool) {
 		if workErr == nil && ctx.Err() != nil {
 			workErr = vaultwarden.ErrCancelled
 		}
-		a.window.Update(func() {
+		dispatch(func() {
 			a.pending--
 			if a.epoch != epoch {
 				if login && session != nil {
@@ -303,6 +310,9 @@ func (a *app) syncVault(login bool) {
 					a.status = "登录已超时，请重新输入主密码。"
 				}
 				return
+			}
+			if !backupContinuation.current(a) {
+				backupContinuation = nil
 			}
 			if concrete, ok := session.(*vaultwarden.Session); ok {
 				if err := concrete.AcceptAuthenticatedSnapshot(reply.Vault, reply.State.Revision); err != nil {
@@ -334,7 +344,7 @@ func (a *app) syncVault(login bool) {
 			s := result.Summary
 			a.status = fmt.Sprintf("已同步 %d 个项目；可填充登录 %d。填充排除：未授权组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
 			a.reconcileBulk()
-			a.reconcileImport()
+			a.reconcileImport(backupContinuation)
 		})
 	}()
 }

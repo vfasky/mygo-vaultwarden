@@ -16,6 +16,10 @@ func cipherHasAttachments(document vaultwarden.CipherDocument) bool {
 	return json.Unmarshal(document.JSON, &meta) == nil && len(meta.Attachments) > 0
 }
 func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEditor) {
+	a.startResourceCipherCopyWith(session, e, a.window.Update, callStorage, func() { a.syncVault(false) })
+}
+
+func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *cipherEditor, dispatch func(func()), storage func(storageRequest) storageReply, refresh func()) {
 	if err := attachmentDraftSaved(session, a.vault, e); err != nil {
 		a.status = "复制含附件项目之前，请先保存草稿；完整复制使用已保存版本。"
 		return
@@ -29,7 +33,7 @@ func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEdi
 	go func() {
 		var checkpoint *snapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
-			reply, err := saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err := saveSessionCheckpoint(prior, cp, storage)
 			if err == nil {
 				prior, checkpoint = reply.State, reply.State
 			}
@@ -38,7 +42,7 @@ func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEdi
 		var plan *vaultwarden.ResourceImportPlan
 		var created vaultwarden.CipherDocument
 		var err error
-		state := callStorage(storageRequest{Operation: "status"})
+		state := storage(storageRequest{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			err = vaultwarden.ErrConflict
 		}
@@ -65,7 +69,7 @@ func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEdi
 		}
 		attempted := false
 		if err == nil {
-			state := callStorage(storageRequest{Operation: "status"})
+			state := storage(storageRequest{Operation: "status"})
 			if !state.OK || !backupLease(state.State, scope, revision) {
 				err = vaultwarden.ErrConflict
 			}
@@ -74,7 +78,7 @@ func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEdi
 			attempted = true
 			created, err = session.CopyPersonalResourceMetadata(ctx, vault, plan, grant, persist)
 		}
-		a.window.Update(func() {
+		dispatch(func() {
 			a.pending--
 			defer cancel()
 			if a.editor != e || a.epoch != epoch {
@@ -113,7 +117,7 @@ func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEdi
 				a.status = err.Error() + " " + a.status
 			}
 			if a.sessionOwnsSnapshot() {
-				a.syncVault(false)
+				refresh()
 			}
 		})
 	}()
