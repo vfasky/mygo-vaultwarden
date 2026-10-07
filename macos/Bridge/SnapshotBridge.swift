@@ -64,6 +64,20 @@ private struct BridgeReply: Encodable {
 
 private var secretClipboard: SensitiveClipboard?
 
+private func bridgeStore() throws -> SnapshotStore {
+#if SNAPSHOT_BRIDGE_TESTING
+    return try snapshotBridgeTestStore()
+#else
+    return try SnapshotStore.sharedContainer()
+#endif
+}
+
+private func scheduleBridgeIndex(store: SnapshotStore, lease: SnapshotLease?) {
+#if !SNAPSHOT_BRIDGE_TESTING
+    SnapshotIndex.schedule(store: store, lease: lease)
+#endif
+}
+
 // Copy is called synchronously from the Go UI thread. Worker callers enter the
 // main queue before acquiring a snapshot file lease; never dispatch to the UI
 // while holding a store lock. Cleanup uses the same ordering.
@@ -73,7 +87,9 @@ private func onClipboardThread<T>(_ body: () throws -> T) rethrows -> T {
 }
 
 private func clearSecretClipboard() {
+#if !SNAPSHOT_BRIDGE_TESTING
     onClipboardThread { secretClipboard?.clear() }
+#endif
 }
 
 private func execute(_ request: BridgeRequest) -> BridgeReply {
@@ -83,7 +99,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             clearSecretClipboard()
             return BridgeReply(ok: true, code: "ok", message: "", state: nil)
         }
-        let vault = try SnapshotStore.sharedContainer()
+        let vault = try bridgeStore()
         store = vault
         func expected() throws -> String {
             guard let revision = request.expectedRevision else { throw SnapshotError.invalidInput }
@@ -115,7 +131,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
         case "status":
             let state = try vault.state()
             // Repair legacy/late candidates on a signed-out vault without authentication.
-            if state.snapshot == nil && state.indexPending { SnapshotIndex.schedule(store: vault, lease: nil) }
+            if state.snapshot == nil && state.indexPending { scheduleBridgeIndex(store: vault, lease: nil) }
         case "settings":
             let settings = UserDefaults.standard
             let deviceID = settings.string(forKey: "vaultwardenDeviceID") ?? UUID().uuidString
@@ -127,7 +143,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             if request.operation == "restorePolicyAccess" && request.clearingPolicy == nil { throw SnapshotError.invalidInput }
             if request.operation == "restoreOrganizationAccess" && request.organizationID == nil { throw SnapshotError.invalidInput }
             let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session, vault: request.vault, includeVault: true, restoringOrganization: request.operation != "publishVault" ? request.organizationID : nil, clearingPolicy: request.operation == "restorePolicyAccess" ? request.clearingPolicy : nil)
-            SnapshotIndex.schedule(store: vault, lease: lease)
+            scheduleBridgeIndex(store: vault, lease: lease)
             // Do not return a later writer's revision as this session's write authority.
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: "快照已保存。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
@@ -136,7 +152,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             guard let scope = request.scope, let id = request.organizationID, let key = request.unlockKey, let session = request.session else { throw SnapshotError.invalidInput }
             defer { clearSecretClipboard() }
             let lease = try vault.quarantineOrganization(id, scope: scope, expected: expected(), unlockKey: key, session: session, pendingPolicy: request.pendingPolicy)
-            SnapshotIndex.schedule(store: vault, lease: lease)
+            scheduleBridgeIndex(store: vault, lease: lease)
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: "该组织的本机访问已隔离。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
@@ -154,7 +170,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             // Index clear is scheduled even when key cleanup returns an error after
             // the tombstone was committed. Callers still receive that cleanup failure.
             defer {
-                if let state = try? vault.state(), state.snapshot == nil { SnapshotIndex.schedule(store: vault, lease: nil) }
+                if let state = try? vault.state(), state.snapshot == nil { scheduleBridgeIndex(store: vault, lease: nil) }
             }
             try vault.logout(expected: expected())
         case "retryCleanup":
@@ -178,7 +194,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                                 items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
                 }
             }
-            if request.operation == "reindex" { SnapshotIndex.schedule(store: vault, lease: lease) }
+            if request.operation == "reindex" { scheduleBridgeIndex(store: vault, lease: lease) }
         default: throw SnapshotError.invalidInput
         }
         let state = try vault.state()
@@ -193,6 +209,33 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
     }
 }
 
+private let snapshotTransfer = SnapshotTransfer()
+
+private func executeTransfer(_ frame: SnapshotTransferFrame) throws -> SnapshotTransferReply {
+    try snapshotTransfer.exchange(frame) { input in
+        var parsed = try JSONDecoder().decode(BridgeRequest.self, from: input)
+        defer {
+            if let count = parsed.passwordUnlock?.key.count { parsed.passwordUnlock?.key.resetBytes(in: 0..<count) }
+            if let count = parsed.unlockKey?.count { parsed.unlockKey?.resetBytes(in: 0..<count) }
+            if let count = parsed.session?.count { parsed.session?.resetBytes(in: 0..<count) }
+        }
+        guard ["publishVault", "restoreOrganizationAccess", "restorePolicyAccess", "quarantineOrganization", "saveSession", "listPassword", "list", "reindex"].contains(parsed.operation) else { throw SnapshotError.invalidInput }
+        let expires = ProcessInfo.processInfo.systemUptime + 60
+        let reply = execute(parsed)
+        let encoded = try snapshotJSON(reply)
+        if !reply.ok { return (encoded, { bytes, range in bytes.subdata(in: range) }) }
+        guard let receipt = reply.state, receipt.available, let scope = receipt.scope else { throw SnapshotError.stale }
+        let store = try bridgeStore()
+        let current = try store.state()
+        guard current.revision == receipt.revision, let snapshot = current.snapshot,
+              snapshot.header.id == receipt.snapshotID, snapshot.header.scope == scope else { throw SnapshotError.stale }
+        let lease = SnapshotLease(revision: receipt.revision, header: snapshot.header, expiresAt: expires, credentials: [])
+        return (encoded, { bytes, range in
+            try store.withCurrentLease(lease) { bytes.subdata(in: range) }
+        })
+    }
+}
+
 // Synchronous C ABI. Go calls on a worker goroutine; no pointer escapes the call.
 // Only authenticated list operations return the encrypted payload's saved session
 // to the main app; status/index operations and AutoFill leases never return it.
@@ -203,6 +246,15 @@ public func mygoSnapshotExecute(_ request: UnsafePointer<UInt8>?, _ requestLengt
     guard let request, let output, requestLength > 0, requestLength <= 4 * 1024 * 1024,
           capacity >= 1024, capacity <= 4 * 1024 * 1024 else { return -1 }
     return autoreleasepool {
+        let input = Data(bytes: request, count: requestLength)
+        if let frame = try? JSONDecoder().decode(SnapshotTransferFrame.self, from: input), frame.operation == "__transfer_v1" {
+            let result: SnapshotTransferReply
+            do { result = try executeTransfer(frame) }
+            catch { result = SnapshotTransferReply(ok: false) }
+            guard let data = try? snapshotJSON(result), data.count <= capacity else { return -2 }
+            data.copyBytes(to: output, count: data.count)
+            return Int32(data.count)
+        }
         let reply: BridgeReply
         do {
             var parsed = try JSONDecoder().decode(BridgeRequest.self, from: Data(bytes: request, count: requestLength))
