@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"testing"
 )
@@ -162,7 +161,7 @@ func TestBackupOfficialSelectionAndUnsupported(t *testing.T) {
 }
 func TestImportPreflightRejectsBeforeAnyWrite(t *testing.T) {
 	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(500) }))
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls++; w.WriteHeader(500) }))
 	defer server.Close()
 	s, v, ids := backupFixture(t, MyGoBackup, 1)
 	defer s.Close()
@@ -228,7 +227,7 @@ func TestImportFolderMappingAndPartialUnknown(t *testing.T) {
 	calls := []string{}
 	created := 0
 	var first CipherDocument
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls = append(calls, r.Method+" "+r.URL.Path)
 		if r.URL.Path == "/api/folders" {
 			var body map[string]any

@@ -64,7 +64,9 @@ func (s *Session) beginOperationLocked(ctx context.Context) (context.Context, fu
 	}
 	operation, cancel := context.WithCancel(ctx)
 	s.cancelOperation = cancel
+	s.writePolicies = nil
 	return operation, func() {
+		s.writePolicies = nil
 		cancel()
 		s.operationMu.Lock()
 		s.cancelOperation = nil
@@ -121,6 +123,11 @@ func (s *Session) authenticatedGuardedLocked(ctx context.Context, method, endpoi
 	}
 	if time.Until(s.expires) < 30*time.Second {
 		if err := s.refreshAndCheckpointLocked(ctx, persist); err != nil {
+			return 0, nil, err
+		}
+	}
+	if method != http.MethodGet && method != http.MethodHead && s.writePolicies != nil {
+		if err := s.checkOperationPoliciesLocked(ctx, s.writePolicies); err != nil {
 			return 0, nil, err
 		}
 	}

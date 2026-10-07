@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -106,7 +105,7 @@ func TestAuthorizedWriteAndCheckpointExpiry(t *testing.T) {
 	for _, expire := range []bool{false, true} {
 		t.Run(map[bool]string{false: "write", true: "checkpoint-expiry"}[expire], func(t *testing.T) {
 			var writes atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				writes.Add(1)
 				if r.Method != "PUT" || r.URL.Path != "/api/ciphers/item-1" {
 					t.Error("wrong request")

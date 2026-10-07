@@ -8,7 +8,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -119,7 +118,7 @@ func TestCopySessionCheckpointAndUnknownResult(t *testing.T) {
 	source, key := copyFixture(t, 1)
 	fields, _ := DecryptCipherDocument(source, key)
 	calls := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		if r.Method != "POST" || r.URL.Path != "/api/ciphers" {
 			t.Error("wrong copy route")
@@ -171,7 +170,7 @@ func TestCopyDraftRekeysWrappedItemAndLegacyURI(t *testing.T) {
 	fields.Login["password"] = "draft password"
 	fields.Login["uris"].([]any)[0].(map[string]any)["uri"] = "https://edited.example.invalid/"
 	var sent CipherDocument
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		sent.JSON, _ = io.ReadAll(r.Body)
 		payload, err := documentObject(sent)
 		if err != nil {
@@ -218,7 +217,7 @@ func TestCopyRefusesUnknownSourceBeforeRequestEvenIfDraftDropsIt(t *testing.T) {
 	fields, _ := DecryptCipherDocument(source, key)
 	fields.Fields = nil
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(500) }))
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { calls.Add(1); w.WriteHeader(500) }))
 	defer server.Close()
 	s, _ := resumableFixture(t, server.URL)
 	defer s.Close()
@@ -239,7 +238,7 @@ func TestCopyRefusesUnknownSourceBeforeRequestEvenIfDraftDropsIt(t *testing.T) {
 func TestCopyRejectsResponseWithSourceIdentity(t *testing.T) {
 	source, key := copyFixture(t, 1)
 	fields, _ := DecryptCipherDocument(source, key)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(source.JSON) }))
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write(source.JSON) }))
 	defer server.Close()
 	s, _ := resumableFixture(t, server.URL)
 	defer s.Close()
@@ -256,7 +255,7 @@ func TestCloseCancelsCopyWithoutDuplicateCreation(t *testing.T) {
 	fields, _ := DecryptCipherDocument(source, key)
 	entered := make(chan struct{})
 	var calls atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
 		io.Copy(io.Discard, r.Body)
 		close(entered)

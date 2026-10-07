@@ -44,6 +44,20 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 			return result, err
 		}
 	}
+	// Check every item's policy before the first folder or cipher is created.
+	// The private context is reused only inside this import operation.
+	if _, err := s.operationPoliciesLocked(ctx, persist); err != nil {
+		return result, err
+	}
+	for _, document := range documents {
+		var metadata struct{ Type int }
+		if json.Unmarshal(document.JSON, &metadata) != nil {
+			return result, ErrProtocol
+		}
+		if _, err := s.personalCipherPolicyGuardLocked(ctx, metadata.Type, persist, nil); err != nil {
+			return result, err
+		}
+	}
 	mapping := map[string]string{}
 	fail := func(kind, name, id string, err error) (ImportResult, error) {
 		state := "已停止，请同步核对"

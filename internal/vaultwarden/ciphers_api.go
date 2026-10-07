@@ -164,6 +164,10 @@ func (s *Session) UpdatePersonalCipherAuthorized(ctx context.Context, scope Scop
 	if err != nil {
 		return CipherDocument{}, err
 	}
+	guard, err = s.personalCipherPolicyGuardLocked(ctx, fields.Type, persist, guard)
+	if err != nil {
+		return CipherDocument{}, err
+	}
 	status, data, err := s.authenticatedGuardedLocked(ctx, http.MethodPut, "/api/ciphers/"+fields.ID, "application/json", string(encrypted.JSON), persist, guard)
 	if err != nil {
 		return CipherDocument{}, err

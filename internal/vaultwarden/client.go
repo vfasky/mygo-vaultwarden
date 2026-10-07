@@ -287,6 +287,7 @@ type Session struct {
 	stopping                                 bool
 	authorizationRevision                    string
 	authorizationEpoch                       uint64
+	writePolicies                            *operationPolicies
 }
 
 func (s *Session) Close() {
@@ -309,6 +310,7 @@ func (s *Session) Close() {
 	s.closed = true
 	s.authorizationEpoch++
 	s.authorizationRevision = ""
+	s.writePolicies = nil
 	s.client.http.CloseIdleConnections()
 }
 func (s *Session) refreshLocked(ctx context.Context) error {
@@ -333,6 +335,9 @@ func (s *Session) refreshLocked(ctx context.Context) error {
 	s.access = token.AccessToken
 	s.refresh = token.RefreshToken
 	s.expires = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+	// Even a non-persisted online session must not carry policy authority across
+	// a token refresh. Durable sessions are additionally revoked at checkpoint.
+	s.authorizationEpoch++
 	return nil
 }
 func (s *Session) Sync(ctx context.Context) (SyncResult, error) {

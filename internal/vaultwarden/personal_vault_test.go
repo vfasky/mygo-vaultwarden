@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 )
 
@@ -184,7 +183,7 @@ func TestSuccessfulWriteMalformedResponseIsUncertain(t *testing.T) {
 	doc, key := cipherDocumentFixture(t, 3)
 	fields, _ := DecryptCipherDocument(doc, key)
 	requests := 0
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests++; w.Write([]byte(`{"unexpected":true}`)) }))
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests++; w.Write([]byte(`{"unexpected":true}`)) }))
 	defer server.Close()
 	session, _ := resumableFixture(t, server.URL)
 	session.key = key

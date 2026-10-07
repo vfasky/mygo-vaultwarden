@@ -3,6 +3,7 @@ package vaultwarden
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 )
 
@@ -29,6 +30,22 @@ func (s *Session) createCipherDocumentLocked(ctx context.Context, document Ciphe
 }
 
 func (s *Session) createGuardedCipherDocumentLocked(ctx context.Context, document CipherDocument, persist func(SessionCheckpoint) error, guard func() error) (CipherDocument, error) {
+	var metadata struct {
+		Type           int
+		OrganizationID *string
+	}
+	if json.Unmarshal(document.JSON, &metadata) != nil || metadata.Type < 1 || metadata.Type > 8 || metadata.OrganizationID != nil {
+		return CipherDocument{}, ErrValidation
+	}
+	if guard != nil {
+		if err := guard(); err != nil {
+			return CipherDocument{}, err
+		}
+	}
+	guard, err := s.personalCipherPolicyGuardLocked(ctx, metadata.Type, persist, guard)
+	if err != nil {
+		return CipherDocument{}, err
+	}
 	status, data, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, "/api/ciphers", "application/json", string(document.JSON), persist, guard)
 	if err != nil {
 		return CipherDocument{}, err

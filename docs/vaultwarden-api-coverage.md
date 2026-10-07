@@ -1,6 +1,6 @@
 # Vaultwarden API 覆盖矩阵
 
-**INCOMPLETE：整卡未完成，未达到验收。** 最新增量为群组原生CRUD、成员/集合配置及显式accessAll确认，见[群组管理](organization-groups.md)。policies会话执行层及管理界面仍未实现。此前补齐隔离 SMTP 邮件接受回环及恢复策略 auto-enrollment、组织恢复 RSA 钥对和原生明确授权，见[邀请与恢复登记](organization-invitation-recovery.md)；此前已实现成员目录、单人邀请/重新邀请、公钥可信核验确认、角色、撤销/恢复/移除及邮件链接接受表单；已有集合CRUD、成员/群组集合访问配置继续保留，复用组织创建/资料修改/退出/删除及持久隔离恢复；已有组织密钥/权限、读写共享与安全Login投影继续保留，见 [组织密码库](organization-vault.md)；个人冲突比较与显式重新应用见 [冲突处理](cipher-conflicts.md)；既有 reprompt 短授权、密码/TOTP短时显示和受控复制见 [敏感操作](sensitive-operations.md)。禁止据此启动 Review 或合并。
+**INCOMPLETE：整卡未完成，未达到验收。** 最新增量为操作内权威策略上下文，以及个人create/update/copy/import对type5/15的保存约束，见[组织策略执行](organization-policies.md)。策略执行尚在逐入口迁移，组织写入/离线读取及policies管理界面仍未实现；不能把当前检查当作全部策略支持。此前群组原生CRUD、成员/集合配置及显式accessAll确认见[群组管理](organization-groups.md)。此前补齐隔离 SMTP 邮件接受回环及恢复策略 auto-enrollment、组织恢复 RSA 钥对和原生明确授权，见[邀请与恢复登记](organization-invitation-recovery.md)；此前已实现成员目录、单人邀请/重新邀请、公钥可信核验确认、角色、撤销/恢复/移除及邮件链接接受表单；已有集合CRUD、成员/群组集合访问配置继续保留，复用组织创建/资料修改/退出/删除及持久隔离恢复；已有组织密钥/权限、读写共享与安全Login投影继续保留，见 [组织密码库](organization-vault.md)；个人冲突比较与显式重新应用见 [冲突处理](cipher-conflicts.md)；既有 reprompt 短授权、密码/TOTP短时显示和受控复制见 [敏感操作](sensitive-operations.md)。禁止据此启动 Review 或合并。
 
 固定服务器 **Vaultwarden 1.37.4**：tag 对象 `54a40806c990da2def7acd5a3152edc530c59b79`，commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档 SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。字段加密参考 Bitwarden clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的 `libs/common/src/vault/models/domain/{bank-account,drivers-license,passport,login-uri}.ts`。本轮从固定 commit 的 raw URL 成功读取这四份文件，未换用 main。
 
@@ -28,6 +28,7 @@
 
 | 边界 | 实际实现及证据 | 仍需完成 |
 |---|---|---|
+| 权威策略执行（迁移中） | 个人create/update/copy/import操作内认证GET `/api/sync`，完整核验profile/organizations/policies/policiesNew；type5/15保存约束，refresh/checkpoint/epoch/revision/取消派发前检查 | [专题](organization-policies.md)。单元与隔离1.37.4真实owner/member通过；policy GET不发布vault或取消组织隔离。其它写入口、离线读取/type15投影与完整政策原生表单仍缺；policy读→写无服务端事务/CAS |
 | 请求约束 | TLS/loopback、禁重定向、请求超时、32 MiB响应限制、ID过滤、脱敏错误；既有测试 | query/multipart/binary独立传输、Retry-After未完成 |
 | 刷新持久化 | pending checkpoint失败阻断请求；Swift同scope/revision保存session并保留完整vault；相关Go/Swift测试 | 所有未来模块必须复用门控 |
 | 写入未知结果 | 传输错误、意外成功状态、5xx、成功响应不可解码/身份错误、写后取消均按未知结果；不自动重试；UI禁重复保存并保留草稿 | 同步后逐字段比较本地/远端改动并显式选择重新应用或采用远端已接UI，原始最新文档保留unknown；历史只删除已观察条目；reprompt新grant、锁定和版本隔离测试及真实回环通过。双改URI/custom无稳定行ID，逐行对应选择仍缺，目前明确保留远端后手动编辑；详见 [冲突处理](cipher-conflicts.md) |
@@ -75,7 +76,7 @@
 | 成员撤销/恢复/移除 | PUT `/api/organizations/{orgId}/users/{memberId}/revoke`、`/restore`；DELETE `/users/{memberId}` | `ChangeOrganizationMember`；每成员确认，服务器状态/权限约束，不能revoke/restore自己，最后owner由live server最终保护；移除自己前强制持久隔离，普通sync不能恢复。Go取消/Close后未知结果零重试、checkpoint失败零请求；真实revoke/restore/移除invited与最后owner拒绝已验。角色与成员写入未知结果禁原表单再提交，先同步核对。SMTP消息/真实Swift→Keychain全链未验；bulk及restore/vnext兼容入口未开放 |
 | 邀请策略与恢复密钥 | GET `/api/accounts/profile`、`/api/organizations/{orgId}/policies/token?token=…`、`/public-key`；POST `/keys`（后两者组织路径）；`/keys`旧GET别名未调用 | `PrepareInvitationAcceptance/AcceptPreparedInvitation/OrganizationRecoveryPublicKey`；邀请两阶段核验及owner恢复公钥/初始化原生确认。无key/损坏key/未同意不包装user key。策略和公钥重新验证，已accepted/confirmed仅提示核对不再accept；接受请求token+resetPasswordKey单次发送，任何可能部分执行错误均按未知结果且确认不可重放。旧组织初始化只创建缺失公钥，已存在不轮换；mock crypto/权限及新建组织真实密钥链验证，旧组织初始化真实回环未验。GETquery保basepath/编码/禁止跨host；refresh先checkpoint，epoch失效。完整管理员恢复、既有成员登记/退出和全部策略客户端检查仍缺 |
 | 群组CRUD/成员与集合分配 | GET `/api/organizations/{orgId}/groups`、`/groups/{groupId}/details`、`/groups/{groupId}/users`；POST `/groups`、PUT/DELETE `/groups/{groupId}` | `OrganizationGroups/GroupDetails/SaveGroup/DeleteGroup`及组织管理原生表单；owner/admin、UseGroups门控，成员ID/globalUserID/orgID与目录完整性校验。固定GET不返回accessAll（group.rs:75–109），PUT必覆盖（organizations.rs:2454/2467），因此包括更名在内每次保存需重新明确选全部/仅指定集合并绑定全草稿确认；不宣称无副作用更名。其余成员/集合/externalId/opaque保留，重新核对可读状态；无法检测隐藏accessAll并发变化。已有组更新/删除先持久隔离、明确恢复；未知/部分结果不重试。单元、原生headless、真实owner/admin CRUD及member/manager拒绝、true→false→true→false集合投影验证通过；实际范围见[专题](organization-groups.md)。groups/details列表别名、单组plain GET及批量删除尚未调用/实现 |
-| 其余组织管理路由 | policies/events/recovery及批量成员/群组 | **仍仅部分集成fixture调用，不是产品功能**。policies管理及可信会话策略执行尚未实现；events/完整recovery等待实现（邀请auto-enrollment仅完成上述分支），完整范围未缩减 |
+| 其余组织管理路由 | policies/events/recovery及批量成员/群组 | **仍仅部分集成fixture调用，不是产品功能**。policies管理尚未实现；可信操作内执行基础已接个人create/update/copy/import的type5/15保存检查，详见[专题](organization-policies.md)，其余写与离线读取迁移仍缺；events/完整recovery等待实现（邀请auto-enrollment仅完成上述分支），完整范围未缩减 |
 
 组织只读详情目前提供非秘密标准字段及Login密码/TOTP认证操作，隐藏密码占位未提供更细只读详情；组织项目状态/批量/copy/export、冲突字段重基、legacy共享和完整组织策略管理仍缺。新sync清组织草稿，不把个人冲突保稿规则扩大到已撤销组织。详见 [组织实现与边界](organization-vault.md)。
 

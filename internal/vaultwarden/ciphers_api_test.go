@@ -75,7 +75,7 @@ func TestUpdateCipherEncryptedAndRevisionBound(t *testing.T) {
 		t.Fatal(err)
 	}
 	fields.Name = "Changed title"
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newPersonalPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "PUT" || r.URL.Path != "/api/ciphers/item-1" {
 			t.Fatal("wrong route")
 		}
