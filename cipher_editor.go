@@ -33,28 +33,30 @@ type editorCustom struct {
 }
 
 type cipherEditor struct {
-	document                     vaultwarden.CipherDocument
-	fields                       vaultwarden.CipherFields
-	inputs                       []editorField
-	notes                        string
-	uris                         []editorURI
-	custom                       []editorCustom
-	conflict                     bool
-	comparison                   *vaultwarden.CipherRebase
-	changes                      []vaultwarden.CipherChange
-	localChoices                 map[string]bool
-	compareAuthorization         bool
-	uncertain                    bool
-	saved                        bool
-	revision                     string
-	confirm                      vaultwarden.CipherAction
-	showHistory                  bool
-	confirmHistoryDelete         bool
-	authorization                *vaultwarden.ItemAuthorization
-	repromptID, repromptPassword string
-	authorizationExpires         time.Time
-	shownSecret                  string
-	shownSecretExpires           time.Time
+	organizationID, collectionID           string
+	shareOrganizationID, shareCollectionID string
+	document                               vaultwarden.CipherDocument
+	fields                                 vaultwarden.CipherFields
+	inputs                                 []editorField
+	notes                                  string
+	uris                                   []editorURI
+	custom                                 []editorCustom
+	conflict                               bool
+	comparison                             *vaultwarden.CipherRebase
+	changes                                []vaultwarden.CipherChange
+	localChoices                           map[string]bool
+	compareAuthorization                   bool
+	uncertain                              bool
+	saved                                  bool
+	revision                               string
+	confirm                                vaultwarden.CipherAction
+	showHistory                            bool
+	confirmHistoryDelete                   bool
+	authorization                          *vaultwarden.ItemAuthorization
+	repromptID, repromptPassword           string
+	authorizationExpires                   time.Time
+	shownSecret                            string
+	shownSecretExpires                     time.Time
 }
 
 var cipherTypeNames = []string{"", "登录", "安全笔记", "支付卡", "身份", "SSH 密钥", "银行账户", "驾驶证", "护照"}
@@ -91,11 +93,14 @@ func sectionFields(f *vaultwarden.CipherFields) map[string]any {
 	return nil
 }
 func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
+	organizationPrompt := a.editor != nil && a.organizationItem(a.editor.repromptID)
 	a.vault = nil
 	a.folders = nil
+	a.organizations, a.collections = nil, nil
 	if vault == nil {
 		return nil
 	}
+	a.items = nil
 	session, ok := a.session.(*vaultwarden.Session)
 	if !ok || a.liveScope == nil || vault.Scope != *a.liveScope {
 		return vaultwarden.ErrIdentity
@@ -108,10 +113,40 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	if err != nil {
 		return err
 	}
+	organizations, collections, err := session.Organizations(vault)
+	if err != nil {
+		return err
+	}
+	orgEntries, err := session.OrganizationEntries(vault)
+	if err != nil {
+		return err
+	}
+	entries = append(entries, orgEntries...)
 	items := make([]displayCredential, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, displayCredential{ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, RequiresPassword: e.RequiresPassword, FolderID: e.FolderID})
+		items = append(items, displayCredential{OrganizationID: e.OrganizationID, CollectionIDs: e.CollectionIDs, Readable: e.Readable, ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, RequiresPassword: e.RequiresPassword, FolderID: e.FolderID})
 	}
+	if err := session.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
+		return err
+	}
+	a.clearSecretClipboard()
+	if a.editor != nil {
+		e := a.editor
+		organizationDraft := organizationPrompt || e.fields.OrganizationID != nil || e.organizationID != "" || e.shareOrganizationID != ""
+		for _, entry := range entries {
+			if entry.ID == e.fields.ID && entry.OrganizationID != "" {
+				organizationDraft = true
+			}
+		}
+		if organizationDraft {
+			// A new organization sync may revoke access or replace its owner key.
+			// Personal conflict retention must not keep organization plaintext alive.
+			*e = cipherEditor{}
+			a.editor = nil
+			a.secretInputVersion++
+		}
+	}
+	a.organizations, a.collections = organizations, collections
 	a.vault, a.items, a.folders = vault, items, folders
 	if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
 		found := false
@@ -149,9 +184,13 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 	}
 	if id != "" {
 		var err error
-		editor.document, editor.fields, err = session.ReadPersonalCipherAuthorized(a.vault, id, grant)
+		if a.organizationItem(id) {
+			editor.document, editor.fields, err = session.ReadOrganizationCipher(a.vault, id, grant)
+		} else {
+			editor.document, editor.fields, err = session.ReadPersonalCipherAuthorized(a.vault, id, grant)
+		}
 		if err != nil {
-			if errors.Is(err, vaultwarden.ErrPermission) && grant == nil && session.PersonalItemRequiresPassword(a.vault, id) {
+			if errors.Is(err, vaultwarden.ErrPermission) && grant == nil && (session.PersonalItemRequiresPassword(a.vault, id) || a.organizationItemRequiresPassword(id)) {
 				editor.repromptID = id
 				a.editor = editor
 				a.secretInputVersion++
@@ -159,7 +198,7 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 			a.status = err.Error()
 			return
 		}
-		if !editor.fields.Edit || !editor.fields.ViewPassword {
+		if (!editor.fields.Edit && editor.fields.OrganizationID == nil) || !editor.fields.ViewPassword {
 			a.status = vaultwarden.ErrPermission.Error()
 			return
 		}
@@ -167,6 +206,21 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 		editor.fields = vaultwarden.CipherFields{Type: kind, Login: map[string]any{}, SecureNote: map[string]any{}, Card: map[string]any{}, Identity: map[string]any{}, SSHKey: map[string]any{}, BankAccount: map[string]any{}, DriversLicense: map[string]any{}, Passport: map[string]any{}}
 	}
 	populateCipherEditor(editor)
+	if id == "" {
+		for _, collection := range a.collections {
+			if a.category == "collection:"+collection.ID {
+				if collection.ReadOnly || collection.HidePasswords {
+					a.status = vaultwarden.ErrPermission.Error()
+					return
+				}
+				editor.organizationID, editor.collectionID = collection.OrganizationID, collection.ID
+			}
+		}
+		if strings.HasPrefix(a.category, "org:") {
+			a.status = "请先选择可写集合，再新增组织项目。"
+			return
+		}
+	}
 	a.editor = editor
 	a.folderEditor = nil
 	if id == "" && strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
@@ -206,6 +260,10 @@ func populateCipherEditor(editor *cipherEditor) {
 }
 func (a *app) cipherEditorView(c *ui.Context) {
 	e := a.editor
+	if e.fields.OrganizationID != nil && !e.fields.Edit && e.repromptID == "" {
+		a.readOnlyOrganizationCipherView(c, e)
+		return
+	}
 	if e.repromptID != "" && !e.compareAuthorization {
 		a.itemAuthorizationView(c)
 		return
@@ -245,6 +303,9 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				title = "新增"
 			}
 			ui.Text(c, title+cipherTypeNames[e.fields.Type]).FontSize(23).FontWeight(600)
+			if e.organizationID != "" && e.fields.ID == "" {
+				a.organizationTypePicker(c, e)
+			}
 			ui.Text(c, "标题").FontSize(12)
 			ui.TextInput(c, &e.fields.Name).Label("标题").Disabled(a.pending != 0 || e.uncertain)
 			for i := range e.inputs {
@@ -351,7 +412,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			if e.uncertain {
 				ui.Text(c, "请先同步核对服务器结果，当前表单不会重复提交。").FontSize(12).TextColor(vaultPurple)
 			}
-			if e.fields.ID != "" && (e.conflict || e.uncertain || e.revision != a.sessionRevision) {
+			if e.fields.OrganizationID == nil && e.fields.ID != "" && (e.conflict || e.uncertain || e.revision != a.sessionRevision) {
 				ui.Text(c, "草稿已保留。先同步核实结果，再比较改动；不会自动重试。秘密比较仅显示是否更改。")
 				if action(c, "同步最新版本", "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
@@ -371,7 +432,8 @@ func (a *app) cipherEditorView(c *ui.Context) {
 					a.syncVault(false)
 				}
 			})
-			if e.fields.ID != "" {
+			if e.fields.ID != "" && e.fields.OrganizationID == nil {
+				a.organizationShareView(c, e)
 				a.cipherStateButtons(c, e)
 			}
 		})
@@ -447,6 +509,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	}
 	editor := a.editor
 	editor.applyInputs()
+	vault := a.vault
 	scope, prior := *a.liveScope, a.snapshot
 	a.epoch++
 	epoch := a.epoch
@@ -472,6 +535,16 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 			err = vaultwarden.ErrConflict
 		} else {
 			switch {
+			case action == shareOrganizationAction:
+				_, err = session.SharePersonalCipher(ctx, vault, editor.shareOrganizationID, editor.shareCollectionID, editor.document, editor.fields, editor.authorization, persist)
+			case editor.organizationID != "":
+				_, err = session.CreateOrganizationCipher(ctx, vault, editor.organizationID, editor.collectionID, editor.fields, persist)
+			case editor.fields.OrganizationID != nil:
+				if action != "" {
+					err = vaultwarden.ErrPermission
+				} else {
+					_, err = session.UpdateOrganizationCipher(ctx, vault, editor.document, editor.fields, editor.authorization, persist)
+				}
 			case action == copyCipherAction:
 				_, err = session.CopyPersonalCipherAuthorized(ctx, scope, editor.document, editor.fields, editor.authorization, persist)
 			case action != "":

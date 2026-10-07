@@ -30,9 +30,13 @@ func (a *app) observeSnapshot(state *snapshotStatus) {
 		if a.editor != nil {
 			a.editor.shownSecret = ""
 			a.editor.repromptPassword = ""
+			if a.pending == 0 {
+				*a.editor = cipherEditor{}
+			}
 		}
 		a.items = nil
 		a.vault, a.editor = nil, nil
+		a.organizations, a.collections = nil, nil
 		a.folders, a.folderEditor = nil, nil
 		a.bulkEditor = nil
 		a.clearBackupEditor()
@@ -63,6 +67,9 @@ func (a *app) stopNetwork() {
 	if a.editor != nil {
 		a.editor.shownSecret = ""
 		a.editor.repromptPassword = ""
+		if a.pending == 0 {
+			*a.editor = cipherEditor{}
+		}
 	}
 	// Invalidate every pending callback, including writes whose server response
 	// arrives after an observed external lock or account switch.
@@ -81,6 +88,7 @@ func (a *app) stopNetwork() {
 	a.sessionRevision = ""
 	a.items = nil
 	a.vault, a.editor = nil, nil
+	a.organizations, a.collections = nil, nil
 	a.folders, a.folderEditor = nil, nil
 	a.itemsRevision = ""
 	a.selectedID = ""
@@ -288,7 +296,7 @@ func (a *app) syncVault(login bool) {
 			a.itemsRevision = a.snapshot.Revision
 			a.showSettings, a.showLogin = false, false
 			s := result.Summary
-			a.status = fmt.Sprintf("已同步 %d 个个人项目；可填充登录 %d。填充排除：组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
+			a.status = fmt.Sprintf("已同步 %d 个项目；可填充登录 %d。填充排除：未授权组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
 			a.reconcileBulk()
 			a.reconcileImport()
 		})

@@ -55,6 +55,22 @@ var vaultCategories = []vaultCategory{
 }
 
 func (a *app) currentCategory() vaultCategory {
+	if a.category == "personal" {
+		return vaultCategory{"personal", "我的密码库", "user", true}
+	}
+	for _, org := range a.organizations {
+		if a.category == "org:"+org.ID {
+			return vaultCategory{a.category, org.Name, "vault", true}
+		}
+	}
+	for _, collection := range a.collections {
+		if a.category == "collection:"+collection.ID {
+			return vaultCategory{a.category, collection.Name, "vault", true}
+		}
+	}
+	if strings.HasPrefix(a.category, "org:") || strings.HasPrefix(a.category, "collection:") {
+		return vaultCategory{a.category, "组织权限已变化", "vault", false}
+	}
 	if strings.HasPrefix(a.category, "folder:") {
 		id := strings.TrimPrefix(a.category, "folder:")
 		if id == "" {
@@ -82,6 +98,23 @@ func (a *app) filteredItems() []displayCredential {
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	items := make([]displayCredential, 0, len(a.items))
 	for _, item := range a.items {
+		if a.category == "personal" && item.OrganizationID != "" {
+			continue
+		}
+		if strings.HasPrefix(a.category, "org:") && item.OrganizationID != strings.TrimPrefix(a.category, "org:") {
+			continue
+		}
+		if strings.HasPrefix(a.category, "collection:") {
+			found := false
+			for _, id := range item.CollectionIDs {
+				if a.category == "collection:"+id {
+					found = true
+				}
+			}
+			if !found {
+				continue
+			}
+		}
 		if strings.HasPrefix(a.category, "folder:") && item.FolderID != strings.TrimPrefix(a.category, "folder:") {
 			continue
 		}
@@ -292,8 +325,8 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
 				sectionLabel(c, "所有密码库")
-				if navItem(c, "我的密码库", "user", "", false, false).Clicked() {
-					a.category, a.query, a.showSettings = "all", "", false
+				if navItem(c, "我的密码库", "user", "", a.category == "personal", false).Clicked() {
+					a.category, a.query, a.showSettings = "personal", "", false
 				}
 				ui.Box(c).Height(10)
 				sectionLabel(c, "项目")
@@ -309,6 +342,17 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 					if b.Clicked() {
 						a.category, a.showSettings = category.id, false
 						a.listState.ScrollTo(0, ui.Start)
+					}
+				}
+				sectionLabel(c, "组织")
+				for _, org := range a.organizations {
+					if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
+						a.category, a.showSettings = "org:"+org.ID, false
+					}
+					for _, collection := range a.collections {
+						if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
+							a.category, a.showSettings = "collection:"+collection.ID, false
+						}
 					}
 				}
 				sectionLabel(c, "文件夹")
@@ -503,7 +547,7 @@ func (a *app) credentialDetail(c *ui.Context, item displayCredential) {
 				}
 				ui.Text(c, kind).FontSize(12).TextColor(vaultMuted)
 				ui.Spacer(c)
-				if action(c, "查看与编辑", "", false, a.pending != 0 || (!item.Editable && !item.RequiresPassword) || a.vault == nil).Clicked() {
+				if action(c, "查看与编辑", "", false, a.pending != 0 || (!item.Editable && !item.Readable && !item.RequiresPassword) || a.vault == nil).Clicked() {
 					a.openCipherEditor(item.ID, item.Type)
 				}
 			})

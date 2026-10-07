@@ -43,6 +43,7 @@ func (a *app) authorizePersonalItem() {
 	if e.compareAuthorization {
 		revision = a.sessionRevision
 	}
+	organization := a.organizationItem(id)
 	a.epoch++
 	epoch := a.epoch
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -50,7 +51,13 @@ func (a *app) authorizePersonalItem() {
 	a.pending++
 	go func() {
 		defer clear(password)
-		grant, err := session.AuthorizePersonalItem(ctx, vault, revision, id, password)
+		var grant *vaultwarden.ItemAuthorization
+		var err error
+		if organization {
+			grant, err = session.AuthorizeOrganizationItem(ctx, vault, revision, id, password)
+		} else {
+			grant, err = session.AuthorizePersonalItem(ctx, vault, revision, id, password)
+		}
 		a.window.Update(func() {
 			defer cancel()
 			a.pending--

@@ -33,9 +33,16 @@ func (a *app) openBackupEditor() {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
-	e := &backupEditor{revision: a.sessionRevision, format: vaultwarden.BitwardenJSON, selected: map[string]bool{}, candidates: append([]displayCredential(nil), a.items...)}
+	e := &backupEditor{revision: a.sessionRevision, format: vaultwarden.BitwardenJSON, selected: map[string]bool{}}
+	for _, item := range a.items {
+		if item.OrganizationID == "" {
+			e.candidates = append(e.candidates, item)
+		}
+	}
 	for _, item := range a.filteredItems() {
-		e.selected[item.ID] = true
+		if item.OrganizationID == "" {
+			e.selected[item.ID] = true
+		}
 	}
 	a.backupEditor = e
 	a.showSettings = false
@@ -46,7 +53,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
 			ui.Text(c, "导入与导出").FontSize(23)
-			ui.Text(c, "文件包含未加密的密码和其他秘密，请仅保存在可信本地位置。附件、通行密钥及未知扩展尚不支持，发现后会整体拒绝。组织库另行管理。").MaxLines(5).FontSize(12)
+			ui.Text(c, "文件包含未加密的密码和其他秘密，请仅保存在可信本地位置。附件、通行密钥及未知扩展尚不支持，发现后会整体拒绝。当前仅导入导出个人密码库，组织导入导出尚未实现。").MaxLines(5).FontSize(12)
 			if !e.submitted {
 				if !e.confirm && e.plan == nil {
 					for _, format := range []struct {

@@ -22,7 +22,11 @@ func (a *app) copyPersonalSecret(kind string, storage func(storageRequest) stora
 		a.status = err.Error()
 		return
 	}
-	err := s.WithPersonalSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
+	useSecret := s.WithPersonalSecret
+	if e.fields.OrganizationID != nil {
+		useSecret = s.WithOrganizationSecret
+	}
+	err := useSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
 		reply := storage(storageRequest{Operation: "copySecret", SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
 			return reply.failure()
@@ -50,7 +54,11 @@ func (a *app) showPersonalSecret(kind string, storage func(storageRequest) stora
 		a.status = err.Error()
 		return
 	}
-	err := s.WithPersonalSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
+	useSecret := s.WithPersonalSecret
+	if e.fields.OrganizationID != nil {
+		useSecret = s.WithOrganizationSecret
+	}
+	err := useSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
 		reply := storage(storageRequest{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
 			return reply.failure()

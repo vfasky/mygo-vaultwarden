@@ -26,14 +26,18 @@ func (a *app) openBulkEditor(emptyTrash bool) {
 	e := &bulkEditor{revision: a.sessionRevision, selected: map[string]bool{}}
 	if emptyTrash {
 		for _, item := range a.items {
-			if item.Deleted {
+			if item.Deleted && item.OrganizationID == "" {
 				e.candidates = append(e.candidates, item)
 				e.selected[item.ID] = true
 			}
 		}
 		e.action = vaultwarden.CipherDeletePermanently
 	} else {
-		e.candidates = append([]displayCredential(nil), a.filteredItems()...)
+		for _, item := range a.filteredItems() {
+			if item.OrganizationID == "" {
+				e.candidates = append(e.candidates, item)
+			}
+		}
 		e.action = vaultwarden.CipherMove
 	}
 	a.bulkEditor = e
@@ -61,7 +65,7 @@ func (a *app) bulkEditorView(c *ui.Context) {
 					a.syncVault(false)
 				}
 			} else {
-				ui.Text(c, "请选择项目及操作。永久删除仅允许回收站中的项目；需主密码再次验证的项目请单独处理。").MaxLines(3).FontSize(12)
+				ui.Text(c, "当前仅管理个人项目。请选择项目及操作；永久删除仅允许个人回收站中的项目，需要再次验证的项目请单独处理。").MaxLines(3).FontSize(12)
 				for _, item := range e.candidates {
 					label := "□ " + item.Title
 					if e.selected[item.ID] {

@@ -21,6 +21,8 @@ type app struct {
 	items                                     []displayCredential
 	vault                                     *vaultwarden.VaultData
 	editor                                    *cipherEditor
+	organizations                             []vaultwarden.Organization
+	collections                               []vaultwarden.Collection
 	folders                                   []vaultwarden.Folder
 	folderEditor                              *folderEditor
 	bulkEditor                                *bulkEditor
