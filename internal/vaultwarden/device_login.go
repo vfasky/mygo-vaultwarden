@@ -36,6 +36,7 @@ type DeviceLogin struct {
 	session  *Session
 	policy   *AccountPasswordPolicy
 	metadata AuthRequest
+	recovery DeviceLoginRecoveryState
 }
 
 func (*DeviceLogin) String() string   { return "[device login]" }
@@ -132,7 +133,41 @@ func (c *Client) BeginDeviceLogin(ctx context.Context, email string, scope Scope
 	return f, nil
 }
 
+// DeviceLoginRecoveryState is monotonic for one attempt. Submitted means the
+// request may have reached the server; failure cannot prove MFA was unchanged.
+type DeviceLoginRecoveryState uint8
+
+const (
+	DeviceLoginRecoveryNotSubmitted DeviceLoginRecoveryState = iota
+	DeviceLoginRecoverySubmitted
+	DeviceLoginRecoveryConfirmed
+)
+
+// DeviceLoginRecovery contains no credentials and remains valid after Close.
+type DeviceLoginRecovery struct {
+	Scope                      Scope
+	Email, DeviceID, RequestID string
+	Epoch                      uint64
+	State                      DeviceLoginRecoveryState
+}
+
+func (f *DeviceLogin) Recovery() DeviceLoginRecovery {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return DeviceLoginRecovery{Scope: f.scope, Email: f.email, DeviceID: f.client.deviceID, RequestID: f.metadata.ID, Epoch: f.epoch, State: f.recovery}
+}
+
+func (f *DeviceLogin) recordRecovery(state DeviceLoginRecoveryState) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if state > f.recovery {
+		f.recovery = state
+	}
+}
+
 type DeviceLoginResult struct {
+	// Recovery is returned even on errors, without Session, Sync or secrets.
+	Recovery      DeviceLoginRecovery
 	Session       *Session
 	Sync          SyncResult
 	RememberToken string
@@ -143,7 +178,11 @@ type DeviceLoginResult struct {
 
 // Run polls even when notifications are unavailable. Notifications are hints only.
 // A second call is refused, including after an unknown token exchange result.
-func (f *DeviceLogin) Run(prompt func(context.Context, MFAChallenge) (MFAResponse, error)) (DeviceLoginResult, error) {
+func (f *DeviceLogin) Run(prompt func(context.Context, MFAChallenge) (MFAResponse, error)) (out DeviceLoginResult, runErr error) {
+	defer func() {
+		out.Recovery = f.Recovery()
+		out.RemovedAllMFA = out.Recovery.State == DeviceLoginRecoveryConfirmed
+	}()
 	f.mu.Lock()
 	if f.started {
 		f.mu.Unlock()
@@ -258,6 +297,9 @@ func (f *DeviceLogin) exchange(code, id string, prompt func(context.Context, MFA
 		if err := f.guard(); err != nil {
 			return tokenReply{}, "", recovery, err
 		}
+		if form.Get("twoFactorProvider") == "8" {
+			f.recordRecovery(DeviceLoginRecoverySubmitted)
+		}
 		status, data, err := f.client.request(f.ctx, "POST", "/identity/connect/token", "application/x-www-form-urlencoded", form.Encode(), "")
 		if err != nil {
 			return tokenReply{}, "", recovery, &MutationUncertainError{Cause: err}
@@ -276,6 +318,9 @@ func (f *DeviceLogin) exchange(code, id string, prompt func(context.Context, MFA
 			clear(data)
 			if err != nil || !validToken(reply.tokenReply) {
 				return tokenReply{}, "", recovery, &MutationUncertainError{Cause: ErrProtocol}
+			}
+			if form.Get("twoFactorProvider") == "8" {
+				f.recordRecovery(DeviceLoginRecoveryConfirmed)
 			}
 			f.mu.Lock()
 			f.policy = reply.Policy
@@ -315,12 +360,12 @@ func (f *DeviceLogin) exchange(code, id string, prompt func(context.Context, MFA
 			clear(response.Token)
 			return tokenReply{}, "", recovery, ErrValidation
 		}
-		recovery = response.Provider == 8
+		recovery = recovery || response.Provider == 8
 		form.Set("twoFactorProvider", strconv.Itoa(response.Provider))
 		form.Set("twoFactorToken", string(response.Token))
 		clear(response.Token)
 		form.Set("twoFactorRemember", "0")
-		if response.Remember && !recovery {
+		if response.Remember && response.Provider != 8 {
 			form.Set("twoFactorRemember", "1")
 		}
 	}

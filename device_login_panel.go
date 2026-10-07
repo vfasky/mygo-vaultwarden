@@ -36,6 +36,7 @@ type DeviceLoginPanel struct {
 	providers              map[int]string
 	platformProviders      map[int]string
 	platform               func(int)
+	recovery               []vaultwarden.DeviceLoginRecovery
 }
 
 func NewDeviceLoginPanel(client *vaultwarden.Client, email string, scope vaultwarden.Scope, epoch uint64, host DeviceLoginHost) *DeviceLoginPanel {
@@ -45,6 +46,32 @@ func NewDeviceLoginPanel(client *vaultwarden.Client, email string, scope vaultwa
 	}
 	return p
 }
+
+// RecoveryOutcomes returns credential-free account/attempt records, including
+// late completions after cancellation or Close. Read on the UI thread.
+func (p *DeviceLoginPanel) RecoveryOutcomes() []vaultwarden.DeviceLoginRecovery {
+	return append([]vaultwarden.DeviceLoginRecovery(nil), p.recovery...)
+}
+func (p *DeviceLoginPanel) retainRecovery(r vaultwarden.DeviceLoginRecovery) {
+	if r.State == vaultwarden.DeviceLoginRecoveryNotSubmitted || r.Scope != p.scope || r.Epoch != p.epoch || r.RequestID == "" {
+		return
+	}
+	for i, old := range p.recovery {
+		if old.RequestID == r.RequestID {
+			if r.State > old.State {
+				p.recovery[i] = r
+			}
+			return
+		}
+	}
+	p.recovery = append(p.recovery, r)
+}
+func deviceLoginRecoveryWarning(r vaultwarden.DeviceLoginRecovery) string {
+	if r.State == vaultwarden.DeviceLoginRecoveryConfirmed {
+		return "已关闭全部两步验证，需核验并重新设置。"
+	}
+	return "可能已关闭全部两步验证，需核验并重新设置。"
+}
 func (p *DeviceLoginPanel) cancelAttempt() {
 	if p.cancel != nil {
 		p.cancel()
@@ -52,6 +79,7 @@ func (p *DeviceLoginPanel) cancelAttempt() {
 	}
 	if p.flow != nil {
 		p.flow.Close()
+		p.retainRecovery(p.flow.Recovery())
 		p.flow = nil
 	}
 	if p.auth != nil {
@@ -115,6 +143,9 @@ func (p *DeviceLoginPanel) Start() {
 	}()
 }
 func (p *DeviceLoginPanel) finish(seq uint64, flow *vaultwarden.DeviceLogin, result vaultwarden.DeviceLoginResult, err error) {
+	// Preserve only non-secret metadata on this original account panel, even
+	// when the attempt/epoch is no longer eligible to install a session.
+	p.retainRecovery(result.Recovery)
 	if !p.current(seq) {
 		if flow != nil {
 			flow.Close()
@@ -233,6 +264,9 @@ func (p *DeviceLoginPanel) View(c *ui.Context) {
 			ui.Text(c, "通过另一台设备登录").FontSize(23)
 			ui.Text(c, p.email)
 			ui.Text(c, "请通过可信的当面或独立通信渠道，在审批设备核对下面完整 SHA-256 公钥指纹。不要只信任服务器显示的请求。 ").MaxLines(6)
+			for _, r := range p.recovery {
+				ui.Text(c, r.Email+"（"+r.Scope.Server+"）："+deviceLoginRecoveryWarning(r)).MaxLines(6)
+			}
 			if p.closed {
 				ui.Text(c, "面板已关闭")
 				return

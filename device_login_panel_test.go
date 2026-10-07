@@ -10,6 +10,43 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
+func TestDeviceLoginPanelRecoveryFailureAndLateCompletion(t *testing.T) {
+	scope := vaultwarden.Scope{Server: "https://example.invalid", Account: "fixture"}
+	client, _ := vaultwarden.NewClient(scope.Server, "fixture-device-id")
+	adopted := 0
+	p := NewDeviceLoginPanel(client, "fixture@example.invalid", scope, 7, DeviceLoginHost{
+		Dispatch: func(f func()) { f() }, Check: func(vaultwarden.Scope, uint64) error { return nil },
+		Accept: func(*vaultwarden.DeviceLogin, vaultwarden.DeviceLoginResult) error { adopted++; return nil },
+	})
+	p.auth = newAuthForm(scope, 7, func(authRequest) {})
+	secret := p.auth
+	secret.token = "synthetic secret"
+	r := vaultwarden.DeviceLoginRecovery{Scope: scope, Email: "fixture@example.invalid", Epoch: 7, RequestID: "request-a", State: vaultwarden.DeviceLoginRecoverySubmitted}
+	p.finish(0, nil, vaultwarden.DeviceLoginResult{Recovery: r}, vaultwarden.ErrIdentity)
+	if adopted != 0 || p.auth != nil || secret.token != "" || !secret.closed {
+		t.Fatal("failed result adopted or secrets retained")
+	}
+	if got := p.RecoveryOutcomes(); len(got) != 1 || deviceLoginRecoveryWarning(got[0]) != "可能已关闭全部两步验证，需核验并重新设置。" {
+		t.Fatal("failure warning missing")
+	}
+	p.Cancel()
+	p.Close()
+	r.State = vaultwarden.DeviceLoginRecoveryConfirmed
+	p.finish(0, nil, vaultwarden.DeviceLoginResult{Recovery: r}, vaultwarden.ErrCancelled)
+	r.State = vaultwarden.DeviceLoginRecoverySubmitted
+	p.finish(0, nil, vaultwarden.DeviceLoginResult{Recovery: r}, vaultwarden.ErrCancelled)
+	r.Scope.Account = "other-account"
+	p.finish(0, nil, vaultwarden.DeviceLoginResult{Recovery: r}, vaultwarden.ErrIdentity)
+	got := p.RecoveryOutcomes()
+	if len(got) != 1 || got[0].State != vaultwarden.DeviceLoginRecoveryConfirmed || deviceLoginRecoveryWarning(got[0]) != "已关闭全部两步验证，需核验并重新设置。" || adopted != 0 {
+		t.Fatal("late completion lost warning or resurrected login")
+	}
+	got[0].State = vaultwarden.DeviceLoginRecoveryNotSubmitted
+	if p.RecoveryOutcomes()[0].State != vaultwarden.DeviceLoginRecoveryConfirmed {
+		t.Fatal("metadata alias")
+	}
+}
+
 func TestDeviceLoginPanelCancellationAndLateMFA(t *testing.T) {
 	dispatch := make(chan func(), 8)
 	scope := vaultwarden.Scope{Server: "https://example.invalid", Account: "fixture"}

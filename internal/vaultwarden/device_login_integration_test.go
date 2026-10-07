@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -30,7 +31,7 @@ func TestDeviceLoginLive1374(t *testing.T) {
 	listener.Close()
 	name := "mygo-device-login-" + fixtureUUID()
 	base := fmt.Sprintf("http://127.0.0.1:%d", port)
-	out, e := exec.CommandContext(ctx, "docker", "create", "--name", name, "--label", "mygo.fixture="+name, "--publish", fmt.Sprintf("127.0.0.1:%d:80", port), "-e", "I_REALLY_WANT_VOLATILE_STORAGE=true", "-e", "DOMAIN="+base, "-e", "SIGNUPS_ALLOWED=true", "-e", "SIGNUPS_VERIFY=false", "vaultwarden/server:1.37.4").CombinedOutput()
+	out, e := exec.CommandContext(ctx, "docker", "create", "--name", name, "--label", "mygo.fixture="+name, "--publish", fmt.Sprintf("127.0.0.1:%d:80", port), "-e", "I_REALLY_WANT_VOLATILE_STORAGE=true", "-e", "DOMAIN="+base, "-e", "SIGNUPS_ALLOWED=true", "-e", "SIGNUPS_VERIFY=false", "-e", "LOGIN_RATELIMIT_MAX_BURST=100", "vaultwarden/server:1.37.4").CombinedOutput()
 	if e != nil {
 		t.Fatalf("fixture create: %s %v", out, e)
 	}
@@ -209,5 +210,39 @@ func TestDeviceLoginLive1374(t *testing.T) {
 		clear(saved.Session)
 		clear(saved.PasswordUnlock.Key)
 		flow.Close()
+		if account == 1 {
+			// A real recovery grant removes all MFA. Keep the normal TOTP path
+			// above, then verify the added result metadata against server state.
+			raw, err := approver.MFAManage(ctx, MFARecovery, AccountSensitiveInput{Password: password}, nil, true, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var recovery struct{ Code string }
+			if json.Unmarshal(raw, &recovery) != nil || recovery.Code == "" {
+				t.Fatal("missing recovery code")
+			}
+			clear(raw)
+			rf, err := requester.client.BeginDeviceLogin(ctx, requester.email, initial.Scope, 2, func(Scope, uint64) error { return nil })
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer rf.Close()
+			if err = approver.RespondAuthRequest(ctx, synced.Vault, rf.Metadata().ID, rf.Metadata().PublicKey, true, true, nil); err != nil {
+				t.Fatal(err)
+			}
+			rr, err := rf.Run(func(context.Context, MFAChallenge) (MFAResponse, error) {
+				return MFAResponse{Provider: 8, Token: []byte(recovery.Code), ConfirmRemoveAllMFA: true}, nil
+			})
+			recovery.Code = ""
+			if err != nil || !rr.RemovedAllMFA || rr.Recovery.State != DeviceLoginRecoveryConfirmed {
+				t.Fatal("recovery grant metadata", err, errors.Unwrap(err), rr.Recovery.State)
+			}
+			plain, err := requester.client.LoginMFA(ctx, requester.email, password, "", nil)
+			if err != nil {
+				t.Fatal("MFA still required after recovery", err)
+			}
+			plain.Session.Close()
+			rf.Close()
+		}
 	}
 }
