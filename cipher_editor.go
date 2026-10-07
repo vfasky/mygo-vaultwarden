@@ -303,6 +303,9 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				title = "新增"
 			}
 			ui.Text(c, title+cipherTypeNames[e.fields.Type]).FontSize(23).FontWeight(600)
+			if e.fields.OrganizationID != nil || e.organizationID != "" {
+				ui.Text(c, "组织权限以最新同步为准；同步会关闭此表单并清除未保存更改。").FontSize(12)
+			}
 			if e.organizationID != "" && e.fields.ID == "" {
 				a.organizationTypePicker(c, e)
 			}
