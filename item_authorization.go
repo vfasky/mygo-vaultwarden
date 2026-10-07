@@ -29,7 +29,7 @@ func (a *app) itemAuthorizationView(c *ui.Context) {
 }
 func (a *app) authorizePersonalItem() {
 	e := a.editor
-	if e == nil || e.repromptID == "" || a.pending != 0 || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
+	if e == nil || e.repromptID == "" || a.pending != 0 || !a.sessionOwnsSnapshot() || (!e.compareAuthorization && e.revision != a.sessionRevision) {
 		return
 	}
 	session, ok := a.session.(*vaultwarden.Session)
@@ -40,6 +40,9 @@ func (a *app) authorizePersonalItem() {
 	e.repromptPassword = ""
 	a.secretInputVersion++
 	vault, revision, id := a.vault, e.revision, e.repromptID
+	if e.compareAuthorization {
+		revision = a.sessionRevision
+	}
 	a.epoch++
 	epoch := a.epoch
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -62,7 +65,11 @@ func (a *app) authorizePersonalItem() {
 			if !a.sessionOwnsSnapshot() || a.sessionRevision != revision || a.editor != e || ctx.Err() != nil {
 				return
 			}
-			a.openCipherEditorAuthorized(id, 0, grant)
+			if e.compareAuthorization {
+				a.compareCipher(grant)
+			} else {
+				a.openCipherEditorAuthorized(id, 0, grant)
+			}
 		})
 	}()
 }

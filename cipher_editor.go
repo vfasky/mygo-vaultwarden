@@ -39,6 +39,11 @@ type cipherEditor struct {
 	notes                        string
 	uris                         []editorURI
 	custom                       []editorCustom
+	conflict                     bool
+	comparison                   *vaultwarden.CipherRebase
+	changes                      []vaultwarden.CipherChange
+	localChoices                 map[string]bool
+	compareAuthorization         bool
 	uncertain                    bool
 	saved                        bool
 	revision                     string
@@ -161,6 +166,20 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 	} else {
 		editor.fields = vaultwarden.CipherFields{Type: kind, Login: map[string]any{}, SecureNote: map[string]any{}, Card: map[string]any{}, Identity: map[string]any{}, SSHKey: map[string]any{}, BankAccount: map[string]any{}, DriversLicense: map[string]any{}, Passport: map[string]any{}}
 	}
+	populateCipherEditor(editor)
+	a.editor = editor
+	a.folderEditor = nil
+	if id == "" && strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
+		folder := strings.TrimPrefix(a.category, "folder:")
+		editor.fields.FolderID = &folder
+	}
+	a.secretInputVersion++
+	a.showSettings = false
+}
+
+func populateCipherEditor(editor *cipherEditor) {
+	editor.inputs, editor.uris, editor.custom = nil, nil, nil
+	editor.notes = ""
 	editor.inputs = append([]editorField(nil), editorSpecs[editor.fields.Type]...)
 	section := sectionFields(&editor.fields)
 	for i := range editor.inputs {
@@ -184,18 +203,10 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 	if editor.fields.Notes != nil {
 		editor.notes = *editor.fields.Notes
 	}
-	a.editor = editor
-	a.folderEditor = nil
-	if id == "" && strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
-		folder := strings.TrimPrefix(a.category, "folder:")
-		editor.fields.FolderID = &folder
-	}
-	a.secretInputVersion++
-	a.showSettings = false
 }
 func (a *app) cipherEditorView(c *ui.Context) {
 	e := a.editor
-	if e.repromptID != "" {
+	if e.repromptID != "" && !e.compareAuthorization {
 		a.itemAuthorizationView(c)
 		return
 	}
@@ -218,6 +229,14 @@ func (a *app) cipherEditorView(c *ui.Context) {
 		} else {
 			c.After(time.Until(e.shownSecretExpires))
 		}
+	}
+	if e.repromptID != "" {
+		a.itemAuthorizationView(c)
+		return
+	}
+	if e.comparison != nil {
+		a.cipherComparisonView(c)
+		return
 	}
 	ui.Scroll(c).Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion)).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(12).Padding(18).Children(func() {
@@ -332,8 +351,17 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			if e.uncertain {
 				ui.Text(c, "请先同步核对服务器结果，当前表单不会重复提交。").FontSize(12).TextColor(vaultPurple)
 			}
+			if e.fields.ID != "" && (e.conflict || e.uncertain || e.revision != a.sessionRevision) {
+				ui.Text(c, "草稿已保留。先同步核实结果，再比较改动；不会自动重试。秘密比较仅显示是否更改。")
+				if action(c, "同步最新版本", "sync", false, a.pending != 0).Clicked() {
+					a.syncVault(false)
+				}
+				if action(c, "比较本地与远端改动", "", false, a.pending != 0 || e.revision == a.sessionRevision).Clicked() {
+					a.compareCipher(nil)
+				}
+			}
 			ui.Row(c).Gap(8).Children(func() {
-				if action(c, "保存", "sync", true, a.pending != 0 || e.uncertain || e.fields.Name == "").Clicked() {
+				if action(c, "保存", "sync", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
 					a.saveCipher()
 				}
 				if action(c, "取消", "", false, a.pending != 0).Clicked() {
@@ -399,7 +427,7 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 }
 func (a *app) saveCipher() { a.mutateCipher("") }
 func (a *app) mutateCipher(action vaultwarden.CipherAction) {
-	if a.pending != 0 || a.editor == nil || a.editor.uncertain || !a.sessionOwnsSnapshot() {
+	if a.pending != 0 || a.editor == nil || a.editor.conflict || a.editor.uncertain || !a.sessionOwnsSnapshot() {
 		return
 	}
 	if !a.editor.authorizationExpires.IsZero() && !time.Now().Before(a.editor.authorizationExpires) {
@@ -475,6 +503,7 @@ func (a *app) completeCipherMutation(epoch uint64, editor *cipherEditor, checkpo
 	}
 	if err != nil {
 		var unknown *vaultwarden.MutationUncertainError
+		editor.conflict = errors.Is(err, vaultwarden.ErrConflict)
 		editor.uncertain = errors.As(err, &unknown)
 		a.syncFailed(reply, err)
 		return

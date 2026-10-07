@@ -3,6 +3,7 @@ package vaultwarden
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"time"
 )
@@ -34,6 +35,20 @@ func mutationStatusError(status int) error {
 		return &MutationUncertainError{Cause: statusError(status)}
 	}
 	return statusError(status)
+}
+
+// Vaultwarden 1.37.4 reports its stale cipher check as HTTP 400. Recognize
+// only its exact fixed message; never surface arbitrary server response text.
+func cipherUpdateStatusError(status int, data []byte) error {
+	if status == http.StatusBadRequest {
+		var response struct {
+			Message string `json:"message"`
+		}
+		if json.Unmarshal(data, &response) == nil && response.Message == "The client copy of this cipher is out of date. Resync the client and try again." {
+			return ErrConflict
+		}
+	}
+	return mutationStatusError(status)
 }
 
 // beginOperationLocked gives Close a way to cancel the network operation before

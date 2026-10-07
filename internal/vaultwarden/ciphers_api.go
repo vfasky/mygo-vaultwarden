@@ -169,7 +169,7 @@ func (s *Session) UpdatePersonalCipherAuthorized(ctx context.Context, scope Scop
 		return CipherDocument{}, err
 	}
 	if status != http.StatusOK {
-		return CipherDocument{}, mutationStatusError(status)
+		return CipherDocument{}, cipherUpdateStatusError(status, data)
 	}
 	result := CipherDocument{JSON: data}
 	updated, err := DecryptCipherDocument(result, s.key)

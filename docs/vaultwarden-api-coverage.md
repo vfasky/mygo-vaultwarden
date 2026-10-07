@@ -1,6 +1,6 @@
 # Vaultwarden API 覆盖矩阵
 
-**INCOMPLETE：整卡未完成，未达到验收。** 本轮新增个人 reprompt 短授权、密码/TOTP短时显示和受控复制，见 [敏感操作](sensitive-operations.md)；不是完整 Vaultwarden API 产品。禁止据此启动 Review 或合并。
+**INCOMPLETE：整卡未完成，未达到验收。** 本轮新增个人冲突比较与显式重新应用，见 [冲突处理](cipher-conflicts.md)；既有 reprompt 短授权、密码/TOTP短时显示和受控复制见 [敏感操作](sensitive-operations.md)；不是完整 Vaultwarden API 产品。禁止据此启动 Review 或合并。
 
 固定服务器 **Vaultwarden 1.37.4**：tag 对象 `54a40806c990da2def7acd5a3152edc530c59b79`，commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档 SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。字段加密参考 Bitwarden clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的 `libs/common/src/vault/models/domain/{bank-account,drivers-license,passport,login-uri}.ts`。本轮从固定 commit 的 raw URL 成功读取这四份文件，未换用 main。
 
@@ -22,7 +22,7 @@
 | 密码历史 / URI 完整性 | 更新体的 passwordHistory、passwordRevisionDate、uriChecksum | 自动保留旧密码，URI SHA256 Base64 再 type-2 加密；单元与真实回环 | 改密码/网址时维护；历史显式显示/隐藏与确认清除已接入（保存时提交；同时改密码仍记录刚替换的旧密码）。URI默认及0–5策略可编辑，未知策略保留；起始/正则匹配当前仅保存，不进入AutoFill |
 | 完整离线数据 | 本地 `VaultData{version:1,scope,sync:base64}` | Go Documents 校验、Swift `SnapshotPayload.vault`、bridge、迁移与 checkpoint 测试 | 完整原始 sync 仅放 AES-GCM payload；认证主应用解锁才返回；状态/AutoFill lease不返回。旧 payload 无 vault 时可解锁，下次成功同步迁移 |
 
-实际 Cipher 类型是 1 Login、2 SecureNote、3 Card、4 Identity、5 SSHKey、6 BankAccount、7 DriversLicense、8 Passport。逐字段加密名单来自固定客户端源码，未递归加密所有字符串。`encryptedFor` 是当前稳定账号 UUID。源 `lastKnownRevisionDate` 原样提交；服务端只有约一秒容差的旧版本检测，可能返回 400，并非严格 CAS。当前不轮换用户 key；源中的 `encryptedByKeyId` 若存在原样保留，尚无完整 keyId 生命周期/轮换流程。
+实际 Cipher 类型是 1 Login、2 SecureNote、3 Card、4 Identity、5 SSHKey、6 BankAccount、7 DriversLicense、8 Passport。逐字段加密名单来自固定客户端源码，未递归加密所有字符串。`encryptedFor` 是当前稳定账号 UUID。源 `lastKnownRevisionDate` 原样提交；服务端检查整秒差值 `num_seconds() > 1`（不足两秒可能接受旧稿），HTTP400精确固定消息已映射为ErrConflict，并非严格 CAS。当前不轮换用户 key；源中的 `encryptedByKeyId` 若存在原样保留，尚无完整 keyId 生命周期/轮换流程。
 
 ## 安全边界及验证
 
@@ -30,7 +30,7 @@
 |---|---|---|
 | 请求约束 | TLS/loopback、禁重定向、请求超时、32 MiB响应限制、ID过滤、脱敏错误；既有测试 | query/multipart/binary独立传输、Retry-After未完成 |
 | 刷新持久化 | pending checkpoint失败阻断请求；Swift同scope/revision保存session并保留完整vault；相关Go/Swift测试 | 所有未来模块必须复用门控 |
-| 写入未知结果 | 传输错误、意外成功状态、5xx、成功响应不可解码/身份错误、写后取消均按未知结果；不自动重试；UI禁重复保存并保留草稿 | 尚无逐字段冲突比较/显式重基；同步改变本地revision后旧草稿禁止提交，需用户核对后重新编辑 |
+| 写入未知结果 | 传输错误、意外成功状态、5xx、成功响应不可解码/身份错误、写后取消均按未知结果；不自动重试；UI禁重复保存并保留草稿 | 同步后逐字段比较本地/远端改动并显式选择重新应用或采用远端已接UI，原始最新文档保留unknown；历史只删除已观察条目；reprompt新grant、锁定和版本隔离测试及真实回环通过。双改URI/custom无稳定行ID，逐行对应选择仍缺，目前明确保留远端后手动编辑；详见 [冲突处理](cipher-conflicts.md) |
 | 锁定与撤销 | `stopNetwork`推进epoch并取消会话，清除vault/editor/list；迟到回调不能复活并释放私有草稿；headless及race | Go/Swift运行时无法证明清零所有字符串历史副本；真实系统安装/视觉未验证 |
 | 填充投影 | 只含个人Login；deleted、archived、reprompt、viewPassword=false和组织均排除；零条显式替换；真实归档回环及Swift撤销测试 | 组织授权后填充、等价域名、更多URI规则仍缺 |
 | 未知字段 | 同key更新保留opaque passkey/扩展/大整数；加密输入不修改编辑草稿；未知格式失败 | 标准个人copy已实现新key完整转换；附件/FIDO2/未知扩展copy仍拒绝，share/用户key轮换未实现，不能用有限编辑冒充这些能力 |
