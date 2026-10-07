@@ -1,6 +1,6 @@
 # Vaultwarden API 覆盖矩阵
 
-**INCOMPLETE：整卡未完成，未达到验收。** 最新增量为组织create/update/share按目标组织type15检查，以及个人state/bulk/partial底层的认证server条目核验；此前个人create/update/copy/import的type5/15保存约束继续保留，见[组织策略执行](organization-policies.md)。策略执行尚在逐入口迁移，离线读取、其它策略消费及policies管理界面仍未实现；不能把当前检查当作全部策略支持。此前群组原生CRUD、成员/集合配置及显式accessAll确认见[群组管理](organization-groups.md)。此前补齐隔离 SMTP 邮件接受回环及恢复策略 auto-enrollment、组织恢复 RSA 钥对和原生明确授权，见[邀请与恢复登记](organization-invitation-recovery.md)；此前已实现成员目录、单人邀请/重新邀请、公钥可信核验确认、角色、撤销/恢复/移除及邮件链接接受表单；已有集合CRUD、成员/群组集合访问配置继续保留，复用组织创建/资料修改/退出/删除及持久隔离恢复；已有组织密钥/权限、读写共享与安全Login投影继续保留，见 [组织密码库](organization-vault.md)；个人冲突比较与显式重新应用见 [冲突处理](cipher-conflicts.md)；既有 reprompt 短授权、密码/TOTP短时显示和受控复制见 [敏感操作](sensitive-operations.md)。禁止据此启动 Review 或合并。
+**INCOMPLETE：整卡未完成，未达到验收。** 最新增量是同步在个人/组织AutoFill秘密解密前解析完整policy并按type15过滤，以及尚未接实际生产回执的私有可信snapshot上下文基础。既有离线读取guard、Swift旧候选验证与完整五链仍未完成，不能把同步投影或基础构造器当作离线policy保护。前序增量为组织create/update/share按目标组织type15检查，以及个人state/bulk/partial底层的认证server条目核验；此前个人create/update/copy/import的type5/15保存约束继续保留，见[组织策略执行](organization-policies.md)。策略执行尚在逐入口迁移，离线读取、其它策略消费及policies管理界面仍未实现；不能把当前检查当作全部策略支持。此前群组原生CRUD、成员/集合配置及显式accessAll确认见[群组管理](organization-groups.md)。此前补齐隔离 SMTP 邮件接受回环及恢复策略 auto-enrollment、组织恢复 RSA 钥对和原生明确授权，见[邀请与恢复登记](organization-invitation-recovery.md)；此前已实现成员目录、单人邀请/重新邀请、公钥可信核验确认、角色、撤销/恢复/移除及邮件链接接受表单；已有集合CRUD、成员/群组集合访问配置继续保留，复用组织创建/资料修改/退出/删除及持久隔离恢复；已有组织密钥/权限、读写共享与安全Login投影继续保留，见 [组织密码库](organization-vault.md)；个人冲突比较与显式重新应用见 [冲突处理](cipher-conflicts.md)；既有 reprompt 短授权、密码/TOTP短时显示和受控复制见 [敏感操作](sensitive-operations.md)。禁止据此启动 Review 或合并。
 
 固定服务器 **Vaultwarden 1.37.4**：tag 对象 `54a40806c990da2def7acd5a3152edc530c59b79`，commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档 SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。字段加密参考 Bitwarden clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的 `libs/common/src/vault/models/domain/{bank-account,drivers-license,passport,login-uri}.ts`。本轮从固定 commit 的 raw URL 成功读取这四份文件，未换用 main。
 
@@ -29,11 +29,12 @@
 | 边界 | 实际实现及证据 | 仍需完成 |
 |---|---|---|
 | 权威策略执行（迁移中） | 个人create/update/copy/import与组织create/update/share、个人state/bulk/partial底层操作内认证GET `/api/sync`；type5按个人保存、type15按个人并集/目标组织范围；state从认证server条目核对type/归属/权限，refresh/checkpoint/epoch/revision/取消派发前检查 | [专题](organization-policies.md)。单元与隔离1.37.4真实owner/member、reprompt状态、bulk缺ID零写/服务器partial协议通过；policy GET不发布vault或取消组织隔离。生命周期等其它写入口、离线读取/type15投影与完整政策原生表单仍缺；policy读→写无服务端事务/CAS |
+| 同步策略投影与可信快照基础 | `SyncWithCheckpoint`在解密前解析完整policy；个人并集/组织自身范围过滤type15 Login。`RestoreSessionFromAuthenticatedSnapshot`、`AcceptAuthenticatedSnapshot`、`ValidateAuthenticatedSnapshot`绑定完整vault hash/scope/profile/成员与policy/revision/epoch，深拷贝，失败撤销旧上下文 | 新单元与独有1.37.4个人/组织候选撤销、政策恢复重投影通过。**构造器尚无生产回执调用，离线读取未接guard，Swift旧快照/候选未迁移；不能声称五链或离线type15完成。** Go-only受信receipt fixture不等于桥认证 |
 | 请求约束 | TLS/loopback、禁重定向、请求超时、32 MiB响应限制、ID过滤、脱敏错误；既有测试 | query/multipart/binary独立传输、Retry-After未完成 |
 | 刷新持久化 | pending checkpoint失败阻断请求；Swift同scope/revision保存session并保留完整vault；相关Go/Swift测试 | 所有未来模块必须复用门控 |
 | 写入未知结果 | 传输错误、意外成功状态、5xx、成功响应不可解码/身份错误、写后取消均按未知结果；不自动重试；UI禁重复保存并保留草稿 | 同步后逐字段比较本地/远端改动并显式选择重新应用或采用远端已接UI，原始最新文档保留unknown；历史只删除已观察条目；reprompt新grant、锁定和版本隔离测试及真实回环通过。双改URI/custom无稳定行ID，逐行对应选择仍缺，目前明确保留远端后手动编辑；详见 [冲突处理](cipher-conflicts.md) |
 | 锁定与撤销 | `stopNetwork`推进epoch并取消会话，清除vault/editor/list；迟到回调不能复活并释放私有草稿；headless及race | Go/Swift运行时无法证明清零所有字符串历史副本；真实系统安装/视觉未验证 |
-| 填充投影 | 个人及获授权组织Login；deleted、archived、reprompt、viewPassword=false排除；组织成员confirmed+enabled、有效cipher权限门控；零条显式替换；组织真实成员/集合撤销回环及Swift撤销测试 | 等价域名、更多URI规则仍缺；离线无法发现服务器新撤销，成功sync才替换；真实签名AutoFill未验证 |
+| 填充投影 | 个人及获授权组织Login；deleted、archived、reprompt、viewPassword=false排除；新同步先解析完整policy，type15个人并集/组织自身范围在秘密解密前过滤；组织成员confirmed+enabled、有效cipher权限门控；零条显式替换；组织真实成员/集合撤销回环及Swift撤销测试 | 等价域名、更多URI规则仍缺；离线无法发现服务器新撤销，成功sync才替换；真实签名AutoFill未验证 |
 | 未知字段 | 同key更新保留opaque passkey/扩展/大整数；加密输入不修改编辑草稿；未知格式失败 | 标准个人copy已实现新key完整转换；个人copy的附件/FIDO2/未知扩展仍拒绝；组织share已支持独立item key重包装、同key保持附件包装/FIDO2/unknown，legacy无item key共享及用户key轮换未实现 |
 | 桥和快照大小 | vault不混入64 KiB session；沿用4 MiB C ABI上限，超限报错、保旧快照 | 完整大库有界传输尚未扩展；附件禁止通过JSON/此桥传输 |
 | 认证前元数据 | header仅控制元数据；完整库不在displayCredential/status/session日志；Swift认证lease才返回vault；原生开表单后才解密秘密 | 个人与组织Login密码/TOTP短时显示复制、reprompt读取/更新已接入；个人单项状态/有限完整copy已实现；reprompt批量/导出与完整组织策略管理仍缺 |

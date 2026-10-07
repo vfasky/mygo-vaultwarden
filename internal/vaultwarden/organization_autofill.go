@@ -6,7 +6,10 @@ import "encoding/json"
 // appendOrganizationCredentialsLocked creates only the minimal authenticated
 // Login projection. No organization key, membership or collection metadata is
 // copied into the AutoFill payload. Full sync replacement revokes old entries.
-func (s *Session) appendOrganizationCredentialsLocked(result *SyncResult) error {
+func (s *Session) appendOrganizationCredentialsLocked(result *SyncResult, policies *operationPolicies) error {
+	if policies == nil {
+		return ErrPermission
+	}
 	data, err := s.organizationVaultLocked(result.Vault)
 	if err != nil {
 		return err
@@ -21,7 +24,7 @@ func (s *Session) appendOrganizationCredentialsLocked(result *SyncResult) error 
 		if json.Unmarshal(document.JSON, &item) != nil {
 			return ErrProtocol
 		}
-		if item.OrganizationID == nil || item.Type != 1 || item.Login == nil || item.Reprompt != 0 || item.DeletedDate != nil || item.ArchivedDate != nil || item.ViewPassword == nil || !*item.ViewPassword {
+		if item.OrganizationID == nil || policies.restricts(item.OrganizationID, item.Type) || item.Type != 1 || item.Login == nil || item.Reprompt != 0 || item.DeletedDate != nil || item.ArchivedDate != nil || item.ViewPassword == nil || !*item.ViewPassword {
 			continue
 		}
 		_, key, err := s.organizationDocumentLocked(result.Vault, item.ID, data)

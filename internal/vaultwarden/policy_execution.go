@@ -179,6 +179,15 @@ func parseOperationPolicies(body []byte, scope Scope, email, wrapped string) (*o
 	return result, nil
 }
 
+// restricts keeps personal union and each organization's own restrictions
+// separate. PersonalOwnership applies to writes, never existing-item reads.
+func (p *operationPolicies) restricts(orgID *string, kind int) bool {
+	if orgID == nil || *orgID == "" {
+		return p.restrictedPersonal[kind]
+	}
+	return p.restrictedOrganizations[*orgID][kind]
+}
+
 // organizationCipherPolicyGuardLocked applies only the destination's type policy.
 // The policy read cannot grant collection access or lift local quarantine; those
 // checks and the decrypted key remain owned by organizationVaultLocked.

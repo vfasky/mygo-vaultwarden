@@ -52,7 +52,7 @@ func organizationPolicySyncFixture() map[string]any {
 
 func emptyPolicySyncFixture() map[string]any {
 	return map[string]any{
-		"profile": map[string]any{"id": "account-a", "email": "fixture@example.invalid", "key": "fixture-wrapped-user-key", "organizations": []any{}},
+		"profile": map[string]any{"id": "account-a", "email": "fixture@example.invalid", "key": "fixture-wrapped-user-key", "organizations": []any{}, "organizationsNew": []any{}},
 		"ciphers": []any{}, "policies": []any{}, "policiesNew": []any{},
 	}
 }

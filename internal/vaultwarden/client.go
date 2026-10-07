@@ -288,6 +288,7 @@ type Session struct {
 	authorizationRevision                    string
 	authorizationEpoch                       uint64
 	writePolicies                            *operationPolicies
+	offlinePolicies                          *snapshotPolicies
 }
 
 func (s *Session) Close() {
@@ -311,6 +312,7 @@ func (s *Session) Close() {
 	s.authorizationEpoch++
 	s.authorizationRevision = ""
 	s.writePolicies = nil
+	s.offlinePolicies = nil
 	s.client.http.CloseIdleConnections()
 }
 func (s *Session) refreshLocked(ctx context.Context) error {
@@ -352,6 +354,10 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 		return SyncResult{}, err
 	}
 	defer finish()
+	// Starting a replacement sync revokes the previous offline authority even
+	// when download, identity validation or policy migration subsequently fails.
+	s.offlinePolicies = nil
+	s.authorizationEpoch++
 	status, data, err := s.authenticatedLocked(ctx, http.MethodGet, "/api/sync", "", "", persist)
 	if err != nil {
 		return SyncResult{}, err
@@ -369,7 +375,12 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	if syncData.Profile.Key != s.wrapped {
 		return SyncResult{}, ErrExpired
 	}
-	result, err := decryptSync(syncData, s.key)
+	policies, err := parseOperationPolicies(data, Scope{Server: s.client.base.String(), Account: syncData.Profile.ID}, s.email, s.wrapped)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	// Parsing and filtering must precede every credential decryption.
+	result, err := decryptSyncWithPolicies(syncData, s.key, policies)
 	if err != nil {
 		return SyncResult{}, err
 	}
@@ -382,7 +393,7 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	if _, err := result.Vault.Documents(result.Scope); err != nil {
 		return SyncResult{}, err
 	}
-	if err := s.appendOrganizationCredentialsLocked(&result); err != nil {
+	if err := s.appendOrganizationCredentialsLocked(&result, policies); err != nil {
 		return SyncResult{}, err
 	}
 	if ctx.Err() != nil {

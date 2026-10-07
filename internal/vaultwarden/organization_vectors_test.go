@@ -76,7 +76,7 @@ func TestOrganizationAutoFillExclusions(t *testing.T) {
 			v := changeOrganizationFixture(t, vault, func(d map[string]any) { d["ciphers"].([]any)[0].(map[string]any)[tc.field] = tc.value })
 			result := SyncResult{Vault: v}
 			session.mu.Lock()
-			err := session.appendOrganizationCredentialsLocked(&result)
+			err := session.appendOrganizationCredentialsLocked(&result, &operationPolicies{})
 			session.mu.Unlock()
 			if err != nil || len(result.Credentials) != tc.expected {
 				t.Fatal("AutoFill exclusion", err, len(result.Credentials))
@@ -89,7 +89,7 @@ func TestOrganizationAutoFillExclusions(t *testing.T) {
 	})
 	result := SyncResult{Vault: revoked}
 	session.mu.Lock()
-	err := session.appendOrganizationCredentialsLocked(&result)
+	err := session.appendOrganizationCredentialsLocked(&result, &operationPolicies{})
 	session.mu.Unlock()
 	if err != nil || len(result.Credentials) != 0 {
 		t.Fatal("revoked projection", err)

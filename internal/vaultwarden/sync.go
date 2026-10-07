@@ -80,13 +80,21 @@ func NormalizeURI(value string, match int) (URI, string, error) {
 	return URI{URI: u.String(), Match: match, BaseDomain: base, IncludeSubdomains: subdomains}, host, nil
 }
 
-func decryptSync(data syncReply, key []byte) (SyncResult, error) {
+// Production sync always supplies policies parsed from the authenticated reply.
+func decryptSyncWithPolicies(data syncReply, key []byte, policies *operationPolicies) (SyncResult, error) {
 	result := SyncResult{Credentials: make([]Credential, 0)}
+	if policies == nil {
+		return result, ErrPermission
+	}
 	if len(data.Ciphers) > 100000 {
 		return result, ErrProtocol
 	}
 	seen := make(map[string]bool)
 	for _, item := range data.Ciphers {
+		if policies.restricts(item.OrganizationID, item.Type) {
+			result.Summary.Restricted++
+			continue
+		}
 		if item.DeletedDate != nil {
 			result.Summary.Deleted++
 			continue

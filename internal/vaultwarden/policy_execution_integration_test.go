@@ -80,7 +80,9 @@ func TestLivePolicyExecution(t *testing.T) {
 		if e != nil {
 			t.Fatal(e)
 		}
-		if e = s.BindSnapshotRevision(r.Scope, fixtureUUID()); e != nil {
+		// Go-only equivalent of a verified publication receipt. This privileged
+		// call does not exercise the Swift bridge or platform authentication.
+		if e = s.AcceptAuthenticatedSnapshot(r.Vault, fixtureUUID()); e != nil {
 			t.Fatal(e)
 		}
 		return r.Vault
@@ -211,5 +213,49 @@ func TestLivePolicyExecution(t *testing.T) {
 	t.Run("bulk-preflight-and-server-partial", func(t *testing.T) {
 		testLiveFoldersAndBulk(t, ctx, owner, ov.Scope)
 	})
-	t.Log("owned 1.37.4: authoritative policy sync; member ownership denial and owner exemption; restricted personal and organization create/update denied without UI resync; unrestricted organization note succeeds; type5 allows state/bulk and type15 blocks bulk; no offline or policy editor claim")
+	t.Run("policy-sync-autofill", func(t *testing.T) {
+		ov = syncVault(owner)
+		login := CipherFields{Type: 1, Name: "Policy projection login", Login: map[string]any{"username": "fixture", "password": "fixture-only-secret"}}
+		personalLogin, e := owner.CreatePersonalCipher(ctx, ov.Scope, login, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		organizationLogin, e := owner.CreateOrganizationCipher(ctx, ov, org.ID, collectionID, login, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var personalID, organizationID struct{ ID string }
+		_ = json.Unmarshal(personalLogin.JSON, &personalID)
+		_ = json.Unmarshal(organizationLogin.JSON, &organizationID)
+		check := func(want bool) {
+			r, e := owner.Sync(ctx)
+			if e != nil {
+				t.Fatal(e)
+			}
+			defer clear(r.Session)
+			if r.PasswordUnlock != nil {
+				defer clear(r.PasswordUnlock.Key)
+			}
+			seen := map[string]bool{}
+			for _, c := range r.Credentials {
+				seen[c.ID] = true
+			}
+			if seen[personalID.ID] != want || seen[organizationID.ID] != want {
+				t.Fatal("type15 projection disagrees with policy", want)
+			}
+			revision := fixtureUUID()
+			if e = owner.AcceptAuthenticatedSnapshot(r.Vault, revision); e != nil {
+				t.Fatal("authenticated policy snapshot", e)
+			}
+			if e = owner.ValidateAuthenticatedSnapshot(r.Vault, revision); e != nil {
+				t.Fatal(e)
+			}
+		}
+		check(true)
+		seedPolicy(15, []int{1, 3})
+		check(false)
+		seedPolicy(15, []int{3})
+		check(true)
+	})
+	t.Log("owned 1.37.4: authoritative policy sync; personal/organization type15 AutoFill projection revokes and recovers; privileged Go snapshot receipt validates; state/write checks retained; no Swift bridge, offline read enforcement or policy editor claim")
 }

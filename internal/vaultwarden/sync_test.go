@@ -3,6 +3,12 @@ package vaultwarden
 
 import "testing"
 
+// Cryptographic fixtures explicitly supply no restrictions. This helper is
+// test-only; production always parses policy from the authenticated sync.
+func decryptSync(data syncReply, key []byte) (SyncResult, error) {
+	return decryptSyncWithPolicies(data, key, &operationPolicies{})
+}
+
 func TestLastLoginExcludedProducesExplicitEmptyReplacement(t *testing.T) {
 	deleted := "2026-10-07T00:00:00Z"
 	denied := false

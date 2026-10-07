@@ -49,7 +49,7 @@ func TestLoginChallengeProtocol(t *testing.T) {
 					return
 				}
 				if r.URL.Path == "/api/sync" {
-					_ = json.NewEncoder(w).Encode(map[string]any{"profile": map[string]string{"id": "account-a", "email": email, "key": wrapped}, "ciphers": []any{}})
+					_ = json.NewEncoder(w).Encode(map[string]any{"profile": map[string]any{"id": "account-a", "email": email, "key": wrapped, "organizations": []any{}}, "ciphers": []any{}, "policies": []any{}, "policiesNew": []any{}})
 					return
 				}
 				if r.URL.Path != "/identity/connect/token" {

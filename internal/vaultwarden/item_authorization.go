@@ -45,6 +45,7 @@ func (s *Session) BindSnapshotRevision(scope Scope, revision string) error {
 		return ErrIdentity
 	}
 	if s.authorizationRevision != revision {
+		s.offlinePolicies = nil
 		s.authorizationEpoch++
 		s.authorizationRevision = revision
 	}
@@ -54,6 +55,7 @@ func (s *Session) BindSnapshotRevision(scope Scope, revision string) error {
 func (s *Session) RevokeItemAuthorizations() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	s.offlinePolicies = nil
 	s.authorizationEpoch++
 }
 

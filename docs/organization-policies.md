@@ -2,6 +2,16 @@
 
 **INCOMPLETE — 这是逐入口迁移中的会话执行基础，不是全部策略或管理表单已完成。** 原完整API验收范围保持不变；未完成前禁止Review/merge。
 
+## 同步前投影与可信 snapshot 基础（本轮增量）
+
+`SyncWithCheckpoint`在开始替换同步时撤销旧私有offline上下文并推进epoch，网络失败、缺policy或身份校验失败均不保留旧上下文。认证`/api/sync`完整policy先解析，然后`decryptSyncWithPolicies`与`appendOrganizationCredentialsLocked`在任何Login秘密解密前按type15过滤；个人使用组织并集，组织只用自身范围。type5不禁止旧个人读取，disabled但confirmed组织的服务器policy仍参与个人限制。保留原始完整server-encrypted sync，不删改受限项目。低层`decryptSync`仅用于crypto向量测试，生产调用显式提供认证解析结果。
+
+新增`snapshot_policy.go`：`RestoreSessionFromAuthenticatedSnapshot`与`AcceptAuthenticatedSnapshot`是先前批准的**受信app控制器特权入口**，不自行验证Swift凭据，也不抵御任意同进程Go代码；只有完成真实桥operation/epoch/scope/revision/state等检查后才能调用。目前**尚未接到生产controller回执**。构造先深拷贝vault bytes/quarantine，再校验完整policy、profile/email/wrappedKey、组织身份及key链；`organizationsNew`须存在，与原成员一致，隔离成员也不能跳过身份核对。私有`snapshotPolicies`持有完整vault hash、scope、revision、epoch及独立解析树，失败不保留半权限；`ValidateAuthenticatedSnapshot`只检查已安装能力。普通`RestoreSession`与`BindSnapshotRevision`不创建此上下文；绑定新revision、Revoke、Close、替换sync撤销已有能力。
+
+**尚未统一离线读取guard或五链**：现有列表/条目/秘密/导出仍沿前序逻辑；checkpoint同内容续接、controller解锁/publish/quarantine/restore安装、Swift旧候选与缺policy缓存迁移都未接，不能以此宣称离线type15已保护。新增API目前仅由针对性测试和Go-only真服务receipt fixture调用。
+
+新测试`snapshot_policy_test.go`与`snapshot_policy_organization_test.go`覆盖公开binder无授许可、受信恢复、缺policy/成员数组/错身份/错key/版本/revision、调用方后改与隔离hash、关闭/撤销/同步成功及失败、失败回执撤旧、隔离保留server限制、恢复重建，以及受限个人/组织损坏cipher不被解密、type5不掩盖密码学损坏。`TestLivePolicyExecution/policy-sync-autofill`以独有1.37.4实例验证个人与组织Login候选随type15开启消失、移除限制后恢复，并验证受信Go快照上下文；不等于Swift桥或系统候选安装实测。本轮Go build/test/vet/race全部通过，完整命令与剩余接缝见最新handoff。未修改Swift、未验证平台调用。
+
 ## 已连接的生产路径
 
 `policy_execution.go`只允许经过本Session认证HTTP读取的完整`GET /api/sync`建立私有`operationPolicies`，从不从调用方公开的`VaultData`或revision构造在线授权。上下文只活在单次`beginOperationLocked`到`finish`之间。当前已接入：
@@ -27,7 +37,7 @@ policy GET只形成操作内检查，不解密/发布新vault，不推进UI快�
 
 - Vaultwarden1.37.4 commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`：`src/api/core/ciphers.rs:162–169` confirmed `policies`与accepted+confirmed `policiesNew`；`:409–426`个人所有权禁止个人create/update，但允许delete/share；`src/db/models/org_policy.rs:275–304`适用性检查按confirmed成员角色；`src/db/models/organization.rs:438–532`profile membership与权限字段。
 - Bitwarden clients commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce`：`libs/common/src/admin-console/services/policy/default-policy.service.ts`按type应用角色豁免，type15适用于所有角色；`libs/common/src/vault/services/restricted-item-types.service.ts`定义type数组/null默认Card、个人多组织并集和组织各自受限范围。上述固定文件本轮从GitHub原站读取；没有改用main。
-- type15还限制既有项目读取，允许未对该type设限的其它组织项目读取。这部分**尚未迁移**，不得把当前个人/组织保存及状态检查当作完整type15支持。type16是`data.uriMatchDetection`，也尚未接入实际消费路径。
+- type15还限制既有项目读取，允许未对该type设限的其它组织项目读取。新同步AutoFill投影已在解密前过滤；**其余既有离线读取和Swift旧候选复核尚未迁移**，不得把投影/保存/状态检查当作完整type15支持。type16是`data.uriMatchDetection`，也尚未接入实际消费路径。
 
 ## 验证证据与未验证边界
 
