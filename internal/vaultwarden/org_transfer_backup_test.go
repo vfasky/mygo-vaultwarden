@@ -103,6 +103,9 @@ func TestOrgBackupOfficialRoutesRoundtripAndNoFalseImportSuccess(t *testing.T) {
 	if err != nil || result.Applied || !result.ReconcileRequired {
 		t.Fatal("200 incorrectly treated as item success", result, err)
 	}
+	if result.ImportReconciliation == nil || !result.ImportReconciliation.ReadCompleted || len(result.ImportReconciliation.AddedIDs) != 0 || len(result.ImportReconciliation.Items) != 1 || result.ImportReconciliation.Items[0].Verified {
+		t.Fatal("missing fresh read / false per-item success", result.ImportReconciliation)
+	}
 }
 
 func TestOrgBackupRejectsOpaquePlaintext(t *testing.T) {

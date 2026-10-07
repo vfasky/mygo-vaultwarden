@@ -14,7 +14,18 @@ func exportOrgBackupFile(ctx context.Context, session *vaultwarden.Session, vaul
 	if session == nil {
 		return vaultwarden.ErrExpired
 	}
-	return session.WithOrganizationBackup(ctx, vault, orgID, grants, confirmed, func(data []byte) error {
+	return exportOrgBackupFormatFile(ctx, session, vault, orgID, path, grants, confirmed, false, persist)
+}
+
+func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed, official bool, persist func(vaultwarden.SessionCheckpoint) error) error {
+	if session == nil {
+		return vaultwarden.ErrExpired
+	}
+	export := session.WithOrganizationBackup
+	if official {
+		export = session.WithBitwardenOrganizationJSON
+	}
+	return export(ctx, vault, orgID, grants, confirmed, func(data []byte) error {
 		stage, err := stageBackupFile(ctx, path, data)
 		if err != nil {
 			return err
@@ -28,10 +39,17 @@ func exportOrgBackupFile(ctx context.Context, session *vaultwarden.Session, vaul
 }
 
 func readOrgImportPlan(ctx context.Context, path string) (*vaultwarden.OrganizationImportPlan, error) {
+	return readOrgImportFormatPlan(ctx, path, false)
+}
+
+func readOrgImportFormatPlan(ctx context.Context, path string, official bool) (*vaultwarden.OrganizationImportPlan, error) {
 	raw, err := readBackupFile(ctx, path)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(raw)
+	if official {
+		return vaultwarden.ParseBitwardenOrganizationJSON(raw)
+	}
 	return vaultwarden.ParseOrganizationImport(raw)
 }

@@ -27,12 +27,13 @@ type OrganizationDirectoryImport struct {
 }
 
 // The official endpoint supplies no per-item outcomes. Even HTTP 200 may skip a
-// policy-disallowed restore or missing group member. Every row therefore remains
-// unverified until the host reconciles the authenticated membership/group list.
+// policy-disallowed restore or missing group member. Reconciliation reports a
+// fresh authenticated management read; unmatched rows remain unknown.
 type OrganizationDirectoryResult struct {
 	RequestAccepted                     bool
 	ReconcileRequired                   bool
 	MemberExternalIDs, GroupExternalIDs []string
+	Reconciliation                      *OrganizationDirectoryReconciliation
 }
 
 func validateOrganizationDirectory(input OrganizationDirectoryImport) error {
@@ -90,9 +91,11 @@ func (s *Session) ImportOrganizationDirectory(ctx context.Context, vault *VaultD
 	}
 	defer data.close()
 	owner := false
+	var ownerOrganization Organization
 	for _, org := range data.organizations {
 		if org.ID == orgID && org.Type == 0 && (len(input.Groups) == 0 || org.UseGroups) {
 			owner = true
+			ownerOrganization = org
 		}
 	}
 	if !owner {
@@ -107,8 +110,12 @@ func (s *Session) ImportOrganizationDirectory(ctx context.Context, vault *VaultD
 	if err := s.checkpointLocked(isolate); err != nil {
 		return result, ErrCheckpoint
 	}
-	guard := s.organizationManagementGuardLocked(s.authorizationRevision)
+	guard := s.orgOperationGuardLocked()
 	if err := guard(); err != nil {
+		return result, err
+	}
+	before, err := s.organizationDirectorySnapshotLocked(ctx, ownerOrganization)
+	if err != nil {
 		return result, err
 	}
 	form := url.Values{"grant_type": {"client_credentials"}, "scope": {"api.organization"}, "client_id": {"organization." + orgID}, "client_secret": {string(secret)}}
@@ -146,6 +153,8 @@ func (s *Session) ImportOrganizationDirectory(ctx context.Context, vault *VaultD
 	result.ReconcileRequired = true
 	status, response, err = s.client.request(ctx, http.MethodPost, "/api/public/organization/import", "application/json", string(body), token.AccessToken)
 	token.AccessToken = ""
+	after, _ := s.organizationDirectorySnapshotLocked(ctx, ownerOrganization)
+	result.Reconciliation = reconcileOrganizationDirectory(input, before, after)
 	if err != nil {
 		return result, &MutationUncertainError{Cause: err}
 	}

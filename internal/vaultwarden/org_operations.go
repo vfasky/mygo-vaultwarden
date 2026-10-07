@@ -10,9 +10,20 @@ import (
 // OrganizationOperationResult never infers rollback from an HTTP error. An
 // uncertain batch must be reconciled by a fresh sync before any retry.
 type OrganizationOperationResult struct {
-	IDs               []string
-	Applied           bool
-	ReconcileRequired bool
+	IDs                  []string
+	Applied              bool
+	ReconcileRequired    bool
+	ImportReconciliation *OrganizationImportReconciliation
+}
+
+func (s *Session) orgOperationGuardLocked() func() error {
+	revision, epoch := s.authorizationRevision, s.authorizationEpoch
+	return func() error {
+		if !s.itemSessionActiveLocked() || revision == "" || revision != s.authorizationRevision || epoch != s.authorizationEpoch {
+			return ErrExpired
+		}
+		return nil
+	}
 }
 
 func organizationStateRoute(action CipherAction) (string, string, error) {
@@ -104,6 +115,9 @@ func (s *Session) ChangeOrganizationCiphers(ctx context.Context, vault *VaultDat
 	// Read current memberships, policy and cipher flags once for the whole batch.
 	policies, err := s.operationPoliciesLocked(ctx, persist)
 	if err != nil {
+		return result, err
+	}
+	if _, err := s.snapshotPoliciesLocked(vault); err != nil {
 		return result, err
 	}
 	member, ok := policies.memberships[orgID]

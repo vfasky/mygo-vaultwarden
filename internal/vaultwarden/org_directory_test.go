@@ -18,6 +18,13 @@ func TestOrgDirectoryIsolationTokenRouteAndUnverifiedRows(t *testing.T) {
 		if !isolated {
 			t.Error("request before isolation")
 		}
+		if r.URL.Path == "/api/organizations/org-1/users" {
+			if r.Method != "GET" || r.Header.Get("Authorization") == "Bearer public-fixture" {
+				t.Error("wrong management read")
+			}
+			_, _ = w.Write([]byte(`{"data":[{"id":"member-1","userId":"account-a","email":"owner@example.invalid","type":0,"status":2}],"continuationToken":null}`))
+			return
+		}
 		if r.URL.Path == "/identity/connect/token" {
 			_ = r.ParseForm()
 			if r.Form.Get("scope") != "api.organization" || r.Form.Get("client_id") != "organization.org-1" || r.Form.Get("client_secret") != "fixture-secret" || r.Header.Get("Authorization") != "" {
@@ -58,7 +65,7 @@ func TestOrgDirectoryIsolationTokenRouteAndUnverifiedRows(t *testing.T) {
 		t.Fatal("early HTTP")
 	}
 	result, err := s.ImportOrganizationDirectory(context.Background(), v, "org-1", []byte("fixture-secret"), input, true, func(SessionCheckpoint) error { isolated = true; return nil })
-	if err != nil || !result.RequestAccepted || !result.ReconcileRequired || len(result.MemberExternalIDs) != 1 || calls.Load() != 2 {
+	if err != nil || !result.RequestAccepted || !result.ReconcileRequired || len(result.MemberExternalIDs) != 1 || calls.Load() != 4 || result.Reconciliation == nil || result.Reconciliation.After == nil || result.Reconciliation.Rows[0].Verified {
 		t.Fatal(result, err, calls.Load())
 	}
 }

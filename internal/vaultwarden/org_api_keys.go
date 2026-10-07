@@ -44,7 +44,7 @@ func (s *Session) WithOrganizationAPIKey(ctx context.Context, vault *VaultData, 
 	if rotate {
 		path = "/api/organizations/" + orgID + "/rotate-api-key"
 	}
-	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, path, "application/json", string(body), persist, s.organizationManagementGuardLocked(s.authorizationRevision))
+	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, path, "application/json", string(body), persist, s.orgOperationGuardLocked())
 	if err != nil {
 		return err
 	}

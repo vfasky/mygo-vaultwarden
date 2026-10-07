@@ -44,7 +44,7 @@ func (p *OrganizationImportPlan) PreviewItems() []ImportPreview {
 	for _, item := range p.file.Items {
 		kind, _ := item["type"].(json.Number).Int64()
 		name, _ := item["name"].(string)
-		out = append(out, ImportPreview{Name: name, Type: int(kind)})
+		out = append(out, ImportPreview{Name: name, Type: int(kind), Archived: item["archivedDate"] != nil, Deleted: item["deletedDate"] != nil})
 	}
 	return out
 }
@@ -162,6 +162,9 @@ func (s *Session) WithOrganizationBackup(ctx context.Context, vault *VaultData, 
 	if err != nil {
 		return err
 	}
+	if _, err := s.snapshotPoliciesLocked(vault); err != nil {
+		return err
+	}
 	member, ok := policies.memberships[orgID]
 	if !ok || *member.Status != 2 || !*member.Enabled || (*member.Type != 0 && *member.Type != 1) {
 		return ErrPermission
@@ -178,7 +181,7 @@ func (s *Session) WithOrganizationBackup(ctx context.Context, vault *VaultData, 
 		}
 		live[id.ID] = CipherDocument{JSON: raw}
 	}
-	guard := s.organizationManagementGuardLocked(s.authorizationRevision)
+	guard := s.orgOperationGuardLocked()
 	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodGet, "/api/organizations/"+orgID+"/export", "", "", persist, guard)
 	if err != nil {
 		return err
@@ -408,7 +411,7 @@ func (s *Session) ImportOrganizationBackup(ctx context.Context, vault *VaultData
 		}
 		result.IDs = append(result.IDs, item["id"].(string))
 	}
-	guard := s.organizationManagementGuardLocked(s.authorizationRevision)
+	guard := s.orgOperationGuardLocked()
 	for kind := range kinds {
 		guard, err = s.organizationCipherPolicyGuardLocked(ctx, data, orgID, kind, persist, guard)
 		if err != nil {
@@ -419,10 +422,20 @@ func (s *Session) ImportOrganizationBackup(ctx context.Context, vault *VaultData
 	if err != nil {
 		return result, ErrProtocol
 	}
-	result.ReconcileRequired = true
-	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, "/api/ciphers/import-organization?organizationId="+url.QueryEscape(orgID), "application/json", string(body), persist, guard)
+	before, err := s.operationPoliciesLocked(ctx, persist)
 	if err != nil {
 		return result, err
+	}
+	beforeIDs := organizationCipherIDs(before.ciphers, orgID)
+	if err := s.checkOperationPoliciesLocked(ctx, before); err != nil {
+		return result, err
+	}
+	result.ReconcileRequired = true
+	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, "/api/ciphers/import-organization?organizationId="+url.QueryEscape(orgID), "application/json", string(body), persist, guard)
+	reconciliation := s.reconcileOrganizationImportLocked(ctx, orgID, beforeIDs, ciphers, plan, mappings, persist)
+	result.ImportReconciliation = &reconciliation
+	if err != nil {
+		return result, &MutationUncertainError{Cause: err}
 	}
 	if status != http.StatusOK && status != http.StatusNoContent {
 		return result, &MutationUncertainError{Cause: cipherUpdateStatusError(status, response)}

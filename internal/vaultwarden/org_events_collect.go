@@ -56,7 +56,7 @@ func (s *Session) CollectOrganizationEvents(ctx context.Context, vault *VaultDat
 	if err != nil {
 		return ErrValidation
 	}
-	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, "/events/collect", "application/json", string(body), persist, s.organizationManagementGuardLocked(s.authorizationRevision))
+	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, "/events/collect", "application/json", string(body), persist, s.orgOperationGuardLocked())
 	if err != nil {
 		return err
 	}

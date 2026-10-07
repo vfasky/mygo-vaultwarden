@@ -1,76 +1,74 @@
-# Board #8 组织条目、传输和审计模块交接
+# Board #8：组织条目、导入导出、目录与审计交接
 
-状态：**INCOMPLETE，不能据此宣称整卡或完整组织客户端完成。** 本次提交包含可独立检查的客户端模块及测试；主应用集成由协调者/#5负责。本模块尚缺下述产品表单、官方明文格式互操作、真实服务器多角色回环与部分结果重读核对。独立 Review 应按完整卡片要求核对这些缺口，不能把单测通过当作整卡通过。
+候选状态：本模块已实现并完成下述验证，待独立 Review；尚未合并，也不代表主窗口已完成接线。**主窗口注册归 #14，附件/FIDO2/legacy 完整跨 key 转换归 #13**。没有实现服务器或额外 Public API。
 
-## 基线和范围
+## 分支与范围
 
-工作树初始分支 `waku/board-8-new-worktree`，HEAD `9fee5bd420a76d0cf6ab678cb4a13f5de0221e51`，status干净。按卡片明确授权，在原分支执行 `git reset --hard 14bbaf0ec2f176c598560883cc895f4dcd24405d`。仅新增 `internal/vaultwarden/org_*.go`、根 `org_*.go` 和本文；未修改现有组织/成员/集合/群组/策略/密码文档/附件/存储/网络/主界面、Swift、go.mod。未启动子代理，未访问生产账号或修改主工作树。
+本轮从干净 `waku/board-8-new-worktree` / `242f88c97083fc5efff8a93bcad9fbc969da3b35` 开始，按明确授权 merge 固定 `f32f28c29b7bf011fd9e7c48cc1781a6b9732390`，无冲突、保留原提交。该 merge 带入已审查的账号/Send/附件/存储实现；本轮作者改动仅 `internal/vaultwarden/org_*.go`、根 `org_*.go` 和本文。未编辑主工作区、其他工作树、恢复引用、已有 organization/member/collection/group/policy/存储/网络核心。没有子代理。
 
-协议核对来自卡片指定缓存 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/src/api/core/` 的 ciphers.rs、organizations.rs、events.rs、public.rs；本轮未独立验证该缓存构建镜像的版本/摘要，因此“固定1.37.4”是卡片提供的来源标识，并非本轮实测证明。
+## 后端契约
 
-## 已实现接口
+| 接口 | 行为与限制 |
+|---|---|
+| `ChangeOrganizationCiphers` | 单项/批量软删、恢复、永久删、归档、取消归档。官方 `/api/ciphers/delete`、`restore`、`archive`、`unarchive` 和 DELETE `/api/ciphers`。校验组织/成员/账号不同身份、live policy、版本、edit/viewPassword、reprompt。非事务；不从错误推断回滚，不自动重发。 |
+| `AssignOrganizationCipherCollections` | 官方单条 PUT `/api/ciphers/{id}/collections`，支持可见集合的选择/取消（移动或分配）。差异集合必须明确可写。任何 HTTP 前必须完成持久 isolate；失败零 HTTP。服务器可能保留不可见关联。结果不得自动撤隔离。不另造 bulk collections API。 |
+| `CopyOrganizationCipher` | 官方 POST `/api/ciphers/create`。源/目标组织权限与政策检查、跨 key 完整标准字段转换、新随机 item key；清除副本身份与生命周期，保留源。八种标准类型、custom fields、history、兼容 URI/checksum。附件/FIDO2/未知字段/encryptedByKeyId 在写前拒绝，待 #13 adapter。只读源保守禁止复制。 |
+| `WithOrganizationBackup` | GET `/api/organizations/{id}/export`，owner/admin；完整权限、版本、policy、reprompt 检查，借用明文 save 回调后清 byte buffer。输出 `mygo-organization-backup` v1，明确为自有格式。未知/附件/FIDO2 不静默丢弃。 |
+| `WithBitwardenOrganizationJSON` | 同一真实 export API 与授权路径，输出官方 `encrypted:false / collections / items` 明文组织 JSON。仅删除可推导的 legacy URI 别名和验证正确、可重建的 URI checksum；非空额外元数据、冲突别名、超出格式支持的字段失败关闭。不是个人 export，不是加密备份。 |
+| `ParseOrganizationImport` / `ParseBitwardenOrganizationJSON` | 两种格式独立、严格解析；未知字段、加密文件、重复 ID、跨组织或缺失集合关系拒绝。官方文件允许缺 organizationId，使用仅限预览的内部命名空间，目标授权始终来自明确选择的真实组织。私有 plan 提供复制的集合/条目预览，取消/结束 `Clear()`。 |
+| `ImportOrganizationBackup` | POST `/api/ciphers/import-organization?organizationId=...`；显式逐集合映射（已有 ID 或空值新建），类型/政策/权限预检与新 key；归档/删除/folder 元数据不能由官方接口保留，因此写前拒绝。源 ID 不是服务器新 ID。 |
+| `OrganizationEvents` | 组织 `/api/organizations/{id}/events`、成员 `/api/organizations/{id}/users/{membershipID}/events`、条目 `/api/ciphers/{id}/events`；owner/admin；显式分页和取消，未知事件数字保留，校验时间/token/返回组织。成员参数不是 global userID。空结果不证明服务器已启用日志。 |
+| `CollectOrganizationEvents` | POST **`/events/collect`**；仅真实客户端动作对应的支持事件；不是 `/api/events/collect`。成功不证明服务器保存审计。 |
+| `WithOrganizationAPIKey` | owner、主密码 proof、显式确认；官方 api-key/rotate-api-key。secret 仅借给回调；clientID=`organization.{id}`。首次读取可能创建，轮换撤销旧 key。 |
+| `ImportOrganizationDirectory` | 官方组织 client credentials → 唯一 Public POST `/api/public/organization/import`，不向 Public route 发送 user token。owner/UseGroups、邮箱/externalID/群组引用检查，明确 overwrite。任何 HTTP（含管理读取/token）前持久 isolate，失败零 HTTP。 |
 
-| 接口 | 实际协议/行为 | 接线责任 |
-|---|---|---|
-| `Session.ChangeOrganizationCiphers` | 单ID或同组织批量：PUT `/api/ciphers/delete`、`restore`、`archive`、`unarchive`；DELETE `/api/ciphers`。重复/无效ID、跨组织、缺edit/viewPassword、未授权reprompt、未删除直接永久删均拒绝。派发前认证sync核对memberID/globalUserID/role、cipher revision/type/权限及策略。 | 传入当前认证VaultData和每条ItemAuthorization；checkpoint由现有存储适配器处理。返回 `OrganizationOperationResult`。任何不确定结果先sync核对，禁止自动重试。 |
-| `AssignOrganizationCipherCollections` | PUT `/api/ciphers/{id}/collections`；调整用户可见关联，服务器可保留该用户不可见的旧关联。差异集合必须本地明确可写。可能撤回自身访问，所以在**任何HTTP前**调用isolate；失败零HTTP。随后live sync核对条目与原关联、政策。空列表编码为 `[]`。 | isolate复用现有原子quarantineOrganization回调；保留pending policies，不能在成功/失败后自动撤隔离。成功回执采用既有adoptOrganizationIsolation；显式重新核验才能恢复。当前只有单条集合分配接口，批量bulk-collections未实现。 |
-| `CopyOrganizationCipher` | 真实 POST `/api/ciphers/create`；从认证源组织文档读取，目标组织/集合明确。标准八类型、custom fields、history、legacy URI/checksum重加密到新随机item key，再用目标org key包装。源不改，新建清除ID/创建修订时间/删除归档状态及个人folder。两端策略及当前源权限检查。 | 显示复制语义并明确确认；组织复制专用UI未实现。附件/FIDO2/未知扩展/encryptedByKeyId在HTTP前拒绝，绝不静默剔除。只读源当前保守拒绝。 |
-| `WithOrganizationBackup` | GET `/api/organizations/{orgID}/export`，仅owner/admin。结合认证sync与绑定快照核对完整导出项目的权限、策略、revision和reprompt；解密集合名及八类型标准字段。整份预检，任何未知/附件/FIDO2/不支持字段失败，不产生假成功的部分备份。 | 明确 `confirmed`，借用明文给save回调，用毕清buffer；save不可重入Session。根 `exportOrgBackupFile` 复用既有安全文件实现：父目录descriptor/no-follow、0600暂存、原子no-replace发布，不覆盖已有文件。主应用需持有认证snapshot lease并传递锁定取消。 |
-| `ParseOrganizationImport` / `OrganizationImportPlan` | 解析严格versioned `mygo-organization-backup` v1。私有计划、只读预览、集合映射，unknown不丢弃而拒绝。此格式保留官方明文导入器可能规范化的legacy URI/checksum等字段。 | **不是官方Bitwarden CLI明文JSON/CSV导入支持，也不是加密备份。** 不得在UI标成官方兼容文件。Close/取消后Clear；有进行中worker时由worker完成后Clear，不并发Clear。Go字符串不能保证历史副本归零。 |
-| `ImportOrganizationBackup` | POST `/api/ciphers/import-organization?organizationId=...`。每个源集合必须明确映射既有集合，或空字符串选择新建；目标权限/建集合权限、类型政策预检；重新生成item key；collectionRelationships为条目/集合索引。 | 新建ID及创建/修订日期为服务器生成；有回收/归档或folder元数据的对象暂拒绝，不能无声恢复成普通条目。`IDs`是源预览ID，不是新服务器ID。`Applied`始终false、`ReconcileRequired`始终true（派发后），即使200也只代表请求返回。 |
-| `OrganizationEvents` | 组织 GET `/api/organizations/{id}/events`；成员 GET `/api/organizations/{id}/users/{membershipID}/events`；条目 GET `/api/ciphers/{id}/events`。start/end/continuationToken正确编码，显式一次一页，时间窗口/token/跨组织返回检查；未知事件类型数字保留。 | 仅owner/admin入口；成员ID不是global userID。空日志也可能是服务器未启用审计，不得显示“确定没有活动”。不自动无限翻页。 |
-| `CollectOrganizationEvents` | POST **`/events/collect`**，不是 `/api/events/collect`。支持组织客户端导出1602及服务器接受的cipher客户端事件1107–1114、1117、1119–1132。校验本组织/cipher关系，拒绝伪造服务端管理事件。 | 只在对应真实客户端动作发生后调用；不能把collect成功当作证明日志已存储（服务器可关闭审计）。banner事件和个人导出1007未实现，不属于本接口支持。 |
-| `WithOrganizationAPIKey` | owner + 主密码派生proof + 显式确认；POST `/api/organizations/{id}/api-key` 或 `rotate-api-key`。返回secret仅借给回调，用后clear byte slice，clientID=`organization.{id}`。 | 读取也可能首次创建key；轮换撤销旧key。回调不得重入Session，UI不得写日志或持久保存key。当前未实现原生API key展示/轮换表单。 |
-| `ImportOrganizationDirectory` | 仅既有Public目录路由：先组织client credentials获取 `api.organization` token，POST `/api/public/organization/import`，不伪造Public GET/users/groups等路由，不传user token。校验email/externalId重复及group引用；owner/UseGroups门控。 | 显式确认overwriteExisting语义；先isolate，失败零HTTP（含token请求）。借用API secret，不持久化。请求/组/成员全部待核对，返回外部ID用于表格；没有凭空生成逐项成功。当前原生目录表单及认证成员/群组重读差异报告未实现。 |
+状态操作 refresh 后再次验证快照 authority；本模块派发 guard 同时检查 epoch/revision。缺失、过期或失败 checkpoint receipt 不复活旧快照；同内容且有效的新 receipt 可继续无 reprompt 操作，旧 reprompt grant 始终失效。
 
-## 非事务和权限的重要限制
+## 派发后的真实核对
 
-缓存上游 `post_org_import` 对每个 `update_cipher_from_data(...).await.ok()` 忽略结果，因此HTTP200**也可能缺少条目**；不能仅通过状态码产生逐项成功记录。目录import也可能因策略跳过恢复、缺失外部成员引用或服务器关闭群组而没有完成期望状态。本模块只报告请求级acceptance和待核对行，不声明已验证全部成功。尚缺完整产品reconciliation UI，不得把底层结果包装成全绿。
+`OrganizationOperationResult.ImportReconciliation` 含 `ReadCompleted / BeforeIDs / AfterIDs / AddedIDs / Items`。派发后执行**新的认证 GET /api/sync**，独立解析并叠加 pending policy；不能调用会复用操作内缓存的 `operationPoliciesLocked` 冒充新读取，也不接纳 snapshot/发行 offline receipt/撤隔离。
 
-普通组织状态批量遇到非2xx或不确定传输结果，不推断全部失败或回滚。集合调整中途错误保留隔离，不能自动重试。隔离刻意撤销旧offline authority与外部grant；集合操作只在Session锁内保留隔离前已验证grant的短期限给本次操作，并在新epoch检查，不更新/复活外部grant。政策读取不借隔离绕过pending政策。
+逐项仅在新增服务器 ID、唯一生成 key、完整内容字段、类型、reprompt、明确映射的集合全部一致且仍有权限时 `Verified=true`。重复源内容、缺少新建集合映射、读失败/取消/撤权/无法匹配保持 unknown。HTTP 200 可能逐项失败；HTTP 错误后仍在未取消的上下文中尝试读差异。`Applied` 不据 HTTP200 置 true，`ReconcileRequired` 保留。并发写入可产生额外 AddedIDs；不是事务 receipt，不能自动重发。
 
-当前授权由最后认证快照+提交前sync+服务器最终检查组成，不是服务端CAS。sync到写入之间仍有权限/内容并发变化窗口。旧snapshot、错误scope和refresh checkpoint均继续使用基线既有机制，但本卡**未新增覆盖全部旧receipt/refresh失败组合的专属测试**。
+`OrganizationDirectoryResult.Reconciliation` 含 `Before/After` 管理快照和逐成员/群组/overwrite 行。隔离后只借用本次操作初始已认证 owner 身份，用既有内部管理读取 GET users、GET groups、GET group/users；再次核对自身 membership/global user/owner/confirmed，所有成员和群组身份分开。前后快照核对邮箱、externalID、成员状态、群组名称及完整成员关系；overwrite 缺席成员也显示，owner 受服务器保护时不能冒充撤权成功。读失败或状态不符保持 unknown。管理读取不清 marker/pending、不调用普通 Sync 接纳逻辑。
 
-## 原生组件与集成
+## #14 原生接线
 
-- `newOrgOperationsPanel`：输入已认证组织entry列表、绑定Session/snapshot的execute、UI线程dispatcher。业务列表选择、权限禁用、操作选择、二次确认、取消、进行中和待核对结果；失败/成功后均冻结，不自动重试。需要reprompt的条目不在此多选面板授权，调用方需提供单条授权入口。`Close()`必须在锁定/sync/scope变化时调用，清条目并丢弃迟到回调。
-- `newOrgEventsPanel`：输入组织/成员/条目业务筛选所得query、fetch、UI dispatcher。时间表单、事件列表、未知类型数字、分页、取消与迟到结果清理。筛选对象应来自现有业务目录，不能让用户猜原始ID。
-- 根 `exportOrgBackupFile`、`readOrgImportPlan`：安全文件绑定，复用既有文件工具而不修改存储核心。
-- 未创建全局app映射，未改main或既有组织管理UI。上面两个View需要#5挂载。复制/集合分配/导入预览映射/导出确认/API key/目录的完整原生产品表单仍需实现，不能拿方法存在等同用户入口完成。
+所有构造器均无全局 app 映射，提供 `View(*ui.Context)` / `Close()`；操作回调绑定当前 Session、认证 VaultData、scope/revision lease 和真正的 checkpoint/isolation 持久实现。`dispatch` 必须回到 UI 线程，并由宿主触发刷新。锁定、sync 或 scope 变化统一 Close，丢弃迟到回调。
 
-## 跨卡精确依赖
+| 组件 | 宿主注入 |
+|---|---|
+| `newOrgOperationsPanel` | 当前组织列表与状态 execute；reprompt 条目走单项授权入口。 |
+| `newOrgEventsPanel` | 来自业务目录选择的组织/成员/条目 query、fetch；时间和分页表单。 |
+| `newOrgCopyPanel` | 已认证 source、目标组织集合 choices、复制回调；回调在执行前获取所需单项 reprompt 授权，取消则零写。choices.Name 应提供用户可区分的组织/集合名称。 |
+| `newOrgCollectionPanel` | 已认证条目、同组织可见集合、当前关联、分配回调；显示持久隔离与失去访问后果。 |
+| `newOrgImportPanel` | 由文件入口读取并独占移交的 plan、准确格式名、仅目标组织的集合 choices、建集合权限、import execute。显示类型/名称预览、逐集合映射、归档/回收站阻止提交、确认、取消与新读取逐项结果。运行期间 worker 独占并 Clear plan，Close 不并发 Clear。 |
+| `newOrgExportPanel` | 组织名称、owner/admin 可用性、安全保存回调。明确选择 MyGo 或官方 JSON，路径、明文风险与确认；不要接普通 os.WriteFile。 |
+| `newOrgAPIKeyPanel` | owner 可用性、`WithOrganizationAPIKey` adapter；密码输入、读取/轮换确认、隐藏默认/显式显示/清除，关闭与迟到回调清除密钥。禁止日志/持久保存。 |
+| `newOrgDirectoryPanel` | owner/UseGroups、目录回调；邮箱/externalID/撤权行、群组名称/成员选择、删除预览行、overwrite 明确确认、临时 key、进行中/取消/部分结果。 |
 
-1. #3附件与完整跨key复制：需要接受已授权完整source CipherDocument、源/目标owner key及附件迁移能力的转换接口；返回完整新document和明确逐附件结果/不支持原因。未知/FIDO2不能当作明文普通字段或者直接丢弃。当前安全标准对象已实现独立跨key复制，附件/FIDO2/unknown继续失败关闭。
-2. #5集成：提供当前Session/VaultData/snapshot lease、checkpoint持久保存回调、持久quarantine及adopt回执、UI线程dispatcher、锁定/sync统一Close；不能用no-op隔离回调接产品。
-3. 导入结果：官方接口没有新ID映射/逐项receipt，需一次新sync后按预览/新增集合/条目差异展示，重复内容无法唯一匹配时保留unknown并要求人工核对。不能自动重发整份文件。
-4. 目录结果：需隔离状态下由既有管理读取接口核对成员及群组关系，但不能普通sync自动撤隔离或pending policy。MemberID、globalUserID、orgID及externalID均独立展示/传递。
+文件 adapter：`readOrgImportFormatPlan(ctx,path,official)` 使用现有受限安全文件读取；`exportOrgBackupFormatFile(...,confirmed,official,...)` 使用已有目录 descriptor/no-follow、0600 暂存、原子 no-replace 发布，不覆盖已有文件。旧 `readOrgImportPlan` / `exportOrgBackupFile` 保留为 MyGo 格式 wrapper。宿主原生文件选择器传入路径。回调不可在 Session 锁内重入 Session。
 
-## 本轮验证
+所有表单完成或不确定失败后冻结，不自动重试；新构造器必须使用新认证状态。Go string 和 UI 字符串历史副本不能保证物理归零；密码/key 的借用 byte slice 均清除。
 
-已执行并通过：
+## 验证证据
 
-- `go test ./internal/vaultwarden -run 'TestOrgOperations' -count=1`
-- `go test -tags headless ./... -run 'TestOrg(Operation|Event)' -count=1`
-- `go test -tags headless ./... -run 'TestOrg(Operation|Event|Collection|APIKey|Copy|Directory)' -count=1`
-- `go test ./internal/vaultwarden -run 'TestOrgBackup' -count=1`
+已通过：
+
 - `go test -tags headless ./...`
+- `go test -race -tags headless ./... -run 'TestOrg' -count=1`
 - `go vet -tags headless ./...`
-- `go test -race -tags headless ./... -run 'TestOrg(Operation|Event|Collection|APIKey|Copy|Directory|Backup)' -count=1`（最终审计panel和live-test文件加入后再次通过；live test因未设置隔离fixture URL而skip，未运行HTTP回环）
+- `MYGO_ORG_MODULE_TEST_URL=http://127.0.0.1:32797 go test ./internal/vaultwarden -run '^TestLiveOrgModule$' -count=1 -v`
+- `MYGO_ORG_MODULE_TEST_URL=http://127.0.0.1:32797 go test -race ./internal/vaultwarden -run '^TestLiveOrgModule$' -count=1 -v`（同一自有实例，race 回环也通过）
 
-覆盖：真实路由/请求体、批量非事务HTTP400、只读/隐藏/reprompt拒绝、live权限撤回/版本变化/跨组织、非法ID与取消零请求、集合隔离失败零HTTP、API key owner/确认/secret借用归零、组织Public token路径和隔离、目录重复externalID/缺失组成员拒绝、八类型跨key复制及unknown/附件/FIDO2拒绝、官方export→自有文件→官方import协议加密回环、200不冒充逐项成功、借用导出buffer归零、集合预览不可变、独立UI控制器确认/取消/迟到/分页。
+新增/扩展测试覆盖：官方明文严格解析/字段/集合/unknown/FIDO2，真实新读取、唯一项确认/重复内容 unknown、HTTP200缺项不能全绿，目录部分结果/overwrite/读取撤权/身份歧义、refresh/checkpoint失败/旧receipt/有效receipt、reprompt有效/过期/跨条目、表单确认/取消/late key/运行期间plan寿命/部分结果/不自动重发。本轮测试发现并修正了操作内 policy 缓存不能用作新读取，以及 refresh 后旧 authority 检查不足。
 
-中间集合测试曾失败：隔离会推进authorizationEpoch，最初复用了隔离前epoch，导致操作总是Expired。已修正为隔离成功后只更新本次操作期望epoch，外部grant仍失效；隔离前验证并借用短期限，不延长授权。定向测试及全量通过。未执行的检查没有标记通过。
+真实镜像：`vaultwarden/server@sha256:efb3cde962015fcc036b2ea625242248611943b27212ebf4392841fb30fad055`，镜像标签 version=1.37.4 / revision=7c188967e7a467b19b2757bc3326f9cf3ccae327。使用 create→记录完整ID→start→inspect/port，ownership label 和仅 loopback 随机端口，volatile 自有数据，无外发邮件或生产账号。
 
-**未验证**：实际自有1.37.4容器owner/admin/member多角色回环、官方CLI文件互操作、真实窗口/视觉/Keychain/系统AutoFill、原生导入导出和目录/API key全流程、持久隔离接线（只测试借用回调协议，真实存储归基线）、完整checkpoint/旧receipt组合。本次没有外发邮件。
+第一次受控实例 `be8b14ecc256d5b8db7eb35007e0e7a004e4a1d8ef90d19083d19bbf2f097f08` 启动成功，owner 回环通过；扩展群组测试时因默认 ORG_GROUPS_ENABLED=false 得到服务器 400。按协调者额外明确授权核验 ownership、保存有界日志并按完整 ID 清理（含匿名卷），以同 digest 新建 `1493719d78abbb67fd69d6d8f9b3eb61d452ec62549e1aaddc45cf8c65771177`，name/label=`mygo-board8-groups-01a1174d`，启用 ORG_GROUPS_ENABLED 与 ORG_EVENTS_ENABLED。
 
-### 回环基础设施失败证据
+真实通过场景：owner 状态/复制/导出导入/集合分配/永久删；member/admin 可写、只读/隐藏拒绝、群组继承复制、撤权后旧快照拒绝；admin 导出和事件、member 入口拒绝；MyGo 与官方明文 JSON 经真实 export/官方 import 回环；新读取确认唯一安全笔记及重复登录项 unknown；组织/成员/条目审计、collect；API key读取及轮换；Public目录成员+群组导入并新读取验证完整关系。一次性 fixture 的 isolate 为 no-op，仅证明本模块调用协议；产品必须接持久隔离适配器。
 
-新增 `TestLiveOrgModule` 可用 `MYGO_ORG_MODULE_TEST_URL` 指向专属loopback服务器，涵盖owner的状态/复制/export-import/collect-events/APIkey/Public目录/集合分配与永久删。普通全量测试默认skip，不算实测。该fixture只有owner，不能替代多角色证明；isolate为一次性服务器fixture的no-op，不能用于产品。
+两实例均已按完整 ID 执行 `docker rm -fv` 清理自有容器及匿名卷。最终有界日志保存在本会话 scratch 的 `org-fixture-final.log`；未将凭据、密钥或测试账号数据提交到仓库。
 
-本轮执行 `docker version --format '{{.Server.Version}}'` 得到 `29.4.0`，`docker image ls`确认本地有 `vaultwarden/server:1.37.4`。执行：
-
-```
-docker run --rm -d --name mygo-board8-module-01a11726 -p 127.0.0.1::80 -e SIGNUPS_ALLOWED=true -e ORG_EVENTS_ENABLED=true -e WEBSOCKET_ENABLED=false vaultwarden/server:1.37.4
-```
-
-返回容器ID `bd3e93ea05926c4923e8b2036949ee260f152e326c31a11c501a81d133f8bd6f`。随后 `docker port mygo-board8-module-01a11726 80/tcp` 失败：`Error response from daemon: No such container: mygo-board8-module-01a11726`。容器已退出且被 `--rm` 删除，未拿到监听地址，因此未执行live test，也没有可读的保留日志；退出原因未验证。按卡片指令没有重试、更换镜像/CLI/运行模式。测试账号注册尚未开始，没有残留该命名容器或生产用户改动。
+**未验证/边界**：本机 `command -v bw` 无可执行文件，未执行 CLI 互操作；未运行真实窗口视觉/Keychain/AutoFill。附件/FIDO2/legacy完整跨key转换交 #13，当前安全拒绝；主窗口接线与真实持久隔离交 #14。导入新建集合无服务器新ID映射时保留 unknown，需用户检查新快照。权限校验到写入间仍存在服务端非 CAS 的并发窗口。

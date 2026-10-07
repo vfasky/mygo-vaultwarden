@@ -96,7 +96,7 @@ func (s *Session) OrganizationEvents(ctx context.Context, vault *VaultData, quer
 			return page, ErrPermission
 		}
 	}
-	status, body, err := s.authenticatedGuardedLocked(ctx, http.MethodGet, path, "", "", persist, s.organizationManagementGuardLocked(s.authorizationRevision))
+	status, body, err := s.authenticatedGuardedLocked(ctx, http.MethodGet, path, "", "", persist, s.orgOperationGuardLocked())
 	if err != nil {
 		return page, err
 	}
