@@ -8,9 +8,34 @@ func b64(_ data: Data) -> String {
         .replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "=", with: "")
 }
 
+// The platform requests below do not request any WebAuthn extensions. Emit the
+// actual empty result, never an invented AppID success. Vaultwarden 1.37.4's
+// PublicKeyCredentialCopy requires an object-valued top-level `extensions`.
+// Keep this pure encoder shared by the system callback and serialization tests.
+enum VaultCredentialResponse {
+    case assertion(authenticatorData: Data, signature: Data, userHandle: Data)
+    case registration(attestationObject: Data)
+}
+
+func encodeVaultCredential(id: Data, clientDataJSON: Data, response: VaultCredentialResponse) throws -> Data {
+    var fields: [String: Any] = ["clientDataJSON": b64(clientDataJSON)]
+    switch response {
+    case let .assertion(authenticatorData, signature, userHandle):
+        fields["authenticatorData"] = b64(authenticatorData)
+        fields["signature"] = b64(signature)
+        fields["userHandle"] = b64(userHandle)
+    case let .registration(attestationObject):
+        fields["attestationObject"] = b64(attestationObject)
+    }
+    return try JSONSerialization.data(withJSONObject: [
+        "id": b64(id), "rawId": b64(id), "type": "public-key",
+        "extensions": [String: Any](), "response": fields
+    ])
+}
+
 // Retain one bridge per UI authentication lease. Call cancel on lock/switch.
 // Integration must configure signed associated domains (webcredentials:RP).
-@available(macOS 12.0, *)
+@available(macOS 13.0, *)
 @MainActor
 final class VaultWebAuthn: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private var controller: ASAuthorizationController?
@@ -65,13 +90,17 @@ final class VaultWebAuthn: NSObject, ASAuthorizationControllerDelegate, ASAuthor
     }
     func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
         guard controller === self.controller else { return }
-        var result: [String: Any]
-        if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
-            result = ["id": b64(credential.credentialID), "rawId": b64(credential.credentialID), "type": "public-key", "response": ["clientDataJSON": b64(credential.rawClientDataJSON), "authenticatorData": b64(credential.rawAuthenticatorData), "signature": b64(credential.signature), "userHandle": b64(credential.userID)]]
-        } else if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration, let attestation = credential.rawAttestationObject {
-            result = ["id": b64(credential.credentialID), "rawId": b64(credential.credentialID), "type": "public-key", "response": ["clientDataJSON": b64(credential.rawClientDataJSON), "attestationObject": b64(attestation)]]
-        } else { finish(.failure(NSError(domain: "MyGo.Authentication", code: 2))); return }
-        do { finish(.success(try JSONSerialization.data(withJSONObject: result))) } catch { finish(.failure(error)) }
+        do {
+            let encoded: Data
+            if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialAssertion {
+                encoded = try encodeVaultCredential(id: credential.credentialID, clientDataJSON: credential.rawClientDataJSON,
+                    response: .assertion(authenticatorData: credential.rawAuthenticatorData, signature: credential.signature, userHandle: credential.userID))
+            } else if let credential = authorization.credential as? ASAuthorizationPlatformPublicKeyCredentialRegistration, let attestation = credential.rawAttestationObject {
+                encoded = try encodeVaultCredential(id: credential.credentialID, clientDataJSON: credential.rawClientDataJSON,
+                    response: .registration(attestationObject: attestation))
+            } else { finish(.failure(NSError(domain: "MyGo.Authentication", code: 2))); return }
+            finish(.success(encoded))
+        } catch { finish(.failure(error)) }
     }
 }
 

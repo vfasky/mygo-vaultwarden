@@ -60,7 +60,7 @@ Exchange返回完整token RawMessage（秘密），**不会安装Session或打�
 
 `NewWebAuthnBinding`/`Validate(rawCredential,epoch)`要求HTTPS、RP与服务器host精确一致（支持server路径）；绑定challenge、origin、webauthn.get/create、credential ID、allowed list、2分钟、epoch、一次性消费。assertion还核验RP hash与UP标志；不伪造签名/计数器/attestation核验成功，最终由VW完成。拒绝crossOrigin、错误origin、错challenge、RP hash、重复JSON字段及重放。保留原始clientDataJSON字节，绝不重写origin或challenge。
 
-平台桥仅支持AuthenticationServices平台凭据；旧U2F AppID扩展及外部USB安全密钥需另行平台能力，不能把它们标成已覆盖。
+平台桥仅支持AuthenticationServices平台凭据；旧U2F AppID扩展及外部USB安全密钥需另行平台能力，不能把它们标成已覆盖。生产callback统一调用纯函数`encodeVaultCredential(id:clientDataJSON:response:)`，断言与注册均输出顶层`extensions: {}`：当前请求未启用扩展，这是实际空扩展结果，不伪造`appid: true`。固定VW1.37.4 `PublicKeyCredentialCopy`要求该字段为对象，缺失会在签名验证前失败。编码保留原始clientDataJSON、credential ID及response二进制字节。
 
 ## 原生UI及最终集成清单
 
@@ -70,8 +70,8 @@ Exchange返回完整token RawMessage（秘密），**不会安装Session或打�
 
 1. 主登录选择接LoginMFA/BeginSSO；scheduler在派发及采用结果前核验当前scope/epoch/sequence，账号切换/锁定取消context并Close表单、SSO/Duo/WebAuthn对象。每个Request用完Close；过时返回的Session立即Close。UI仅在UI线程调用。
 2. 新MFA provider2/7按钮分别开启系统浏览器/凭据控制器，不让用户手工输入JSON；普通码输入仅用于0/1/3/8。Duo AuthUrl、WebAuthn原始metadata须来自当前挑战。
-3. 将`macos/Authentication/VaultAuthentication.swift`加入app专用源目标（排除Tests/main.swift），注册Go/Swift JSON/回调适配层并持有NSWindow与桥对象。Swift `VaultWebAuthn.start(rp,challenge,userID,userName,allowed,excluded,completion)`；断言userID/userName=nil，注册使用服务器User字段；result Data先经Binding.Validate，再交provider7或MFAManage(webAuthn)提交id/name/deviceResponse。注册id/name由管理UI收集并绑定当前待注册操作。
-4. 配置签名、`com.apple.developer.associated-domains`的`webcredentials:<RP>`和服务器AASA。macOS12+基础API，已有excluded credentials注册需macOS14+；旧系统显式失败，避免忽略排除列表。不改现有存储桥文件。
+3. 将`macos/Authentication/VaultAuthentication.swift`加入app专用源目标（排除Tests/及独立Package.swift），注册Go/Swift JSON/回调适配层并持有NSWindow与桥对象。Swift `VaultWebAuthn.start(rp,challenge,userID,userName,allowed,excluded,completion)`；断言userID/userName=nil，注册使用服务器User字段；result Data先经Binding.Validate，再交provider7或MFAManage(webAuthn)提交id/name/deviceResponse。注册id/name由管理UI收集并绑定当前待注册操作。
+4. 配置签名、`com.apple.developer.associated-domains`的`webcredentials:<RP>`和服务器AASA。浏览器桥macOS12+，WebAuthn桥macOS13+（系统控制器cancel API的最低版本）；已有excluded credentials注册需macOS14+；旧系统显式失败，避免忽略排除列表。不改现有存储桥文件。
 5. `VaultAuthenticationBrowser.start`返回系统会话URL；用SSO/Duo flow做精确来源/state检查。Close/取消必须调用Swift cancel，桥处理重复/迟到系统回调并返回取消错误。URL scheme/entitlement/注册冲突和loopback方案由集成落实。
 6. Remember安全存储、账户撤销、完成登录后的sync/账号核验/主密码policy/安全快照发布复用现有契约。注册/管理结果要在当前账号下重新读取核验；UI不得把未知失败当作无副作用并自动重复POST。
 
@@ -89,6 +89,15 @@ Exchange返回完整token RawMessage（秘密），**不会安装Session或打�
 
 真实fixture为卡片独占容器`mygo-auth-10-01a1173c`、`mygo-auth-smtp-10-01a1173c`，镜像`vaultwarden/server:1.37.4`，image `sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216`。只有loopback随机端口、易失/data及新example.invalid账号。SMTP sink复用仓库测试程序，仅在独占容器执行，不转发邮件；二进制/邮件spool只在session scratch，不安装服务，不触碰用户账户。结束删除两容器及含秘密spool。
 
-失败证据：首次根UI测试字段名AccountID编译失败后改为契约Account；SMTP测试首轮错误假设注册总会发邮件，修正为遵循返回token/EmailSent；取消测试夹具未读请求体导致超时，修正后通过。Swift新增`macos/Authentication/Tests/main.swift`的XCTest字节编码测试**未执行**：工具链返回`no such module 'XCTest'`，未安装依赖或切换运行方式；这不影响生产桥typecheck通过，但不能算平台测试通过。
+历史失败证据：首次根UI测试字段名AccountID编译失败后改为契约Account；SMTP测试首轮错误假设注册总会发邮件，修正为遵循返回token/EmailSent；取消测试夹具未读请求体导致超时，修正后通过。此前直接swiftc编译XCTest出现`no such module 'XCTest'`是调用方式未提供测试框架路径，并非工具链不能运行测试。现以模块内独立SwiftPM包自动发现测试，移除XCTMain；未修改公共macos/Package.swift或app工程。
+
+Review #23修复后验证（本轮未重跑历史SMTP/硬件回环）：
+
+- `swift test --package-path macos/Authentication --scratch-path "$TMPDIR/mygo-auth-swift-build"`：4个XCTest全部通过，含原2个字节测试及完整assertion/registration DTO回归。检查extensions对象/缺失或null或数组或bool拒绝、id/rawId base64url、全部response字节与clientDataJSON原样、分支字段不混用及空userHandle。使用生产callback同一编码函数；这是固定server必需字段的Swift契约检查，未执行Rust反序列化或真实签名验证。
+- SwiftPM首轮按macOS12部署目标暴露既有`ASAuthorizationController.cancel()`要求macOS13的问题；将WebAuthn类明确标注13+后通过，浏览器仍12+。最终集成须按版本门控WebAuthn入口。
+- `swiftc -typecheck -target arm64-apple-macos12.0 macos/Authentication/VaultAuthentication.swift`：通过，包含可用性检查。
+- `go test -tags headless ./... -timeout=90s`：全包通过。
+- `go test -tags headless ./internal/vaultwarden -run 'WebAuthn' -count=1 -v`：2个定向测试通过。
+- `git diff --check`：通过。可复现说明见`macos/Authentication/README.md`；SwiftPM构建输出存于session scratch。
 
 尚未验证：真实Duo租户、YubiKey硬件、WebAuthn/Touch ID签名系统窗口与associated domains、真实SSO IdP/nonce交换、多provider SSO邮件重发、生产存储与主应用桥接。HTTP fixture不是这些环境的替代证据；Swift字节测试亦不是实际认证测试。主应用接线、完整平台注册及UI完整旅程留给最终集成卡。
