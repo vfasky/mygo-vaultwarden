@@ -2,7 +2,7 @@
 
 使用 Go + MyGo Native UI 和 Swift/AppKit 构建的 macOS Vaultwarden 客户端。采用 GPL-3.0-only。
 
-当前已接入 Vaultwarden 只读登录与同步：支持 PBKDF2、Argon2id、TOTP 双重验证、token 刷新和个人 Login 条目解密。主密码和 TOTP 验证码直接在登录页输入；解密结果写入受 Keychain 保护的加密快照，支持离线解锁与 macOS 系统自动填充。暂不支持编辑、组织库或新 COSE 加密格式，兼容边界见 [只读接入说明](docs/vaultwarden-readonly.md)。
+已接入 Vaultwarden 登录、同步及个人密码库写入：支持 PBKDF2、Argon2id、TOTP 登录验证、先持久化的令牌刷新、八种项目的标准字段新增/编辑、收藏、归档和回收站操作。完整服务器加密同步数据保存在受 Keychain / 主密码保护的本机加密快照中；系统自动填充使用独立的合规个人 Login 投影。完整 API 工作仍未完成：文件夹、批量、复制、导入导出、组织、附件、Send 和账号安全管理等尚缺；准确状态见 [API 覆盖矩阵](docs/vaultwarden-api-coverage.md)。
 
 ## 开发环境
 
@@ -95,7 +95,7 @@ bash scripts/build-macos.sh release --notarize
 
 成功同步全量替换快照；普通网络/解密失败保留上次成功快照并明确报错。refresh token 更新会先加密落盘，再下载密码库，即使后续断网也可在下次解锁后继续同步。账号身份或认证失效要求重新登录。登出先撤销快照，再清理 Keychain 和系统候选。候选回执与旧密钥清理的状态独立显示。
 
-实现边界见 [安全快照设计](docs/secure-snapshots.md) 和 [只读接入说明](docs/vaultwarden-readonly.md)。
+实现边界见 [安全快照设计](docs/secure-snapshots.md)、[登录与同步说明](docs/vaultwarden-readonly.md) 和 [API 覆盖矩阵](docs/vaultwarden-api-coverage.md)。
 
 ## 测试
 
@@ -128,7 +128,7 @@ log show --last 10m --style compact \
 main.go                          MyGo 原生主窗口
 ui.go / ui_auth.go / ui_icons.go  登录、解锁与三栏密码库界面
 network.go                       登录、同步、取消与 UI 代次控制
-internal/vaultwarden/            只读协议、KDF、解密及兼容性测试
+internal/vaultwarden/            协议、KDF、个人项目加解密与写入及兼容性测试
 storage*.go                      受限 JSON / C ABI 桥接与错误处理
 resources/                       应用图标及品牌资源
 macos/App/                       主应用 Info.plist 与共享权限

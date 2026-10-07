@@ -1,53 +1,57 @@
 # Vaultwarden API 覆盖矩阵
 
-**阶段成果，整卡未完成，未达到验收。** 当前原生产品仍以登录、解锁和只读同步为主；新写入接口尚未接入原生界面或完整快照模型。此矩阵禁止用于宣称“完整 Vaultwarden API 已完成”。
+**INCOMPLETE：整卡未完成，未达到验收。** 本轮已把个人密码库写入接入原生界面，并保存完整加密 sync 文档；不是完整 Vaultwarden API 产品。协调者已批准阶段提交后继续同一卡，禁止据此启动 Review 或合并。
 
-兼容目标固定为 **Vaultwarden 1.37.4**。已直接核对该标签的 [`src/api/core/ciphers.rs`](https://github.com/dani-garcia/vaultwarden/blob/1.37.4/src/api/core/ciphers.rs)，首次 raw 直连超时后依照内置 github-mirror-fallback 技能取得同一资源。其余模块逐路由审计尚待并行审计结果。标签源码缓存位置、后续步骤见 [实现交接](vaultwarden-implementation-handoff.md)。不能将 HTTP 方法相近的路由视为同义词，特别是删除。
+固定服务器 **Vaultwarden 1.37.4**：tag 对象 `54a40806c990da2def7acd5a3152edc530c59b79`，commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档 SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。字段加密参考 Bitwarden clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的 `libs/common/src/vault/models/domain/{bank-account,drivers-license,passport,login-uri}.ts`。本轮从固定 commit 的 raw URL 成功读取这四份文件，未换用 main。
 
-## 当前已核对的协议和实现
+## 已连接的个人功能
 
-路径前缀 `/api` 由客户端添加。以下为能力入口，不声称已测试每一个上游别名。
+以下 `/api` 前缀来自 main.rs 的挂载。别名列明服务器支持，不代表客户端逐个执行过。单条状态操作必须先在当前认证快照中打开可编辑的个人项目，写入前检查本地 revision，成功后全量同步并用原会话的 CAS 发布。
 
-| 功能 | 1.37.4 方法与路径 | 上游源码 | 本地实现 / 测试 | 权限、界面和真实状态 |
-|---|---|---|---|---|
-| 全量同步 | GET `/api/sync`，可选 query `excludeDomains` | ciphers.rs:121 | client.go `SyncWithCheckpoint`；既有 sync/client/session 测试 | 仅既有个人 Login 投影进入 UI；query 尚未支持；组织、其他类型及完整 metadata 尚未集成 |
-| 项目更新 | PUT `/api/ciphers/{id}`；POST 同路径别名；另有 admin 别名 | ciphers.rs:682–715 | ciphers_api.go `UpdatePersonalCipher`；`TestUpdateCipherEncryptedAndRevisionBound` | 仅个人五类的有限字段编辑；要求源文档 edit/viewPassword、无 reprompt、有效 revision；未接入 UI；仅测试 PUT |
-| 收藏 / 文件夹 | PUT `/api/ciphers/{id}/partial`，POST 别名 | ciphers.rs:743–754 | `SetCipherPersonalMetadata`；`TestCipherPartialDoesNotOverwriteEncryptedFields` | 用户自己的 metadata，服务端校验可访问性；客户端仅测试 PUT；未接 UI |
-| 软删除 | PUT `/api/ciphers/{id}/delete`，另有 admin / bulk 变体 | ciphers.rs:1511 | `ChangeCipherState(CipherTrash)`；`TestCipherStateRouteMethodsAndScope` | 服务端校验；尚需 UI 确认、reprompt 与本地权限集成 |
-| 永久删除 | DELETE `/api/ciphers/{id}`；POST `/api/ciphers/{id}/delete` 为永久删除别名 | ciphers.rs:1499、1523 | `ChangeCipherState(CipherDeletePermanently)`；同上 | 只实现 DELETE；危险操作 UI 确认未接入 |
-| 恢复 | PUT `/api/ciphers/{id}/restore`，另有 admin / bulk | ciphers.rs:1601 | `ChangeCipherState(CipherRestore)`；同上 | 未接 UI / 全量同步模型 |
-| 归档 / 取消 | PUT `/api/ciphers/{id}/archive`、`/unarchive`；另有 bulk | ciphers.rs:1778、1793 | `ChangeCipherState(CipherArchive/CipherUnarchive)`；同上 | 未接 UI / 快照 / AutoFill 排除规则 |
-| 五类加密文档 | CipherData type 1 Login / 2 SecureNote / 3 Card / 4 Identity / 5 SSHKey | ciphers.rs:240–298、type match 549 起 | cipher_document.go；`TestCipherDocumentFiveTypesPreserveExtensions`、`TestCipherDocumentRejectsUnsafeChanges` | 支持标准字段 type-2 解密与有限重写，未知 JSON 扩展原样保留；不是完整 CRUD |
-| 新增 / 复制 / 分享 | POST `/api/ciphers`、`/create`、`/admin`；PUT/POST `/{id}/share` | ciphers.rs:338–384、988–1021 | 未实现 | 必须生成/包装新 key，重加密未知扩展前明确检查；禁止复用有限编辑接口冒充复制 |
-| 批量 / collections / import / purge | 详见上游 routes 注册列表 | ciphers.rs:34–104 | 未实现 | 待逐项核对请求、响应、权限和 UI |
-| 附件 | GET 获取；POST attachment/v2 JSON 元数据 + multipart 数据；legacy/admin/share/delete 变体 | ciphers.rs:1167–1488 | 未实现 | 需加密二进制、下载 URL 边界、临时文件与取消清理 |
+| 能力 | 方法 / 路径及别名 | Go 实现 / 测试 | 原生入口、权限与实际边界 |
+|---|---|---|---|
+| 全量同步 | GET `/api/sync`；query `excludeDomains` 尚未开放 | `SyncWithCheckpoint`、`VaultData`；sync/session 测试及真实回环 | 顶栏「同步」。保留服务器原始加密响应及未知区段；个人八类型列表与最小 Login 填充分离；组织数据只保存不解密 |
+| 新增 | POST `/api/ciphers`；`/create`、`/admin` 未实现 | `CreatePersonalCipher`、`NewPersonalCipher`；八类型独立随机 item key 测试和真实回环 | 在八种分类选择「新增」；默认所有项目新增 Login。type-2 字段加密，item key 由用户 key 包装；未知 section/custom/URI 扩展拒绝跨新 key 写入；SSH 三项不能为空 |
+| 更新 | PUT `/api/ciphers/{id}`；POST 同路径 / admin 别名未调用 | `UpdatePersonalCipher`、`EncryptCipherDocument`；八类型、未知扩展、大整数、自定义字段、历史和 URI checksum 测试 | 「查看与编辑」→「保存」。保留同 item key/FIDO2/未知扩展；必须个人、edit/viewPassword、无 reprompt、源 revision 合法。支持名称/备注/类型标准字符串、多 URI、TOTP 秘钥、文本及隐藏自定义字段；已有布尔/关联字段原样保留或显式删除，无完整编辑器 |
+| 收藏 / 文件夹 metadata | PUT `/api/ciphers/{id}/partial`，POST 别名 | `SetCipherPersonalMetadata`，最小请求体 httptest | 收藏已接入完整编辑保存；partial 接口尚未直接接 UI，文件夹列表/管理尚未实现 |
+| 软删除 | PUT `/api/ciphers/{id}/delete` | `ChangeCipherState(CipherTrash)`；方法断言、真实回环 | 编辑页「移入回收站」→确认；不使用 POST 同路径 |
+| 恢复 | PUT `/api/ciphers/{id}/restore` | `CipherRestore`；真实回环 | 回收站打开项目→恢复 |
+| 永久删除 | DELETE `/api/ciphers/{id}`；POST `/api/ciphers/{id}/delete` 为永久删除别名 | `CipherDeletePermanently`；仅 DELETE 已测试 | 回收站打开项目→永久删除→不可恢复提示→确认；未实现批量清空回收站 |
+| 归档 / 取消 | PUT `/api/ciphers/{id}/archive`、`/unarchive` | `CipherArchive/CipherUnarchive`；真实回环，归档排除 AutoFill | 编辑页归档按钮；侧栏归档分类；完整 PUT 保留原 `archivedDate` |
+| 分类 | 本地过滤认证后的完整库元数据 | `PersonalEntries`、`filteredItems`；headless 测试 | 八类型、收藏、归档、回收站；未知格式/reprompt显示受保护占位标题，不能解密编辑；不是虚假的空分类 |
+| 密码历史 / URI 完整性 | 更新体的 passwordHistory、passwordRevisionDate、uriChecksum | 自动保留旧密码，URI SHA256 Base64 再 type-2 加密；单元与真实回环 | 改密码/网址时维护；历史查看/删除、URI 匹配策略编辑未完成，原 match 保留，新 URI 使用默认规则 |
+| 完整离线数据 | 本地 `VaultData{version:1,scope,sync:base64}` | Go Documents 校验、Swift `SnapshotPayload.vault`、bridge、迁移与 checkpoint 测试 | 完整原始 sync 仅放 AES-GCM payload；认证主应用解锁才返回；状态/AutoFill lease不返回。旧 payload 无 vault 时可解锁，下次成功同步迁移 |
 
-`CipherData` 在该版本还接受 type **6 BankAccount、7 DriversLicense、8 Passport**。本次五类模型明确拒绝这些类型，不能称上游不支持；字段/加密协议与 UI 尚待核对。服务端本身以 `lastKnownRevisionDate` 检查旧数据，但当前上游用常规错误路径报告陈旧 revision，不能假定必为 HTTP 409；客户端已经区分真实 409/412，400 仍为脱敏验证错误。
+实际 Cipher 类型是 1 Login、2 SecureNote、3 Card、4 Identity、5 SSHKey、6 BankAccount、7 DriversLicense、8 Passport。逐字段加密名单来自固定客户端源码，未递归加密所有字符串。`encryptedFor` 是当前稳定账号 UUID。源 `lastKnownRevisionDate` 原样提交；服务端只有约一秒容差的旧版本检测，可能返回 400，并非严格 CAS。当前不轮换用户 key；源中的 `encryptedByKeyId` 若存在原样保留，尚无完整 keyId 生命周期/轮换流程。
 
-## 安全基础状态
+## 安全边界及验证
 
-| 项目 | 当前证据 | 剩余工作 |
+| 边界 | 实际实现及证据 | 仍需完成 |
 |---|---|---|
-| HTTPS / loopback、无重定向、响应上限、超时 | 既有 Client 边界与测试保留 | query / multipart / binary 的统一有界接口未完成 |
-| token 刷新先持久化 | authenticated.go；pending 无 callback 拒绝；已绑定持久 session 在无 callback 时禁止刷新；session_state 及 authenticated 测试 | 确保所有新增 API 复用同一门控；初次未绑定登录同步仍允许原有内存流程 |
-| 错误脱敏与分类 | 400/422 validation、401 expired、403 permission、404、409/412 conflict、429、5xx network；响应正文不回传 | 账号/MFA/公共 API 需各自安全业务错误建模 |
-| 未知写入结果 | 所有非 GET/HEAD 传输错误返回 MutationUncertainError；无自动重试；401 写入只发一次 | UI 必须同步核对并禁止自动重发；成功状态后响应损坏也需统一处理 |
-| 锁定/取消 | Session.Close 先取消当前请求再等 mutex；取消响应体读取返回 ErrCancelled；race 通过 | 新表单/下载/授权随 app epoch 与快照 lease 清理尚未实现 |
-| type-2 加密 | 随机 IV、AES256-CBC/HMAC、明文上限、篡改与错 key 测试 | 组织 RSA / 新格式 / 文件格式 / Send KDF 未完成 |
-| 未知字段 | 文档保留原始未知字段；JSON Number 避免大整数舍入；同 key 更新；passkey opaque 保留测试 | 密码/URI/历史/自定义字段编辑当前明确拒绝，后续需要无损完整编辑；其他加密格式明确失败 |
+| 请求约束 | TLS/loopback、禁重定向、请求超时、32 MiB响应限制、ID过滤、脱敏错误；既有测试 | query/multipart/binary独立传输、Retry-After未完成 |
+| 刷新持久化 | pending checkpoint失败阻断请求；Swift同scope/revision保存session并保留完整vault；相关Go/Swift测试 | 所有未来模块必须复用门控 |
+| 写入未知结果 | 传输错误、意外成功状态、5xx、成功响应不可解码/身份错误、写后取消均按未知结果；不自动重试；UI禁重复保存并保留草稿 | 尚无逐字段冲突比较/显式重基；同步改变本地revision后旧草稿禁止提交，需用户核对后重新编辑 |
+| 锁定与撤销 | `stopNetwork`推进epoch并取消会话，清除vault/editor/list；迟到回调不能复活并释放私有草稿；headless及race | Go/Swift运行时无法证明清零所有字符串历史副本；真实系统安装/视觉未验证 |
+| 填充投影 | 只含个人Login；deleted、archived、reprompt、viewPassword=false和组织均排除；零条显式替换；真实归档回环及Swift撤销测试 | 组织授权后填充、等价域名、更多URI规则仍缺 |
+| 未知字段 | 同key更新保留opaque passkey/扩展/大整数；加密输入不修改编辑草稿；未知格式失败 | copy/share/用户key轮换需要完整重加密；没有用有限编辑冒充这些能力 |
+| 桥和快照大小 | vault不混入64 KiB session；沿用4 MiB C ABI上限，超限报错、保旧快照 | 完整大库有界传输尚未扩展；附件禁止通过JSON/此桥传输 |
+| 认证前元数据 | header仅控制元数据；完整库不在displayCredential/status/session日志；Swift认证lease才返回vault；原生开表单后才解密秘密 | 密码/TOTP安全显示复制、reprompt再次验证尚缺；当前密码输入遮掩且没有复制秘密入口 |
 
-## 完整范围待办（不得删减）
+## 全卡其余模块（全部保留，不缩减范围）
 
-| 模块类别 | 需要完成的能力 | 当前状态 |
+| 模块 | 1.37.4 审计事实与边界 | 当前实现 / UI / 验证 |
 |---|---|---|
-| 客户端密码库 API | 全类型新增/编辑/复制；密码历史、URI checksum、自定义字段、TOTP；bulk move/delete/restore；folders；trash purge；archive；import/export | 部分协议基础，产品未完成 |
-| 组织和管理员 API | RSA 私钥/组织 key；组织、collections、共享、成员/邀请/确认/角色；groups/policies/events/目录；权限映射 | 未实现；需并行协议审计 |
-| Send | 文本/文件 create/read/edit/delete，访问、密码、过期、次数；正式 E2EE 和文件流程 | 未实现 |
-| 账号与安全 API | profile/register/verify/keys/email/password/KDF/delete/purge；devices/sessions/auth requests；domains；emergency；MFA 与浏览器/平台认证 | 登录/TOTP/refresh 是基线成果，其余未实现 |
-| 公共/身份 API | 身份登录 provider、必要公共流程与错误语义 | 仅基线 password/TOTP/prelogin/refresh；其他待审计实现 |
-| 通知与同步 | 通知状态、断线全量同步、背景任务账号/锁定隔离 | 仅基线手动同步/epoch 边界 |
-| 原生 UI | 完整分类、folder/org/collection/favorite/archive/trash；编辑/详情/复制密码和 TOTP；附件/Send/账号/组织；确认/取消 | 保留基线三栏/登录/解锁布局；新入口未实现 |
-| Go–Swift 离线 | 完整 encrypted vault 文档与 metadata、迁移、lease/revision/撤销；仅合规 Login AutoFill 投影 | 仍为基线 Login 快照，新模型尚未桥接 |
-| 服务器 HTML 管理 / 运维 | `/admin` 等服务器管理流程与客户端范围区分 | 路由及理由待审计；不擅自冒充客户端 API |
-| 上游不支持的服务 | 按 1.37.4 实际注册与实现明确标记 | 尚未取得完整审计，不猜测名单 |
-| 验证 | fixture/httptest、恶意输入、权限、冲突、取消、Swift、临时 loopback 真服务、原生视觉 | 本阶段本地测试通过；真服务、安装和视觉验证未做 |
+| folders / bulk / copy / import-export | 单条folders、批量移动/软删/恢复/归档真实存在；个人无 `/export` 或 `/trash`；purge是清全库 | 未实现产品闭环，下一进程优先；复制必须新key并处理未知扩展；导出本地转换且明确确认 |
+| 组织 / collections / members / groups / policies / events / recovery | RSA SPKI/PKCS8、OAEP type3/4；权限涉及角色、群组、readOnly/hidePasswords/manage/accessAll；memberId不等于userId | 完整加密组织profile/collections等已随sync保留；RSA解包、组织CRUD、共享、策略/权限与所有管理UI未实现 |
+| 附件 | `attachment/v2`元数据后multipart `data`；二进制 `0x02||IV16||HMAC32||CBC`；root `/attachments/...`或预签名URL | 未实现；需外部URL禁Bearer、大小/MAC、两阶段补偿和安全临时文件 |
+| Send | seed16、HKDF-SHA256 salt `bitwarden-send`/info `send`；访问走grant `send_access` 后 `/api/sends/access`、`/access/file/{fileId}`；无旧 `/access/{id}` | 未实现。文件/文本所有者及接收UI均缺；emails验证型Send上游不支持 |
+| 账号 / keys / KDF / registration | 新注册在 `/identity/accounts/register/send-verification-email` 与 `/finish`；rotate-user-account-keys为非整体事务完整DTO | 仅测试fixture注册，不是产品注册；profile/邮箱/主密码/KDF/轮换/删除/清库/security stamp未实现 |
+| MFA / SSO / WebAuthn | provider0 TOTP、1 Email、2 Duo、3 YubiKey、7 WebAuthn；5 remember；8恢复码会删除MFA。`/api/webauthn`空列表不是MFA WebAuthn | 登录password/TOTP/refresh已有且真实回环；其他provider管理、浏览器交互、SSO/PKCE/解密尚缺 |
+| devices / auth requests / domains / emergency | 有正式上游端点，不能视作不支持 | 未实现产品功能 |
+| notifications | `/notifications/hub` SignalR MessagePack；匿名事件拼写 `AuthRequestResponseRecieved`；断线需全同步 | 未实现 |
+| events / Public API | collect挂root `/events/collect`；Public API仅POST `/api/public/organization/import` | 未实现 |
+| admin / 部署资源 | `/admin`是独立HTML运维cookie；图标/静态文件/存活检查是资源；tasks/passkey登录/billing/plans部分占位，Secrets Manager不支持 | 需逐项方法/别名/权限/UI或准确上游边界完整矩阵；本表未完成该逐注册路由验收项 |
+
+完整路由审计已由协调者提供。固定源码缓存：`/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`；原始路由抽取 `routes.txt` 在同一父目录（含未注册声明，不能直接把每行当启用API）。后续须逐模块核对 `routes!` 和 main挂载后补足每条注册路由，而不是把客户端尚缺功能标成上游限制。
+
+本轮测试、隔离容器证据、续做步骤见 [精确交接](vaultwarden-implementation-handoff.md)。
