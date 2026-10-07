@@ -1,39 +1,50 @@
-# 完整 Vaultwarden 实现：第五轮阶段交接
+# 完整 Vaultwarden 实现：第六轮阶段交接
 
-**INCOMPLETE — 整卡未完成，禁止据此启动 Review 或合并。** 本轮完成个人原生文件导入导出后继续调查了 reprompt/秘密/TOTP；在剩余上下文不足以可靠实现跨 Go/Swift 安全剪贴板时，协调者通过 `contact_supervisor(need_decision)` 批准精确交接、清理和续启同一卡。整卡目标与原验收不变，没有将下一模块调查计为实现。
+**INCOMPLETE — 整卡未完成，禁止据此启动 Review 或合并。** 协调者通过 `contact_supervisor(need_decision)` 批准本轮在跨Go/Swift敏感操作模块与历史删除完成、验证后，精确交接并续启同卡。下一进程直接推进冲突比较/显式重基，然后组织RSA/权限/共享管理和全部原整卡范围；不能把本轮子集当整卡完成。
 
-## 工作树与提交
+## 分支与提交
 
-- 唯一写入项目目录：`/Users/vfasky/Library/Application Support/Waku/worktrees/board/56a21c6a-f119-465b-ae4e-7e77f68151bd/board-2-vaultwarden-api`，分支 `waku/board-2-vaultwarden-api`。
-- 本轮起点 **e54ac2673ef1135897dee72cb73634a80da867d5**；保留全部前序阶段，包括 baseline `4b0a910`、`331b1c4`、八类/离线库 `7ae7560`、文件夹/批量 `15a0567`、细节编辑 `7f0a408`、复制 `0dab306`。不要回退/重导入。
-- 本轮主实现 **0d258d2**：20文件、个人原生导入导出、MyGo八类备份、官方CLI互操作。
-- 后续安全细化 **5a48a35**：两种导出强制不同扩展名；无扩展名时补全，错误扩展名在触碰文件前拒绝，避免应用格式伪装官方JSON。最后交接提交另含导入导出面板期间其他管理入口的禁用状态修正，最终HEAD见 `git log -1`。
-- 主目录 `/Users/vfasky/code/mygo-vaultwarden` 没有修改、暂存、commit、stash/reset/clean；用户app/watch及其他容器没有操作。没有读取用户凭据、访问生产vault或启动子代理。主目录dirty合并问题仍由协调者处理。
+- 唯一项目写入目录为分配的 `board-2-vaultwarden-api` 工作树，分支 `waku/board-2-vaultwarden-api`。主目录 `/Users/vfasky/code/mygo-vaultwarden` 未写入、暂存、提交、stash/reset/clean；用户app/watch、其他容器、凭据均未操作，未访问生产服务，未启动子代理。
+- 本轮起点 **f4efc008f20ec3e7c7484e7e50bd02839b61125c**。保留所有前序提交，包括 `0d258d2` 个人导入导出和 `5a48a35` 格式扩展名。不要重导入、回退或重做已验证导入导出。
+- **ad6aef0**：个人reprompt主密码短授权、密码/TOTP显示复制、Swift认证lease与敏感剪贴板、协议/Swift/headless/真实回环验证。
+- **cbe30c5**：密码历史确认清除；只允许原历史的有序子序列，禁止伪造/重排；保留未删除条目和未知扩展，密码修改仍自动记录刚替换的旧密码。
+- **ddb2ca5**：最终入口审计补批量reprompt/viewPassword拒绝；ID-only单项状态API移为测试专用，partial transport收为内部；补历史旧稿/锁定迟到回归。
+- 最后交接文档提交的最终HEAD以 `git log -1` 为准；本段实现HEAD不代表允许回退。
 
-## 已实现与精确边界
+## 本轮产品与安全边界
 
-详见 [个人文件格式与互操作](personal-backup.md) 及 [API矩阵](vaultwarden-api-coverage.md)。
+详见 [敏感操作说明](sensitive-operations.md)、[API矩阵](vaultwarden-api-coverage.md) 和 [前序备份格式](personal-backup.md)。
 
-- 顶栏「导入导出」连接真实 `mygo.Dialog.Open/Save`，不是raw API壳。选择格式/逐项导出范围，默认当前列表，可显式选整个个人库中活动/归档/回收站；同时包含全部个人文件夹（含空文件夹）。导入显示项目数、文件夹数、归档/回收站数和逐项类型/标题，明确确认创建新副本而非覆盖。
-- **Bitwarden兼容JSON `.json`** 是官方camelCase `{encrypted:false,folders,items}`。以固定 clients `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的 `CipherExport`、各section export、`BitwardenJsonImporter` 为据。只支持该版本真实可表示的1–7类，且所选范围中有Passport、回收站、>5条history、不可重建checksum/不一致legacy alias、登录附加设置/密码修订时间、空白名称/备注、亚毫秒history时间时整体阻断并提示MyGo格式。库中未勾选的Passport不妨碍兼容子集。官方该版本不导入Passport是格式限制，**不是Vaultwarden不能保存8类**。
-- **MyGo备份 `.mygovault`**：`format:"mygo-vaultwarden-personal-backup",version:1,encrypted:false,folders,items`。与官方格式严格互斥，未知版本拒绝。1–8类标准字段、四类custom、notes、多URI/checksum/legacy alias、登录设置、全部history、日期与folder引用保留。不含用户key/item key/token/账号凭据；尚不支持附件、FIDO2、未知扩展、有旧key依赖的字段，遇到时整体拒绝，不能称任意数据完整备份。组织不导出；reprompt在再次验证完成前拒绝导出。
-- 导入32MiB/10,000项目与文件夹上限，拒绝重复JSON键、非UTF8、混合/未知格式、畸形类型/date/URI策略/folder引用。**第一次服务器写入前预检并加密全部项目**；每项独立随机64字节key，经当前user key包装。先建folder并映射ID，再POST cipher，回收站项随后PUT `/delete`。服务器生成新的创建/修订/删除时间；归档日期可原样保留。原始history内容不截断。
-- 刷新仍先checkpoint落盘；scope/revision/epoch与取消/锁定检查；任何导入写入失败立即停止并保留已创建ID、失败/未知项，不重试。成功/失败后全量sync；UI按已知ID报告存在性并要求核对内容和状态，未知ID不假装核对成功。取消不假装回滚已完成服务器写入。
-- 文件读取仅有界普通文件；逐目录描述符+`O_NOFOLLOW`拒绝符号链接；0600随机临时文件、fsync、`linkat`原子不覆盖发布。已有文件/符号链接/并发创建目标均拒绝，需新文件名。对话框期间不保留导出明文缓冲，返回后重新核对并解密。失败、取消、锁定或陈旧revision回调删除本次临时文件、不发布目标。无覆盖旧文件功能，不承诺崩溃后自动清扫或运行时所有字符串副本可证明清零。
-- 没有改Swift schema/桥或AutoFill；仍通过既有sync→完整加密vault→最小Login投影，不乐观插入凭据。
+| 路径 | 已完成的实际授权/产品行为 | 仍未完成或明确限制 |
+|---|---|---|
+| 读取/打开reprompt项目 | 列表仅受保护标题占位，`RequiresPassword`允许打开验证表单；`AuthorizePersonalItem`用当前认证session的domain-separated snapshot unlock key、当前KDF验证主密码；30秒能力绑定session、scope、snapshot revision、源密文SHA256 | 个人项目限定；组织/未知reprompt/viewPassword=false拒绝。不能仅凭公开revision获得能力 |
+| 编辑与保存 | `ReadPersonalCipherAuthorized`、`UpdatePersonalCipherAuthorized`；保持reprompt=1，完整PUT保留既有未知字段，同key；操作前及刷新checkpoint之后、HTTP发送前复核 | UI到期关闭并清空未保存表单，事前明确告知；无自动续期。组织策略未实现 |
+| 项目复制 | `CopyPersonalCipherAuthorized`新随机item key，源grant复核；reprompt标志保留 | 完整copy对附件/FIDO2/未知扩展仍严格拒绝；不可通过删除草稿字段绕过源schema检查 |
+| 单项状态 | UI只调用`ChangePersonalCipherStateAuthorized`，带原文档、权限和grant；刷新后guard复核 | 原`ChangeCipherState`与`SetCipherPersonalMetadata`名称仅在`cipher_transport_test.go`存在，供测试路由断言/自有fixture清理。生产只保留内部transport；不能把这些测试helper接UI |
+| 批量/清回收站 | `ChangePersonalCiphers`在整批网络请求前拒绝reprompt或viewPassword=false，UI明确要求单项验证后处理；不静默跳过受保护项目 | 批量逐项授权仍未接入；清空选区含受保护项目时整批阻断，需单项处理 |
+| 导入导出 | 继承前序真实产品闭环；导出reprompt继续拒绝，不会借用旧grant | 导出逐项验证尚缺；导入用户选择的备份文件可以创建reprompt=1新项目并保留标志，这是新增操作，不是读取/修改现有受保护项目 |
+| 密码/TOTP | 登录编辑页「显示已保存密码/显示当前验证码/复制已保存密码/复制当前验证码」；只用认证快照的已保存内容；显示最长30秒，TOTP不越本周期，reprompt不越grant剩余时间 | 不复制未提交草稿；参数范围、系统剪贴板边界见专文；历史明文显示沿用已有控件，独立短时认证显示尚待统一 |
+| 历史清除 | 「清除密码历史」→确认/保留；确认仅改草稿，保存才PUT；有序子序列验证防伪造/重排，剩余未知字段原样保留 | 当前UI提供清除全部；API允许删除任意子序列，UI逐条选择未提供。结果未知不重试；冲突比较/显式重基仍待实现 |
 
-## 官方互操作与固定源码
+### revision、取消、锁与线程
 
-- npm独立官方CLI **`@bitwarden/cli@2026.5.0`**，实际 `bw --version` 为 `2026.5.0`；安装命令 `npm install --prefix "$TMPDIR/bw-cli" @bitwarden/cli@2026.5.0 --ignore-scripts --no-audit --no-fund`。没有改项目依赖。tarball SHA1 `3a5a65abd2fa36c0da17ef6a0b751b8bed2cdcbd`，SRI见 `personal-backup.md`。npm没有gitHead，不宣称包等同固定源码commit的构建。
-- CLI每次使用Go `t.TempDir()`中的独立 `BITWARDENCLI_APPDATA_DIR`；密码与session只放子进程env，未写日志/文档或参数。真实账号为本用例随机 `example.invalid`，用户现有CLI profile完全没有触碰。
-- 命令方向：`bw config server <测试HTTPS relay>` → `bw login <随机测试邮箱> --passwordenv <测试环境变量> --raw` → `bw import bitwardenjson <测试兼容JSON>` → `bw sync` → `bw list items` 和 `bw list items --archived` → `bw export --format json --output <测试文件>` → MyGo解析/导入官方文件 → `bw logout`。
-- CLI强制HTTPS；测试用 `httptest.NewTLSServer` 代理至自有回环容器，并通过子进程 `NODE_EXTRA_CA_CERTS` 信任临时测试证书。没有关闭TLS验证或修改CLI。relay随test关闭。
-- 实际验证：官方CLI解密 **1–7类**全部标准字符串、name/notes/favorite、四类custom（含linkedId）、多URI与匹配策略、password history；日期按同一时间比较，custom缺省/null按语义比较。官方导出的整个文件被MyGo接受并写回；MyGo八类格式另行在真实1.37.4导入/再导出，确认history、归档和回收站。**这不是8类完整官方互操作，也不是附件/FIDO2/未知字段互操作。**
-- 固定官方源码缓存本轮仍在 `/tmp/pi/01a114ab-b4d7-702d-ad3e-13eac28463f8/official/`（各 `*.export.ts`、`bitwarden-json-importer.ts`、`individual-vault-export.service.ts`等）。只留无凭据源码缓存，CLI安装及profile已清理，下一轮需要时按固定版重新获取。
+- `BindSnapshotRevision`只能由认证后的UI lease调用，本身不授予项目权限。grant不是序列化token，字段私有，仅进程内使用；不能跨session/server/account/项目或变更后的密文。
+- 主密码KDF在Session.mu之外运行；完成后复核epoch、closed/stopping、ctx取消、revision。主密码byte buffer用后清理，不保留原密码；Go/Swift运行时仍不能证明清零全部字符串副本。
+- `persistPendingLocked`安全checkpoint成功后立即递增authorizationEpoch，**即使UI尚未收到新revision也已撤销旧grant**。如果protected写入因此被拒绝，不会向服务器发出该写入；UI采用checkpoint后关闭旧授权表单。checkpoint失败维持阻断。
+- 表单到期、lock/logout/切换清除新增显示/密码验证内容。旧回调受UI epoch保护；复用既有`completeCipherMutation`在锁定迟到响应后清理私有草稿。历史旧稿与迟到回归已明确覆盖。
+- 秘密复制/显示只在同步UI事件执行，没有从worker/网络响应复制的路径。`WithPersonalSecret`锁顺序为Go Session.mu → Swift主线程（调用已经在UI线程）→ snapshot文件lease；receiver不得回调Session。Swift worker进入时先切主队列再取文件锁，禁止拿文件锁等待UI。UI lock不等待Go Close，Close异步取消/清理。
 
-## 测试与实际执行结果
+### Swift桥与剪贴板
 
-Go统一 `GO_BIN="$(bash scripts/resolve-go.sh)"`。
+- 新桥协议1：`copySecret`、`authorizeSecretDisplay`和`clearSecretClipboard`。前两者需scope、expectedRevision、临时借用的unlockKey、secretNotAfter毫秒时间；copy另带最大64KiB UTF8文本。`withSecretCopyAuthorization`先密码解包再`withCurrentLease`线性化到复制，最终检查deadline仍在(0,30]秒；回执不含秘密或owner。
+- `SensitiveClipboard`仅保存随机owner/count；每次复制写入concealed/transient提示。timer最长30秒（TOTP/grant更短则提前），lock/logout/切换/正常退出和观察到外部revision失效时尽力清理；旧timer不能清后续复制、外部同值写入不能被内容相等判断误清。
+- **注入测试**：同值/异值外部写入、后续copy/旧receipt、owner或count不匹配、长度界限、主动清理。**真实NSPasteboard测试**：仅独立随机命名board，验证写入owner、外部同值保留及本应用清理；不接触通用剪贴板。
+- **Swift认证测试**：错误key+正确公开revision、过期/过长deadline、旧revision、lock/logout均不进入复制body。现有store测试覆盖账号替换与迟到认证撤销；不把这些内存key测试说成真实Keychain验证。
+- concealed/transient只是提示，不能防止其他应用/历史管理器读取。NSPasteboard无跨进程原子CAS，最后检查至清理之间仍有外部竞态；强杀/崩溃或尚未观察到的外部锁不能保证立即清理，后者仍有到期清理。
+
+## 实际执行验证
+
+Go统一使用 `GO_BIN="$(bash scripts/resolve-go.sh)"`。以下都实际执行：
 
 ```sh
 "$GO_BIN" fmt ./internal/vaultwarden ./
@@ -43,44 +54,32 @@ Go统一 `GO_BIN="$(bash scripts/resolve-go.sh)"`。
 "$GO_BIN" vet ./...
 swift test --package-path macos
 swiftc -typecheck -parse-as-library -module-name SnapshotBridge macos/Shared/*.swift macos/Bridge/SnapshotBridge.swift
-MYGO_VW_TEST_URL=http://127.0.0.1:32777 MYGO_BW_CLI="$TMPDIR/bw-cli/node_modules/.bin/bw" "$GO_BIN" test ./internal/vaultwarden -run TestLiveVaultwarden -count=1 -v
+MYGO_VW_TEST_URL=http://127.0.0.1:32780 "$GO_BIN" test ./internal/vaultwarden -run TestLiveVaultwarden -count=1 -v
 git diff --check
 ```
 
-- 全部最终通过。最后格式扩展名细化后的Go test root **0.691s**，协议cached（本轮 **0.564s**）；race root **3.043s**，协议cached（本轮最终全验证 **2.882s**），dev-debug cached（本轮 **7.369s**）。最终交接入口禁用状态修正后再跑：root test **0.695s**、race **3.052s**，协议/dev-debug cached；build/vet退出0。
-- Swift本轮实际重新执行：**44 XCTest、0 failures**，总 **0.213s** / wall **0.217s**；bridge typecheck退出0。没有把继承结果说成本轮运行。
-- 最后真实回环：PBKDF2 **19.63s**（含官方CLI）、Argon2id **0.26s**、TOTP **0.57s**，总 **20.46s** / 包 **20.591s**，全部通过。文件扩展名和最终纯UI禁用修正不改协议，未为这些无关改动重跑真实互操作。
-- 新测试：`backup_test.go`、`backup_safety_test.go`、`backup_integration_test.go`、`backup_file_test.go`，覆盖八类字段往返/新key、兼容子集/Passport阻断、unknown/FIDO2/附件/权限/reprompt、无效/混合/重复键零请求、folder映射/部分未知结果/软删、checkpoint失败、scope混淆、Close取消不继续、0600/链接/并发目标/取消/锁定/旧revision/格式扩展名、headless确认与预览清理。
-- 真实测试过程中曾因官方CLI拒绝HTTP而失败（补测试TLS relay解决）；非UUID夹具folder被SDK拒绝（换合法UUID）；默认CLI list不显示archive（加入显式archived查询）；JS日期规范化和缺省null导致过严测试比较（改按时间/字段语义比较）。连续调试撞到自有服务unauthenticated 429，重启自有容器清内存限流后端口由32776变32777，旧端口一次连接失败；更新实际端口后完整回归通过。不是生产请求或产品绕过限流。
-- **未验证**实际Open/Save窗口/安装、Keychain/Touch ID、AutoFill交互、SMTP/WebAuthn/SSO；headless/Go/官方CLI不能代替这些。
+- 最终生产代码入口封闭后：Go root **0.695s**、协议 **0.554s**、dev-debug cached；race root **3.174s**、协议 **3.021s**、dev-debug cached（本轮首次race实际 **7.848s**）。build/vet/diff check退出0。最后仅新增旧稿历史断言后root test **0.687s**通过，不为断言重跑无关平台验证。
+- Swift最终版本实际 **50 XCTest、0 failures**，测试 **0.147s** / wall **0.150s**；bridge typecheck退出0。后续Go历史/批量改动不改Swift，未无理由重复平台验证。
+- 真实回环最后执行：PBKDF2 **0.44s**、Argon2id **0.23s**、TOTP **0.63s**，总 **1.31s** / package **1.428s**，通过。包含reprompt创建→sync排除AutoFill→真实密码验证→读取→PUT保持标志→新keycopy保持标志→清理；八类型历史/CRUD已有测试继续通过，新增真实历史清除保持当前密码。
+- 本轮**没有安装/执行官方CLI**，输出明确 `official CLI interoperability not requested`；不能借前序官方CLI结果称本轮验证了官方secret/reprompt互操作。
+- 初次Go回归旧测试将任何reprompt editor视为泄露，随后区分空的验证表单与明文表单；用`RequiresPassword`独立于Editable保持元数据边界。修正后全量通过。
+- 新测试：`totp_test.go`含RFC6238全部18向量、固定Steam向量、边界/畸形参数；`item_authorization_test.go`覆盖错误密码、跨session、文档/权限替换、expiry/revision/撤销/关闭/取消、checkpoint后零写入；`personal_secret_test.go`覆盖认证参数/已保存值/过期表单/错误native授权/锁定/陈旧copy；`password_history_test.go`保留扩展、大整数、草稿不变、禁止伪造/重排/重复、清除并同时换密码；另有批量六种操作权限零请求和Swift上述测试。
+- **未验证**真实原生窗口/安装、通用剪贴板用户流程、系统Keychain/Touch ID、AutoFill交互、SMTP、WebAuthn或SSO。headless/命名board/协议回环不替代这些。
 
-## 自有资源清理（已执行）
+## 自有资源清理（已完成）
 
-- 容器 `mygo-card2-01a114ab-vw`，ID **`ece0aae5e0611e1d2a22253d8cf40d9f3111240432329f09239df3f08d32a1d1`**，label `mygo-test-owner=01a114ab`；镜像1.37.4 ID `sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216`。挂载仅本轮scratch的 `vw-backup-data`→`/data`；loopback初始32776、最后32777。
-- 清理前inspect核对ID、label、镜像和挂载；按完整ID `docker rm -fv` 成功。按名字筛选 `docker ps -a` 无输出。
-- 删除本轮scratch `vw-backup-data`、独立 `bw-state`、`bw-cli`安装、安装日志及package元数据，逐路径确认不存在。Go `TestLiveVaultwarden*` 临时目录剩余 **0**（包括测试token/profile/导出/证书）。测试内部还清理各用例相对起点新建的cipher/folder。无本轮容器/账号数据库/CLI token遗留；没有清理其他资源。
+- 成功使用容器 `mygo-card2-01a114d0-vw`，ID **8634ca2b631f5950ac8cd36a3a5e7003a1dc7fdd08141aaa4d6947c6be15fb25**；label `mygo-test-owner=01a114d0`；loopback **127.0.0.1:32780**；数据bind为本轮 `$TMPDIR/vw-secret-data`→`/data`。
+- 镜像ID **sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216**，inspect labels确认版本1.37.4、commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`。
+- 清理前按完整ID inspect核对label/镜像/mount后 `docker rm -fv <完整ID>`成功；删除仅本轮scratch `vw-secret-data`，`test ! -e`确认不存在；`docker ps -a --filter name=mygo-card2-01a114d0-vw`无输出。账号和数据库仅为测试随机example.invalid，随自有数据删除。
+- 初次容器 **d7827ee4...**未bind scratch即被立即移除（含其匿名volume）；第二次 **812c7325...**因测试环境`PASSWORD_ITERATIONS=5000`低于服务器启动下限100000而退出，已移除；最终容器使用服务器默认设置，不弱化启动限值。未改用户Docker资源、镜像或已有容器。
+- 仅留无凭据Swift测试输出于scratch；无本轮CLI/profile安装或外部认证数据。
 
-## 下一轮直接继续：已批准的安全秘密模块（尚无实现）
+## 下一进程已批准方向与入口
 
-不要重做导入导出或重导入baseline，先读最新HEAD。调查及协调结果如下，**仅方向批准，不算已落代码**：
+1. 先保留所有新提交并读本交接/coverage。**冲突比较+显式重基优先**：现有 `cipherEditor`保留document/fields/revision，`completeCipherMutation`对ErrConflict保草稿、MutationUncertainError锁定重复提交，完整sync位于`network.go`。实现保留本地草稿和服务器最新原始对象的用户可见比较/选择；不能静默覆盖最新unknown字段，不能自动重试结果未知写入，不能把服务器约1秒revision容差当严格CAS。reprompt重新比较/解密也需新的有效能力；不可续借旧grant。
+2. 随后组织key链、授权与collections/共享/组织管理：完整原始sync已经在`VaultData.Sync`保存；目前`PersonalEntries`跳过组织，`personalDocumentLocked`拒绝组织。`cipherItemKey`目前只有个人owner key；不要把organizationId改一下就共享。实现SPKI公钥、PKCS8私钥、RSA-OAEP type3 SHA256/type4 SHA1解包，结合角色/群组/readOnly/hidePasswords/manage/accessAll和policies授权；memberId与userId严格区分。
+3. 固定Vaultwarden源码缓存 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`，tag对象`54a40806c990da2def7acd5a3152edc530c59b79`，commit`7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档SHA256`d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。前序routes.txt在父目录，有未注册声明，须对routes!与main挂载核对。
+4. TOTP已实际读取固定SDK `39dbb510f5eae82f5cbfd527b0f70a01d5626ec1`，缓存 `/tmp/pi/01a114ab-b4d7-702d-ad3e-13eac28463f8/official/totp.rs`；已实现无需重查。Bitwarden clients固定`5983f56ce0cf924eea56c7d8f066f7885825a7ce`；前序导出格式及CLI证据见`personal-backup.md`，不重做。
+5. 后续仍须完成：组织import/export、附件/FIDO2/未知扩展完整备份/copy；附件binary/multipart/外部URL禁Bearer/MAC/大小/两阶段失败补偿/安全临时文件；Send seed16/HKDF/password/fragment/send_access/文本文件owner与接收UI；注册/验证/profile/主密码邮箱KDF/用户key轮换恢复/删除清库/security stamp、MFA各provider管理与平台SSO/WebAuthn、devices/auth requests/domains/emergency/recovery；SignalR MessagePack通知与断线sync；大库桥、query/binary/multipart/Retry-After；完整逐注册路由矩阵及所有模块真实互操作、原生交互验证。
 
-1. **reprompt**：主密码再次验证后只给短时、当前scope+本地revision+item的授权；锁定/账号切换/迟到回调/授权过期都撤销。再次解密与复制前检查viewPassword/reprompt，组织后续按实际权限。`Session.passwordUnlock`保存domain-separated snapshot unlock key及KDF配置，可用现有`DeriveSnapshotUnlockKey`验证，不要存原主密码。现有 `ReadPersonalCipher`、`EncryptCipherDocument`/copy仍拒绝reprompt；不可只改flag绕过。
-2. **剪贴板接口已批准**：MyGo v0.2.15 `modules.go`只有ReadText/WriteText/Clear，没有changeCount/ownership或sensitive标记。因此通过Swift桥实现：`NSPasteboard.changeCount`+每次随机owner双重校验，固定30秒、lock/logout/账号切换/正常退出尽力清理；旧timer不能清后来本应用复制或用户后来复制的同值内容。串行化本应用操作，内存只保留标识/计数；concealed/transient仅兼容提示，不保证禁止其他应用读取/历史/同步；系统无跨进程原子CAS，不作绝对外部竞态保证。
-3. **授权接口约束**：必须有当前认证session/lease及scope+revision，不能只凭公开revision；payload限长、无秘密日志/状态/回执，owner不是vault授权。Go/Swift bridge需要明确版本及失败处理，不影响AutoFill。`SnapshotStore.unlockWithPassword` + `withCurrentLease`可作为已有认证/线性化参考；如果用session的snapshot unlock key，复制key必须借用后清除，不能增加认证前泄露。锁定后的迟到响应不能写pasteboard。复制密码与TOTP复用此路径。
-4. **验证方向**：注入pasteboard模型覆盖外部同值/异值、连续copy/旧timer、lock/logout/切换、revision变化、错误授权、退出；Swift回归+bridge typecheck+Go生命周期。真实底层测试只能用独立命名pasteboard，不改用户现有通用剪贴板；模拟不等于真实已验证。
-5. **TOTP源码**：固定clients `5983f56.../libs/common/src/vault/services/totp.service.ts`只调用SDK。已读固定SDK **`39dbb510f5eae82f5cbfd527b0f70a01d5626ec1`** 的 `crates/bitwarden-vault/src/totp.rs`，缓存上述official目录中的`totp.rs`。支持base32、otpauth、steam，SHA1/256/512。其parser会默认/夹紧部分参数，本客户端需明确安全参数范围，不把未知算法或畸形输入静默当成功；加入RFC6238与固定Steam向量、时间边界、短时显示/复制UI。当前还未写生成器/显示/复制代码。
-6. MyGo正常退出事件是`mygo.App.OnWillQuit`/`OnQuit`；UI可用 `Context.After`定时更新，敏感输入仍应遮掩并独立短时显示。不要切成普通可复制输入却绕过受控剪贴板。
-
-## 原整卡未完成范围（全部保留）
-
-- 任意附件/FIDO2/未知扩展的完整copy/backup、组织import/export、官方加密导出/ZIP与完整互操作。
-- reprompt短授权、密码/TOTP显示复制、历史删除、冲突比较/显式重基。
-- 组织SPKI/PKCS8 RSA-OAEP type3/4 key链、角色/群组/manage/readOnly/hidePasswords/accessAll权限与策略、collections/共享、组织CRUD/退出、成员邀请接受确认撤销恢复、groups/policies/events/Public API目录/API keys/账号恢复。
-- 附件binary/multipart独立传输、0x02/IV/HMAC/CBC、外部URL禁Bearer、大小/MAC/URL、两阶段补偿、安全临时文件；Send seed16/HKDF/password/fragment/send_access/文件与文本owner/接收完整UI。
-- 账号注册/邮箱验证/profile/keys/主密码/邮箱/KDF/用户key轮换恢复/删除/清库/security stamp、其他MFAprovider/管理、SSO/WebAuthn平台交互、devices/auth requests/domains/emergency/recovery、SignalR MessagePack通知/断线sync。
-- 桥4MiB大库边界、query/multipart/binary/Retry-After、逐注册method/path/别名/权限/UI与真实上游边界的完整矩阵。
-- 上述模块的crypto/权限/故障/真实互操作；真实原生窗口/安装/Keychain/AutoFill/SMTP/WebAuthn/SSO验证。
-
-固定Vaultwarden源码仍为 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`，commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，tag对象 `54a40806c990da2def7acd5a3152edc530c59b79`，归档SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。前四轮细节见 `git show e54ac26:docs/vaultwarden-implementation-handoff.md`。
-
-继续同一卡，不自审、不完成、不合并。
+继续同一卡，不自审、不完成、不合并。前五轮详细证据可用 `git show f4efc00:docs/vaultwarden-implementation-handoff.md` 获取。
