@@ -13,10 +13,10 @@
 | 全量同步 | GET `/api/sync`；query `excludeDomains` 尚未开放 | `SyncWithCheckpoint`、`VaultData`；sync/session 测试及真实回环 | 顶栏「同步」。保留服务器原始加密响应及未知区段；个人八类型列表与最小 Login 填充分离；组织数据只保存不解密 |
 | 新增 | POST `/api/ciphers`；`/create`、`/admin` 未实现 | `CreatePersonalCipher`、`NewPersonalCipher`；八类型独立随机 item key 测试和真实回环 | 在八种分类选择「新增」；默认所有项目新增 Login。type-2 字段加密，item key 由用户 key 包装；未知 section/custom/URI 扩展拒绝跨新 key 写入；SSH 三项不能为空 |
 | 更新 | PUT `/api/ciphers/{id}`；POST 同路径 / admin 别名未调用 | `UpdatePersonalCipher`、`EncryptCipherDocument`；八类型、未知扩展、大整数、自定义字段、历史和 URI checksum 测试 | 「查看与编辑」→「保存」。保留同 item key/FIDO2/未知扩展；必须个人、edit/viewPassword、无 reprompt、源 revision 合法。支持名称/备注/类型标准字符串、多 URI、TOTP 秘钥、文本及隐藏自定义字段；已有布尔/关联字段原样保留或显式删除，无完整编辑器 |
-| 收藏 / 文件夹 metadata | PUT `/api/ciphers/{id}/partial`，POST 别名 | `SetCipherPersonalMetadata`，最小请求体 httptest | 收藏已接入完整编辑保存；partial 接口尚未直接接 UI，文件夹列表/管理尚未实现 |
+| 收藏 / 文件夹 metadata | PUT `/api/ciphers/{id}/partial`，POST 别名 | `SetCipherPersonalMetadata`，最小请求体 httptest | 收藏已接入完整编辑保存；partial 接口尚未直接接 UI，文件夹列表/管理及编辑器文件夹选择已接入 |
 | 软删除 | PUT `/api/ciphers/{id}/delete` | `ChangeCipherState(CipherTrash)`；方法断言、真实回环 | 编辑页「移入回收站」→确认；不使用 POST 同路径 |
 | 恢复 | PUT `/api/ciphers/{id}/restore` | `CipherRestore`；真实回环 | 回收站打开项目→恢复 |
-| 永久删除 | DELETE `/api/ciphers/{id}`；POST `/api/ciphers/{id}/delete` 为永久删除别名 | `CipherDeletePermanently`；仅 DELETE 已测试 | 回收站打开项目→永久删除→不可恢复提示→确认；未实现批量清空回收站 |
+| 永久删除 | DELETE `/api/ciphers/{id}`；POST `/api/ciphers/{id}/delete` 为永久删除别名 | `CipherDeletePermanently`；仅 DELETE 已测试 | 回收站打开项目→永久删除→不可恢复提示→确认；顶栏清空回收站只选deleted再确认批量删除 |
 | 归档 / 取消 | PUT `/api/ciphers/{id}/archive`、`/unarchive` | `CipherArchive/CipherUnarchive`；真实回环，归档排除 AutoFill | 编辑页归档按钮；侧栏归档分类；完整 PUT 保留原 `archivedDate` |
 | 分类 | 本地过滤认证后的完整库元数据 | `PersonalEntries`、`filteredItems`；headless 测试 | 八类型、收藏、归档、回收站；未知格式/reprompt显示受保护占位标题，不能解密编辑；不是虚假的空分类 |
 | 密码历史 / URI 完整性 | 更新体的 passwordHistory、passwordRevisionDate、uriChecksum | 自动保留旧密码，URI SHA256 Base64 再 type-2 加密；单元与真实回环 | 改密码/网址时维护；历史查看/删除、URI 匹配策略编辑未完成，原 match 保留，新 URI 使用默认规则 |
@@ -41,7 +41,9 @@
 
 | 模块 | 1.37.4 审计事实与边界 | 当前实现 / UI / 验证 |
 |---|---|---|
-| folders / bulk / copy / import-export | 单条folders、批量移动/软删/恢复/归档真实存在；个人无 `/export` 或 `/trash`；purge是清全库 | 未实现产品闭环，下一进程优先；复制必须新key并处理未知扩展；导出本地转换且明确确认 |
+| folders CRUD | POST `/api/folders`、PUT `/api/folders/{id}`、DELETE `/api/folders/{id}`；POST 更新及 `/delete` 为服务器别名，客户端未调用；GET 列表/单条由完整 sync 本地读取替代 | `SaveFolder/DeleteFolder/PersonalFolders`；type-2 名称加密、scope、错误未知结果、离线读取测试与真实 1.37.4 回环 | 侧栏新建/管理/筛选；编辑器文件夹选择；删除明确提示只解除项目归属；草稿绑定本地revision、锁定清除。服务器没有文件夹CAS |
+| 个人批量管理 | PUT `/api/ciphers/move`（POST 别名）、`/delete`（软删）、`/restore`、`/archive`、`/unarchive`；DELETE `/api/ciphers`（POST `/delete` 为永久删除别名） | `ChangePersonalCiphers`；验证选中ID属个人快照，永久删除仅允许deleted；httptest方法断言、真实批量及400部分移动回环 | 顶栏批量管理→选择项目/操作→确认；回收站清空只选择deleted，绝不purge。任意批量错误后同步逐项展示当前目标状态，不重试、不宣称原子成功；锁定清除 |
+| copy / import-export | 个人无 `/export` 或 `/trash`；purge是清全库 | 尚未实现；复制必须新key并处理未知扩展；导出本地转换且明确确认 |
 | 组织 / collections / members / groups / policies / events / recovery | RSA SPKI/PKCS8、OAEP type3/4；权限涉及角色、群组、readOnly/hidePasswords/manage/accessAll；memberId不等于userId | 完整加密组织profile/collections等已随sync保留；RSA解包、组织CRUD、共享、策略/权限与所有管理UI未实现 |
 | 附件 | `attachment/v2`元数据后multipart `data`；二进制 `0x02||IV16||HMAC32||CBC`；root `/attachments/...`或预签名URL | 未实现；需外部URL禁Bearer、大小/MAC、两阶段补偿和安全临时文件 |
 | Send | seed16、HKDF-SHA256 salt `bitwarden-send`/info `send`；访问走grant `send_access` 后 `/api/sends/access`、`/access/file/{fileId}`；无旧 `/access/{id}` | 未实现。文件/文本所有者及接收UI均缺；emails验证型Send上游不支持 |

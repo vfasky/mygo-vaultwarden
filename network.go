@@ -29,6 +29,8 @@ func (a *app) observeSnapshot(state *snapshotStatus) {
 	if state == nil || state.Revision != a.itemsRevision {
 		a.items = nil
 		a.vault, a.editor = nil, nil
+		a.folders, a.folderEditor = nil, nil
+		a.bulkEditor = nil
 		a.itemsRevision = ""
 		a.selectedID = ""
 	}
@@ -69,8 +71,10 @@ func (a *app) stopNetwork() {
 	a.sessionRevision = ""
 	a.items = nil
 	a.vault, a.editor = nil, nil
+	a.folders, a.folderEditor = nil, nil
 	a.itemsRevision = ""
 	a.selectedID = ""
+	a.bulkEditor = nil
 }
 
 func (a *app) syncVault(login bool) {
@@ -264,6 +268,9 @@ func (a *app) syncVault(login bool) {
 				a.status = err.Error()
 				return
 			}
+			if a.folderEditor != nil && a.folderEditor.saved {
+				a.folderEditor = nil
+			}
 			if a.editor != nil && a.editor.saved {
 				a.editor = nil
 			}
@@ -271,6 +278,7 @@ func (a *app) syncVault(login bool) {
 			a.showSettings, a.showLogin = false, false
 			s := result.Summary
 			a.status = fmt.Sprintf("已同步 %d 个个人项目；可填充登录 %d。填充排除：组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
+			a.reconcileBulk()
 		})
 	}()
 }

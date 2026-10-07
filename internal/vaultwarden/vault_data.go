@@ -45,6 +45,7 @@ func (v *VaultData) Documents(scope Scope) ([]CipherDocument, error) {
 
 type VaultEntry struct {
 	ID, Title, Username, URL              string
+	FolderID                              string
 	Type                                  int
 	Favorite, Archived, Deleted, Editable bool
 }
@@ -68,6 +69,7 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 	for _, document := range documents {
 		var metadata struct {
 			ID                        string
+			FolderID                  *string
 			Type                      int
 			OrganizationID            *string
 			Reprompt                  int
@@ -82,6 +84,9 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 			continue
 		}
 		entry := VaultEntry{ID: metadata.ID, Type: metadata.Type, Title: "受保护或暂不支持的项目", Favorite: metadata.Favorite, Archived: metadata.ArchivedDate != nil, Deleted: metadata.DeletedDate != nil}
+		if metadata.FolderID != nil {
+			entry.FolderID = *metadata.FolderID
+		}
 		if metadata.Reprompt == 0 && (metadata.ViewPassword == nil || *metadata.ViewPassword) {
 			if fields, err := DecryptCipherDocument(document, s.key); err == nil {
 				entry.Title, entry.Editable = fields.Name, fields.Edit && fields.ViewPassword

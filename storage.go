@@ -57,6 +57,7 @@ type displayCredential struct {
 	Archived bool   `json:"archived,omitempty"`
 	Deleted  bool   `json:"deleted,omitempty"`
 	Editable bool   `json:"editable,omitempty"`
+	FolderID string `json:"folderId,omitempty"`
 }
 
 type storageReply struct {

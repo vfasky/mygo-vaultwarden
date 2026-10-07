@@ -55,6 +55,18 @@ var vaultCategories = []vaultCategory{
 }
 
 func (a *app) currentCategory() vaultCategory {
+	if strings.HasPrefix(a.category, "folder:") {
+		id := strings.TrimPrefix(a.category, "folder:")
+		if id == "" {
+			return vaultCategory{a.category, "无文件夹", "vault", true}
+		}
+		for _, f := range a.folders {
+			if f.ID == id {
+				return vaultCategory{a.category, f.Name, "vault", true}
+			}
+		}
+		return vaultCategory{a.category, "文件夹已不存在", "vault", false}
+	}
 	for _, category := range vaultCategories {
 		if category.id == a.category {
 			return category
@@ -70,6 +82,9 @@ func (a *app) filteredItems() []displayCredential {
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	items := make([]displayCredential, 0, len(a.items))
 	for _, item := range a.items {
+		if strings.HasPrefix(a.category, "folder:") && item.FolderID != strings.TrimPrefix(a.category, "folder:") {
+			continue
+		}
 		if item.Deleted != (a.category == "trash") {
 			continue
 		}
@@ -139,7 +154,11 @@ func (a *app) body(c *ui.Context) {
 		a.reconcileSelection(items)
 		a.credentialList(c, items)
 		ui.Column(c).Key("detail-pane").Grow(1).MinWidth(0).Gap(16).Children(func() {
-			if a.editor != nil {
+			if a.bulkEditor != nil {
+				a.bulkEditorView(c)
+			} else if a.folderEditor != nil {
+				a.folderEditorView(c)
+			} else if a.editor != nil {
 				a.cipherEditorView(c)
 			} else if a.showSettings {
 				a.settings(c)
@@ -218,12 +237,18 @@ func (a *app) header(c *ui.Context) {
 			state = "可同步"
 		}
 		pill(c, state, vaultLavender, vaultPurple)
-		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil).Clicked() {
+		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil).Clicked() {
 			kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
 			if kind == 0 {
 				kind = 1
 			}
 			a.openCipherEditor("", kind)
+		}
+		if toolbarButton(c, "批量管理", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil).Clicked() {
+			a.openBulkEditor(false)
+		}
+		if a.category == "trash" && toolbarButton(c, "清空回收站", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil).Clicked() {
+			a.openBulkEditor(true)
 		}
 		if toolbarButton(c, "同步", "sync", false, a.pending != 0).Clicked() {
 			a.syncVault(false)
@@ -279,6 +304,23 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 					if b.Clicked() {
 						a.category, a.showSettings = category.id, false
 						a.listState.ScrollTo(0, ui.Start)
+					}
+				}
+				sectionLabel(c, "文件夹")
+				if navItem(c, "无文件夹", "vault", "", a.category == "folder:", false).Clicked() {
+					a.category, a.showSettings = "folder:", false
+				}
+				for _, f := range a.folders {
+					if navItem(c, f.Name, "vault", "", a.category == "folder:"+f.ID, false).Clicked() {
+						a.category, a.showSettings = "folder:"+f.ID, false
+					}
+				}
+				if navItem(c, "新建文件夹", "vault", "", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil).Clicked() {
+					a.openFolderEditor("")
+				}
+				if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
+					if navItem(c, "管理文件夹", "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil).Clicked() {
+						a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
 					}
 				}
 			})

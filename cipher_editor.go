@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -75,6 +76,7 @@ func sectionFields(f *vaultwarden.CipherFields) map[string]any {
 }
 func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	a.vault = nil
+	a.folders = nil
 	if vault == nil {
 		return nil
 	}
@@ -86,15 +88,19 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	if err != nil {
 		return err
 	}
+	folders, err := session.PersonalFolders(vault)
+	if err != nil {
+		return err
+	}
 	items := make([]displayCredential, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, displayCredential{ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable})
+		items = append(items, displayCredential{ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, FolderID: e.FolderID})
 	}
-	a.vault, a.items = vault, items
+	a.vault, a.items, a.folders = vault, items, folders
 	return nil
 }
 func (a *app) openCipherEditor(id string, kind int) {
-	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil {
+	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.bulkEditor != nil {
 		return
 	}
 	session, ok := a.session.(*vaultwarden.Session)
@@ -139,6 +145,11 @@ func (a *app) openCipherEditor(id string, kind int) {
 		editor.notes = *editor.fields.Notes
 	}
 	a.editor = editor
+	a.folderEditor = nil
+	if id == "" && strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
+		folder := strings.TrimPrefix(a.category, "folder:")
+		editor.fields.FolderID = &folder
+	}
 	a.secretInputVersion++
 	a.showSettings = false
 }
@@ -188,6 +199,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 					e.uris = append(e.uris, editorURI{source: map[string]any{"match": nil}})
 				}
 			}
+			a.folderPicker(c, &e.fields.FolderID, a.pending != 0 || e.uncertain)
 			favorite := "加入收藏"
 			if e.fields.Favorite {
 				favorite = "取消收藏"

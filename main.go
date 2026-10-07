@@ -21,6 +21,9 @@ type app struct {
 	items                                     []displayCredential
 	vault                                     *vaultwarden.VaultData
 	editor                                    *cipherEditor
+	folders                                   []vaultwarden.Folder
+	folderEditor                              *folderEditor
+	bulkEditor                                *bulkEditor
 	itemsRevision                             string
 	pending                                   int
 	epoch                                     uint64
