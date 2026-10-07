@@ -38,6 +38,83 @@ func clickUI(t *testing.T, tt *ui.Tester, label string) {
 	}
 }
 
+func TestVaultSidebarToggle(t *testing.T) {
+	a := previewApp()
+	tt := ui.NewTester(a.view, 1060, 700)
+	if a.sidebarCollapsed || a.sidebarWidth() != 236 {
+		t.Fatal("sidebar should start expanded")
+	}
+	tt.SetTitleBar(ui.TitleBar{Height: 52, Left: 88})
+	clickUI(t, tt, "折叠侧栏")
+	if !a.sidebarCollapsed || a.sidebarWidth() != 64 {
+		t.Fatal("sidebar did not collapse")
+	}
+	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 {
+		t.Fatal("collapsed toggle overlaps native window controls")
+	}
+	for _, text := range []string{"Vaultwarden", "个人密码库 · 只读", "所有密码库", "项目"} {
+		if slices.Contains(tt.Texts(), text) {
+			t.Fatalf("collapsed sidebar retained text %q", text)
+		}
+	}
+	clickUI(t, tt, "支付卡")
+	if a.category != "card" || !slices.Contains(tt.Texts(), "此分类尚未同步") {
+		t.Fatal("collapsed category navigation failed")
+	}
+	clickUI(t, tt, "我的密码库")
+	if a.category != "all" || a.showSettings {
+		t.Fatal("collapsed vault navigation failed")
+	}
+	clickUI(t, tt, "展开侧栏")
+	if a.sidebarCollapsed || !slices.Contains(tt.Texts(), "所有密码库") {
+		t.Fatal("sidebar did not expand")
+	}
+	tt.Key(ui.Cmd, ui.KeyB)
+	if !a.sidebarCollapsed {
+		t.Fatal("keyboard shortcut did not collapse sidebar")
+	}
+	tt.Key(ui.Cmd, ui.KeyB)
+	if a.sidebarCollapsed {
+		t.Fatal("keyboard shortcut did not expand sidebar")
+	}
+}
+
+func TestCollapsedSidebarNavigation(t *testing.T) {
+	a := previewApp()
+	a.sidebarCollapsed = true
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() { a.sidebar(c) })
+	}, 65, 700)
+	if slices.Contains(tt.Texts(), "8") {
+		t.Fatal("collapsed sidebar retained count badge")
+	}
+	for _, category := range vaultCategories {
+		clickUI(t, tt, category.title)
+		if a.category != category.id || a.showSettings {
+			t.Fatalf("collapsed navigation failed for %s", category.title)
+		}
+		// Texts includes accessibility labels; each icon button keeps its label,
+		// but must not also render a text child.
+		count := 0
+		for _, text := range tt.Texts() {
+			if text == category.title {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("collapsed button %q has %d labels/texts, want 1", category.title, count)
+		}
+	}
+	clickUI(t, tt, "账号与设置")
+	if !a.showSettings {
+		t.Fatal("collapsed sidebar settings did not open")
+	}
+	clickUI(t, tt, "我的密码库")
+	if a.category != "all" || a.showSettings {
+		t.Fatal("collapsed vault navigation did not close settings")
+	}
+}
+
 func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1280, 820)
