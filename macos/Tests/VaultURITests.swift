@@ -27,7 +27,7 @@ final class VaultURITests: XCTestCase {
     func testEmptyOrUnsupportedURIsNeverFallBackToHosts() {
         let item = VaultCredential(id: "real", title: "real", username: "user", password: "fixture", hosts: ["example.com"], url: "", uris: [])
         XCTAssertFalse(item.matches(serviceIdentifier: "example.com", isURL: false))
-        for mode in [2,4,5] {
+        for mode in [4,5] {
             let rule = CredentialURI(uri: "https://example.com", match: mode, baseDomain: "example.com", includeSubdomains: true)
             XCTAssertFalse(rule.valid)
             XCTAssertFalse(rule.matches(serviceIdentifier: "example.com", isURL: false))
@@ -53,6 +53,48 @@ final class VaultURITests: XCTestCase {
         XCTAssertTrue(rule.valid)
         XCTAssertFalse(rule.quickEligible)
         XCTAssertFalse(rule.matches(serviceIdentifier: "example.co.uk", isURL: false))
+    }
+    func testLiteralPrefixSharedVectorsAndUnicodeCodeUnits() throws {
+        struct Vector: Decodable { let name: String; let prefix: String; let target: String; let isURL: Bool; let valid: Bool; let matches: Bool }
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let vectors = try JSONDecoder().decode([Vector].self, from: Data(contentsOf: root.appendingPathComponent("internal/vaultwarden/testdata/uri-prefix-cases.json")))
+        for vector in vectors {
+            let rule = CredentialURI(uri: vector.prefix, match: 2, baseDomain: nil, includeSubdomains: false, sourceIndex: 0)
+            XCTAssertEqual(rule.valid, vector.valid, vector.name)
+            XCTAssertEqual(rule.matches(serviceIdentifier: vector.target, isURL: vector.isURL), vector.matches, vector.name)
+            XCTAssertFalse(rule.quickEligible, vector.name)
+            XCTAssertFalse(rule.matches(serviceIdentifier: vector.target, isURL: false), vector.name)
+            let item = VaultCredential(id: "prefix", title: "Prefix", username: "u", password: "fixture", hosts: ["example.com"], url: vector.prefix, uris: [rule])
+            XCTAssertFalse(item.quickFillMatches(serviceIdentifier: vector.target, isURL: vector.isURL), vector.name)
+        }
+    }
+    func testPrefixUTF8ByteLimits() {
+        let exact = "https://x/" + String(repeating: "é", count: 4091)
+        XCTAssertEqual(exact.utf8.count, 8192)
+        let rule = CredentialURI(uri: exact, match: 2, baseDomain: nil, includeSubdomains: false)
+        XCTAssertTrue(rule.valid)
+        XCTAssertTrue(rule.matches(serviceIdentifier: exact, isURL: true))
+        for extra in ["a", "é"] {
+            XCTAssertFalse(CredentialURI(uri: exact + extra, match: 2, baseDomain: nil, includeSubdomains: false).valid)
+            XCTAssertFalse(rule.matches(serviceIdentifier: exact + extra, isURL: true))
+        }
+        XCTAssertFalse(CredentialURI(uri: "https://x/\u{0}", match: 2, baseDomain: nil, includeSubdomains: false).valid)
+    }
+    func testPrefixProjectionStillRequiresActualSourceMatchAndIndex() throws {
+        let scope = SnapshotScope(server: "https://vault.example.invalid", account: "account-a")
+        let base = try policyVaultFixture(scope: scope, ids: ["prefix"])
+        var object = try JSONSerialization.jsonObject(with: base.sync) as! [String: Any]
+        var ciphers = object["ciphers"] as! [[String: Any]]
+        ciphers[0]["login"] = ["uris": [["match": 2], ["match": 5]]]
+        object["ciphers"] = ciphers
+        let vault = VaultData(version: 1, scope: scope, sync: try JSONSerialization.data(withJSONObject: object))
+        for index: Int? in [nil, -1, 0, 1, 2] {
+            let rule = CredentialURI(uri: "https://example.com/path", match: 2, baseDomain: nil, includeSubdomains: false, sourceIndex: index)
+            let item = VaultCredential(id: "prefix", title: "Prefix", username: "u", password: "fixture", hosts: ["example.com"], url: rule.uri, uris: [rule])
+            let retained = try XCTUnwrap(vault.policyCandidates([item]).first)
+            XCTAssertEqual(retained.uris, index == 0 ? [rule] : [])
+            XCTAssertFalse(retained.matches(serviceIdentifier: "example.com", isURL: false))
+        }
     }
     func testIDNAEncodedHost() {
         let rule = CredentialURI(uri: "https://xn--fsqu00a.xn--0zwm56d/", match: 0, baseDomain: "xn--fsqu00a.xn--0zwm56d", includeSubdomains: true)

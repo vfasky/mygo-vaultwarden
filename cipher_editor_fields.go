@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"time"
 )
 
 // Bitwarden clients 5983f56ce0cf924eea56c7d8f066f7885825a7ce:
@@ -56,7 +57,7 @@ func (a *app) uriMatchPicker(c *ui.Context, u *editorURI, disabled bool) {
 				u.showMatch = false
 			}
 		}
-		ui.Text(c, "起始部分和正则表达式将保存到服务器，当前系统自动填充不支持这两种策略。").FontSize(11).MaxLines(3)
+		ui.Text(c, "起始部分仅在系统提供完整网址时按原字符串匹配，不进入快捷建议；正则表达式会保留，但不用于当前系统填充。").FontSize(11).MaxLines(3)
 	}
 }
 func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom) {
@@ -102,6 +103,14 @@ func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom)
 	}
 }
 func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
+	if e.showHistory && (!time.Now().Before(e.historyExpires) || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision) {
+		e.showHistory = false
+		clear(e.shownHistory)
+		e.shownHistory = nil
+	}
+	if e.showHistory {
+		c.After(time.Until(e.historyExpires))
+	}
 	if len(e.fields.PasswordHistory) == 0 {
 		return
 	}
@@ -111,6 +120,8 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 			if action(c, "确认清除历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.fields.PasswordHistory = nil
 				e.confirmHistoryDelete, e.showHistory = false, false
+				clear(e.shownHistory)
+				e.shownHistory = nil
 			}
 			if action(c, "保留历史", "", false, a.pending != 0).Clicked() {
 				e.confirmHistoryDelete = false
@@ -121,21 +132,25 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 	if action(c, "清除密码历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
 		e.confirmHistoryDelete = true
 	}
-	label := fmt.Sprintf("显示密码历史明文（%d）", len(e.fields.PasswordHistory))
+	label := fmt.Sprintf("显示已保存密码历史明文（%d）", len(e.fields.PasswordHistory))
 	if e.showHistory {
 		label = "隐藏密码历史"
 	}
-	if action(c, label, "key", false, a.pending != 0).Clicked() {
-		e.showHistory = !e.showHistory
+	if action(c, label, "key", false, a.pending != 0 || e.uncertain).Clicked() {
+		if e.showHistory {
+			e.showHistory = false
+			clear(e.shownHistory)
+			e.shownHistory = nil
+		} else {
+			a.showCipherHistory(callStorage)
+		}
 	}
 	if e.showHistory {
 		ui.Scroll(c).Height(160).Children(func() {
 			ui.Column(c).Gap(8).Children(func() {
-				for _, entry := range e.fields.PasswordHistory {
-					date, _ := entry["lastUsedDate"].(string)
-					password, _ := entry["password"].(string)
-					ui.Text(c, date).FontSize(11)
-					ui.Text(c, password).FontSize(12).MaxLines(3)
+				for _, entry := range e.shownHistory {
+					ui.Text(c, entry.LastUsedDate).FontSize(11)
+					ui.Text(c, entry.Password).FontSize(12).MaxLines(3)
 				}
 			})
 		})

@@ -120,6 +120,20 @@ type AttachmentPublication struct {
 // call Session methods. On any error the caller removes its own unpublished
 // stage. Neither the file contents nor the signed URL enter a JSON bridge.
 func (s *Session) DownloadAttachment(ctx context.Context, vault *VaultData, id, attachmentID string, grant *ItemAuthorization, persist func(SessionCheckpoint) error, consume func(*os.File, int64) error) (*AttachmentPublication, error) {
+	return s.downloadAttachmentForPurpose(ctx, vault, id, attachmentID, grant, persist, consume, attachmentPurposeRead)
+}
+
+// DownloadAttachmentForBackup permits read-only access to a currently trashed
+// item. It never grants mutation authority or restores the source. All ordinary
+// attachment operations retain their existing trash restrictions.
+func (s *Session) DownloadAttachmentForBackup(ctx context.Context, vault *VaultData, id, attachmentID string, grant *ItemAuthorization, persist func(SessionCheckpoint) error, consume func(*os.File, int64) error) (*AttachmentPublication, error) {
+	return s.downloadAttachmentForPurpose(ctx, vault, id, attachmentID, grant, persist, consume, attachmentBackupRead)
+}
+
+func (s *Session) downloadAttachmentForPurpose(ctx context.Context, vault *VaultData, id, attachmentID string, grant *ItemAuthorization, persist func(SessionCheckpoint) error, consume func(*os.File, int64) error, purpose attachmentPurpose) (*AttachmentPublication, error) {
+	if purpose != attachmentPurposeRead && purpose != attachmentBackupRead {
+		return nil, ErrPermission
+	}
 	if consume == nil || !validObjectID(attachmentID) {
 		return nil, ErrValidation
 	}
@@ -130,7 +144,7 @@ func (s *Session) DownloadAttachment(ctx context.Context, vault *VaultData, id, 
 		return nil, err
 	}
 	defer finish()
-	a, err := s.attachmentAuthorityLocked(ctx, vault, id, grant, false, false, persist)
+	a, err := s.attachmentPurposeAuthorityLocked(ctx, vault, id, grant, purpose, persist)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +210,7 @@ func (s *Session) DownloadAttachment(ctx context.Context, vault *VaultData, id, 
 	}
 	// Staging may take time. Recheck server policy and exact cipher after staging,
 	// then issue a single-use publication capability tied to this local epoch.
-	fresh, err := s.attachmentAuthorityLocked(ctx, vault, id, grant, false, false, persist)
+	fresh, err := s.attachmentPurposeAuthorityLocked(ctx, vault, id, grant, purpose, persist)
 	if err != nil {
 		return nil, err
 	}

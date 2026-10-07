@@ -285,7 +285,7 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 	if err != nil {
 		return err
 	}
-	if err = transformCipher(copy, key, true); err != nil {
+	if err = transformCompleteCipher(copy, key, true); err != nil {
 		return err
 	}
 	if format == BitwardenJSON {
@@ -308,6 +308,9 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 			return fmt.Errorf("回收站项目请使用 MyGo 备份")
 		}
 		if fields.Login != nil {
+			if !emptyCopyArray(fields.Login["fido2Credentials"]) {
+				return fmt.Errorf("完整通行密钥请使用 MyGo 备份；官方 JSON 适配尚未验证")
+			}
 			if err := copyKeys(fields.Login, "username", "password", "totp", "uris", "fido2Credentials"); err != nil {
 				return err
 			}
@@ -361,6 +364,16 @@ func ParseImport(data []byte, format BackupFormat) (*ImportPlan, error) {
 // ExportPersonalBackup converts only the explicitly selected IDs. An unrelated
 // unsupported item elsewhere in the vault does not block a compatible subset.
 func (s *Session) ExportPersonalBackup(ctx context.Context, vault *VaultData, ids []string, format BackupFormat) ([]byte, error) {
+	return s.ExportPersonalBackupAuthorized(ctx, vault, ids, format, nil)
+}
+
+// ExportPersonalBackupAuthorized requires a separate current authorization for
+// each protected item. A grant for one item never authorizes the rest of a batch.
+func (s *Session) ExportPersonalBackupAuthorized(ctx context.Context, vault *VaultData, ids []string, format BackupFormat, grants map[string]*ItemAuthorization) ([]byte, error) {
+	return s.exportPersonalBackup(ctx, vault, ids, format, grants, false)
+}
+
+func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, ids []string, format BackupFormat, grants map[string]*ItemAuthorization, resources bool) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ctx, finish, err := s.beginOperationLocked(ctx)
@@ -419,8 +432,11 @@ func (s *Session) ExportPersonalBackup(ctx context.Context, vault *VaultData, id
 		if json.Unmarshal(doc.JSON, &metadata) != nil {
 			return nil, ErrProtocol
 		}
-		if metadata.OrganizationID != nil || metadata.Reprompt != 0 || metadata.ViewPassword == nil || !*metadata.ViewPassword || policies.restricts(nil, metadata.Type) {
+		if metadata.OrganizationID != nil || (metadata.Reprompt != 0 && !s.validItemAuthorizationLocked(grants[id], doc)) || metadata.ViewPassword == nil || !*metadata.ViewPassword || policies.restricts(nil, metadata.Type) {
 			return nil, ErrPermission
+		}
+		if resources {
+			delete(object, "attachments")
 		}
 		if err = validateCopyObject(object); err != nil {
 			return nil, backupError(len(file.Items), "包含尚不支持的附件、通行密钥、扩展或权限")
@@ -429,14 +445,11 @@ func (s *Session) ExportPersonalBackup(ctx context.Context, vault *VaultData, id
 		if err != nil {
 			return nil, err
 		}
-		if fields.Reprompt != 0 {
-			return nil, ErrPermission
-		}
 		key, err := cipherItemKey(object, s.key)
 		if err != nil {
 			return nil, err
 		}
-		err = transformCipher(object, key, false)
+		err = transformCompleteCipher(object, key, false)
 		clear(key)
 		if err != nil {
 			return nil, err
@@ -515,7 +528,104 @@ func (s *Session) ExportPersonalBackup(ctx context.Context, vault *VaultData, id
 		clear(data)
 		return nil, ErrCancelled
 	}
+	if err := s.personalBackupAuthorizationLocked(vault, ids, grants); err != nil {
+		clear(data)
+		return nil, err
+	}
+	if ctx.Err() != nil {
+		clear(data)
+		return nil, ErrCancelled
+	}
 	return data, nil
+}
+
+// PublishPersonalBackup rechecks the authenticated snapshot and every expiring
+// grant immediately before a short atomic file publication callback. The callback
+// must not reenter Session. A Save dialog must never extend a grant's lifetime.
+func (s *Session) PublishPersonalBackup(ctx context.Context, vault *VaultData, ids []string, grants map[string]*ItemAuthorization, publish func() error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if ctx.Err() != nil {
+		return ErrCancelled
+	}
+	if publish == nil {
+		return ErrValidation
+	}
+	if err := s.personalBackupAuthorizationLocked(vault, ids, grants); err != nil {
+		return err
+	}
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	if s.stopping || ctx.Err() != nil {
+		return ErrCancelled
+	}
+	return publish()
+}
+
+func (s *Session) personalBackupAuthorizationLocked(vault *VaultData, ids []string, grants map[string]*ItemAuthorization) error {
+	if len(ids) == 0 || len(ids) > 10000 {
+		return ErrValidation
+	}
+	if vault == nil || !s.itemSessionActiveLocked() {
+		return ErrExpired
+	}
+	if err := s.requireScopeLocked(vault.Scope); err != nil {
+		return err
+	}
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return err
+	}
+	documents, err := vault.Documents(vault.Scope)
+	if err != nil {
+		return err
+	}
+	wanted, seen := map[string]bool{}, map[string]bool{}
+	for _, id := range ids {
+		if !validObjectID(id) || wanted[id] {
+			return ErrValidation
+		}
+		wanted[id] = true
+	}
+	var earliest time.Time
+	// One authenticated vault scan, not one full parse/hash per selected ID.
+	for _, doc := range documents {
+		var metadata struct {
+			ID             string
+			Type, Reprompt int
+			OrganizationID *string
+			ViewPassword   bool
+		}
+		if json.Unmarshal(doc.JSON, &metadata) != nil {
+			return ErrProtocol
+		}
+		if !wanted[metadata.ID] {
+			continue
+		}
+		if seen[metadata.ID] {
+			return ErrProtocol
+		}
+		seen[metadata.ID] = true
+		if metadata.OrganizationID != nil || !metadata.ViewPassword || metadata.Reprompt < 0 || metadata.Reprompt > 1 || policies.restricts(nil, metadata.Type) {
+			return ErrPermission
+		}
+		if metadata.Reprompt != 0 {
+			grant := grants[metadata.ID]
+			if !s.validItemAuthorizationLocked(grant, doc) {
+				return ErrPermission
+			}
+			if earliest.IsZero() || grant.expires.Before(earliest) {
+				earliest = grant.expires
+			}
+		}
+	}
+	if len(seen) != len(wanted) {
+		return ErrNotFound
+	}
+	if !earliest.IsZero() && !time.Now().Before(earliest) {
+		return ErrPermission
+	}
+	return nil
 }
 
 func encryptImportedItem(item map[string]any, userKey []byte, account string) (CipherDocument, error) {
@@ -551,7 +661,7 @@ func encryptImportedItem(item map[string]any, userKey []byte, account string) (C
 			}
 		}
 	}
-	if err = transformCipher(object, key, true); err != nil {
+	if err = transformCompleteCipher(object, key, true); err != nil {
 		return CipherDocument{}, err
 	}
 	encrypted, err := json.Marshal(object)

@@ -23,6 +23,11 @@ func testLiveBackups(t *testing.T, ctx context.Context, s *Session, scope Scope,
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The Go fixture must explicitly install each newly authenticated snapshot;
+	// Sync alone cannot stand in for the production durable publication receipt.
+	if err = s.AcceptAuthenticatedSnapshot(before.Vault, fixtureUUID()); err != nil {
+		t.Fatal(err)
+	}
 	beforeDocs, _ := before.Vault.Documents(scope)
 	keep := map[string]bool{}
 	for _, doc := range beforeDocs {
@@ -41,6 +46,10 @@ func testLiveBackups(t *testing.T, ctx context.Context, s *Session, scope Scope,
 		after, err := s.Sync(ctx)
 		if err != nil {
 			t.Errorf("backup fixture cleanup sync: %v", err)
+			return
+		}
+		if err = s.AcceptAuthenticatedSnapshot(after.Vault, fixtureUUID()); err != nil {
+			t.Error("backup fixture cleanup receipt", err)
 			return
 		}
 		docs, _ := after.Vault.Documents(scope)
@@ -93,6 +102,9 @@ func testLiveBackups(t *testing.T, ctx context.Context, s *Session, scope Scope,
 	}
 	synced, err := s.Sync(ctx)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err = s.AcceptAuthenticatedSnapshot(synced.Vault, fixtureUUID()); err != nil {
 		t.Fatal(err)
 	}
 	roundtrip, err := s.ExportPersonalBackup(ctx, synced.Vault, imported, MyGoBackup)

@@ -5,6 +5,7 @@ import (
 	"net"
 	"net/url"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
@@ -40,6 +41,20 @@ type syncReply struct {
 }
 
 func NormalizeURI(value string, match int) (URI, string, error) {
+	if match == 2 {
+		// clients 5983f56c login-uri.view.ts:175 compares the original strings.
+		// Prefixes may end within a host/path/escape, so do not URL-normalize them.
+		// They never contribute a domain/host hint or a quick-fill identity.
+		if value == "" || len(value) > 8192 || !utf8.ValidString(value) {
+			return URI{}, "", ErrProtocol
+		}
+		for _, character := range value {
+			if character <= 0x20 || character == 0x7f {
+				return URI{}, "", ErrProtocol
+			}
+		}
+		return URI{URI: value, Match: 2}, "", nil
+	}
 	if match != 0 && match != 1 && match != 3 {
 		return URI{}, "", ErrProtocol
 	}

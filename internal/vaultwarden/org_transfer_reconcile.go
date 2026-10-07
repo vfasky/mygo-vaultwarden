@@ -118,6 +118,7 @@ func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID s
 		if !ok || key == "" {
 			continue
 		}
+		normalizeResponseLoginAlias(want)
 		wantFields, err := decodeCipherFields(want)
 		if err != nil {
 			continue
@@ -147,6 +148,7 @@ func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID s
 			if old[id] || actual["organizationId"] != orgID || actual["key"] != key {
 				continue
 			}
+			normalizeResponseLoginAlias(actual)
 			gotFields, err := decodeCipherFields(actual)
 			if err != nil || !gotFields.ViewPassword || !gotFields.Edit || fresh.restricts(&orgID, gotFields.Type) {
 				continue

@@ -49,12 +49,17 @@ type cipherEditor struct {
 	comparison                             *vaultwarden.CipherRebase
 	changes                                []vaultwarden.CipherChange
 	localChoices                           map[string]bool
+	rowChoices                             map[string][]int
+	rowPreview                             *cipherRowReveal
+	attachmentMigration                    *cipherAttachmentMigrationEditor
 	compareAuthorization                   bool
 	uncertain                              bool
 	saved                                  bool
 	revision                               string
 	confirm                                vaultwarden.CipherAction
 	showHistory                            bool
+	shownHistory                           []vaultwarden.PasswordHistoryValue
+	historyExpires                         time.Time
 	confirmHistoryDelete                   bool
 	authorization                          *vaultwarden.ItemAuthorization
 	repromptID, repromptPassword           string
@@ -425,6 +430,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			})
 			a.passwordHistoryView(c, e)
 			a.attachmentView(c, e)
+			a.cipherAttachmentMigrationView(c, e)
 			ui.Text(c, "备注").FontSize(12)
 			ui.TextArea(c, &e.notes).Label("备注").MinHeight(100).Disabled(a.pending != 0 || e.uncertain)
 			if e.uncertain {
@@ -451,6 +457,9 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				}
 			})
 			if e.fields.ID != "" && e.fields.OrganizationID == nil {
+				if vaultwarden.CipherShareRequiresRecovery(e.document) {
+					ui.Text(c, "旧格式附件共享需要先保存账户绑定的加密恢复文件。共享前后都请保留它，结果未知时从导入导出页打开核对；文件依赖当前账户密钥，账号密钥轮换或删除前必须处理未决迁移。无 key 附件需先完成上方迁移。")
+				}
 				a.organizationShareView(c, e)
 				a.cipherStateButtons(c, e)
 			}
@@ -467,7 +476,7 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 			text = "永久删除无法恢复。确认删除此项目及其附件？"
 		}
 		if e.confirm == copyCipherAction {
-			text = "将当前表单复制为独立项目，原项目不变。副本保留文件夹、收藏和密码历史，恢复为未归档状态。含附件、通行密钥或尚不支持的数据时会拒绝复制。"
+			text = "将项目复制为独立条目，原项目不变。副本保留文件夹、收藏、密码历史和通行密钥数据，恢复为未归档状态。含附件时请先保存草稿；验证源文件并创建副本后，还需逐文件恢复和核验才算完成。未知扩展不会被默默丢弃。"
 		}
 		ui.Text(c, text).TextColor(vaultPurple)
 		ui.Row(c).Gap(8).Children(func() {
@@ -527,6 +536,10 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	}
 	editor := a.editor
 	editor.applyInputs()
+	if action == copyCipherAction && editor.fields.OrganizationID == nil && cipherHasAttachments(editor.document) {
+		a.startResourceCipherCopy(session, editor)
+		return
+	}
 	vault := a.vault
 	scope, prior := *a.liveScope, a.snapshot
 	a.epoch++
@@ -534,6 +547,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++
+	parent := a.window
 	a.status = "正在保存修改…"
 	go func() {
 		var reply storageReply
@@ -554,7 +568,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 		} else {
 			switch {
 			case action == shareOrganizationAction:
-				_, err = session.SharePersonalCipher(ctx, vault, editor.shareOrganizationID, editor.shareCollectionID, editor.document, editor.fields, editor.authorization, persist)
+				_, err = shareCipherWithRecovery(ctx, parent, session, vault, editor, scope, editor.revision, persist)
 			case editor.organizationID != "":
 				_, err = session.CreateOrganizationCipher(ctx, vault, editor.organizationID, editor.collectionID, editor.fields, persist)
 			case editor.fields.OrganizationID != nil:

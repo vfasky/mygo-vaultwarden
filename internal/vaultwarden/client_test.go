@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -126,7 +127,7 @@ func TestSyncFilteringAndFailureIsAtomic(t *testing.T) {
 	}
 }
 func TestURIRulesDoNotExpandPublicSuffixOrUnsupportedModes(t *testing.T) {
-	for _, mode := range []int{2, 4, 5, 99} {
+	for _, mode := range []int{4, 5, 99} {
 		if _, _, err := NormalizeURI("https://example.com", mode); err == nil {
 			t.Fatal("unsupported rule accepted")
 		}
@@ -149,5 +150,42 @@ func TestURIRulesDoNotExpandPublicSuffixOrUnsupportedModes(t *testing.T) {
 	}
 	if !strings.HasPrefix(rule.URI, "https://") {
 		t.Fatal("scheme changed")
+	}
+}
+
+func TestLiteralURIPrefixSharedVectorsAndByteLimits(t *testing.T) {
+	data, err := os.ReadFile("testdata/uri-prefix-cases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var vectors []struct {
+		Name, Prefix string
+		Valid        bool
+	}
+	if err = json.Unmarshal(data, &vectors); err != nil {
+		t.Fatal(err)
+	}
+	for _, vector := range vectors {
+		t.Run(vector.Name, func(t *testing.T) {
+			rule, host, err := NormalizeURI(vector.Prefix, 2)
+			if (err == nil) != vector.Valid {
+				t.Fatal("prefix eligibility", err)
+			}
+			if err == nil && (rule.URI != vector.Prefix || rule.Match != 2 || host != "" || rule.BaseDomain != "" || rule.IncludeSubdomains) {
+				t.Fatal("prefix normalized or granted host fallback")
+			}
+		})
+	}
+	exact := "https://x/" + strings.Repeat("é", 4091)
+	if len(exact) != 8192 {
+		t.Fatal("fixture length")
+	}
+	if rule, _, err := NormalizeURI(exact, 2); err != nil || rule.URI != exact {
+		t.Fatal("8192-byte prefix", err)
+	}
+	for _, prefix := range []string{exact + "a", exact + "é", "\xff", "https://x/\x00"} {
+		if _, _, err := NormalizeURI(prefix, 2); err == nil {
+			t.Fatal("invalid/oversized prefix accepted")
+		}
 	}
 }

@@ -41,7 +41,7 @@ func TestOrganizationDefaultURIProjectionAndCheckpoint(t *testing.T) {
 		}
 		rules := result.Credentials[0].URIs
 		want := 1
-		if match == 0 || match == 1 || match == 3 {
+		if match == 0 || match == 1 || match == 2 || match == 3 {
 			want = 2
 		}
 		if len(rules) != want || rules[want-1].Match != 0 {

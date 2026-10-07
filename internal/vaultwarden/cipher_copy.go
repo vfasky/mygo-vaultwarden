@@ -137,8 +137,8 @@ func validateCopyObject(object map[string]any) error {
 		}
 		if section == "login" {
 			allowed = append(allowed, "uri", "uris", "passwordRevisionDate", "autofillOnPageLoad", "fido2Credentials")
-			if !emptyCopyArray(detail["fido2Credentials"]) {
-				return ErrUnsupportedEdit
+			if err := validateFIDO2Credentials(detail["fido2Credentials"]); err != nil {
+				return err
 			}
 			if err := copyArrayKeys(detail["uris"], "uri", "uriChecksum", "match"); err != nil {
 				return err
@@ -196,7 +196,7 @@ func copyAuthorizedPersonalCipherDocument(source CipherDocument, ownerKey []byte
 		return CipherDocument{}, err
 	}
 	defer clear(oldKey)
-	if err := transformCipher(object, oldKey, false); err != nil {
+	if err := transformCompleteCipher(object, oldKey, false); err != nil {
 		return CipherDocument{}, err
 	}
 	key := make([]byte, 64)
@@ -212,7 +212,7 @@ func copyAuthorizedPersonalCipherDocument(source CipherDocument, ownerKey []byte
 		delete(object, name)
 	}
 	object["key"], object["encryptedFor"] = wrapped, account
-	if err := transformCipher(object, key, true); err != nil {
+	if err := transformCompleteCipher(object, key, true); err != nil {
 		return CipherDocument{}, err
 	}
 	data, err := json.Marshal(object)

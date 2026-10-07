@@ -21,11 +21,35 @@ type backupEditor struct {
 	importing, confirm, submitted bool
 	plan                          *vaultwarden.ImportPlan
 	results                       []vaultwarden.ImportEntry
+	exportPassword                string
+	exportIDs                     []string
+	exportGrants                  map[string]*vaultwarden.ItemAuthorization
+	resources                     *backupResourceEditor
+	recovery                      *cipherShareRecoveryEditor
+}
+
+func backupSelectionRequiresPassword(e *backupEditor) bool {
+	for _, item := range e.candidates {
+		if e.selected[item.ID] && item.RequiresPassword {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *app) clearBackupEditor() {
 	if a.backupEditor != nil {
 		a.backupEditor.plan.Clear()
+		if a.backupEditor.resources != nil {
+			a.backupEditor.resources.plan.Clear()
+			a.backupEditor.resources.password = ""
+		}
+		if a.backupEditor.recovery != nil {
+			clear(a.backupEditor.recovery.file)
+			a.backupEditor.recovery.password = ""
+		}
+		a.backupEditor.exportPassword = ""
+		a.backupEditor.exportGrants = nil
 		a.backupEditor = nil
 	}
 }
@@ -49,17 +73,27 @@ func (a *app) openBackupEditor() {
 }
 func (a *app) backupEditorView(c *ui.Context) {
 	e := a.backupEditor
+	if e.recovery != nil {
+		a.cipherShareRecoveryView(c, e)
+		return
+	}
 	busy := a.pending != 0
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
 			ui.Text(c, "导入与导出").FontSize(23)
-			ui.Text(c, "文件包含未加密的密码和其他秘密，请仅保存在可信本地位置。附件、通行密钥及未知扩展尚不支持，发现后会整体拒绝。当前仅导入导出个人密码库，组织导入导出尚未实现。").MaxLines(5).FontSize(12)
+			if !e.submitted && action(c, "打开加密共享迁移恢复文件…", "", false, busy).Clicked() {
+				a.chooseCipherShareRecovery()
+			}
+			ui.Text(c, "文件包含未加密的密码、通行密钥及其他秘密，请仅保存在可信本地位置。完整资源格式另含附件，不是 Bitwarden 官方格式；普通 JSON 不含附件。未知扩展仍整体拒绝。本页导入导出个人密码库。").MaxLines(5).FontSize(12)
+			if e.format == vaultwarden.MyGoResources {
+				ui.Text(c, "完整资源格式上限：文件合计 1 GiB、单文件 512 MiB、10,000 个文件、32 MiB 清单。操作不会自动重试或覆盖现有文件。").FontSize(12).MaxLines(3)
+			}
 			if !e.submitted {
 				if !e.confirm && e.plan == nil {
 					for _, format := range []struct {
 						id    vaultwarden.BackupFormat
 						label string
-					}{{vaultwarden.BitwardenJSON, "Bitwarden 兼容 JSON（1–7 类）"}, {vaultwarden.MyGoBackup, "MyGo 备份（八类，.mygovault）"}} {
+					}{{vaultwarden.BitwardenJSON, "Bitwarden 兼容 JSON（1–7 类）"}, {vaultwarden.MyGoBackup, "MyGo 备份（八类，.mygovault）"}, {vaultwarden.MyGoResources, "MyGo 完整资源备份（含附件，.mygoresources）"}} {
 						if navItem(c, format.label, "vault", "", e.format == format.id, busy).Clicked() {
 							e.format = format.id
 						}
@@ -90,6 +124,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 							}
 							ui.Text(c, label).MaxLines(2).FontSize(12)
 						}
+						a.backupResourcePreview(c, e)
 						if action(c, "确认创建这些项目", "", true, busy).Clicked() {
 							a.importBackup()
 						}
@@ -112,6 +147,10 @@ func (a *app) backupEditorView(c *ui.Context) {
 						}
 					}
 					if e.confirm {
+						if backupSelectionRequiresPassword(e) {
+							ui.Text(c, "所选项目要求主密码确认。授权逐项绑定，30 秒后失效；保存窗口停留过久需重新确认。")
+							ui.TextInput(c, &e.exportPassword).Label("导出所选受保护项目的主密码").Password().Disabled(busy)
+						}
 						ui.Text(c, "确认将勾选项目中的密码、TOTP 秘钥、备注及历史以明文导出？请使用新的文件名；为保护原文件，本应用不会覆盖已有文件。").MaxLines(4)
 						if action(c, "确认并选择保存位置…", "", true, busy).Clicked() {
 							a.chooseExportFile()
@@ -125,6 +164,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 				for _, r := range e.results {
 					ui.Text(c, r.Kind+" · "+r.Name+"："+r.State).MaxLines(3).FontSize(12)
 				}
+				a.backupResourceRestoreView(c, e)
 				if action(c, "同步核对导入结果", "sync", false, busy).Clicked() {
 					a.syncVault(false)
 				}
@@ -148,6 +188,9 @@ func backupLease(state *snapshotStatus, scope vaultwarden.Scope, revision string
 	return state != nil && state.Available && state.Scope != nil && *state.Scope == scope && state.Revision == revision
 }
 func backupDialogFilter(format vaultwarden.BackupFormat) mygo.FileFilter {
+	if format == vaultwarden.MyGoResources {
+		return mygo.FileFilter{Name: "MyGo 完整资源备份", Extensions: []string{"mygoresources"}}
+	}
 	if format == vaultwarden.MyGoBackup {
 		return mygo.FileFilter{Name: "MyGo 备份", Extensions: []string{"mygovault"}}
 	}
@@ -158,7 +201,9 @@ func backupOutputPath(path string, format vaultwarden.BackupFormat) (string, err
 		return "", vaultwarden.ErrCancelled
 	}
 	extension := ".json"
-	if format == vaultwarden.MyGoBackup {
+	if format == vaultwarden.MyGoResources {
+		extension = ".mygoresources"
+	} else if format == vaultwarden.MyGoBackup {
 		extension = ".mygovault"
 	} else if format != vaultwarden.BitwardenJSON {
 		return "", vaultwarden.ErrValidation
@@ -173,6 +218,10 @@ func backupOutputPath(path string, format vaultwarden.BackupFormat) (string, err
 }
 
 func (a *app) chooseImportFile() {
+	if a.backupEditor != nil && a.backupEditor.format == vaultwarden.MyGoResources {
+		a.chooseResourceImportFile()
+		return
+	}
 	e := a.backupEditor
 	if a.pending != 0 || e == nil || e.plan != nil || !e.importing || !a.backupCurrent(e, a.epoch) {
 		return
@@ -221,6 +270,10 @@ func (a *app) chooseImportFile() {
 	}()
 }
 func (a *app) chooseExportFile() {
+	if a.backupEditor != nil && a.backupEditor.format == vaultwarden.MyGoResources {
+		a.chooseResourceExportFile()
+		return
+	}
 	e := a.backupEditor
 	if a.pending != 0 || e == nil || e.importing || !e.confirm || !a.backupCurrent(e, a.epoch) {
 		return
@@ -239,6 +292,15 @@ func (a *app) chooseExportFile() {
 		a.status = "请先勾选导出的项目。"
 		return
 	}
+	password := []byte(e.exportPassword)
+	e.exportPassword = ""
+	if backupSelectionRequiresPassword(e) && len(password) == 0 {
+		a.status = "请提供主密码以授权所选受保护项目。"
+		return
+	}
+	e.exportIDs = append([]string(nil), ids...)
+	e.exportGrants = make(map[string]*vaultwarden.ItemAuthorization)
+	grants := e.exportGrants
 	a.epoch++
 	epoch := a.epoch
 	ctx, cancel := context.WithCancel(context.Background())
@@ -246,6 +308,7 @@ func (a *app) chooseExportFile() {
 	a.pending++
 	format, scope, revision, vault, parent := e.format, *a.liveScope, e.revision, a.vault, a.window
 	go func() {
+		defer clear(password)
 		// Preflight before showing Save or touching any target file.
 		status := callStorage(storageRequest{Operation: "status"})
 		var data []byte
@@ -254,7 +317,18 @@ func (a *app) chooseExportFile() {
 		if !status.OK || !backupLease(status.State, scope, revision) {
 			err = vaultwarden.ErrConflict
 		} else {
-			data, err = session.ExportPersonalBackup(ctx, vault, ids, format)
+			for _, id := range ids {
+				if session.PersonalItemRequiresPassword(vault, id) {
+					grants[id], err = session.AuthorizePersonalItem(ctx, vault, revision, id, password)
+					if err != nil {
+						break
+					}
+				}
+			}
+			clear(password)
+			if err == nil {
+				data, err = session.ExportPersonalBackupAuthorized(ctx, vault, ids, format, grants)
+			}
 		}
 		clear(data)
 		data = nil // Never retain plaintext while the native Save panel waits.
@@ -271,7 +345,7 @@ func (a *app) chooseExportFile() {
 				if !status.OK || !backupLease(status.State, scope, revision) {
 					err = vaultwarden.ErrConflict
 				} else {
-					data, err = session.ExportPersonalBackup(ctx, vault, ids, format)
+					data, err = session.ExportPersonalBackupAuthorized(ctx, vault, ids, format, grants)
 					if err == nil {
 						stage, err = stageBackupFile(ctx, path, data)
 					}
@@ -306,14 +380,24 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 		a.status = vaultwarden.ErrConflict.Error()
 		return
 	}
-	if err = stage.Commit(); err != nil {
+	if session, ok := a.session.(*vaultwarden.Session); ok {
+		err = session.PublishPersonalBackup(ctx, a.vault, e.exportIDs, e.exportGrants, stage.Commit)
+	} else {
+		err = vaultwarden.ErrPermission
+	}
+	if err != nil {
 		a.status = err.Error()
 		return
 	}
+	e.exportGrants = nil
 	e.confirm = false
 	a.status = "明文备份已安全写入新文件，请妥善保管并在不再需要时删除。"
 }
 func (a *app) importBackup() {
+	a.importBackupWith(a.window.Update, callStorage, func() { a.syncVault(false) })
+}
+
+func (a *app) importBackupWith(dispatch func(func()), storage func(storageRequest) storageReply, refresh func()) {
 	e := a.backupEditor
 	if a.pending != 0 || e == nil || !e.importing || e.plan == nil || e.submitted || !a.backupCurrent(e, a.epoch) {
 		return
@@ -337,14 +421,14 @@ func (a *app) importBackup() {
 		var checkpoint *snapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			reply, err = saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err = saveSessionCheckpoint(prior, cp, storage)
 			if err == nil {
 				prior = reply.State
 				checkpoint = reply.State
 			}
 			return err
 		}
-		state := callStorage(storageRequest{Operation: "status"})
+		state := storage(storageRequest{Operation: "status"})
 		var result vaultwarden.ImportResult
 		var err error
 		if !state.OK || !backupLease(state.State, scope, prior.Revision) || ctx.Err() != nil {
@@ -352,32 +436,46 @@ func (a *app) importBackup() {
 		} else {
 			result, err = session.ImportPersonalBackup(ctx, scope, plan, persist)
 		}
-		a.window.Update(func() {
+		dispatch(func() {
 			a.pending--
 			defer cancel()
 			if a.epoch != epoch || a.backupEditor != e {
 				return
 			}
 			a.cancel = nil
-			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
+			if checkpoint != nil && !a.adoptBackupCheckpoint(e, checkpoint) {
 				a.stopNetwork()
 				a.status = vaultwarden.ErrIdentity.Error()
 				return
 			}
 			e.results = result.Entries
+			if e.resources != nil {
+				for _, entry := range result.Entries {
+					if entry.SourceID != "" && entry.ID != "" {
+						e.resources.targets[entry.SourceID] = entry.ID
+					}
+				}
+			}
 			if err != nil {
 				e.results = append(e.results, vaultwarden.ImportEntry{Kind: "导入已停止", State: err.Error()})
 				a.syncFailed(reply, err)
 			}
 			if a.backupEditor == e && a.sessionOwnsSnapshot() {
 				a.status = "导入操作已结束，正在同步核对已知项目；结果未知时请人工核对。"
-				a.syncVault(false)
+				refresh()
 			}
 		})
 	}()
 }
-func (a *app) reconcileImport() {
+func (a *app) reconcileImport(continuations ...*backupContinuation) {
 	e := a.backupEditor
+	if len(continuations) == 1 {
+		continuations[0].resume(a)
+	}
+	if e != nil && e.recovery != nil && a.sessionOwnsSnapshot() {
+		e.revision = a.sessionRevision
+		return
+	}
 	if e == nil || !e.submitted {
 		return
 	}

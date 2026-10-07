@@ -134,6 +134,10 @@ func validateOrganizationBackupItem(item map[string]any) error {
 // following/overwrite) and may not re-enter Session. All rows must be supported;
 // no partial/empty backup is returned when a row cannot be preserved safely.
 func (s *Session) WithOrganizationBackup(ctx context.Context, vault *VaultData, orgID string, grants map[string]*ItemAuthorization, confirmed bool, save func([]byte) error, persist func(SessionCheckpoint) error) error {
+	return s.withOrganizationBackup(ctx, vault, orgID, grants, confirmed, save, persist, false)
+}
+
+func (s *Session) withOrganizationBackup(ctx context.Context, vault *VaultData, orgID string, grants map[string]*ItemAuthorization, confirmed bool, save func([]byte) error, persist func(SessionCheckpoint) error, resources bool) error {
 	if !confirmed || save == nil || !validObjectID(orgID) {
 		return ErrValidation
 	}
@@ -260,6 +264,9 @@ func (s *Session) WithOrganizationBackup(ctx context.Context, vault *VaultData, 
 		org, relations := object["organizationId"], object["collectionIds"]
 		delete(object, "organizationId")
 		delete(object, "collectionIds")
+		if resources {
+			delete(object, "attachments")
+		}
 		if err := validateCopyObject(object); err != nil {
 			return err
 		}
@@ -267,7 +274,7 @@ func (s *Session) WithOrganizationBackup(ctx context.Context, vault *VaultData, 
 		if err != nil {
 			return err
 		}
-		err = transformCipher(object, key, false)
+		err = transformCompleteCipher(object, key, false)
 		clear(key)
 		if err != nil {
 			return err
