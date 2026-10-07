@@ -1,33 +1,34 @@
-# 完整 Vaultwarden 实现：第九轮组织生命周期交接
+# 完整 Vaultwarden 实现：第十轮集合管理交接
 
-**INCOMPLETE — 整卡未完成，禁止启动 Review 或合并。** 本轮经 `contact_supervisor(need_decision)` 获准：完成组织生命周期/持久隔离恢复、必要验证、分模块提交、精确清理后交接续启同卡。整卡范围不缩减。前轮全文在 `0045ad8:docs/vaultwarden-implementation-handoff.md`，不回退、不重新导入。
+**INCOMPLETE — 整卡未完成，禁止 Review / merge。** 协调者本轮通过 `contact_supervisor(need_decision)` 明确批准：完成集合模块回归、提交、精确清理和INCOMPLETE交接后续启同卡，原完整范围不变。历史交接见 `b2e6ed1:docs/vaultwarden-implementation-handoff.md`；当前能力/剩余整卡范围见 [覆盖矩阵](vaultwarden-api-coverage.md)，不要重复导入基线或重做旧模块。
 
-## 提交和隔离
+## 提交与唯一工作树
 
-- 本轮起点 `0045ad840245d415c4e2aafa8312d27a4fe2fc02`，保留d3ad954/5a398db及全部前序成果。
-- **e260064**：组织生命周期原生管理、write-ahead持久组织隔离、明确联网核验恢复，Go/Swift/headless/真实协议回归。22文件，1301 additions/50 deletions。
-- **46ad508**：隔离/恢复回执必须推进revision，恢复一个组织不得顺带移除其他组织隔离；新增headless回归。
-- 文档提交接在其后，最新HEAD用 `git log -1` 核对；不能把正文中的历史提交当最终HEAD。
-- 唯一写入工作树 `board-2-vaultwarden-api`，分支 `waku/board-2-vaultwarden-api`。未操作主目录 `/Users/vfasky/code/mygo-vaultwarden`，未commit/stash/reset/clean主目录，未读真实凭据/快照、未访问生产vault、未操作用户app/watch、未启动其他子代理。
+- 起点 `b2e6ed121557bf3583dddad3b0fe39293fc8dfa1`，保留全部前序成果。
+- **49724bd**：集合原生CRUD、成员/群组集合访问配置、持久隔离复用、多角色真实协议和安全回归，14文件，1349 additions/10 deletions。
+- 本交接另有后续文档提交；**以 `git log -1` 为最新HEAD**。
+- 仅写入 `board-2-vaultwarden-api` / `waku/board-2-vaultwarden-api`。未改主目录 `/Users/vfasky/code/mygo-vaultwarden`，未commit/stash/reset/clean主目录，未读真实凭据/快照，未访问生产vault或发送真实邀请，未操作用户app/watch，未启动子代理。
 
-## 当前新增产品能力
+## 本轮已接产品与文件地图
 
-1. `internal/vaultwarden/organization_management.go`：`SaveOrganization`创建/修改、`OrganizationProfile`读取、`LeaveOrganization`退出、`DeleteOrganization`删除。固定源码 `organizations.rs:101/183/224/237/270/276`。
-   - 创建每次随机64B组织key，当前经过验证的账户PKCS8/SPKI公钥RSA-OAEP SHA256包装，默认集合名type2；组织名和账单邮箱明文。验证名称/邮箱/长度。可选组织RSA恢复keys未生成；本接口不等于组织恢复功能完成。
-   - owner可GET/PUT资料；普通已确认成员可退出；owner删除要求真实当前主密码，使用已认证KDF构造masterPasswordHash，服务器最终验证。最后owner退出由服务器实时拒绝。邮件OTP替代验证未实现。
-   - scope/身份/revision/current session、请求取消和refresh checkpoint先落盘。管理操作没有item reprompt授权，不因合法refresh撤销item-grant epoch而错误拒绝请求；测试覆盖checkpoint失败零请求和成功checkpoint可继续。任何写入非预期响应/非事务失败均不盲重试。
-2. `organization_management_ui.go`：侧栏创建组织、组织导航→管理当前组织、owner名称/账单邮箱编辑、退出确认、owner主密码删除确认、加载失败重载、取消并锁定、未知结果核对提示。当前组织名来自服务器，表单绑定快照revision，锁定/同步清理；和现有项目/文件夹/批量/备份编辑互斥。
-3. 按协调者明确要求，危险请求采用组织级持久隔离，而不是每次全账号logout。API必须提供isolate回调，先安全存储后才能HTTP。隔离失败/旧revision/错误scope/预取消不会发送危险请求；磁盘失败没有已发请求需要补偿，因此不使用全logout兜底。存储回执异常会阻断请求并使界面重新解锁核对，不能伪报成功。发送后的取消/Close/未知结果均保留隔离。
-4. Swift `SnapshotStore.quarantineOrganization`：同文件锁、scope、expectedRevision和password unlock授权下原子重封完整payload；保留个人/其他组织和session，过滤目标组织Login投影，新snapshot ID和revision撤销旧lease及候选。不会把目标组织key放入元数据。正常publish继续随机新AES key；隔离重封沿用当前AES key但使用新GCM nonce、新header和密码wrapper，避免为本地隔离创建跨Keychain多阶段事务。
-5. 新可选 `VaultData.quarantinedOrganizations` 在AES-GCM认证payload内；旧Go/Swift快照缺字段按空处理，不升version。按scope+org ID隔离。原始server-encrypted `sync` 字节完整保持，不重编码或删除profile新旧列表/集合/cipher字段，因此opaque大整数和未知扩展不丢失。Go `Documents/organizationVaultLocked`统一排除目标文档/keys/集合；Swift统一过滤对应credentials并验证payload不含隔离候选。旧密文仍存在于认证payload内，隔离不等同磁盘安全擦除。
-6. 普通publish认证旧payload并合并隔离标记，旧服务器响应不能复活；saveSession保留完整vault及标记。publish默认继续不向一般lease返回vault；bridge主应用显式includeVault并回传规范化vault，Go同步采用该vault，已有隔离却没有正确回执则拒绝。扩展认证读取只拿过滤credentials，完整vault/session仍只属主应用。主密码wrapper损坏时不得覆盖旧payload擦除隔离；需显式撤销本地快照。Swift更换包装key支持显式priorUnlockKey，客户端KDF/key轮换产品仍未实现。
-7. 显式恢复：`IsolatedOrganizations`只给名称，侧栏「重新核验：名称」→用户确认→新`SyncWithCheckpoint`→Go验证confirmed/enabled、全局用户ID与member ID、RSA密钥链→专用`restoreOrganizationAccess`发布。Swift再次验证当前成员/用户与旧隔离标记，只取消指定org的隔离；其他隔离保留。普通sync绝不取消。accepted、错误账号/member、网络失败、已退出/删除仍无授权均不恢复；恢复不重发原危险写。全账号显式logout清整个快照，之后登录从服务器重建。
+- `internal/vaultwarden/collections.go`：`CollectionDetails(ctx,vault,orgID,collectionID,persist)`返回绑定scope/revision的 `*CollectionDraft`；空collectionID准备新草稿。`SaveCollection(ctx,vault,draft,isolate,persist)`；`DeleteCollection`同样要求危险写前isolate。详情使用完整 `/collections/{id}/details`，不拿sync投影冒充完整访问配置。名称type2/org key；保留users/groups/externalId与opaque，包括大整数及未修改访问条目未知字段。
+- `internal/vaultwarden/collection_access.go`：`CollectionAccessDetails(ctx,vault,source,persist)`返回独立草稿，从 `/users/mini-details` 获取姓名/邮箱及membershipID/globalUserID映射，从启用时 `/groups` 获取群组名字与组织归属。`CollectionDraft.Access`是业务选择项；私有原目录验证身份，不能伪造任意成员/账号ID。未列出的旧条目继续保留。`Clone/Close/AccessChanged`用于后台副本、清理和确认。
+- `organizations.go`增加 `UseGroups` 和 `CanCreateCollections()`。**profile没有accessAll字段**；经理type4必须具备官方 createNewCollections/editAnyCollection/deleteAnyCollection 三项permissions才可创建。owner/admin创建；集合级经理只能管理已有manage集合；普通成员不能管理。三项规则来自固定上游manager-as-custom转换，不从角色数字大小推断。
+- `collection_management_ui.go`、既有 `organization_management_ui.go`：组织导航→管理当前组织→集合列表/新建/名称编辑/删除确认；配置成员与群组访问→姓名邮箱/群组名称、分配/移除、只读/隐藏密码/管理控件→保存确认。没有raw JSON编辑器。未知结果禁当前表单重复提交；锁定/同步/隔离清表单，后台独立Clone和epoch防迟到恢复。
+- 测试：`collections_test.go`、`collection_access_test.go`、`collections_integration_test.go`、`collection_management_ui_test.go`；扩充 `organization_members_integration_test.go`，把成员只读/隐藏、取消直接分配改为调用产品集合接口。成员邀请/确认/角色变更等fixture仍不是产品实现。
+- README、coverage、organization-vault已同步。Swift存储实现本轮未修改，复用既有持久组织隔离/显式恢复能力。
 
-这解决的是组织生命周期；**集合CRUD/访问配置、成员可信邀请确认与角色管理、groups/policies、legacy共享均未在本轮实现**。权限/只读/reprompt/RSA/独立item-key共享等第八轮成果继续保持。
+## 必须保持的边界
 
-## 验证证据与局限
+1. 访问数组的ID是membershipID，不能用global userId。目录校验当前member/account双向映射、重复用户/成员、群组组织归属；配置变更只来自认证目录。UseGroups关闭时不请求群组目录，不抹掉原有不可编辑群组分配。
+2. 仅更名不隔离。修改**已有集合访问**或删除集合在任何HTTP之前先 `checkpointLocked(isolate)`→Swift `quarantineOrganization`；隔离失败零HTTP（包含保存前GET）。保守隔离整个目标组织，保留个人和其他组织。无产品no-op回调。
+3. 普通sync不能撤隔离。成功/错误/取消/结果未知都保留隔离；用户从侧栏「重新核验：组织名」明确确认，新sync验证confirmed/enabled、member/account、RSA钥链后由专用restore发布恢复，**不会重新提交原集合操作**。正常成功访问调整后也走这条恢复路径。不是永久锁死，也不是悄悄自动恢复。
+4. 保存前新GET逐字段核对原详情，有差异返回ErrConflict。**服务端没有集合CAS，GET与PUT之间仍有竞争窗口**；不声称严格CAS/事务。数组重排保守视作冲突。服务器更新访问会先删除再重建，任意非200/意外成功响应按未知结果，不重试。保持未编辑数组/条目/unknown是请求级保证，不能保证上游存储未知扩展。
+5. 集合删除仅解除关联，不删除组织cipher。管理权不能与只读/隐藏限制同时新配置。离线仍只能依据最后一次认证快照；没有远端实时撤销通知。
 
-所有Go通过 `GO_BIN="$(bash scripts/resolve-go.sh)"` 解析。
+## 验证与实际边界
+
+Go均经 `GO_BIN="$(bash scripts/resolve-go.sh)"` 解析。最终命令：
 
 ```sh
 "$GO_BIN" fmt ./internal/vaultwarden ./
@@ -35,41 +36,36 @@
 "$GO_BIN" build ./...
 "$GO_BIN" vet ./...
 "$GO_BIN" test -race ./...
+MYGO_VW_TEST_URL=http://127.0.0.1:32786 "$GO_BIN" test ./internal/vaultwarden -run TestLiveVaultwarden -count=1 -v
 swift test --package-path macos
 swiftc -typecheck -parse-as-library -module-name SnapshotBridge macos/Shared/*.swift macos/Bridge/SnapshotBridge.swift
-MYGO_VW_TEST_URL=http://127.0.0.1:32785 "$GO_BIN" test ./internal/vaultwarden -run TestLiveVaultwarden -count=1 -v
 git diff --check
 ```
 
-- 最后Go全量root **1.145s**、协议/dev-debug cached；此前实际协议 **1.255s**。build/vet/diff退出0。最后race root **4.777s**、协议/dev-debug cached；此前实际协议race **4.242s**，全部通过。
-- Swift **52 XCTest、0 failures**，最终测试 **0.134s/wall0.137s**；bridge typecheck退出0。随后仅Go同步回执安全检查和文档更改，没有无理由重复Swift。
-- 最后隔离1.37.4：PBKDF2 **3.30s**、Argon2id **0.28s**、TOTP **0.61s**；总 **4.20s**，package **4.319s**，全通过。真实产品创建组织/默认集合解密、GET/PUT组织资料、最后owner退出拒绝、member restore fixture后产品正常退出、owner密码删除。原组织cipher/RSA/member多集合/直接用户优先group等回归继续通过。
-- **真实协议fixture的isolate回调是明确标注的no-op**，只用于独立HTTP互操作；Swift持久隔离另用MemoryKeys测试。不能声称已运行真实安装环境下Go→Swift→Keychain→系统扩展完整端到端。没有SMTP/生产邮件、官方CLI组织互操作、真实窗口视觉/Touch ID/真实Keychain/系统AutoFill安装验证，CLI输出仍明确not requested。
-- Go单测：随机org key/RSA/默认集合加密、owner和member权限、正确方法/DTO、主密码hash、无隔离回调/磁盘失败零请求、checkpoint失败零请求与成功可继续、最后owner拒绝不重试、预取消零请求、发送后cancel/Close结果未知、隔离后无文档/keys/集合/重复退出请求。
-- Swift新增：隔离后同/独立store重新打开、模拟扩展读取过滤、个人和其他组织保留、session checkpoint轮换保留、普通sync旧授权不能恢复、scope/revision/错误key拒绝、旧lease失效、锁定后离线解锁继续隔离、显式恢复验证accepted/wrong-user/member-account混淆拒绝与正确恢复。既有候选身份/index测试继续通过。没有进程kill/断电的真实故障注入；原子文件写和重开测试是该边界的证据，不能夸大。
-- Headless：创建/保存入口、成员仅退出确认取消、编辑器互斥、锁定清表单、持久隔离回执保留个人/session、旧epoch迟到回调不能复活、恢复入口必须显式操作、旧revision/错误恢复回执拒绝、恢复一个组织不得移除其他组织隔离。
-- 本轮中间失败均修复：Swift publication默认不能返回vault给普通lease；密码包装轮换需旧key授权、损坏wrapper测试先logout；Go持久化回调原始错误应保留而非假定ErrCheckpoint；发现管理guard误把合法refresh的item epoch变化当失效，改为current session+revision，并增加成功checkpoint测试。最终以上命令全通过。
+- 最后Go全量root **1.257s**、协议 **1.643s**、dev-debug cached；build/vet/diff退出0。最终race root **5.284s**、协议 **4.963s**、dev-debug cached。
+- Swift **52测试、0 failures，0.166s/wall0.170s**；bridge typecheck退出0。本轮Swift未改，因集合新写路径复用持久隔离而重跑。日志 `$TMPDIR/collections-swift-tests.log` 是临时日志。
+- 最后隔离1.37.4：PBKDF2 **3.36s**、Argon2id **0.20s**、TOTP **0.54s**，总 **4.10s** / package **4.221s**。实际owner和全组织经理CRUD、集合级经理details/mini目录/更名、禁止创建、普通成员禁止管理；产品访问配置直接成员readOnly/hidePasswords覆盖group、取消直接分配后group回退，连同多集合有效权限和AutoFill投影回归全部通过。
+- 单元：opaque大整数/未知条目保持、旧详情冲突、目录账号/成员混淆、clone隔离、manage不一致拒绝、revision/预取消、refresh checkpoint失败零请求、持久隔离失败零HTTP、删除dispatch后取消/Close结果未知且不重试。headless：角色入口、姓名/邮箱业务控件、权限联动、危险确认、锁定清理；既有持久隔离/旧lease/候选/显式恢复测试继续通过。
+- **真实HTTP fixture的isolate是明确no-op**，仅验证协议；持久存储另由Swift MemoryKeys测试。未运行真实Go→Swift→Keychain→系统扩展全链路、真实窗口/Touch ID/安装、官方CLI本轮组织互操作、SMTP邮件接受、公钥用户现场核验。不能把headless和替身说成这些已验证。
+- 中途仅一次编译失败（新增UI权限标签helper漏定义），补齐后全部通过；没有未解决失败。
 
-## 自有资源已清理
+## 自有资源清理完成
 
-- 容器名 `mygo-card2-01a11529-management`，label `mygo-test-owner=01a11529`。
-- 完整ID `270d356bd1b51606770d61dd3e00ab5aa1ad10a057fddc35b12a71613b57cffa`。
-- 镜像 `vaultwarden/server:1.37.4`，ID `sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216`，arm64；exec输出Vaultwarden1.37.4/Web-Vault2026.7.0。协议按提供的1.37.4固定commit源码核验，未以Web-Vault版本替代协议版本。
-- 仅loopback `127.0.0.1:32785`；bind `/tmp/pi/01a11529-bc1e-70d8-87c3-77ed8787ae1a/vw-organization-management-data`→`/data`。ORG_GROUPS_ENABLED与测试ratelimit开启。账号均随机example.invalid，无SMTP。
-- 清理前完整ID重新inspect确认image/label/mount，之后 `docker rm -fv <完整ID>` 成功；只删除上述scratch数据目录，`test ! -e "$TMPDIR/vw-organization-management-data"`通过，精确name filter的docker ps无输出。没有清理其他容器、镜像或用户资源。
+- 容器 `mygo-card2-01a1154b-collections`，label `mygo-test-owner=01a1154b`；完整ID `a42374abafb9030c9f4a4d6b995ac9e454f67cfc3d2c57eb74ede47f764c2e21`。
+- 镜像 `vaultwarden/server:1.37.4` arm64，ID `sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216`；inspect revision `7c188967e7a467b19b2757bc3326f9cf3ccae327`。
+- 仅loopback `127.0.0.1:32786`；bind `/tmp/pi/01a1154b-10a3-72f2-b1a6-2690b4796eff/vw-collections-data`→`/data`。随机example.invalid账号，无SMTP。
+- 清理前重新inspect核对完整ID/name/image/label/mount/port；`docker rm -fv <完整ID>`成功，仅删上述scratch数据目录；`test ! -e`通过，精确name filter的docker ps无输出。未删其他容器/镜像/用户资源。
 
-## 下一轮继续同一卡，不重做基线
+## 下一进程直接继续，不重复调查旧模块
 
-优先 **集合CRUD及users/groups访问配置；成员invite/accept/可信公钥确认/reinvite/角色/revoke/restore/移除；groups/policies产品与真实有效授权；legacy无item-key跨key共享**。本轮生命周期、隔离和恢复已建立，不重复fixture基础。创建的组织缺可选RSA恢复key对/OTP替代验证仍需后续账号恢复模块补齐。
+首先看git log/status、本文与coverage相关行即可。下一步按协调者要求：**成员invite/accept/可信公钥确认/reinvite/角色/revoke/restore/remove原生闭环，然后groups/policies、legacy无item-key共享及整卡余项**。成员/群组生命周期仍未实现，集合bulk-access/批量删除也缺；其他完整范围继续见coverage/原卡，未缩减。
 
-- 新Go接口 `SaveOrganization/OrganizationProfile/LeaveOrganization/DeleteOrganization/IsolatedOrganizations`；危险接口额外`isolate func(SessionCheckpoint) error`是强制write-ahead边界，不得去掉/给产品传no-op。
-- 新原生 `organizationEditor` 与 `adoptOrganizationSnapshot`，与session checkpoint同revision协作但允许经过验证的隔离/恢复新snapshot ID；不要复用只允许同snapshot ID的`adoptSessionCheckpoint`处理组织隔离receipt。
-- Swift新增bridge操作 `quarantineOrganization` 和 `restoreOrganizationAccess`。新管理端点若会撤销访问，复用持久隔离设计；不得只等成功UI回调或只清内存。主应用sync必须消费Swift规范化vault。
-- 固定源码缓存继续 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`；tag对象54a40806c990da2def7acd5a3152edc530c59b79，commit7c188967e7a467b19b2757bc3326f9cf3ccae327，归档SHA256d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7。
-- `organizations.rs:466` FullCollectionData `{name,groups,users,externalId}`，users ID是membership，不是global user。`:962/989`邀请，`:1239`accept token，`:1352`confirm包装目标user公钥；`:1475/1483`角色/集合/groups；`:2195/2288/2300`revoke/restore；`:2451/2507/2540`group DTO/create/update；精确读取注册routes和headers授权，不猜语义。
-- 成员确认不能照搬fixture静默发key，需验证目标global user public key与member映射，并明确可信指纹/用户确认。已有org权限对特殊管理角色新增/共享目的集合仍保守，后续按服务端有效授权补齐，不能永久拒绝真实有权用户。
-- legacy共享需要全部字段重加密、附件key包装、FIDO2和unknown完整性；不能共享user key。独立item-key opaque共享已有，保留。未知不可安全转换请求前拒绝并明确缺口。
+固定上游源码仍在 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`（1.37.4 commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，完整tag/归档hash见coverage）。定向入口：
 
-其余原卡未完范围全部保留：完整逐注册路由矩阵；组织状态/批量/复制/import-export/冲突安全；完整策略/目录Public API/events/recovery；附件二阶段/MAC/外部URL；Send；注册/profile/keys/主密码/邮箱/KDF/user-key轮换非事务恢复/账号删除清库/stamp/MFA providers/SSO/WebAuthn/devices/auth requests/domains/emergency；SignalR MessagePack；大库桥/query/multipart/binary/Retry-After；个人双改数组逐行冲突UI和reprompt批量/导出。均是客户端待实现，不冒充上游限制。
+- `src/api/core/organizations.rs:962/989`邀请；`:1239`接受token；`:1352`确认包装key；`:1433`mini-details；`:1475/1483`角色/集合/groups；`:2195/2288/2300`revoke/restore；`:2451/2507/2540`group DTO/create/update。
+- `src/db/models/organization.rs:438–535`profile（manager permissions；没有accessAll）；`:536–710`完整成员与mini详情（memberID/globalUserID）。
+- `src/auth.rs:886–1006`ManagerHeaders/Loose；集合明细 `organizations.rs:744–795` 返回真正直接users，列表access-details会额外混入manage-all成员，不可用列表替代原始详情进行完整PUT。
+- 确认成员时必须重新验证组织member与global user public-key映射，UI明确可信校验确认。可核对完整DER/SPKI公钥；若实现词组指纹，先读固定官方 clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的实际实现，**未在本轮定位/实现指纹算法，不得自创哈希冒充官方词组**。集成fixture的静默RSA发key不可照搬到产品。
+- 新增管理请求继续session guard/checkpoint；当前账户可能失权的写入复用强制isolate与明确恢复，不能只等成功回调撤权。最后owner、角色边界、多个成员部分成功必须真实处理。独立item-key共享保持已有opaque支持，legacy重加密不得把user key共享给组织。
 
-本轮不自审、不Review、不合并。继续同一卡完整目标。
+本轮不自审、不Review、不合并；提交后保持干净，续启同卡。
