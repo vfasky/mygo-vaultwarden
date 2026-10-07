@@ -5,6 +5,7 @@ import CryptoKit
 struct SnapshotScope: Codable, Equatable {
     let server: String
     let account: String
+    // Reserved legacy scope: real Vaultwarden publications must never use it.
     static let demo = SnapshotScope(server: "https://demo.invalid", account: "public-demo-account")
     var valid: Bool {
         guard !account.isEmpty, account.utf8.count <= 256, let url = URLComponents(string: server), let host = url.host,
@@ -22,14 +23,57 @@ struct SnapshotHeader: Codable, Equatable {
     let count: Int
 }
 
+struct PasswordUnlockKDF: Codable, Equatable {
+    let kdf: Int
+    let kdfIterations: Int
+    let kdfMemory: Int
+    let kdfParallelism: Int
+    let salt: String?
+
+    var valid: Bool {
+        switch kdf {
+        case 0: return (5000...2000000).contains(kdfIterations)
+        case 1: return (2...10).contains(kdfIterations) && (16...256).contains(kdfMemory) && (1...16).contains(kdfParallelism)
+        default: return false
+        }
+    }
+}
+
+struct PasswordUnlockConfig: Codable, Equatable {
+    let email: String
+    let kdf: PasswordUnlockKDF
+    var valid: Bool {
+        !email.isEmpty && email.utf8.count <= 1024 && kdf.valid &&
+        (kdf.salt == nil || kdf.salt == "" || kdf.salt == email)
+    }
+}
+
+// Transient bridge input; only the authenticated envelope is persisted.
+struct PasswordUnlockMaterial: Decodable {
+    let config: PasswordUnlockConfig
+    var key: Data
+}
+
+struct PasswordWrappedSnapshotKey: Codable {
+    let config: PasswordUnlockConfig
+    let sealed: Data
+}
+
+private struct PasswordUnlockAAD: Encodable {
+    let header: SnapshotHeader
+    let config: PasswordUnlockConfig
+}
+
 struct EncryptedSnapshot: Codable {
     let header: SnapshotHeader
     let sealed: Data
+    var passwordUnlock: PasswordWrappedSnapshotKey? = nil
 }
 
 struct SnapshotPayload: Codable {
     let scope: SnapshotScope
-    let credentials: [DemoCredential]
+    let credentials: [VaultCredential]
+    var session: Data? = nil
 }
 
 struct SnapshotState: Codable {
@@ -54,6 +98,9 @@ struct SnapshotState: Codable {
                   !retiredKeys.contains(snapshot.header.keyID),
                   snapshot.header.scope.valid,
                   snapshot.header.count >= 0, snapshot.header.count <= 10000 else { throw SnapshotError.corrupt }
+            if let wrapper = snapshot.passwordUnlock {
+                guard wrapper.config.valid, wrapper.sealed.count == 60 else { throw SnapshotError.corrupt }
+            }
         }
         guard retiredKeys.allSatisfy({ UUID(uuidString: $0) != nil }) else { throw SnapshotError.corrupt }
     }
@@ -63,12 +110,14 @@ struct SnapshotLease {
     let revision: String
     let header: SnapshotHeader
     let expiresAt: TimeInterval
-    let credentials: [DemoCredential]
+    let credentials: [VaultCredential]
+    // Only authenticated main-app unlocks opt in; AutoFill leases omit it.
+    var session: Data? = nil
 }
 
 enum SnapshotError: Error, Equatable {
     case unavailable, corrupt, stale, expired, wrongScope, busy, invalidInput
-    case keychain(Int32), authenticationRequired, cancelled, configuration
+    case keychain(Int32), authenticationRequired, cancelled, configuration, invalidPassword, passwordUnlockUnavailable
 
     var code: String {
         switch self {
@@ -83,11 +132,13 @@ enum SnapshotError: Error, Equatable {
         case .authenticationRequired: return "authentication_required"
         case .cancelled: return "authentication_cancelled"
         case .configuration: return "configuration_error"
+        case .invalidPassword: return "invalid_password"
+        case .passwordUnlockUnavailable: return "password_unlock_unavailable"
         }
     }
     var message: String {
         switch self {
-        case .unavailable: return "没有可用快照，请先在主应用发布演示凭据。"
+        case .unavailable: return "没有可用快照，请先在主应用登录并同步密码库。"
         case .corrupt: return "快照损坏或格式不受支持，已拒绝解密。"
         case .stale: return "数据已被锁定、更新或撤销，请刷新后重试。"
         case .expired: return "认证已过期，请重新认证。"
@@ -98,6 +149,8 @@ enum SnapshotError: Error, Equatable {
         case .authenticationRequired: return "需要通过 Touch ID 或系统允许的设备认证读取密钥。"
         case .cancelled: return "系统认证已取消，没有读取凭据。"
         case .configuration: return "共享容器或钥匙串权限未配置，请使用完整签名版本。"
+        case .invalidPassword: return "主密码不正确，请重试。"
+        case .passwordUnlockUnavailable: return "请重新登录一次，以启用主密码解锁；也可以使用 Touch ID 解锁。"
         }
     }
 }
@@ -116,7 +169,7 @@ func snapshotDecode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
     return try decoder.decode(type, from: data)
 }
 
-func validateCredentials(_ credentials: [DemoCredential]) throws {
+func validateCredentials(_ credentials: [VaultCredential]) throws {
     guard credentials.count <= 10000, Set(credentials.map(\.id)).count == credentials.count,
           credentials.allSatisfy({
               !$0.id.isEmpty && $0.id.utf8.count <= 256 && !$0.id.contains(":") &&
@@ -125,19 +178,59 @@ func validateCredentials(_ credentials: [DemoCredential]) throws {
           }) else { throw SnapshotError.invalidInput }
 }
 
-func sealSnapshot(credentials: [DemoCredential], scope: SnapshotScope, keyID: String, key: Data) throws -> EncryptedSnapshot {
+func sealSnapshot(credentials: [VaultCredential], scope: SnapshotScope, keyID: String, key: Data,
+                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil) throws -> EncryptedSnapshot {
     try validateCredentials(credentials)
+    try validateSessionData(session)
     guard key.count == 32 else { throw SnapshotError.corrupt }
     // Round the timestamp before using the header as authenticated data.
     let now = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970))
     let header = SnapshotHeader(format: 1, id: UUID().uuidString, keyID: keyID, scope: scope, createdAt: now, count: credentials.count)
-    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials))
+    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session))
     let box = try AES.GCM.seal(plaintext, using: SymmetricKey(data: key), authenticating: snapshotJSON(header))
     guard let combined = box.combined else { throw SnapshotError.corrupt }
-    return EncryptedSnapshot(header: header, sealed: combined)
+    var snapshot = EncryptedSnapshot(header: header, sealed: combined)
+    if let material = passwordUnlock {
+        guard material.config.valid, material.key.count == 32 else { throw SnapshotError.invalidInput }
+        let aad = try snapshotJSON(PasswordUnlockAAD(header: header, config: material.config))
+        let wrapped = try AES.GCM.seal(key, using: SymmetricKey(data: material.key), authenticating: aad)
+        guard let sealed = wrapped.combined else { throw SnapshotError.corrupt }
+        snapshot.passwordUnlock = PasswordWrappedSnapshotKey(config: material.config, sealed: sealed)
+    }
+    return snapshot
 }
 
-func openSnapshot(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope) throws -> [DemoCredential] {
+func unwrapSnapshotKey(_ snapshot: EncryptedSnapshot, unlockKey: Data) throws -> Data {
+    guard let wrapper = snapshot.passwordUnlock else { throw SnapshotError.passwordUnlockUnavailable }
+    guard unlockKey.count == 32, wrapper.config.valid else { throw SnapshotError.invalidInput }
+    do {
+        let aad = try snapshotJSON(PasswordUnlockAAD(header: snapshot.header, config: wrapper.config))
+        let box = try AES.GCM.SealedBox(combined: wrapper.sealed)
+        return try AES.GCM.open(box, using: SymmetricKey(data: unlockKey), authenticating: aad)
+    } catch { throw SnapshotError.invalidPassword }
+}
+
+func validateSessionData(_ session: Data?) throws {
+    if let session {
+        guard !session.isEmpty, session.count <= 64 * 1024 else { throw SnapshotError.invalidInput }
+    }
+}
+
+func replacingSnapshotSession(_ snapshot: EncryptedSnapshot, key: Data, session: Data) throws -> EncryptedSnapshot {
+    try validateSessionData(session)
+    var payload = try openSnapshotPayload(snapshot, key: key, scope: snapshot.header.scope)
+    payload.session = session
+    let box = try AES.GCM.seal(snapshotJSON(payload), using: SymmetricKey(data: key), authenticating: snapshotJSON(snapshot.header))
+    guard let combined = box.combined else { throw SnapshotError.corrupt }
+    // Retain candidate identity, timestamp and password wrapper; use a fresh nonce.
+    return EncryptedSnapshot(header: snapshot.header, sealed: combined, passwordUnlock: snapshot.passwordUnlock)
+}
+
+func openSnapshot(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope) throws -> [VaultCredential] {
+    try openSnapshotPayload(snapshot, key: key, scope: scope).credentials
+}
+
+func openSnapshotPayload(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope) throws -> SnapshotPayload {
     guard snapshot.header.scope == scope else { throw SnapshotError.wrongScope }
     guard key.count == 32 else { throw SnapshotError.corrupt }
     do {
@@ -146,6 +239,7 @@ func openSnapshot(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope
         let payload = try snapshotDecode(SnapshotPayload.self, from: data)
         guard payload.scope == scope, payload.credentials.count == snapshot.header.count else { throw SnapshotError.corrupt }
         try validateCredentials(payload.credentials)
-        return payload.credentials
+        try validateSessionData(payload.session)
+        return payload
     } catch { throw SnapshotError.corrupt }
 }

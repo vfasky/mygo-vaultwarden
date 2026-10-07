@@ -2,14 +2,10 @@
 import XCTest
 @testable import CredentialModel
 
-final class DemoCredentialTests: XCTestCase {
-    private func fixture() throws -> DemoCredential {
-        let root = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-        let data = try Data(contentsOf: root.appendingPathComponent("resources/demo-credentials.json"))
-        let credentials = try JSONDecoder().decode([DemoCredential].self, from: data)
-        XCTAssertEqual(credentials.count, 1)
-        return try XCTUnwrap(credentials.first)
+final class VaultCredentialTests: XCTestCase {
+    private func fixture() throws -> VaultCredential {
+        VaultCredential(id: "legacy-entry", title: "Legacy login", username: "test@example.invalid",
+                        password: "test-password", hosts: ["localhost", "127.0.0.1"], url: "http://localhost/")
     }
 
     func testAcceptsOnlyExactLoopbackDomainIdentities() throws {
@@ -32,17 +28,5 @@ final class DemoCredentialTests: XCTestCase {
                     "file://localhost/passwords", "javascript:localhost", "localhost", ""] {
             XCTAssertFalse(credential.matches(serviceIdentifier: url, isURL: true), url)
         }
-    }
-
-    func testFixtureHasStableRecordAndPublicDemoIdentity() throws {
-        let credential = try fixture()
-        XCTAssertEqual(credential.id, "mygo-autofill-demo-v1")
-        XCTAssertTrue(credential.username.hasSuffix(".invalid"))
-        XCTAssertEqual(Set(credential.hosts), ["localhost", "127.0.0.1"])
-        XCTAssertFalse(credential.password.isEmpty)
-    }
-
-    func testMissingBundleFixtureFailsInsteadOfInventingCredentials() {
-        XCTAssertThrowsError(try DemoCredential.load(from: .main))
     }
 }

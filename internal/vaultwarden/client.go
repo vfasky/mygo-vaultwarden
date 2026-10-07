@@ -186,7 +186,13 @@ func (c *Client) Login(ctx context.Context, email string, password []byte, promp
 				clear(key)
 				return nil, ErrEncryption
 			}
-			return &Session{client: c, email: email, key: key, wrapped: token.wrappedKey(), access: token.AccessToken, refresh: token.RefreshToken, expires: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)}, nil
+			unlockKey, err := snapshotUnlockKey(master)
+			if err != nil {
+				clear(key)
+				return nil, err
+			}
+			return &Session{client: c, email: email, key: key, wrapped: token.wrappedKey(), access: token.AccessToken, refresh: token.RefreshToken, expires: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second),
+				passwordUnlock: &PasswordUnlock{Config: PasswordUnlockConfig{Email: email, KDF: kdf}, Key: unlockKey}}, nil
 		}
 		if status != 400 && status != 401 {
 			return nil, ErrNetwork
@@ -205,6 +211,12 @@ func (c *Client) Login(ctx context.Context, email string, password []byte, promp
 			}
 		}
 		if _, exists := challenge.Details["0"]; exists {
+			totp = true
+		}
+		// After a confirmed TOTP challenge, Vaultwarden can report a bad
+		// code with only invalid_grant (without repeating provider metadata).
+		// Keep the same bounded challenge instead of requesting the password again.
+		if !totp && len(challenge.Providers) == 0 && len(challenge.Details) == 0 && form.Get("twoFactorProvider") == "0" {
 			totp = true
 		}
 		if !totp {
@@ -250,8 +262,10 @@ type Session struct {
 	client                                   *Client
 	email, account, wrapped, access, refresh string
 	key                                      []byte
+	passwordUnlock                           *PasswordUnlock
 	expires                                  time.Time
 	closed                                   bool
+	checkpointPending                        bool
 }
 
 func (s *Session) Close() {
@@ -259,6 +273,10 @@ func (s *Session) Close() {
 	defer s.mu.Unlock()
 	clear(s.key)
 	s.key = nil
+	if s.passwordUnlock != nil {
+		clear(s.passwordUnlock.Key)
+		s.passwordUnlock = nil
+	}
 	s.access = ""
 	s.refresh = ""
 	s.closed = true
@@ -289,13 +307,35 @@ func (s *Session) refreshLocked(ctx context.Context) error {
 	return nil
 }
 func (s *Session) Sync(ctx context.Context) (SyncResult, error) {
+	return s.SyncWithCheckpoint(ctx, nil)
+}
+
+func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCheckpoint) error) (SyncResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.closed {
 		return SyncResult{}, ErrExpired
 	}
-	if time.Until(s.expires) < 30*time.Second {
+	// A failed checkpoint must be retried before any further server request.
+	if s.checkpointPending && persist != nil {
+		if err := s.checkpointLocked(persist); err != nil {
+			return SyncResult{}, err
+		}
+		s.checkpointPending = false
+	}
+	refresh := func() error {
 		if err := s.refreshLocked(ctx); err != nil {
+			return err
+		}
+		s.checkpointPending = true
+		if err := s.checkpointLocked(persist); err != nil {
+			return err
+		}
+		s.checkpointPending = false
+		return nil
+	}
+	if time.Until(s.expires) < 30*time.Second {
+		if err := refresh(); err != nil {
 			return SyncResult{}, err
 		}
 	}
@@ -304,7 +344,7 @@ func (s *Session) Sync(ctx context.Context) (SyncResult, error) {
 		return SyncResult{}, err
 	}
 	if status == 401 {
-		if err = s.refreshLocked(ctx); err != nil {
+		if err = refresh(); err != nil {
 			return SyncResult{}, err
 		}
 		status, data, err = s.client.request(ctx, "GET", "/api/sync", "", "", s.access)
@@ -337,5 +377,13 @@ func (s *Session) Sync(ctx context.Context) (SyncResult, error) {
 	}
 	s.account = syncData.Profile.ID
 	result.Scope = Scope{Server: s.client.base.String(), Account: s.account}
+	if s.passwordUnlock != nil {
+		result.PasswordUnlock = &PasswordUnlock{Config: s.passwordUnlock.Config, Key: append([]byte(nil), s.passwordUnlock.Key...)}
+		result.Session, err = s.savedLocked()
+		if err != nil {
+			clear(result.PasswordUnlock.Key)
+			return SyncResult{}, err
+		}
+	}
 	return result, nil
 }

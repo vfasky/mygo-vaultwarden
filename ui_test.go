@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"image/png"
 	"os"
@@ -128,16 +129,35 @@ func TestVaultVisualPreviews(t *testing.T) {
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatal(err)
 	}
-	for _, size := range [][2]int{{1280, 820}, {1060, 700}} {
-		for _, state := range []string{"detail", "settings", "locked", "empty-search"} {
+	for _, size := range [][2]int{{1280, 820}, {1060, 700}, {460, 580}} {
+		for _, state := range []string{"detail", "settings", "login", "verification", "verification-error", "locked", "locked-legacy", "empty-search"} {
+			if size[0] < 1060 && state != "login" && state != "locked" && state != "locked-legacy" && state != "verification" && state != "verification-error" {
+				continue
+			}
 			a := previewApp()
 			a.selectedID = "3"
 			switch state {
 			case "settings":
 				a.showSettings = true
-			case "locked":
-				a.items = nil
-				a.itemsRevision = ""
+			case "login":
+				a = &app{snapshot: &snapshotStatus{Revision: "empty"}, deviceID: "preview",
+					serverURL: "https://vault.example.com", email: "alex@example.com", masterPassword: "fixture-password"}
+			case "verification", "verification-error":
+				a = &app{snapshot: &snapshotStatus{Revision: "empty"}, showLogin: true, epoch: 1, pending: 1,
+					serverURL: "https://vault.example.com", email: "alex@example.com"}
+				challenge := newLoginChallenge(context.Background(), 1)
+				t.Cleanup(challenge.cancel)
+				attempt := 1
+				if state == "verification-error" {
+					attempt = 2
+				}
+				a.presentLoginChallenge(challenge, attempt)
+			case "locked", "locked-legacy":
+				a = passwordLockedApp()
+				if state == "locked-legacy" {
+					a.snapshot.PasswordUnlock = nil
+				}
+				a.status = ""
 			case "empty-search":
 				a.query = "no such item"
 			}

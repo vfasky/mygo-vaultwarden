@@ -101,31 +101,41 @@ func (a *app) unlocked() bool {
 
 func (a *app) view(c *ui.Context) {
 	c.SetTheme(vaultTheme)
-	ui.Column(c).Fill().Padding(18, 20).Gap(18).TextColor(vaultInk).
-		Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
-		a.header(c)
-		ui.Row(c).Grow(1).MinHeight(0).Gap(16).AlignItems(ui.Stretch).Children(func() {
-			a.sidebar(c)
-			items := a.filteredItems()
-			a.reconcileSelection(items)
-			a.credentialList(c, items)
-			ui.Column(c).Key("detail-pane").Grow(1).MinWidth(0).Gap(16).Children(func() {
-				if a.showSettings {
-					a.settings(c)
-				} else if a.selectedRow >= 0 && a.selectedRow < len(items) {
-					a.credentialDetail(c, items[a.selectedRow])
-				} else {
-					a.emptyDetail(c)
-				}
-			})
+	c.Root().Background(ui.Transparent)
+	if a.showLogin || !a.unlocked() {
+		a.authentication(c)
+		return
+	}
+	ui.Row(c).Fill().TextColor(vaultInk).AlignItems(ui.Stretch).Children(func() {
+		a.sidebar(c)
+		ui.Column(c).Grow(1).MinWidth(0).Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
+			a.header(c)
+			ui.Column(c).Grow(1).MinHeight(0).Padding(0, 20, 18, 20).Gap(16).Children(func() { a.body(c) })
 		})
-		ui.Row(c).Gap(8).Height(32).Shrink(0).Children(func() {
-			icon(c, "shield", 15).TextColor(vaultPurple)
-			ui.Text(c, a.status).FontSize(12).TextColor(vaultMuted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(a.status).Role(ui.RoleStatus)
-			if a.pending != 0 {
-				ui.Text(c, "处理中…").FontSize(12).TextColor(vaultPurple)
+	})
+}
+
+func (a *app) body(c *ui.Context) {
+	ui.Row(c).Grow(1).MinHeight(0).Gap(16).AlignItems(ui.Stretch).Children(func() {
+		items := a.filteredItems()
+		a.reconcileSelection(items)
+		a.credentialList(c, items)
+		ui.Column(c).Key("detail-pane").Grow(1).MinWidth(0).Gap(16).Children(func() {
+			if a.showSettings {
+				a.settings(c)
+			} else if a.selectedRow >= 0 && a.selectedRow < len(items) {
+				a.credentialDetail(c, items[a.selectedRow])
+			} else {
+				a.emptyDetail(c)
 			}
 		})
+	})
+	ui.Row(c).Gap(8).Height(32).Shrink(0).Children(func() {
+		icon(c, "shield", 15).TextColor(vaultPurple)
+		ui.Text(c, a.status).FontSize(12).TextColor(vaultMuted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(a.status).Role(ui.RoleStatus)
+		if a.pending != 0 {
+			ui.Text(c, "处理中…").FontSize(12).TextColor(vaultPurple)
+		}
 	})
 }
 
@@ -154,55 +164,88 @@ func iconButton(c *ui.Context, label, symbol string) *ui.Element {
 		Children(func() { icon(c, symbol, 18) })
 }
 
+func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Element {
+	var b *ui.Element
+	if primary {
+		b = ui.PrimaryButton(c, "")
+	} else {
+		b = ui.Button(c, "")
+	}
+	b.Label(label).Height(32).Padding(0, 13).Gap(6).Radius(16).Disabled(disabled).Children(func() {
+		icon(c, symbol, 15)
+		ui.Text(c, label).FontSize(13)
+	})
+	if !primary {
+		b.Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55))
+	} else {
+		b.Border(0, ui.Transparent)
+	}
+	return b
+}
+
+// header is a unified toolbar: it sits beside the traffic lights' row and
+// shares the content background, like a native macOS toolbar.
 func (a *app) header(c *ui.Context) {
-	ui.Row(c).Height(48).Shrink(0).Gap(12).Children(func() {
-		ui.Row(c).Size(42, 42).Justify(ui.Center).Background(vaultInk).Radius(15).Children(func() { icon(c, "vault", 25).TextColor(vaultWhite) })
-		ui.Column(c).Gap(2).Children(func() {
-			ui.Text(c, "Vaultwarden").FontSize(19).FontWeight(650)
-			ui.Text(c, "MYGO  /  个人密码库").FontSize(10).LetterSpacing(1).TextColor(vaultMuted)
-		})
+	bar := c.TitleBar()
+	ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).Gap(10).AlignItems(ui.Center).
+		Padding(0, 20, 0, 20).DragWindow().Children(func() {
 		ui.Spacer(c)
 		state := "未解锁"
 		if a.unlocked() {
 			state = "本机已解锁"
 		}
 		if a.session != nil {
-			state = "已连接"
+			state = "可同步"
 		}
 		pill(c, state, vaultLavender, vaultPurple)
-		if action(c, "同步", "sync", false, a.pending != 0 || a.session == nil).Clicked() {
+		if toolbarButton(c, "同步", "sync", false, a.pending != 0).Clicked() {
 			a.syncVault(false)
 		}
-		if action(c, "锁定 / 取消", "lock", true, false).Clicked() {
+		if toolbarButton(c, "锁定", "lock", true, false).Clicked() {
 			a.runStorage("lock")
 		}
-		if iconButton(c, "账号与设置", "settings").Clicked() {
+		if ui.Button(c, "").Label("账号与设置").Tooltip("账号与设置").Size(32, 32).Padding(7).Radius(16).
+			Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55)).
+			Children(func() { icon(c, "settings", 16) }).Clicked() {
 			a.showSettings = !a.showSettings
 		}
 	})
 }
 
 func (a *app) sidebar(c *ui.Context) {
-	ui.Column(c).Width(214).Shrink(0).Padding(14).Gap(10).Background(ui.Hex("#F2F1F7")).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65)).Children(func() {
-		ui.Row(c).Padding(10, 8).Gap(8).Children(func() {
-			ui.Text(c, "密码库").FontSize(22).FontWeight(650)
-			ui.Spacer(c)
-			pill(c, "只读", vaultWhite, vaultMuted)
+	bar := c.TitleBar()
+	ui.Row(c).Shrink(0).AlignItems(ui.Stretch).Children(func() {
+		ui.Column(c).Width(236).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c, bar) })
+		ui.Box(c).Width(1).Background(vaultLine)
+	})
+}
+
+func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
+	{
+		ui.Box(c).Height(max(bar.Height, 52) - 8).Shrink(0).DragWindow()
+		ui.Row(c).Padding(2, 8, 8, 8).Gap(10).AlignItems(ui.Center).Children(func() {
+			if appLogo != nil {
+				ui.Image(c, appLogo).Size(32, 32).Shrink(0)
+			}
+			ui.Column(c).Gap(1).Children(func() {
+				ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
+				ui.Text(c, "个人密码库 · 只读").FontSize(11).TextColor(vaultMuted).SingleLine()
+			})
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).Gap(3).Children(func() {
+			ui.Column(c).Gap(2).Children(func() {
 				sectionLabel(c, "所有密码库")
 				if navItem(c, "我的密码库", "user", "", false, false).Clicked() {
 					a.category, a.query, a.showSettings = "all", "", false
 				}
-				ui.Box(c).Height(5)
+				ui.Box(c).Height(10)
 				sectionLabel(c, "项目")
 				for _, category := range vaultCategories {
-					count := "—"
+					count := ""
 					if category.supported && a.unlocked() {
 						count = fmt.Sprint(len(a.items))
 					}
-					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id, false)
+					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
 					if !category.supported {
 						b.Tooltip("当前只读版本尚未同步此分类")
 					}
@@ -211,25 +254,12 @@ func (a *app) sidebar(c *ui.Context) {
 						a.listState.ScrollTo(0, ui.Start)
 					}
 				}
-				ui.Box(c).Height(5)
-				sectionLabel(c, "文件夹")
-				navItem(c, "文件夹未同步", "folder", "", false, true)
-				ui.Box(c).Height(5)
-				navItem(c, "归档", "archive", "", false, true).Tooltip("当前版本暂不支持归档")
-				navItem(c, "回收站", "trash", "", false, true).Tooltip("当前版本暂不支持回收站")
 			})
-		})
-		ui.Column(c).Padding(12).Gap(7).Background(vaultLavender).Radius(17).Children(func() {
-			ui.Row(c).Gap(7).Children(func() {
-				icon(c, "shield", 17).TextColor(vaultPurple)
-				ui.Text(c, "本机加密保护").FontSize(12).FontWeight(550)
-			})
-			ui.Text(c, "通过系统认证安全自动填充").FontSize(11).TextColor(vaultPurple)
 		})
 		if navItem(c, "账号与设置", "settings", "", a.showSettings, false).Clicked() {
 			a.showSettings = !a.showSettings
 		}
-	})
+	}
 }
 
 func sectionLabel(c *ui.Context, text string) {
@@ -268,11 +298,18 @@ func (a *app) credentialList(c *ui.Context, items []displayCredential) {
 			ui.Spacer(c)
 			pill(c, fmt.Sprint(len(items)), vaultWhite, vaultMuted)
 		})
-		ui.Row(c).Key("vault-search").Background(vaultWhite).Radius(22).Padding(0, 12).Height(43).Gap(8).Children(func() {
+		field := ui.Row(c).Key("vault-search").Background(vaultWhite).Radius(22).Padding(0, 12).Height(43).Gap(8)
+		field.Children(func() {
 			icon(c, "search", 18).TextColor(vaultMuted)
-			search := ui.TextInput(c, &a.query).Label("搜索密码库").Placeholder("搜索密码库").Grow(1).MinWidth(0).Border(0, ui.Transparent).Background(ui.Transparent).Padding(0)
+			search := ui.TextInput(c, &a.query).Label("搜索密码库").Placeholder("搜索密码库").Grow(1).MinWidth(0).Border(0, ui.Transparent).Background(ui.Transparent).Padding(0).FocusRing(false)
 			if c.Shortcut(ui.Cmd, ui.KeyF) {
 				search.Focus()
+			}
+			if search.Focused() {
+				field.DrawOver(func(p *ui.Painter, r ui.Rect) {
+					outer := ui.Rect{X: r.X - 2, Y: r.Y - 2, W: r.W + 4, H: r.H + 4}
+					p.Stroke(outer, vaultPurple, 24, 2)
+				})
 			}
 			if search.Changed() {
 				a.listState.ScrollTo(0, ui.Start)
@@ -454,22 +491,8 @@ func detailField(c *ui.Context, label, value, empty string) {
 func (a *app) emptyDetail(c *ui.Context) {
 	ui.Column(c).Grow(1).Background(ui.RGBA(247, 246, 251, .6)).Radius(26).Padding(34).Justify(ui.Center).AlignItems(ui.Center).Gap(16).Children(func() {
 		ui.Row(c).Size(76, 76).Justify(ui.Center).Radius(26).Background(vaultWhite).Children(func() { icon(c, "vault", 38).TextColor(vaultPurple) })
-		title, subtitle := "选择一个项目", "项目的登录信息和网站会显示在这里。"
-		if !a.unlocked() {
-			title, subtitle = "你的密码，安心收好", "连接你的 Vaultwarden，或通过系统认证解锁本机密码库。"
-		}
-		ui.Text(c, title).FontSize(23).FontWeight(600).TextAlign(ui.Center)
-		ui.Text(c, subtitle).FontSize(13).LineHeight(1.6).TextColor(vaultMuted).TextAlign(ui.Center)
-		if !a.unlocked() {
-			if action(c, "登录密码库", "user", true, a.pending != 0).Clicked() {
-				a.showSettings = true
-			}
-			if a.snapshot != nil && a.snapshot.Available {
-				if action(c, "离线解锁", "lock", false, a.pending != 0).Clicked() {
-					a.runStorage("list")
-				}
-			}
-		}
+		ui.Text(c, "选择一个项目").FontSize(23).FontWeight(600).TextAlign(ui.Center)
+		ui.Text(c, "项目的登录信息和网站会显示在这里。").FontSize(13).LineHeight(1.6).TextColor(vaultMuted).TextAlign(ui.Center)
 	})
 }
 
@@ -491,13 +514,12 @@ func (a *app) settings(c *ui.Context) {
 			})
 			detailCard(c, "连接密码库", func() {
 				ui.Column(c).Padding(16).Gap(13).Children(func() {
-					ui.Field(c, "Vaultwarden 服务器", func() {
-						ui.TextInput(c, &a.serverURL).Placeholder("https://vault.example.com").Disabled(a.pending != 0)
-					})
-					ui.Field(c, "邮箱", func() { ui.TextInput(c, &a.email).Placeholder("you@example.com").Disabled(a.pending != 0) })
-					ui.Text(c, "主密码将在系统安全输入框中输入。登录会切换本机账号并替换离线快照。").FontSize(11).LineHeight(1.5).TextColor(vaultMuted)
-					if action(c, "登录并同步", "sync", true, !ready || a.deviceID == "").Clicked() {
-						a.syncVault(true)
+					ui.Text(c, a.connectedServer()).FontSize(14).MaxLines(2)
+					ui.Text(c, "登录凭据在本地加密保存，解锁后可同步；也可连接其他服务器与账号。").FontSize(12).LineHeight(1.5).TextColor(vaultMuted)
+					if action(c, "登录服务器", "user", true, a.pending != 0).Clicked() {
+						a.resetLoginForm()
+						a.showLogin = true
+						a.status = ""
 					}
 				})
 			})
@@ -542,11 +564,6 @@ func (a *app) settings(c *ui.Context) {
 			ui.Row(c).Gap(8).Wrap().Children(func() {
 				if action(c, "退出账号", "user", false, a.snapshot == nil).Clicked() {
 					a.runStorage("logout")
-				}
-				if strings.HasPrefix(a.serverURL, "http://127.0.0.1") || strings.HasPrefix(a.serverURL, "http://localhost") {
-					if action(c, "本机测试页", "external", false, false).Clicked() {
-						a.openDemo()
-					}
 				}
 			})
 			ui.Text(c, "MyGo Vaultwarden · macOS 原生\n当前版本支持个人登录条目的只读同步。").FontSize(11).TextColor(vaultMuted).LineHeight(1.6)

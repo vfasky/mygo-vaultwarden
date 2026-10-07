@@ -103,7 +103,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         message = reason
         render()
     }
-    private func matches(_ credential: DemoCredential) -> Bool {
+    private func matches(_ credential: VaultCredential) -> Bool {
         switch request {
         case .configuration: return false
         case .list(let services):
