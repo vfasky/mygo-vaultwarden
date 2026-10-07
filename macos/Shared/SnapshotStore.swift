@@ -29,9 +29,10 @@ final class SnapshotStore {
     // Journal key IDs before creating them. Crashes cannot leave untracked secrets.
     // A new AES key is used for every replacement.
     func publish(_ credentials: [VaultCredential], scope: SnapshotScope, expected: String,
-                 passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil) throws -> SnapshotLease {
+                 passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil) throws -> SnapshotLease {
         try validateCredentials(credentials)
         try validateSessionData(session)
+        try vault?.validate(scope: scope)
         if session != nil && passwordUnlock == nil { throw SnapshotError.invalidInput }
         guard scope.valid else { throw SnapshotError.wrongScope }
         if let material = passwordUnlock {
@@ -55,7 +56,7 @@ final class SnapshotStore {
             try files.write(journal)
             do {
                 try keys.create(id: keyID, key: key)
-                let snapshot = try sealSnapshot(credentials: credentials, scope: scope, keyID: keyID, key: key, passwordUnlock: passwordUnlock, session: session)
+                let snapshot = try sealSnapshot(credentials: credentials, scope: scope, keyID: keyID, key: key, passwordUnlock: passwordUnlock, session: session, vault: vault)
                 var next = journal
                 next.snapshot = snapshot
                 next.signedOut = false
@@ -82,7 +83,8 @@ final class SnapshotStore {
         defer { key.resetBytes(in: 0..<key.count) }
         let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
         let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
-                                  expiresAt: clock() + 60, credentials: payload.credentials, session: includeSession ? payload.session : nil)
+                                  expiresAt: clock() + 60, credentials: payload.credentials, session: includeSession ? payload.session : nil,
+                                  vault: includeSession ? payload.vault : nil)
         try withCurrentLease(lease) {}
         return lease
     }
@@ -98,7 +100,7 @@ final class SnapshotStore {
         defer { key.resetBytes(in: 0..<key.count) }
         let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
         let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
-                                  expiresAt: clock() + 60, credentials: payload.credentials, session: payload.session)
+                                  expiresAt: clock() + 60, credentials: payload.credentials, session: payload.session, vault: payload.vault)
         try withCurrentLease(lease) {}
         return lease
     }

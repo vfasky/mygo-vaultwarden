@@ -30,6 +30,7 @@ type storageRequest struct {
 	PasswordUnlock   *vaultwarden.PasswordUnlock `json:"passwordUnlock,omitempty"`
 	UnlockKey        []byte                      `json:"unlockKey,omitempty"`
 	Session          []byte                      `json:"session,omitempty"`
+	Vault            *vaultwarden.VaultData      `json:"vault,omitempty"`
 }
 
 // A zero-result sync is an explicit replacement, never an absent field.
@@ -51,17 +52,23 @@ type displayCredential struct {
 	Title    string `json:"title"`
 	Username string `json:"username"`
 	URL      string `json:"url"`
+	Type     int    `json:"type,omitempty"`
+	Favorite bool   `json:"favorite,omitempty"`
+	Archived bool   `json:"archived,omitempty"`
+	Deleted  bool   `json:"deleted,omitempty"`
+	Editable bool   `json:"editable,omitempty"`
 }
 
 type storageReply struct {
-	OK        bool                `json:"ok"`
-	Code      string              `json:"code"`
-	Message   string              `json:"message"`
-	State     *snapshotStatus     `json:"state,omitempty"`
-	Items     []displayCredential `json:"items,omitempty"`
-	Truncated bool                `json:"truncated,omitempty"`
-	DeviceID  string              `json:"deviceID,omitempty"`
-	Session   []byte              `json:"session,omitempty"`
+	OK        bool                   `json:"ok"`
+	Code      string                 `json:"code"`
+	Message   string                 `json:"message"`
+	State     *snapshotStatus        `json:"state,omitempty"`
+	Items     []displayCredential    `json:"items,omitempty"`
+	Truncated bool                   `json:"truncated,omitempty"`
+	DeviceID  string                 `json:"deviceID,omitempty"`
+	Session   []byte                 `json:"session,omitempty"`
+	Vault     *vaultwarden.VaultData `json:"vault,omitempty"`
 }
 
 func callStorage(request storageRequest) storageReply {

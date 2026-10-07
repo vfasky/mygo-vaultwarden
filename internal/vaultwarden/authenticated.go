@@ -27,6 +27,15 @@ func statusError(status int) error {
 	}
 }
 
+// A successful but unrecognized status, or server failure, cannot prove that a
+// mutation was rolled back. Never offer it as an ordinary retryable failure.
+func mutationStatusError(status int) error {
+	if (status >= 200 && status < 300) || status >= 500 {
+		return &MutationUncertainError{Cause: statusError(status)}
+	}
+	return statusError(status)
+}
+
 // beginOperationLocked gives Close a way to cancel the network operation before
 // waiting for the session mutex. The caller owns mu for the operation's lifetime.
 func (s *Session) beginOperationLocked(ctx context.Context) (context.Context, func(), error) {

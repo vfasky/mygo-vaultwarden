@@ -19,6 +19,8 @@ type app struct {
 	serverURL, email, query, status, deviceID string
 	snapshot                                  *snapshotStatus
 	items                                     []displayCredential
+	vault                                     *vaultwarden.VaultData
+	editor                                    *cipherEditor
 	itemsRevision                             string
 	pending                                   int
 	epoch                                     uint64
@@ -106,6 +108,9 @@ func (a *app) completeStorage(request storageRequest, epoch uint64, reply storag
 	if isUnlock {
 		a.restoreUnlockedSession(reply)
 		a.items = reply.Items
+		if err := a.adoptVault(reply.Vault); err != nil {
+			a.status = err.Error()
+		}
 		a.itemsRevision = reply.State.Revision
 		a.showSettings, a.showLogin = false, false
 		return

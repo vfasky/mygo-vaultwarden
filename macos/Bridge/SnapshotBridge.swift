@@ -10,6 +10,7 @@ private struct BridgeRequest: Decodable {
     var passwordUnlock: PasswordUnlockMaterial?
     var unlockKey: Data?
     var session: Data?
+    var vault: VaultData?
 }
 
 private struct DisplayCredential: Encodable {
@@ -52,6 +53,7 @@ private struct BridgeReply: Encodable {
     var truncated: Bool? = nil
     var deviceID: String? = nil
     var session: Data? = nil
+    var vault: VaultData? = nil
 }
 
 private func execute(_ request: BridgeRequest) -> BridgeReply {
@@ -76,7 +78,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
         case "publishVault":
             guard let credentials = request.credentials, credentials.allSatisfy({ $0.uris != nil }),
                   let scope = request.scope, scope.valid, scope != .demo else { throw SnapshotError.invalidInput }
-            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session)
+            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session, vault: request.vault)
             SnapshotIndex.schedule(store: vault, lease: lease)
             // Do not return a later writer's revision as this session's write authority.
             return try vault.withCurrentLease(lease) {
@@ -104,7 +106,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             let lease = try vault.unlockWithPassword(scope: scope, expected: expected(), unlockKey: unlockKey)
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: "密码库已解锁。", state: BridgeStatus(try vault.files.read()),
-                            items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session)
+                            items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
             }
         case "reindex", "list":
             let context = LAContext()
@@ -115,7 +117,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 guard lease.revision == request.expectedRevision else { throw SnapshotError.stale }
                 return try vault.withCurrentLease(lease) {
                     BridgeReply(ok: true, code: "ok", message: "离线快照已解锁。", state: BridgeStatus(try vault.files.read()),
-                                items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session)
+                                items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
                 }
             }
             if request.operation == "reindex" { SnapshotIndex.schedule(store: vault, lease: lease) }

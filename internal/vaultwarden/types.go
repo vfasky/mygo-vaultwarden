@@ -62,6 +62,8 @@ type Summary struct {
 	OtherTypes      int
 	Reprompt        int
 	Deleted         int
+	Archived        int
+	Restricted      int
 	UnsupportedURIs int
 }
 
@@ -71,4 +73,5 @@ type SyncResult struct {
 	Summary        Summary
 	PasswordUnlock *PasswordUnlock
 	Session        []byte
+	Vault          *VaultData
 }

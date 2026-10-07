@@ -72,8 +72,8 @@ func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 	}
 	clickUI(t, tt, "清除搜索")
 	clickUI(t, tt, "支付卡")
-	if a.selectedID != "" || !slices.Contains(tt.Texts(), "此分类尚未同步") {
-		t.Fatal("unsupported category showed credentials")
+	if a.selectedID != "" || len(a.filteredItems()) != 0 {
+		t.Fatal("empty card category showed login credentials")
 	}
 	clickUI(t, tt, "登录")
 	if a.selectedID == "" {

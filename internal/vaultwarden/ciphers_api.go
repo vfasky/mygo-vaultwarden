@@ -55,10 +55,10 @@ func (s *Session) ChangeCipherState(ctx context.Context, scope Scope, id string,
 		return err
 	}
 	if status != http.StatusOK && status != http.StatusNoContent {
-		return statusError(status)
+		return mutationStatusError(status)
 	}
 	if ctx.Err() != nil {
-		return ErrCancelled
+		return &MutationUncertainError{Cause: ErrCancelled}
 	}
 	return nil
 }
@@ -95,10 +95,10 @@ func (s *Session) SetCipherPersonalMetadata(ctx context.Context, scope Scope, id
 		return err
 	}
 	if status != http.StatusOK && status != http.StatusNoContent {
-		return statusError(status)
+		return mutationStatusError(status)
 	}
 	if ctx.Err() != nil {
-		return ErrCancelled
+		return &MutationUncertainError{Cause: ErrCancelled}
 	}
 	return nil
 }
@@ -129,18 +129,18 @@ func (s *Session) UpdatePersonalCipher(ctx context.Context, scope Scope, documen
 		return CipherDocument{}, err
 	}
 	if status != http.StatusOK {
-		return CipherDocument{}, statusError(status)
+		return CipherDocument{}, mutationStatusError(status)
 	}
 	result := CipherDocument{JSON: data}
 	updated, err := DecryptCipherDocument(result, s.key)
 	if err != nil {
-		return CipherDocument{}, err
+		return CipherDocument{}, &MutationUncertainError{Cause: err}
 	}
 	if updated.ID != fields.ID || updated.OrganizationID != nil {
-		return CipherDocument{}, ErrIdentity
+		return CipherDocument{}, &MutationUncertainError{Cause: ErrIdentity}
 	}
 	if ctx.Err() != nil {
-		return CipherDocument{}, ErrCancelled
+		return CipherDocument{}, &MutationUncertainError{Cause: ErrCancelled}
 	}
 	return result, nil
 }

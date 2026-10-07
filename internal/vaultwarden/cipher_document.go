@@ -3,6 +3,9 @@ package vaultwarden
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"io"
 	"reflect"
@@ -39,16 +42,22 @@ type CipherFields struct {
 	Card            map[string]any
 	Identity        map[string]any
 	SSHKey          map[string]any
+	BankAccount     map[string]any
+	DriversLicense  map[string]any
+	Passport        map[string]any
 	Fields          []map[string]any
 	PasswordHistory []map[string]any
 }
 
-var cipherSections = map[int]string{1: "login", 2: "secureNote", 3: "card", 4: "identity", 5: "sshKey"}
+var cipherSections = map[int]string{1: "login", 2: "secureNote", 3: "card", 4: "identity", 5: "sshKey", 6: "bankAccount", 7: "driversLicense", 8: "passport"}
 var cipherSecrets = map[string][]string{
-	"login":    {"username", "password", "totp"},
-	"card":     {"cardholderName", "brand", "number", "expMonth", "expYear", "code"},
-	"identity": {"title", "firstName", "middleName", "lastName", "address1", "address2", "address3", "city", "state", "postalCode", "country", "company", "email", "phone", "ssn", "username", "passportNumber", "licenseNumber"},
-	"sshKey":   {"privateKey", "publicKey", "keyFingerprint"},
+	"login":          {"username", "password", "totp"},
+	"card":           {"cardholderName", "brand", "number", "expMonth", "expYear", "code"},
+	"identity":       {"title", "firstName", "middleName", "lastName", "address1", "address2", "address3", "city", "state", "postalCode", "country", "company", "email", "phone", "ssn", "username", "passportNumber", "licenseNumber"},
+	"sshKey":         {"privateKey", "publicKey", "keyFingerprint"},
+	"bankAccount":    {"bankName", "nameOnAccount", "accountType", "accountNumber", "routingNumber", "branchNumber", "pin", "swiftCode", "iban", "bankContactPhone"},
+	"driversLicense": {"firstName", "middleName", "lastName", "dateOfBirth", "licenseNumber", "issuingCountry", "issuingState", "issueDate", "expirationDate", "issuingAuthority", "licenseClass"},
+	"passport":       {"surname", "givenName", "dateOfBirth", "sex", "birthPlace", "nationality", "issuingCountry", "passportNumber", "passportType", "nationalIdentificationNumber", "issuingAuthority", "issueDate", "expirationDate"},
 }
 
 func documentObject(document CipherDocument) (map[string]any, error) {
@@ -134,7 +143,7 @@ func transformCipher(object map[string]any, key []byte, encrypt bool) error {
 			}
 		}
 		if section == "login" {
-			if err := transformArray(values, "uris", []string{"uri"}, key, encrypt); err != nil {
+			if err := transformArray(values, "uris", []string{"uri", "uriChecksum"}, key, encrypt); err != nil {
 				return err
 			}
 		}
@@ -174,7 +183,12 @@ func decodeCipherFields(object map[string]any) (CipherFields, error) {
 	}
 	defer clear(data)
 	var fields CipherFields
-	if json.Unmarshal(data, &fields) != nil || cipherSections[fields.Type] == "" || fields.Name == "" || len(fields.Name) > 4096 {
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if decoder.Decode(&fields) != nil || cipherSections[fields.Type] == "" || fields.Name == "" || len(fields.Name) > 4096 {
+		return CipherFields{}, ErrProtocol
+	}
+	if section, ok := object[cipherSections[fields.Type]].(map[string]any); !ok || section == nil {
 		return CipherFields{}, ErrProtocol
 	}
 	return fields, nil
@@ -219,10 +233,7 @@ func EncryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 	if fields.Name == "" || len(fields.Name) > 4096 || fields.Reprompt < 0 || fields.Reprompt > 1 {
 		return CipherDocument{}, ErrValidation
 	}
-	if !reflect.DeepEqual(fields.Fields, original.Fields) || !reflect.DeepEqual(fields.PasswordHistory, original.PasswordHistory) || !sameOptional(fields.ArchivedDate, original.ArchivedDate) || !sameOptional(fields.DeletedDate, original.DeletedDate) {
-		return CipherDocument{}, ErrUnsupportedEdit
-	}
-	if fields.Type == 1 && (!reflect.DeepEqual(fields.Login["uris"], original.Login["uris"]) || !reflect.DeepEqual(fields.Login["password"], original.Login["password"])) {
+	if !reflect.DeepEqual(fields.PasswordHistory, original.PasswordHistory) || !sameOptional(fields.ArchivedDate, original.ArchivedDate) || !sameOptional(fields.DeletedDate, original.DeletedDate) {
 		return CipherDocument{}, ErrUnsupportedEdit
 	}
 	key, err := cipherItemKey(object, ownerKey)
@@ -239,9 +250,16 @@ func EncryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 	if fields.Notes != nil {
 		object["notes"] = *fields.Notes
 	}
+	if !reflect.DeepEqual(fields.Fields, original.Fields) {
+		custom, err := cloneCustomFields(fields.Fields)
+		if err != nil {
+			return CipherDocument{}, err
+		}
+		object["fields"] = custom
+	}
 	object["favorite"], object["reprompt"] = fields.Favorite, fields.Reprompt
 	section := cipherSections[fields.Type]
-	incoming := map[string]map[string]any{"login": fields.Login, "secureNote": fields.SecureNote, "card": fields.Card, "identity": fields.Identity, "sshKey": fields.SSHKey}[section]
+	incoming := map[string]map[string]any{"login": fields.Login, "secureNote": fields.SecureNote, "card": fields.Card, "identity": fields.Identity, "sshKey": fields.SSHKey, "bankAccount": fields.BankAccount, "driversLicense": fields.DriversLicense, "passport": fields.Passport}[section]
 	existing, _ := object[section].(map[string]any)
 	if existing == nil {
 		return CipherDocument{}, ErrProtocol
@@ -256,12 +274,28 @@ func EncryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 		allowed = append(allowed, "type")
 	}
 	for _, name := range allowed {
+		if name == "uris" && reflect.DeepEqual(incoming[name], original.Login[name]) {
+			continue
+		}
 		if value, ok := incoming[name]; ok {
 			existing[name] = value
 		}
 	}
-	// Custom fields and history may carry unknown extension data; changes to
-	// these arrays require a dedicated lossless editor. Preserve them here.
+	if fields.Type == 1 && !reflect.DeepEqual(fields.Login["uris"], original.Login["uris"]) {
+		if err := checksumURIs(existing); err != nil {
+			return CipherDocument{}, err
+		}
+	}
+	if fields.Type == 1 && !reflect.DeepEqual(fields.Login["password"], original.Login["password"]) {
+		now := time.Now().UTC().Format(time.RFC3339Nano)
+		if previous, ok := original.Login["password"].(string); ok && previous != "" {
+			history, _ := object["passwordHistory"].([]any)
+			object["passwordHistory"] = append([]any{map[string]any{"password": previous, "lastUsedDate": now}}, history...)
+		}
+		existing["passwordRevisionDate"] = now
+	}
+	// History changes are generated above from the prior password; unknown
+	// custom-field and history extensions remain under the unchanged item key.
 	object["encryptedFor"] = account
 	object["lastKnownRevisionDate"] = original.RevisionDate
 	if err := transformCipher(object, key, true); err != nil {
@@ -273,6 +307,153 @@ func EncryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 	}
 	return CipherDocument{JSON: encoded}, nil
 }
+
+// NewPersonalCipher creates a fresh item key and only accepts known input fields.
+// Copying an existing cipher (especially passkeys/attachments) is a separate operation.
+func NewPersonalCipher(fields CipherFields, ownerKey []byte, account string) (CipherDocument, error) {
+	section := cipherSections[fields.Type]
+	if section == "" || fields.Name == "" || len(fields.Name) > 4096 || fields.ID != "" || fields.OrganizationID != nil || fields.Reprompt < 0 || fields.Reprompt > 1 || account == "" {
+		return CipherDocument{}, ErrValidation
+	}
+	if fields.Type == 5 {
+		for _, name := range cipherSecrets["sshKey"] {
+			if value, ok := fields.SSHKey[name].(string); !ok || value == "" {
+				return CipherDocument{}, ErrValidation
+			}
+		}
+	}
+	if len(fields.PasswordHistory) != 0 {
+		return CipherDocument{}, ErrUnsupportedEdit
+	}
+	key := make([]byte, 64)
+	if _, err := rand.Read(key); err != nil {
+		return CipherDocument{}, ErrEncryption
+	}
+	defer clear(key)
+	wrapped, err := EncryptString(key, ownerKey)
+	if err != nil {
+		return CipherDocument{}, err
+	}
+	incoming := map[string]map[string]any{"login": fields.Login, "secureNote": fields.SecureNote, "card": fields.Card, "identity": fields.Identity, "sshKey": fields.SSHKey, "bankAccount": fields.BankAccount, "driversLicense": fields.DriversLicense, "passport": fields.Passport}[section]
+	allowed := map[string]bool{}
+	for _, name := range cipherSecrets[section] {
+		allowed[name] = true
+	}
+	if section == "login" {
+		allowed["uris"] = true
+	}
+	if section == "secureNote" {
+		allowed["type"] = true
+	}
+	for name := range incoming {
+		if !allowed[name] {
+			return CipherDocument{}, ErrUnsupportedEdit
+		}
+	}
+	for _, field := range fields.Fields {
+		for name := range field {
+			if name != "name" && name != "value" && name != "type" && name != "linkedId" {
+				return CipherDocument{}, ErrUnsupportedEdit
+			}
+		}
+	}
+	detail := map[string]any{}
+	for _, name := range cipherSecrets[section] {
+		if value, exists := incoming[name]; exists {
+			detail[name] = value
+		}
+	}
+	if section == "login" {
+		if uris, exists := incoming["uris"]; exists {
+			if entries, ok := uris.([]any); ok {
+				for _, raw := range entries {
+					if entry, ok := raw.(map[string]any); ok {
+						for name := range entry {
+							if name != "uri" && name != "match" && name != "uriChecksum" {
+								return CipherDocument{}, ErrUnsupportedEdit
+							}
+						}
+					}
+				}
+			}
+			detail["uris"] = uris
+		}
+		if err := checksumURIs(detail); err != nil {
+			return CipherDocument{}, err
+		}
+	}
+	if section == "secureNote" {
+		detail["type"] = 0
+	}
+	object := map[string]any{"type": fields.Type, "name": fields.Name, "notes": nil, "folderId": fields.FolderID, "favorite": fields.Favorite, "reprompt": fields.Reprompt, "key": wrapped, "encryptedFor": account, section: detail, "fields": nil, "passwordHistory": nil}
+	custom, err := cloneCustomFields(fields.Fields)
+	if err != nil {
+		return CipherDocument{}, err
+	}
+	object["fields"] = custom
+	if fields.Notes != nil {
+		object["notes"] = *fields.Notes
+	}
+	if err := transformCipher(object, key, true); err != nil {
+		return CipherDocument{}, err
+	}
+	data, err := json.Marshal(object)
+	if err != nil {
+		return CipherDocument{}, ErrProtocol
+	}
+	return CipherDocument{JSON: data}, nil
+}
+
+func cloneCustomFields(fields []map[string]any) (any, error) {
+	if fields == nil {
+		return nil, nil
+	}
+	if len(fields) > 10000 {
+		return nil, ErrValidation
+	}
+	data, err := json.Marshal(fields)
+	if err != nil {
+		return nil, ErrValidation
+	}
+	var result []any
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if decoder.Decode(&result) != nil {
+		return nil, ErrValidation
+	}
+	return result, nil
+}
+
+func checksumURIs(login map[string]any) error {
+	if login["uris"] == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(login["uris"])
+	if err != nil {
+		return ErrValidation
+	}
+	var uris []any
+	decoder := json.NewDecoder(bytes.NewReader(encoded))
+	decoder.UseNumber()
+	if decoder.Decode(&uris) != nil || len(uris) > 128 {
+		return ErrValidation
+	}
+	login["uris"] = uris
+	for _, raw := range uris {
+		uri, ok := raw.(map[string]any)
+		if !ok {
+			return ErrValidation
+		}
+		value, ok := uri["uri"].(string)
+		if !ok || len(value) > 8192 {
+			return ErrValidation
+		}
+		hash := sha256.Sum256([]byte(value))
+		uri["uriChecksum"] = base64.StdEncoding.EncodeToString(hash[:])
+	}
+	return nil
+}
+
 func sameOptional(a, b *string) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }

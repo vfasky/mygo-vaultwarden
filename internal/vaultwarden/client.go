@@ -356,6 +356,10 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	}
 	s.account = syncData.Profile.ID
 	result.Scope = Scope{Server: s.client.base.String(), Account: s.account}
+	result.Vault = &VaultData{Version: 1, Scope: result.Scope, Sync: append([]byte(nil), data...)}
+	if _, err := result.Vault.Documents(result.Scope); err != nil {
+		return SyncResult{}, err
+	}
 	if s.passwordUnlock != nil {
 		result.PasswordUnlock = &PasswordUnlock{Config: s.passwordUnlock.Config, Key: append([]byte(nil), s.passwordUnlock.Key...)}
 		result.Session, err = s.savedLocked()

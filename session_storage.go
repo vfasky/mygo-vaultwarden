@@ -29,6 +29,9 @@ func (a *app) adoptSessionCheckpoint(state *snapshotStatus) bool {
 	if a.itemsRevision == a.sessionRevision {
 		a.itemsRevision = state.Revision
 	}
+	if a.editor != nil && a.editor.revision == a.sessionRevision {
+		a.editor.revision = state.Revision
+	}
 	a.snapshot, a.sessionRevision = state, state.Revision
 	return true
 }

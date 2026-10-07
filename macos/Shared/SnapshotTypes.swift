@@ -70,10 +70,31 @@ struct EncryptedSnapshot: Codable {
     var passwordUnlock: PasswordWrappedSnapshotKey? = nil
 }
 
+struct VaultData: Codable, Equatable {
+    let version: Int
+    let scope: SnapshotScope
+    let sync: Data
+
+    func validate(scope expected: SnapshotScope) throws {
+        guard version == 1, scope == expected, !sync.isEmpty, sync.count <= 32 * 1024 * 1024,
+              let object = try JSONSerialization.jsonObject(with: sync) as? [String: Any],
+              let profile = object["profile"] as? [String: Any], profile["id"] as? String == scope.account,
+              let ciphers = object["ciphers"] as? [[String: Any]], ciphers.count <= 100000 else { throw SnapshotError.invalidInput }
+        var ids = Set<String>()
+        for cipher in ciphers {
+            guard let id = cipher["id"] as? String, !id.isEmpty, id.utf8.count <= 128,
+                  id.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 }),
+                  ids.insert(id).inserted else { throw SnapshotError.invalidInput }
+        }
+    }
+}
+
 struct SnapshotPayload: Codable {
     let scope: SnapshotScope
     let credentials: [VaultCredential]
     var session: Data? = nil
+    // Absent on legacy Login-only snapshots; a successful sync migrates them.
+    var vault: VaultData? = nil
 }
 
 struct SnapshotState: Codable {
@@ -113,6 +134,7 @@ struct SnapshotLease {
     let credentials: [VaultCredential]
     // Only authenticated main-app unlocks opt in; AutoFill leases omit it.
     var session: Data? = nil
+    var vault: VaultData? = nil
 }
 
 enum SnapshotError: Error, Equatable {
@@ -179,14 +201,15 @@ func validateCredentials(_ credentials: [VaultCredential]) throws {
 }
 
 func sealSnapshot(credentials: [VaultCredential], scope: SnapshotScope, keyID: String, key: Data,
-                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil) throws -> EncryptedSnapshot {
+                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil) throws -> EncryptedSnapshot {
     try validateCredentials(credentials)
     try validateSessionData(session)
+    try vault?.validate(scope: scope)
     guard key.count == 32 else { throw SnapshotError.corrupt }
     // Round the timestamp before using the header as authenticated data.
     let now = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970))
     let header = SnapshotHeader(format: 1, id: UUID().uuidString, keyID: keyID, scope: scope, createdAt: now, count: credentials.count)
-    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session))
+    let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session, vault: vault))
     let box = try AES.GCM.seal(plaintext, using: SymmetricKey(data: key), authenticating: snapshotJSON(header))
     guard let combined = box.combined else { throw SnapshotError.corrupt }
     var snapshot = EncryptedSnapshot(header: header, sealed: combined)
@@ -240,6 +263,7 @@ func openSnapshotPayload(_ snapshot: EncryptedSnapshot, key: Data, scope: Snapsh
         guard payload.scope == scope, payload.credentials.count == snapshot.header.count else { throw SnapshotError.corrupt }
         try validateCredentials(payload.credentials)
         try validateSessionData(payload.session)
+        try payload.vault?.validate(scope: scope)
         return payload
     } catch { throw SnapshotError.corrupt }
 }

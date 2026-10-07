@@ -41,12 +41,17 @@ type vaultCategory struct {
 
 var vaultCategories = []vaultCategory{
 	{"all", "所有项目", "grid", true},
-	{"favorites", "收藏夹", "star", false},
+	{"favorites", "收藏夹", "star", true},
 	{"login", "登录", "globe", true},
-	{"card", "支付卡", "card", false},
-	{"identity", "身份", "identity", false},
-	{"note", "安全笔记", "note", false},
-	{"ssh", "SSH 密钥", "key", false},
+	{"card", "支付卡", "card", true},
+	{"identity", "身份", "identity", true},
+	{"note", "安全笔记", "note", true},
+	{"ssh", "SSH 密钥", "key", true},
+	{"bank", "银行账户", "card", true},
+	{"license", "驾驶证", "identity", true},
+	{"passport", "护照", "identity", true},
+	{"archive", "归档", "vault", true},
+	{"trash", "回收站", "vault", true},
 }
 
 func (a *app) currentCategory() vaultCategory {
@@ -65,6 +70,19 @@ func (a *app) filteredItems() []displayCredential {
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	items := make([]displayCredential, 0, len(a.items))
 	for _, item := range a.items {
+		if item.Deleted != (a.category == "trash") {
+			continue
+		}
+		if a.category != "trash" && item.Archived != (a.category == "archive") {
+			continue
+		}
+		if a.category == "favorites" && !item.Favorite {
+			continue
+		}
+		kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
+		if kind != 0 && item.Type != kind && !(kind == 1 && item.Type == 0) {
+			continue
+		}
 		if strings.Contains(strings.ToLower(item.Title+" "+item.Username+" "+item.URL), query) {
 			items = append(items, item)
 		}
@@ -121,7 +139,9 @@ func (a *app) body(c *ui.Context) {
 		a.reconcileSelection(items)
 		a.credentialList(c, items)
 		ui.Column(c).Key("detail-pane").Grow(1).MinWidth(0).Gap(16).Children(func() {
-			if a.showSettings {
+			if a.editor != nil {
+				a.cipherEditorView(c)
+			} else if a.showSettings {
 				a.settings(c)
 			} else if a.selectedRow >= 0 && a.selectedRow < len(items) {
 				a.credentialDetail(c, items[a.selectedRow])
@@ -198,6 +218,13 @@ func (a *app) header(c *ui.Context) {
 			state = "可同步"
 		}
 		pill(c, state, vaultLavender, vaultPurple)
+		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil).Clicked() {
+			kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
+			if kind == 0 {
+				kind = 1
+			}
+			a.openCipherEditor("", kind)
+		}
 		if toolbarButton(c, "同步", "sync", false, a.pending != 0).Clicked() {
 			a.syncVault(false)
 		}
@@ -229,7 +256,7 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 			}
 			ui.Column(c).Gap(1).Children(func() {
 				ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
-				ui.Text(c, "个人密码库 · 只读").FontSize(11).TextColor(vaultMuted).SingleLine()
+				ui.Text(c, "个人密码库").FontSize(11).TextColor(vaultMuted).SingleLine()
 			})
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
@@ -247,7 +274,7 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 					}
 					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
 					if !category.supported {
-						b.Tooltip("当前只读版本尚未同步此分类")
+						b.Tooltip("此分类尚未同步")
 					}
 					if b.Clicked() {
 						a.category, a.showSettings = category.id, false
@@ -423,9 +450,15 @@ func (a *app) credentialDetail(c *ui.Context, item displayCredential) {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted)
 				icon(c, "chevron", 12).TextColor(vaultMuted)
-				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted)
+				kind := "登录"
+				if item.Type > 0 && item.Type < len(cipherTypeNames) {
+					kind = cipherTypeNames[item.Type]
+				}
+				ui.Text(c, kind).FontSize(12).TextColor(vaultMuted)
 				ui.Spacer(c)
-				pill(c, "只读", vaultWhite, vaultMuted)
+				if action(c, "查看与编辑", "", false, a.pending != 0 || !item.Editable || a.vault == nil).Clicked() {
+					a.openCipherEditor(item.ID, item.Type)
+				}
 			})
 			ui.Row(c).Gap(16).Children(func() {
 				credentialAvatar(c, item, 60)
@@ -566,7 +599,7 @@ func (a *app) settings(c *ui.Context) {
 					a.runStorage("logout")
 				}
 			})
-			ui.Text(c, "MyGo Vaultwarden · macOS 原生\n当前版本支持个人登录条目的只读同步。").FontSize(11).TextColor(vaultMuted).LineHeight(1.6)
+			ui.Text(c, "MyGo Vaultwarden · macOS 原生\n支持个人八类型项目编辑；组织与更多功能仍在开发。").FontSize(11).TextColor(vaultMuted).LineHeight(1.6)
 		})
 	})
 }

@@ -35,8 +35,8 @@ func cipherDocumentFixture(t *testing.T, kind int) (CipherDocument, []byte) {
 	}
 	return CipherDocument{JSON: data}, key
 }
-func TestCipherDocumentFiveTypesPreserveExtensions(t *testing.T) {
-	for kind := 1; kind <= 5; kind++ {
+func TestCipherDocumentEightTypesPreserveExtensions(t *testing.T) {
+	for kind := 1; kind <= 8; kind++ {
 		t.Run(cipherSections[kind], func(t *testing.T) {
 			doc, key := cipherDocumentFixture(t, kind)
 			fields, err := DecryptCipherDocument(doc, key)
@@ -76,7 +76,7 @@ func TestCipherDocumentFiveTypesPreserveExtensions(t *testing.T) {
 	}
 }
 func TestCipherDocumentRejectsUnsafeChanges(t *testing.T) {
-	for _, scenario := range []string{"identity", "type", "revision", "invalid-revision", "organization", "custom", "password", "uris", "permission", "reprompt", "corrupt"} {
+	for _, scenario := range []string{"identity", "type", "revision", "invalid-revision", "organization", "history", "permission", "reprompt", "corrupt"} {
 		t.Run(scenario, func(t *testing.T) {
 			doc, key := cipherDocumentFixture(t, 1)
 			object, _ := documentObject(doc)
@@ -113,8 +113,8 @@ func TestCipherDocumentRejectsUnsafeChanges(t *testing.T) {
 			case "organization":
 				id := "other"
 				fields.OrganizationID = &id
-			case "custom":
-				fields.Fields = nil
+			case "history":
+				fields.PasswordHistory = nil
 			case "password":
 				fields.Login["password"] = "new"
 			case "uris":

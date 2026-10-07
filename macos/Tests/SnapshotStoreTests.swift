@@ -79,6 +79,42 @@ final class SnapshotStoreTests: XCTestCase {
         try store.unlockWithPassword(scope: .demo, expected: expected ?? store.state().revision, unlockKey: key ?? passwordMaterial.key)
     }
 
+    func testCompleteVaultIsAuthenticatedRetainedAndOmittedFromAutoFill() throws {
+        let raw = Data(#"{"profile":{"id":"public-demo-account","privateKey":"encrypted-private"},"ciphers":[{"id":"archived-1","type":8,"archivedDate":"2026-01-01"}],"folders":[{"id":"folder-1","name":"encrypted-folder"}],"future":{"id":9007199254740993}}"#.utf8)
+        let vault = VaultData(version: 1, scope: .demo, sync: raw)
+        let lease = try store.publish([], scope: .demo, expected: store.state().revision,
+                                      passwordUnlock: passwordMaterial, session: Data("old-session".utf8), vault: vault)
+        XCTAssertNil(lease.vault)
+        XCTAssertNil(try unlock().vault)
+        XCTAssertEqual(try passwordUnlock().vault, vault)
+        let app = try store.unlock(scope: .demo, context: LAContext(), allowUI: true, includeSession: true)
+        XCTAssertEqual(app.vault?.sync, raw)
+        XCTAssertTrue(app.credentials.isEmpty)
+        let state = try store.state()
+        let checkpoint = try store.saveSession(Data("new-session".utf8), scope: .demo, expected: state.revision, unlockKey: passwordMaterial.key)
+        XCTAssertNotEqual(checkpoint.revision, app.revision)
+        XCTAssertEqual(try passwordUnlock().vault, vault)
+        assertError(.stale) { try self.store.withCurrentLease(app) {} }
+        let disk = try Data(contentsOf: directory.appendingPathComponent("snapshot-v1.json"))
+        XCTAssertFalse(String(decoding: disk, as: UTF8.self).contains("encrypted-private"))
+        try store.lock()
+        assertError(.stale) { try self.store.withCurrentLease(app) {} }
+    }
+
+    func testLegacyMigrationAndInvalidCompleteVaultKeepOldSnapshot() throws {
+        try publishPassword()
+        XCTAssertNil(try passwordUnlock().vault)
+        let before = try store.state()
+        let wrong = VaultData(version: 1, scope: .demo, sync: Data(#"{"profile":{"id":"other-account"},"ciphers":[]}"#.utf8))
+        XCTAssertThrowsError(try store.publish([], scope: .demo, expected: before.revision, vault: wrong))
+        XCTAssertEqual(try store.state().revision, before.revision)
+        XCTAssertEqual(try passwordUnlock().credentials, [credential])
+        let empty = VaultData(version: 1, scope: .demo, sync: Data(#"{"profile":{"id":"public-demo-account"},"ciphers":[]}"#.utf8))
+        _ = try store.publish([], scope: .demo, expected: before.revision, passwordUnlock: passwordMaterial, vault: empty)
+        XCTAssertEqual(try passwordUnlock().vault, empty)
+        XCTAssertTrue(try passwordUnlock().credentials.isEmpty)
+    }
+
     func testPasswordUnlockAfterLockAndReopenWithoutKeychain() throws {
         try publishPassword()
         try store.lock()

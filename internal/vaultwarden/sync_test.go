@@ -5,6 +5,7 @@ import "testing"
 
 func TestLastLoginExcludedProducesExplicitEmptyReplacement(t *testing.T) {
 	deleted := "2026-10-07T00:00:00Z"
+	denied := false
 	for _, tc := range []struct {
 		name    string
 		ciphers []encryptedCipher
@@ -12,6 +13,8 @@ func TestLastLoginExcludedProducesExplicitEmptyReplacement(t *testing.T) {
 		{"empty account", []encryptedCipher{}},
 		{"last login deleted", []encryptedCipher{{ID: "last", Type: 1, DeletedDate: &deleted}}},
 		{"last login reprompt", []encryptedCipher{{ID: "last", Type: 1, Reprompt: 1}}},
+		{"last login archived", []encryptedCipher{{ID: "last", Type: 1, ArchivedDate: &deleted}}},
+		{"last login denied", []encryptedCipher{{ID: "last", Type: 1, ViewPassword: &denied}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			result, err := decryptSync(syncReply{Ciphers: tc.ciphers}, nil)

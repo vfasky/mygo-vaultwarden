@@ -19,6 +19,8 @@ type encryptedCipher struct {
 	Type           int     `json:"type"`
 	OrganizationID *string `json:"organizationId"`
 	DeletedDate    *string `json:"deletedDate"`
+	ArchivedDate   *string `json:"archivedDate"`
+	ViewPassword   *bool   `json:"viewPassword"`
 	Reprompt       int     `json:"reprompt"`
 	Name           *string `json:"name"`
 	Key            *string `json:"key"`
@@ -87,6 +89,14 @@ func decryptSync(data syncReply, key []byte) (SyncResult, error) {
 	for _, item := range data.Ciphers {
 		if item.DeletedDate != nil {
 			result.Summary.Deleted++
+			continue
+		}
+		if item.ArchivedDate != nil {
+			result.Summary.Archived++
+			continue
+		}
+		if item.ViewPassword != nil && !*item.ViewPassword {
+			result.Summary.Restricted++
 			continue
 		}
 		if item.OrganizationID != nil && *item.OrganizationID != "" {
