@@ -15,7 +15,7 @@ type folderEditor struct {
 }
 
 func (a *app) openFolderEditor(id string) {
-	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil {
+	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
 	e := &folderEditor{id: id, revision: a.sessionRevision}

@@ -117,7 +117,7 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	return nil
 }
 func (a *app) openCipherEditor(id string, kind int) {
-	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.bulkEditor != nil {
+	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
 	session, ok := a.session.(*vaultwarden.Session)

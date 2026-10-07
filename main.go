@@ -24,6 +24,7 @@ type app struct {
 	folders                                   []vaultwarden.Folder
 	folderEditor                              *folderEditor
 	bulkEditor                                *bulkEditor
+	backupEditor                              *backupEditor
 	itemsRevision                             string
 	pending                                   int
 	epoch                                     uint64

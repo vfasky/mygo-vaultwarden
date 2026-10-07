@@ -77,6 +77,10 @@ func (s *Session) SaveFolder(ctx context.Context, scope Scope, id, name string, 
 	if err = s.requireScopeLocked(scope); err != nil {
 		return Folder{}, err
 	}
+	return s.saveFolderLocked(ctx, id, name, persist)
+}
+
+func (s *Session) saveFolderLocked(ctx context.Context, id, name string, persist func(SessionCheckpoint) error) (Folder, error) {
 	encrypted, err := EncryptString([]byte(name), s.key)
 	if err != nil {
 		return Folder{}, err

@@ -148,6 +148,7 @@ func TestLiveVaultwarden(t *testing.T) {
 				}
 			}
 			if tc.name == "pbkdf2" {
+				testLiveBackups(t, ctx, session, result.Scope, email, password)
 				testLiveFoldersAndBulk(t, ctx, session, result.Scope)
 				for kind := 1; kind <= 8; kind++ {
 					created, err := session.CreatePersonalCipher(ctx, result.Scope, CipherFields{Type: kind, Name: fmt.Sprintf("Writable type %d", kind), Login: map[string]any{"password": "initial fixture password"}, Fields: []map[string]any{{"name": "fixture custom", "value": "initial custom value", "type": 0}}, SSHKey: map[string]any{"privateKey": "fixture private", "publicKey": "fixture public", "keyFingerprint": "fixture fingerprint"}}, nil)

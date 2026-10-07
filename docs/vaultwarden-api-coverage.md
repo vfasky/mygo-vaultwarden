@@ -1,6 +1,6 @@
 # Vaultwarden API 覆盖矩阵
 
-**INCOMPLETE：整卡未完成，未达到验收。** 本轮增加八类型标准个人项目的安全复制闭环；不是完整 Vaultwarden API 产品。协调者已批准阶段提交后继续同一卡，禁止据此启动 Review 或合并。
+**INCOMPLETE：整卡未完成，未达到验收。** 本轮增加个人原生文件导入导出与官方 CLI 互操作；不是完整 Vaultwarden API 产品。协调者已批准阶段提交后继续同一卡，禁止据此启动 Review 或合并。
 
 固定服务器 **Vaultwarden 1.37.4**：tag 对象 `54a40806c990da2def7acd5a3152edc530c59b79`，commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档 SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。字段加密参考 Bitwarden clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce` 的 `libs/common/src/vault/models/domain/{bank-account,drivers-license,passport,login-uri}.ts`。本轮从固定 commit 的 raw URL 成功读取这四份文件，未换用 main。
 
@@ -43,7 +43,8 @@
 |---|---|---|
 | folders CRUD | POST `/api/folders`、PUT `/api/folders/{id}`、DELETE `/api/folders/{id}`；POST 更新及 `/delete` 为服务器别名，客户端未调用；GET 列表/单条由完整 sync 本地读取替代 | `SaveFolder/DeleteFolder/PersonalFolders`；type-2 名称加密、scope、错误未知结果、离线读取测试与真实 1.37.4 回环；侧栏新建/管理/筛选；编辑器文件夹选择；删除明确提示只解除项目归属；草稿绑定本地revision、锁定清除。服务器没有文件夹CAS |
 | 个人批量管理 | PUT `/api/ciphers/move`（POST 别名）、`/delete`（软删）、`/restore`、`/archive`、`/unarchive`；DELETE `/api/ciphers`（POST `/delete` 为永久删除别名） | `ChangePersonalCiphers`；验证选中ID属个人快照，永久删除仅允许deleted；httptest方法断言、真实批量及400部分移动回环；顶栏批量管理→选择项目/操作→确认；回收站清空只选择deleted，绝不purge。任意批量错误后同步逐项展示当前目标状态，不重试、不宣称原子成功；锁定清除 |
-| copy / import-export | 个人无 `/export` 或 `/trash`；purge是清全库 | `CopyPersonalCipher`经POST `/api/ciphers`新建，八类型标准字段、历史、custom、URI/checksum及legacy `login.uri`以新随机item key完整重加密；编辑页「复制为新项目」→说明当前草稿/清除归档回收状态→确认。源不改，绑定scope/revision/checkpoint；结果未知不重复创建，成功全量同步。httptest/headless/真实1.37.4八类回环通过。附件/FIDO2/未知扩展及非空encryptedByKeyId在请求前拒绝，完整复制仍未完成；个人/组织import-export均未实现，需本地格式转换/敏感确认/原生选择和安全落盘 |
+| copy / import-export | 个人无 `/export` 或 `/trash`；purge是清全库 | `CopyPersonalCipher`经POST `/api/ciphers`新建，八类型标准字段、历史、custom、URI/checksum及legacy `login.uri`以新随机item key完整重加密；编辑页「复制为新项目」→说明当前草稿/清除归档回收状态→确认。源不改，绑定scope/revision/checkpoint；结果未知不重复创建，成功全量同步。httptest/headless/真实1.37.4八类回环通过。附件/FIDO2/未知扩展及非空encryptedByKeyId在请求前拒绝，完整复制仍未完成；个人明文文件导入导出已接入，详见下表；组织import-export、附件/FIDO2/未知扩展完整备份仍未实现。 |
+| 个人文件导入 / 导出 | 无独立export端点；导入用 POST `/api/folders`、POST `/api/ciphers`，回收站项再 PUT `/api/ciphers/{id}/delete`；不调用purge或盲重试 | `backup.go/backup_import.go`、`backup_editor.go`、`backup_file_unix.go`；顶栏「导入导出」→格式与范围→敏感确认/预览→原生Open/Save。兼容JSON覆盖固定官方1–7类；MyGo格式1–8类，标准秘密、四类custom、多URI、全部history、全部个人folders含空文件夹；未知schema/附件/FIDO2/reprompt导出拒绝。导入先完整预检/新key加密后逐项创建、新folder ID映射、部分失败停止、已知ID同步核对。文件最大32MiB/10,000项目，0600临时文件、逐目录拒绝符号链接、原子不覆盖发布；epoch/scope/revision/取消门控。八类单元/真实1.37.4往返，官方CLI2026.5.0七类导入解密+官方导出再回导通过；未实际验证原生Dialog视觉。 |
 | 组织 / collections / members / groups / policies / events / recovery | RSA SPKI/PKCS8、OAEP type3/4；权限涉及角色、群组、readOnly/hidePasswords/manage/accessAll；memberId不等于userId | 完整加密组织profile/collections等已随sync保留；RSA解包、组织CRUD、共享、策略/权限与所有管理UI未实现 |
 | 附件 | `attachment/v2`元数据后multipart `data`；二进制 `0x02||IV16||HMAC32||CBC`；root `/attachments/...`或预签名URL | 未实现；需外部URL禁Bearer、大小/MAC、两阶段补偿和安全临时文件 |
 | Send | seed16、HKDF-SHA256 salt `bitwarden-send`/info `send`；访问走grant `send_access` 后 `/api/sends/access`、`/access/file/{fileId}`；无旧 `/access/{id}` | 未实现。文件/文本所有者及接收UI均缺；emails验证型Send上游不支持 |

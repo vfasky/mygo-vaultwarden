@@ -154,7 +154,9 @@ func (a *app) body(c *ui.Context) {
 		a.reconcileSelection(items)
 		a.credentialList(c, items)
 		ui.Column(c).Key("detail-pane").Grow(1).MinWidth(0).Gap(16).Children(func() {
-			if a.bulkEditor != nil {
+			if a.backupEditor != nil {
+				a.backupEditorView(c)
+			} else if a.bulkEditor != nil {
 				a.bulkEditorView(c)
 			} else if a.folderEditor != nil {
 				a.folderEditorView(c)
@@ -237,7 +239,10 @@ func (a *app) header(c *ui.Context) {
 			state = "可同步"
 		}
 		pill(c, state, vaultLavender, vaultPurple)
-		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil).Clicked() {
+		if toolbarButton(c, "导入导出", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+			a.openBackupEditor()
+		}
+		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
 			if kind == 0 {
 				kind = 1
