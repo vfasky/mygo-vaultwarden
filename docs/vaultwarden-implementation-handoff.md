@@ -1,85 +1,82 @@
-# 完整 Vaultwarden 实现：第六轮阶段交接
+# 完整 Vaultwarden 实现：第七轮阶段交接
 
-**INCOMPLETE — 整卡未完成，禁止据此启动 Review 或合并。** 协调者通过 `contact_supervisor(need_decision)` 批准本轮在跨Go/Swift敏感操作模块与历史删除完成、验证后，精确交接并续启同卡。下一进程直接推进冲突比较/显式重基，然后组织RSA/权限/共享管理和全部原整卡范围；不能把本轮子集当整卡完成。
+**INCOMPLETE — 整卡未完成，禁止据此启动 Review 或合并。** 本轮已通过 `contact_supervisor(need_decision)` 得到明确批准：完成最后安全回归、文档、提交和自有资源清理后精确交接，续启同一卡。下轮直接推进组织密钥/权限产品闭环，不重复导入或重做个人基线。原整卡验收范围不缩减。
 
-## 分支与提交
+## 提交与工作区
 
-- 唯一项目写入目录为分配的 `board-2-vaultwarden-api` 工作树，分支 `waku/board-2-vaultwarden-api`。主目录 `/Users/vfasky/code/mygo-vaultwarden` 未写入、暂存、提交、stash/reset/clean；用户app/watch、其他容器、凭据均未操作，未访问生产服务，未启动子代理。
-- 本轮起点 **f4efc008f20ec3e7c7484e7e50bd02839b61125c**。保留所有前序提交，包括 `0d258d2` 个人导入导出和 `5a48a35` 格式扩展名。不要重导入、回退或重做已验证导入导出。
-- **ad6aef0**：个人reprompt主密码短授权、密码/TOTP显示复制、Swift认证lease与敏感剪贴板、协议/Swift/headless/真实回环验证。
-- **cbe30c5**：密码历史确认清除；只允许原历史的有序子序列，禁止伪造/重排；保留未删除条目和未知扩展，密码修改仍自动记录刚替换的旧密码。
-- **ddb2ca5**：最终入口审计补批量reprompt/viewPassword拒绝；ID-only单项状态API移为测试专用，partial transport收为内部；补历史旧稿/锁定迟到回归。
-- 最后交接文档提交的最终HEAD以 `git log -1` 为准；本段实现HEAD不代表允许回退。
+- 唯一写入目录：分配的 `board-2-vaultwarden-api`；分支 `waku/board-2-vaultwarden-api`。主目录 `/Users/vfasky/code/mygo-vaultwarden` 未写入、暂存、提交、stash/reset/clean；用户app/watch、凭据、其他容器均未操作；未访问生产服务、未启动子代理。
+- 起点 **5c2da9369d7a527c515ea7cb23ed8f7a619ea5cc**，保留 `ad6aef0/cbe30c5/ddb2ca5` 及全部前序成果。前六轮证据：`git show 5c2da93:docs/vaultwarden-implementation-handoff.md`。
+- **8c064fc**：个人冲突比较/显式字段选择重新应用及原生入口、真实HTTP400旧版错误识别、协议/headless/隔离回环验证、覆盖矩阵与 `docs/cipher-conflicts.md`。
+- **fe18500**：reprompt最新授权/旧grant拒绝/再次冲突、双改数组远端新增保留回归；迟到再次授权回调释放已脱离的私有草稿；README准确更新。
+- 最后文档提交HEAD以 `git log -1` 为准。代码已分模块提交；最终退出前确认工作树及index干净。
 
-## 本轮产品与安全边界
+## 本轮实际产品与协议行为
 
-详见 [敏感操作说明](sensitive-operations.md)、[API矩阵](vaultwarden-api-coverage.md) 和 [前序备份格式](personal-backup.md)。
+详见 [冲突处理](cipher-conflicts.md)、[覆盖矩阵](vaultwarden-api-coverage.md) 与 [敏感操作](sensitive-operations.md)。
 
-| 路径 | 已完成的实际授权/产品行为 | 仍未完成或明确限制 |
+| 能力 | 本轮结果 | 剩余边界 |
 |---|---|---|
-| 读取/打开reprompt项目 | 列表仅受保护标题占位，`RequiresPassword`允许打开验证表单；`AuthorizePersonalItem`用当前认证session的domain-separated snapshot unlock key、当前KDF验证主密码；30秒能力绑定session、scope、snapshot revision、源密文SHA256 | 个人项目限定；组织/未知reprompt/viewPassword=false拒绝。不能仅凭公开revision获得能力 |
-| 编辑与保存 | `ReadPersonalCipherAuthorized`、`UpdatePersonalCipherAuthorized`；保持reprompt=1，完整PUT保留既有未知字段，同key；操作前及刷新checkpoint之后、HTTP发送前复核 | UI到期关闭并清空未保存表单，事前明确告知；无自动续期。组织策略未实现 |
-| 项目复制 | `CopyPersonalCipherAuthorized`新随机item key，源grant复核；reprompt标志保留 | 完整copy对附件/FIDO2/未知扩展仍严格拒绝；不可通过删除草稿字段绕过源schema检查 |
-| 单项状态 | UI只调用`ChangePersonalCipherStateAuthorized`，带原文档、权限和grant；刷新后guard复核 | 原`ChangeCipherState`与`SetCipherPersonalMetadata`名称仅在`cipher_transport_test.go`存在，供测试路由断言/自有fixture清理。生产只保留内部transport；不能把这些测试helper接UI |
-| 批量/清回收站 | `ChangePersonalCiphers`在整批网络请求前拒绝reprompt或viewPassword=false，UI明确要求单项验证后处理；不静默跳过受保护项目 | 批量逐项授权仍未接入；清空选区含受保护项目时整批阻断，需单项处理 |
-| 导入导出 | 继承前序真实产品闭环；导出reprompt继续拒绝，不会借用旧grant | 导出逐项验证尚缺；导入用户选择的备份文件可以创建reprompt=1新项目并保留标志，这是新增操作，不是读取/修改现有受保护项目 |
-| 密码/TOTP | 登录编辑页「显示已保存密码/显示当前验证码/复制已保存密码/复制当前验证码」；只用认证快照的已保存内容；显示最长30秒，TOTP不越本周期，reprompt不越grant剩余时间 | 不复制未提交草稿；参数范围、系统剪贴板边界见专文；历史明文显示沿用已有控件，独立短时认证显示尚待统一 |
-| 历史清除 | 「清除密码历史」→确认/保留；确认仅改草稿，保存才PUT；有序子序列验证防伪造/重排，剩余未知字段原样保留 | 当前UI提供清除全部；API允许删除任意子序列，UI逐条选择未提供。结果未知不重试；冲突比较/显式重基仍待实现 |
+| 冲突与结果未知 | 编辑器保留旧原始密文/本地草稿；冲突阻断重复保存；未知结果原有禁重试继续保持；完成新sync后才能进入比较 | 未知结果的新建项目（尚无ID）仍需人工核实，不提供自动重建或重试 |
+| 比较与选择 | 「同步最新版本」→「比较本地与远端改动」；固定中文字段名显示本地/远端是否改动、双方当前值是否相同；默认远端、逐字段勾选本地、采用远端或重新应用到草稿；另行明确保存 | 比较页不展示秘密值，也不提供敏感差异展开；没有声称视觉验证 |
+| 最新文档为底 | `ComparePersonalCipher` / `ApplyPersonalCipherComparison`仅本地操作；保留远端unknown字段、权限、密钥、归档与最新server revision；比较对象session/revision/document hash绑定 | 服务端不是严格CAS；比较到保存仍有协议竞态 |
+| 取消和授权 | 返回比较保留原稿；reprompt必须新文档新grant；旧grant不可重基；旧稿30秒期限仍有效；锁定/新同步/已删除/迁移组织/权限、key、type、reprompt变化阻断 | 组织reprompt流程未实现；旧稿过期按既有承诺清除，不能无限延长明文草稿 |
+| 历史删除 | 只删除原先观察且本地删除的完整条目；最旧端匹配重复；远端新增/扩展改变条目保留；同时改密码仍记录当前远端密码 | UI目前仍为清除全部的确认，非逐条选择；历史明文显示统一短认证仍缺 |
+| URI/custom双改 | 若远端未改可应用本地列表；双方同值可采用；双方都改且不同，阻断本地全数组应用，保留远端并提示在新表单编辑 | **逐行双版本对应尚缺**。不能按index盲配；列表无稳定ID，不得把本地旧数组覆盖远端新增/unknown；不是上游不支持 |
 
-### revision、取消、锁与线程
+### 固定源码冲突纠正
 
-- `BindSnapshotRevision`只能由认证后的UI lease调用，本身不授予项目权限。grant不是序列化token，字段私有，仅进程内使用；不能跨session/server/account/项目或变更后的密文。
-- 主密码KDF在Session.mu之外运行；完成后复核epoch、closed/stopping、ctx取消、revision。主密码byte buffer用后清理，不保留原密码；Go/Swift运行时仍不能证明清零全部字符串副本。
-- `persistPendingLocked`安全checkpoint成功后立即递增authorizationEpoch，**即使UI尚未收到新revision也已撤销旧grant**。如果protected写入因此被拒绝，不会向服务器发出该写入；UI采用checkpoint后关闭旧授权表单。checkpoint失败维持阻断。
-- 表单到期、lock/logout/切换清除新增显示/密码验证内容。旧回调受UI epoch保护；复用既有`completeCipherMutation`在锁定迟到响应后清理私有草稿。历史旧稿与迟到回归已明确覆盖。
-- 秘密复制/显示只在同步UI事件执行，没有从worker/网络响应复制的路径。`WithPersonalSecret`锁顺序为Go Session.mu → Swift主线程（调用已经在UI线程）→ snapshot文件lease；receiver不得回调Session。Swift worker进入时先切主队列再取文件锁，禁止拿文件锁等待UI。UI lock不等待Go Close，Close异步取消/清理。
+Vaultwarden1.37.4缓存 `src/api/core/ciphers.rs:455–466`：`cipher.updated_at.signed_duration_since(dt).num_seconds() > 1`。差值截断为整数秒，**不足两秒可能接受旧稿**。原文档“约一秒容差”不够精确，已修正本轮覆盖矩阵/UI/专文。
 
-### Swift桥与剪贴板
+服务端通过 `err!("The client copy of this cipher is out of date. Resync the client and try again.")`返回HTTP400；`src/error.rs:223–249`序列化顶层 `message` 和 `errorModel`。`cipherUpdateStatusError`只在单cipher更新HTTP400且顶层message**精确等于这条固定字符串**时返回脱敏 `ErrConflict`，其他400仍 `ErrValidation`，403仍权限错误。未知成功/5xx继续结果未知处理，不输出/记录原始错误体。单元明确测试普通400、含out of date但非固定消息、畸形JSON、403带同消息均不能误认冲突。
 
-- 新桥协议1：`copySecret`、`authorizeSecretDisplay`和`clearSecretClipboard`。前两者需scope、expectedRevision、临时借用的unlockKey、secretNotAfter毫秒时间；copy另带最大64KiB UTF8文本。`withSecretCopyAuthorization`先密码解包再`withCurrentLease`线性化到复制，最终检查deadline仍在(0,30]秒；回执不含秘密或owner。
-- `SensitiveClipboard`仅保存随机owner/count；每次复制写入concealed/transient提示。timer最长30秒（TOTP/grant更短则提前），lock/logout/切换/正常退出和观察到外部revision失效时尽力清理；旧timer不能清后续复制、外部同值写入不能被内容相等判断误清。
-- **注入测试**：同值/异值外部写入、后续copy/旧receipt、owner或count不匹配、长度界限、主动清理。**真实NSPasteboard测试**：仅独立随机命名board，验证写入owner、外部同值保留及本应用清理；不接触通用剪贴板。
-- **Swift认证测试**：错误key+正确公开revision、过期/过长deadline、旧revision、lock/logout均不进入复制body。现有store测试覆盖账号替换与迟到认证撤销；不把这些内存key测试说成真实Keychain验证。
-- concealed/transient只是提示，不能防止其他应用/历史管理器读取。NSPasteboard无跨进程原子CAS，最后检查至清理之间仍有外部竞态；强杀/崩溃或尚未观察到的外部锁不能保证立即清理，后者仍有到期清理。
+## 实际验证
 
-## 实际执行验证
-
-Go统一使用 `GO_BIN="$(bash scripts/resolve-go.sh)"`。以下都实际执行：
+Go统一由 `GO_BIN="$(bash scripts/resolve-go.sh)"` 解析。实际执行：
 
 ```sh
 "$GO_BIN" fmt ./internal/vaultwarden ./
 "$GO_BIN" test ./...
-"$GO_BIN" test -race ./...
 "$GO_BIN" build ./...
 "$GO_BIN" vet ./...
+"$GO_BIN" test -race ./...
 swift test --package-path macos
 swiftc -typecheck -parse-as-library -module-name SnapshotBridge macos/Shared/*.swift macos/Bridge/SnapshotBridge.swift
-MYGO_VW_TEST_URL=http://127.0.0.1:32780 "$GO_BIN" test ./internal/vaultwarden -run TestLiveVaultwarden -count=1 -v
+MYGO_VW_TEST_URL=http://127.0.0.1:32782 "$GO_BIN" test ./internal/vaultwarden -run TestLiveVaultwarden -count=1 -v
 git diff --check
 ```
 
-- 最终生产代码入口封闭后：Go root **0.695s**、协议 **0.554s**、dev-debug cached；race root **3.174s**、协议 **3.021s**、dev-debug cached（本轮首次race实际 **7.848s**）。build/vet/diff check退出0。最后仅新增旧稿历史断言后root test **0.687s**通过，不为断言重跑无关平台验证。
-- Swift最终版本实际 **50 XCTest、0 failures**，测试 **0.147s** / wall **0.150s**；bridge typecheck退出0。后续Go历史/批量改动不改Swift，未无理由重复平台验证。
-- 真实回环最后执行：PBKDF2 **0.44s**、Argon2id **0.23s**、TOTP **0.63s**，总 **1.31s** / package **1.428s**，通过。包含reprompt创建→sync排除AutoFill→真实密码验证→读取→PUT保持标志→新keycopy保持标志→清理；八类型历史/CRUD已有测试继续通过，新增真实历史清除保持当前密码。
-- 本轮**没有安装/执行官方CLI**，输出明确 `official CLI interoperability not requested`；不能借前序官方CLI结果称本轮验证了官方secret/reprompt互操作。
-- 初次Go回归旧测试将任何reprompt editor视为泄露，随后区分空的验证表单与明文表单；用`RequiresPassword`独立于Editable保持元数据边界。修正后全量通过。
-- 新测试：`totp_test.go`含RFC6238全部18向量、固定Steam向量、边界/畸形参数；`item_authorization_test.go`覆盖错误密码、跨session、文档/权限替换、expiry/revision/撤销/关闭/取消、checkpoint后零写入；`personal_secret_test.go`覆盖认证参数/已保存值/过期表单/错误native授权/锁定/陈旧copy；`password_history_test.go`保留扩展、大整数、草稿不变、禁止伪造/重排/重复、清除并同时换密码；另有批量六种操作权限零请求和Swift上述测试。
-- **未验证**真实原生窗口/安装、通用剪贴板用户流程、系统Keychain/Touch ID、AutoFill交互、SMTP、WebAuthn或SSO。headless/命名board/协议回环不替代这些。
+- 最后代码回归：root **0.985s**、协议 **0.845s**、dev-debug cached；race root **3.386s**、协议 **3.307s**、dev-debug cached。build/vet/diff check退出0。之后只有注释与文档改动，不重复无关验证。
+- Swift实际 **50 XCTest、0 failures**，测试0.127s / wall0.131s；bridge typecheck退出0。本轮没有Swift源码变化，随后Go安全回归未重复Swift。
+- 新单元：八类型无损重基/unknown保持，最新server revision、采用远端、历史新增及保存时当前远端密码加入历史、删除/组织迁移/edit/viewPassword/key变化/missing、revision/close/二次项目变化、旧grant/expiry、双改URI/custom远端新增/opaque保留、HTTP400精确识别。
+- 新headless：原生比较入口/中文字段状态、敏感值不输出、显式本地/远端采用不发请求、结果未知须先新sync、返回/锁/新sync/删除/权限、reprompt最新文档重新授权、旧grant拒绝、新草稿后再ErrConflict仍保稿并禁重复保存。
+- 最终真实回环：PBKDF2 **2.73s**、Argon2id **0.21s**、TOTP **0.55s**，总3.49s / package **3.603s**，全通过。新增实测创建个人Login→远端改备注→旧稿PUT拒绝→全sync→比较→采用本地标题→新PUT保持远端备注→删除自有项目。既有八类型、备份、folder/bulk、reprompt等回环继续通过。
+- 真实回环失败记录：首次等待1.2秒旧稿仍被接受；按源码改2.2秒后得到普通validation分类，暴露旧分类遗漏，修正为上述精确固定message识别。该次TOTP也出现network错误，未从日志确证原因，不能断言限流。重启**自有**容器后Docker随机端口由32781变32782；一次测试误用旧32781导致注册network失败，inspect确认新映射后最终全通过。未将失败说成成功，也未访问任何外部vault。
+- 未运行官方CLI，本轮输出明确 `official CLI interoperability not requested`。未做真实原生窗口/安装、通用剪贴板、Keychain/Touch ID/AutoFill平台交互、SMTP、SSO/WebAuthn验证；headless/命名pasteboard/协议回环不替代这些。
 
 ## 自有资源清理（已完成）
 
-- 成功使用容器 `mygo-card2-01a114d0-vw`，ID **8634ca2b631f5950ac8cd36a3a5e7003a1dc7fdd08141aaa4d6947c6be15fb25**；label `mygo-test-owner=01a114d0`；loopback **127.0.0.1:32780**；数据bind为本轮 `$TMPDIR/vw-secret-data`→`/data`。
-- 镜像ID **sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216**，inspect labels确认版本1.37.4、commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`。
-- 清理前按完整ID inspect核对label/镜像/mount后 `docker rm -fv <完整ID>`成功；删除仅本轮scratch `vw-secret-data`，`test ! -e`确认不存在；`docker ps -a --filter name=mygo-card2-01a114d0-vw`无输出。账号和数据库仅为测试随机example.invalid，随自有数据删除。
-- 初次容器 **d7827ee4...**未bind scratch即被立即移除（含其匿名volume）；第二次 **812c7325...**因测试环境`PASSWORD_ITERATIONS=5000`低于服务器启动下限100000而退出，已移除；最终容器使用服务器默认设置，不弱化启动限值。未改用户Docker资源、镜像或已有容器。
-- 仅留无凭据Swift测试输出于scratch；无本轮CLI/profile安装或外部认证数据。
+- 容器名 `mygo-card2-01a114f0-comparison`，完整ID **bbe608f1af355d8b356f941ba84b8727c1d95f7d2be17cfd16ade1f3506a8c10**，label `mygo-test-owner=01a114f0`。
+- 镜像 **sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216**，inspect版本1.37.4/commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`。仅loopback自动空闲端口32781，重启后32782。
+- bind数据目录 `/tmp/pi/01a114f0-5cec-73ad-b5be-81b16d193f1e/vw-comparison-data`→`/data`；账号均fixture随机example.invalid。清理前按ID inspect再次核对label/image/mount，随后 `docker rm -fv <完整ID>`成功，仅删除本轮scratch数据，`test ! -e`成功；精确名字过滤 `docker ps -a`无输出。未清理别人的容器、volume、镜像、应用或文件。
 
-## 下一进程已批准方向与入口
+## 下一进程直接推进组织产品闭环
 
-1. 先保留所有新提交并读本交接/coverage。**冲突比较+显式重基优先**：现有 `cipherEditor`保留document/fields/revision，`completeCipherMutation`对ErrConflict保草稿、MutationUncertainError锁定重复提交，完整sync位于`network.go`。实现保留本地草稿和服务器最新原始对象的用户可见比较/选择；不能静默覆盖最新unknown字段，不能自动重试结果未知写入，不能把服务器约1秒revision容差当严格CAS。reprompt重新比较/解密也需新的有效能力；不可续借旧grant。
-2. 随后组织key链、授权与collections/共享/组织管理：完整原始sync已经在`VaultData.Sync`保存；目前`PersonalEntries`跳过组织，`personalDocumentLocked`拒绝组织。`cipherItemKey`目前只有个人owner key；不要把organizationId改一下就共享。实现SPKI公钥、PKCS8私钥、RSA-OAEP type3 SHA256/type4 SHA1解包，结合角色/群组/readOnly/hidePasswords/manage/accessAll和policies授权；memberId与userId严格区分。
-3. 固定Vaultwarden源码缓存 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`，tag对象`54a40806c990da2def7acd5a3152edc530c59b79`，commit`7c188967e7a467b19b2757bc3326f9cf3ccae327`，归档SHA256`d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。前序routes.txt在父目录，有未注册声明，须对routes!与main挂载核对。
-4. TOTP已实际读取固定SDK `39dbb510f5eae82f5cbfd527b0f70a01d5626ec1`，缓存 `/tmp/pi/01a114ab-b4d7-702d-ad3e-13eac28463f8/official/totp.rs`；已实现无需重查。Bitwarden clients固定`5983f56ce0cf924eea56c7d8f066f7885825a7ce`；前序导出格式及CLI证据见`personal-backup.md`，不重做。
-5. 后续仍须完成：组织import/export、附件/FIDO2/未知扩展完整备份/copy；附件binary/multipart/外部URL禁Bearer/MAC/大小/两阶段失败补偿/安全临时文件；Send seed16/HKDF/password/fragment/send_access/文本文件owner与接收UI；注册/验证/profile/主密码邮箱KDF/用户key轮换恢复/删除清库/security stamp、MFA各provider管理与平台SSO/WebAuthn、devices/auth requests/domains/emergency/recovery；SignalR MessagePack通知与断线sync；大库桥、query/binary/multipart/Retry-After；完整逐注册路由矩阵及所有模块真实互操作、原生交互验证。
+不再重做个人基线。此轮只做组织入口源码定位，**尚未新增RSA/组织代码**。准确适配点：
 
-继续同一卡，不自审、不完成、不合并。前五轮详细证据可用 `git show f4efc00:docs/vaultwarden-implementation-handoff.md` 获取。
+- `internal/vaultwarden/client.go:263` `Session`持有用户key，`Close`取消操作/clear key/撤销epoch；`SyncWithCheckpoint`做scope/profile/key校验后完整存原始sync。新增组织密钥不能持久化到未认证列表，生命周期须复用这里。
+- `VaultData.Sync`已在Swift AES-GCM快照内原样保存全部profile/collections/policies等；`vault_data.go`个人列表显式跳过organizationId；`item_authorization.go:personalDocumentLocked`显式拒绝组织。不要直接取消拒绝而没有组织key/权限。
+- `cipher_document.go` `cipherItemKey(document,ownerKey)`已经支持由owner key解包item key，`DecryptCipherDocument`/内部 `encryptCipherDocument`可复用字段无损转换，需以组织key为owner且独立组织授权。个人API `ciphers_api.go`显式拒绝组织；不要简单换organizationId当共享。
+- 原生 `cipher_editor.go:adoptVault/openCipherEditorAuthorized/mutateCipher`目前仅个人；`network.go`全sync后的adopt/revision/checkpoint生命周期是组织UI接入点。需要连接组织/collections分类、列表/读取/编辑/共享，随后管理界面，不能只堆crypto helper当产品完成。
+
+固定服务器源码根 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`，tag对象 `54a40806c990da2def7acd5a3152edc530c59b79`、commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`、归档SHA256 `d31a3ef5456619cfe424f0586f4ecadd186e22513a93bbeab6bc2f09cda803a7`。已读取的准确入口：
+
+1. `src/db/models/user.rs:264–330`：`account_keys_json()`含 `accountKeys.publicKeyEncryptionKeyPair.{wrappedPrivateKey,publicKey}`；profile兼容 `privateKey`，`organizations`仅confirmed，`organizationsNew`包括accepted。不要给accepted组织解密权限。
+2. `src/api/core/ciphers.rs:198–219` sync输出 `profile,folders,collections,policies,policiesNew,ciphers,domains,sends,userDecryption.userKeyId`。两套新旧字段同时存在需一致性/版本校验，不能把profile原始对象丢掉。
+3. `src/db/models/organization.rs:438–534` `Membership::to_json`：`id`是组织ID；`organizationUserId`是membership ID，`userId`是全局用户ID，`key/status/type/enabled`按成员。Manager转换为custom type4；profile `permissions`的createNewCollections/editAnyCollection/deleteAnyCollection三项模拟accessAll。不要假设profile直接有accessAll或把membership ID当用户ID。`has_full_access`在784附近，管理DTO在536起。
+4. `src/db/models/cipher.rs:587–656` `get_access_restrictions`：本人/组织full access/群组full access优先，否则多collection权限readOnly/hidePasswords分别AND、manage OR；sync逐collection直接用户权限优先于群组，不可简单把任意群组许可OR进来。返回cipher的edit/viewPassword在385附近；组织成员confirmed才能有效。
+5. `src/db/models/collection.rs:69–152`：集合名是组织key加密；`to_json_details`提供readOnly/hidePasswords/manage，full access、manager角色及直接/群组权限影响结果。后续需同时尊重server cipher有效权限和collection/role/policy，不能从角色号大小推断所有操作。
+6. 用户RSA公钥Base64 DER/SPKI；私钥PKCS8以user key包装；组织key用RSA-OAEP type3 SHA256/type4 SHA1。固定参考Bitwarden clients `web-v2026.5.0` commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce`与SDK RSA `39dbb510f5eae82f5cbfd527b0f70a01d5626ec1`（前轮审计提供，当前轮未重读RSA源码）。需固定向量/畸形key/权限/revoke/account-member混淆/真实隔离组织互操作。
+
+后续仍完整保留：组织创建/编辑/退出/删除、成员invite/accept/confirm/revoke/restore、collections/groups/policies/events/目录Public API/recovery/API keys；附件二阶段加密binary/multipart/外部URL禁Bearer/补偿；文本文件Send seed/HKDF/fragment/send_access接收；注册/profile/keys/邮箱/主密码/KDF/全user key轮换非事务恢复/删除清库/security stamp/MFA各provider/SSO/WebAuthn/devices/auth requests/domains/emergency；SignalR MessagePack通知/断线sync；大库桥；query/binary/Retry-After；完整逐注册路由矩阵、组织及完整import/export。reprompt批量/导出逐项授权、历史显示统一授权、个人双改数组逐行UI仍缺。所有这些是未实现客户端范围，不可伪装上游限制。
+
+继续同一卡，不自审、不完成、不合并。
