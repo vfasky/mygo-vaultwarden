@@ -33,6 +33,11 @@ func applyPendingPolicies(p *operationPolicies, pending []PendingPolicyMutation)
 				p.restrictedPersonal[kind] = true
 			}
 		}
+		if entry.PolicyType == 16 {
+			// The unknown PUT may narrow the inherited rule. Until the dedicated
+			// recovery clears this exact record, never fill an inherited URI.
+			p.defaultURIMatch = 5
+		}
 		if entry.PolicyType == 5 {
 			p.personalOwnership = true
 		}

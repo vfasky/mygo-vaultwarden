@@ -10,6 +10,34 @@ import (
 func policyManagementOperation(op string) bool {
 	return op == "policy-list" || op == "policy-load" || op == "policy-save" || op == "policy-review" || op == "policy-restore"
 }
+
+// adoptPolicyRecoveryPreview is the UI-thread half of the two-stage recovery.
+// It installs the authenticated publish receipt before binding its network proof;
+// neither an unadopted preview nor a late editor may authorize the next sync.
+func (a *app) adoptPolicyRecoveryPreview(epoch uint64, e *organizationEditor, state *snapshotStatus, vault *vaultwarden.VaultData, review *vaultwarden.PolicyRecoveryReview) bool {
+	if a.epoch != epoch || e == nil || a.organizationEditor != e || review == nil || review.Record().OrganizationID != e.id {
+		return false
+	}
+	session, ok := a.session.(*vaultwarden.Session)
+	if !ok {
+		return false
+	}
+	a.organizationEditor = nil // Preserve this form while replacing its snapshot.
+	if !a.adoptOrganizationIsolation(state, vault, e.id) {
+		a.organizationEditor = e
+		return false
+	}
+	e.revision = a.sessionRevision
+	a.organizationEditor = e
+	if session.BindPolicyRecoveryReview(review, a.vault, a.sessionRevision) != nil {
+		return false
+	}
+	e.policyRecovery.Close()
+	e.policyRecovery = review
+	e.confirmation = "policy-restore"
+	return true
+}
+
 func (a *app) hasPendingPolicy(orgID string) bool {
 	if a.vault != nil {
 		for _, p := range a.vault.PendingPolicyMutations {
@@ -24,7 +52,7 @@ func (a *app) pendingPolicyRecoveryView(c *ui.Context, e *organizationEditor, di
 	if !a.hasPendingPolicy(e.id) {
 		return
 	}
-	ui.Text(c, "此组织策略修改待核验。受限类型修改期间暂停个人条目读取与填充；个人所有权修改仅暂停个人保存。其他组织仍按自身权限访问。普通同步不会解除待核验状态。").MaxLines(5)
+	ui.Text(c, "此组织策略修改待核验。受限类型修改期间暂停个人条目读取与填充；个人所有权修改仅暂停个人保存；默认 URI 修改暂停所有继承默认的 URI 填充，明确设置的规则保留。其他组织仍按自身权限访问。普通同步不会解除待核验状态。").MaxLines(5)
 	if e.policyRecovery == nil {
 		if action(c, "读取服务器当前策略以核验", "sync", false, disabled).Key("policy-review").Clicked() {
 			a.runOrganizationManagement("policy-review")

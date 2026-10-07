@@ -42,6 +42,11 @@ private struct CandidatePolicySync: Decodable {
         }
     }
     struct Cipher: Decodable {
+        struct Login: Decodable {
+            struct URI: Decodable { let match: Int? }
+            let uris: [URI]?
+        }
+        let login: Login?
         let id: String
         let organizationId: String?
         let type: Int
@@ -100,6 +105,19 @@ extension VaultData {
         for (id, p) in newer where members[p.organizationId]?.status == 2 {
             guard confirmed[id] == p else { return [] }
         }
+        // DefaultPolicyService uses the ordered legacy policies array (the new
+        // policy service has a separate policiesNew state). First applicable
+        // policy wins even when its data is null/invalid; role exemptions apply.
+        var defaultMatch = 0
+        if let first = data.policies.first(where: { p in
+            guard p.type == 16, p.enabled, let member = members[p.organizationId] else { return false }
+            return member.type != 0 && member.type != 1 && member.status >= 1
+        }), case .object(let fields) = first.data,
+           case .number(let value) = fields["uriMatchDetection"],
+           value >= 0, value <= 5, value.rounded() == value {
+            defaultMatch = Int(value)
+        }
+        if (pendingPolicyMutations ?? []).contains(where: { $0.policyType == 16 }) { defaultMatch = 5 }
         var personal = Set<Int>()
         var restricted: [String: Set<Int>] = [:]
         for p in confirmed.values where p.enabled && p.type == 15 {
@@ -119,7 +137,7 @@ extension VaultData {
         }
         if (pendingPolicyMutations ?? []).contains(where: { $0.policyType == 15 }) { personal.formUnion(1...8) }
         let isolated = Set(quarantinedOrganizations ?? [])
-        var permitted = Set<String>()
+        var permitted: [String: CandidatePolicySync.Cipher] = [:]
         var seen = Set<String>()
         for cipher in data.ciphers {
             guard seen.insert(cipher.id).inserted else { return [] }
@@ -129,9 +147,22 @@ extension VaultData {
                 guard !org.isEmpty, !isolated.contains(org), let member = members[org], member.status == 2,
                       member.enabled, !(restricted[org]?.contains(1) ?? false) else { continue }
             } else if personal.contains(1) { continue }
-            permitted.insert(cipher.id)
+            permitted[cipher.id] = cipher
         }
-        return credentials.filter { permitted.contains($0.id) }
+        return credentials.compactMap { credential in
+            guard let cipher = permitted[credential.id] else { return nil }
+            guard let rules = credential.uris else { return nil }
+            let retained = rules.filter { rule in
+                // Legacy rules have no proof of their encrypted source. They
+                // require successful sync to migrate, never hosts fallback.
+                guard let index = rule.sourceIndex else { return false }
+                guard let sources = cipher.login?.uris, sources.indices.contains(index) else { return false }
+                return rule.match == (sources[index].match ?? defaultMatch) && rule.valid
+            }
+            if retained == rules { return credential }
+            return VaultCredential(id: credential.id, title: credential.title, username: credential.username,
+                                   password: credential.password, hosts: [], url: retained.first?.uri ?? "", uris: retained)
+        }
     }
 }
 

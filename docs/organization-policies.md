@@ -1,6 +1,6 @@
 # 组织策略执行迁移
 
-**INCOMPLETE — 整卡未完成，禁止Review/merge。** 已新增固定12类策略产品API与原生业务表单，以及跨Go/Swift的持久待核验屏障和显式恢复；策略管理不等于全部策略消费。type16默认URI、兼容zxcvbn、生成器/Send/PIN/账号及组织生命周期的剩余策略消费仍待完成，原完整API范围保持不变。
+**INCOMPLETE — 整卡未完成，禁止Review/merge。** 已新增固定12类策略产品API与原生业务表单，以及跨Go/Swift的持久待核验屏障和显式恢复；策略管理不等于全部策略消费。type16默认URI已接个人/组织投影、原生创建编辑默认说明与Swift旧候选来源核验；兼容zxcvbn、生成器/Send/PIN/账号及组织生命周期的剩余策略消费仍待完成，原完整API范围保持不变。
 
 ## 策略管理与恢复（本轮增量）
 
@@ -18,10 +18,18 @@
 | 8 账号恢复 | autoEnrollEnabled | 邀请自动登记已接；完整管理员恢复待接；服务器可配置要求type3，保存前检查策略变化，依赖拒绝由服务器反馈 |
 | 14 PIN解锁 | 启停 | 本产品尚无PIN入口，无伪造消费 |
 | 15 受限类型 | 启停；固定客户端无数据编辑控件，null默认Card及现有数组保留 | 写入/读取/AutoFill实际执行；待核验期间保守暂停全部个人条目读取及相应保存 |
-| 16 URI默认 | 基础域名/主机/完全匹配/从不匹配；保留未编辑旧值 | 消费待接；官方新表单仅暴露0/1/3/5，既有2/4不静默改写 |
+| 16 URI默认 | 基础域名/主机/完全匹配/从不匹配；保留未编辑旧值 | 按首条适用策略、owner/admin豁免应用于个人及组织未显式规则；0域名/1主机/3精确/5从不，2前缀/4正则目前不投影且不降为域名；待核验期间继承规则暂停填充 |
 | 20 用户通知 | 启停、原有扩展数据保留 | 固定服务器只发现类型保存，未发现通知执行器，不宣称已执行 |
 
-控件来自固定clients `5983f56...`的`policy-edit-definitions/*.component.ts`。主密码长度12–128、生成密码长度5–128、数字/符号数0–9、短语词数3–20，分别核对`platform/misc/utils.ts`与`generator/core/src/metadata/password/{random-password,eff-word-list}.ts`。本轮只读取源码中的DTO与约束，没有新增依赖。type16消费的下一来源：同commit `autofill/services/domain-settings.service.ts:225–246`使用`policiesByType$`后`getFirstPolicy`；`default-policy.service.ts:272–306`的角色豁免；`models/domain/domain-service.ts`枚举0域名/1主机/2前缀/3精确/4正则/5从不。不可把此审计当作消费完成。
+控件来自固定clients `5983f56...`的`policy-edit-definitions/*.component.ts`。主密码长度12–128、生成密码长度5–128、数字/符号数0–9、短语词数3–20，分别核对`platform/misc/utils.ts`与`generator/core/src/metadata/password/{random-password,eff-word-list}.ts`。本轮只读取源码中的DTO与约束，没有新增依赖。type16消费依据：同commit `autofill/services/domain-settings.service.ts:225–246`使用`policiesByType$`后`getFirstPolicy`；`default-policy.service.ts:23–24,46–84,272–306`按角色豁免再取第一条；`models/domain/domain-service.ts`枚举0域名/1主机/2前缀/3精确/4正则/5从不。此次补核`platform/sync/default-sync.service.ts:423–448`确认旧PolicyService使用`response.policies`（`policiesNew`是另一个服务），以及`admin-console/models/domain/organization.ts:309–310`的canManagePolicies包含owner/admin。本应用无用户级默认设置，缺值/非法首条回退0；不继续选第二条。数值按JS JSON Number枚举语义核验，1e0/3.0允许，文本/小数/范围外不允许。
+
+`sync.go`与`organization_autofill.go`在URI.match缺失或null时用已认证`operationPolicies.defaultURIMatch`，显式0–5不覆盖。`DefaultURIMatch`要求当前完整快照许可，原生创建/编辑显示有效默认并继续保存null，不把继承规则固化。Go投影新增`URI.sourceIndex`（原始密文login.uris索引），Swift从同一认证vault原始数组核对该位置的显式match或当前默认；旧候选缺来源、索引越界、规则变化均不填充，也不回退hosts/url。新规则可能因收窄而被暂时移除，成功同步才重新派生；2/4目前不投影。`pendingPolicyType16`将继承默认暂按Never处理，未知PUT结果期间也不能继续使用旧宽松默认；显式规则继续保留。恢复专用receipt后下一次同步重建继承候选。此来源索引是认证数据内部关联，不是对任意伪造同进程数据的密码学证明。
+
+### 最新控制器与URI回归
+
+`policy_recovery_two_stage_test.go`以受控HTTP服务器、模拟认证存储回执连接生产`adoptPolicyRecoveryPreview`→绑定→`SyncForPolicyRecovery`→验证→`adoptOrganizationSnapshot`，覆盖success/changed-policy/late-preview/wrong-preview-receipt/stale-preview/ordinary-sync/cancel/wrong-final-receipt/late-final。另一个controller测试核对完整org/type/mutation与原记录匹配、跨org错误记录、错误type/同type不同mutation、其它pending及marker/session保留、旧revision/snapshot和重放。发现并修复了专用清除记录未校验目标org的问题。此证据不是真实窗口、Swift持久化或Keychain端到端测试。
+
+Go/Swift共享`uri-default-policy-cases.json`的21向量，覆盖全部枚举、数组顺序、role/disabled/accepted边界、非法首条、JSON数值表示；Go真实加密URI与RSA组织解密投影、同内容checkpoint及原生默认显示回归；Swift旧候选迁移、来源位置、域名旁路与pending16阻止继承规则。独有1.37.4回环新增`uri-default-projection`验证六种设置下成员个人URI继承/显式规则；服务器策略由fixture seed设置，不能称为原生管理窗口或Swift落盘证据。最新最终命令与结果见handoff。
 
 ### 持久屏障与因果顺序
 
@@ -72,5 +80,5 @@ Swift57项涵盖MemoryKeys加密快照、lease、隔离/重启/恢复、checkpoi
 ## 下一步，范围不缩减
 
 1. 12种固定服务器策略管理及待核验屏障已接；继续补真实原生两阶段完整交互、平台故障注入与完整策略消费，不能将管理等同执行。
-2. type16默认URI匹配、生成器/Send/PIN/组织生命周期等已有与后续功能的实际政策消费；minComplexity按固定clients/SDK真实zxcvbn词典、用户输入、Unicode语义核对。
+2. 组织生命周期、生成器/Send/PIN等已有与后续功能的实际政策消费；minComplexity按固定clients/SDK真实zxcvbn词典、用户输入、Unicode语义核对；URI前缀/正则完整匹配仍在整卡范围。
 3. 原完整legacy共享、附件、Send、账号/MFA/SSO/通知、大库桥、组织批量/导出、逐项reprompt、无ID数组冲突等继续总矩阵。其余旧opt-in真实协议夹具仍可能使用BindSnapshotRevision或直接改VaultData，运行对应模块前按真实receipt迁移，不放宽生产读取边界。

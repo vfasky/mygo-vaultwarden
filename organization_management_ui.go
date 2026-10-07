@@ -68,7 +68,7 @@ func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarde
 			found = true
 		}
 	}
-	if len(cleared) > 1 || (len(cleared) == 1 && (a.vault == nil || !a.vault.HasPendingPolicy(cleared[0]))) {
+	if len(cleared) > 1 || (len(cleared) == 1 && (cleared[0].OrganizationID != orgID || a.vault == nil || !a.vault.HasPendingPolicy(cleared[0]))) {
 		return false
 	}
 	if a.vault != nil {
@@ -512,15 +512,14 @@ func (a *app) runOrganizationManagement(operation string) {
 		}
 		a.window.Update(func() {
 			if a.epoch == epoch && isolatedVault != nil {
-				preserveReview := operation == "policy-review" && a.organizationEditor == e
-				if preserveReview {
-					a.organizationEditor = nil
-				}
-				if !a.adoptOrganizationIsolation(checkpoint, isolatedVault, id) {
+				if operation == "policy-review" {
+					if err == nil && a.adoptPolicyRecoveryPreview(epoch, e, checkpoint, isolatedVault, loadedPolicyRecovery) {
+						loadedPolicyRecovery = nil // The live editor now owns this proof.
+					} else {
+						a.stopNetwork()
+					}
+				} else if !a.adoptOrganizationIsolation(checkpoint, isolatedVault, id) {
 					a.stopNetwork()
-				} else if preserveReview {
-					e.revision = a.sessionRevision
-					a.organizationEditor = e
 				}
 			}
 			if a.epoch == epoch && restoredVault != nil {
@@ -535,16 +534,7 @@ func (a *app) runOrganizationManagement(operation string) {
 			}
 			a.completeOrganizationManagement(epoch, e, operation, result, checkpoint, reply, err, cancel)
 			if loadedPolicyRecovery != nil {
-				if a.epoch == epoch && a.organizationEditor == e && err == nil && session.BindPolicyRecoveryReview(loadedPolicyRecovery, a.vault, a.sessionRevision) == nil {
-					e.policyRecovery.Close()
-					e.policyRecovery = loadedPolicyRecovery
-					e.confirmation = "policy-restore"
-				} else {
-					loadedPolicyRecovery.Close()
-					if a.epoch == epoch && err == nil {
-						a.status = "策略预览状态已变化，请重新读取服务器当前状态。"
-					}
-				}
+				loadedPolicyRecovery.Close()
 			}
 			if loadedPolicies != nil && a.epoch == epoch && a.organizationEditor == e && err == nil {
 				e.policies = loadedPolicies

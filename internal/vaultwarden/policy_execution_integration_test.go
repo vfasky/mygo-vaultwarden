@@ -139,6 +139,51 @@ func TestLivePolicyExecution(t *testing.T) {
 			t.Fatal("policy seed", status, e)
 		}
 	}
+	t.Run("uri-default-projection", func(t *testing.T) {
+		login := CipherFields{Type: 1, Name: "URI defaults fixture", Login: map[string]any{"username": "fixture", "password": "fixture-only-secret", "uris": []any{
+			map[string]any{"uri": "https://login.example.invalid/path", "match": nil},
+			map[string]any{"uri": "https://explicit.example.invalid/path", "match": 0},
+		}}}
+		doc, e := member.CreatePersonalCipher(ctx, mv.Scope, login, nil)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var meta struct{ ID string }
+		_ = json.Unmarshal(doc.JSON, &meta)
+		for match := 0; match <= 5; match++ {
+			seedPolicy(16, map[string]any{"uriMatchDetection": match})
+			r, e := member.Sync(ctx)
+			if e != nil {
+				t.Fatal(e)
+			}
+			found := false
+			for _, c := range r.Credentials {
+				if c.ID != meta.ID {
+					continue
+				}
+				found = true
+				want := 1
+				if match == 0 || match == 1 || match == 3 {
+					want = 2
+				}
+				if len(c.URIs) != want || c.URIs[want-1].Match != 0 || c.URIs[want-1].SourceIndex == nil || *c.URIs[want-1].SourceIndex != 1 {
+					t.Fatal("explicit/default URI projection", match, c.URIs)
+				}
+				if want == 2 && c.URIs[0].Match != match {
+					t.Fatal("inherited URI projection", match)
+				}
+			}
+			clear(r.Session)
+			if r.PasswordUnlock != nil {
+				clear(r.PasswordUnlock.Key)
+			}
+			if !found {
+				t.Fatal("login missing")
+			}
+		}
+		seedPolicy(16, map[string]any{"uriMatchDetection": 0})
+		mv = syncVault(member)
+	})
 	seedPolicy(5, nil)
 	// No UI sync occurs between changing the server policy and the next write.
 	if _, err = member.CreatePersonalCipher(ctx, mv.Scope, note, nil); !errors.Is(err, ErrPermission) {

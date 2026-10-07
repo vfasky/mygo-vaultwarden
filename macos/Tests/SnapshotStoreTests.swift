@@ -527,7 +527,15 @@ final class SnapshotStoreTests: XCTestCase {
     }
     func testEmptySyncRevokesOldCredentialsAndClearsIdentityIndex() throws {
         let scope = SnapshotScope(server: "https://vault.example.com", account: "account-a")
-        let old = try store.publish([credential], scope: scope, expected: store.state().revision, vault: policyVaultFixture(scope: scope, ids: [credential.id]))
+        let rule = CredentialURI(uri: "https://localhost/", match: 0, baseDomain: "localhost", includeSubdomains: false, sourceIndex: 0)
+        let currentCredential = VaultCredential(id: credential.id, title: credential.title, username: credential.username, password: credential.password, hosts: ["localhost"], url: rule.uri, uris: [rule])
+        var vault = try policyVaultFixture(scope: scope, ids: [credential.id])
+        var object = try JSONSerialization.jsonObject(with: vault.sync) as! [String: Any]
+        var ciphers = object["ciphers"] as! [[String: Any]]
+        ciphers[0]["login"] = ["uris": [["match": NSNull()]]]
+        object["ciphers"] = ciphers
+        vault = VaultData(version: 1, scope: scope, sync: try JSONSerialization.data(withJSONObject: object))
+        let old = try store.publish([currentCredential], scope: scope, expected: store.state().revision, vault: vault)
         let sink = DeferredIndex()
         let indexed = expectation(description: "old identities published")
         sink.onReplace = { identities, callback in XCTAssertFalse(identities.isEmpty); callback(true) }

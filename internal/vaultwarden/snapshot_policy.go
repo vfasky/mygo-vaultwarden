@@ -150,6 +150,19 @@ func (s *Session) snapshotPoliciesLocked(vault *VaultData) (*operationPolicies, 
 	return p.policies, nil
 }
 
+// DefaultURIMatch returns the effective inherited rule for an authenticated
+// snapshot. Keep login.uri.match null in editors: policy changes must continue
+// to affect inherited defaults instead of freezing them as explicit rules.
+func (s *Session) DefaultURIMatch(vault *VaultData) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return 0, err
+	}
+	return policies.defaultURIMatch, nil
+}
+
 // ValidateAuthenticatedSnapshot checks an already installed capability; it never
 // creates one. The controller calls it before adopting any display metadata.
 func (s *Session) ValidateAuthenticatedSnapshot(vault *VaultData, revision string) error {

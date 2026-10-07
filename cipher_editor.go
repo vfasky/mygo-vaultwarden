@@ -33,6 +33,7 @@ type editorCustom struct {
 }
 
 type cipherEditor struct {
+	defaultURIMatch                        int
 	organizationID, collectionID           string
 	shareOrganizationID, shareCollectionID string
 	document                               vaultwarden.CipherDocument
@@ -179,7 +180,12 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 	if !ok {
 		return
 	}
-	editor := &cipherEditor{revision: a.sessionRevision, authorization: grant}
+	defaultMatch, err := session.DefaultURIMatch(a.vault)
+	if err != nil {
+		a.status = err.Error()
+		return
+	}
+	editor := &cipherEditor{revision: a.sessionRevision, authorization: grant, defaultURIMatch: defaultMatch}
 	if grant != nil {
 		editor.authorizationExpires = grant.ExpiresAt()
 	}

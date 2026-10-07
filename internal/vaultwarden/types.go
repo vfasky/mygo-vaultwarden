@@ -40,6 +40,9 @@ type Scope struct {
 }
 
 type URI struct {
+	// SourceIndex binds a derived rule to the original encrypted login URI.
+	// Swift uses its explicit/default match when revalidating old candidates.
+	SourceIndex       *int   `json:"sourceIndex,omitempty"`
 	URI               string `json:"uri"`
 	Match             int    `json:"match"`
 	BaseDomain        string `json:"baseDomain,omitempty"`

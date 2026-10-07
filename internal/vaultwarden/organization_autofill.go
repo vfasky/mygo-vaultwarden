@@ -37,7 +37,7 @@ func (s *Session) appendOrganizationCredentialsLocked(result *SyncResult, polici
 		if err != nil {
 			return err
 		}
-		credential, skipped, err := decryptCipher(item, key)
+		credential, skipped, err := decryptCipher(item, key, policies.defaultURIMatch)
 		if err != nil {
 			return err
 		}

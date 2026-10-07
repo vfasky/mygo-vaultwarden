@@ -40,7 +40,7 @@ func OrganizationPolicyDefinitions() []PolicyDefinition {
 		{8, "账号恢复", "邀请自动登记已接；完整管理员恢复待接。服务器配置可能要求先启用单一组织。", []PolicyFieldDefinition{b("autoEnrollEnabled", "自动登记账号恢复")}},
 		{14, "移除 PIN 解锁", "本应用没有 PIN 解锁入口；未来 PIN 功能须消费此策略。", nil},
 		{15, "受限条目类型", "已约束写入、读取与 AutoFill。固定客户端默认限制卡片，保留服务器扩展数据。", nil},
-		{16, "默认 URI 匹配", "默认 URI 策略消费待接；显式 URI 规则保持原值。", []PolicyFieldDefinition{{Key: "uriMatchDetection", Label: "默认匹配方式", Kind: "uri", Min: 0, Max: 5}}},
+		{16, "默认 URI 匹配", "默认规则已用于个人与组织 URI 投影；显式规则保持原值。前缀与正则当前不参与系统自动填充，待完整实现。", []PolicyFieldDefinition{{Key: "uriMatchDetection", Label: "默认匹配方式", Kind: "uri", Min: 0, Max: 5}}},
 		{20, "组织用户通知", "固定服务器支持保存此类型，未发现其通知执行逻辑；保留原始扩展数据。", nil},
 	}
 }

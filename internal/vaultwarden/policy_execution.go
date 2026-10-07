@@ -16,6 +16,7 @@ type operationPolicies struct {
 	scope                   Scope
 	revision                string
 	epoch                   uint64
+	defaultURIMatch         int
 	personalOwnership       bool
 	restrictedPersonal      map[int]bool
 	restrictedOrganizations map[string]map[int]bool
@@ -146,6 +147,23 @@ func parseOperationPolicies(body []byte, scope Scope, email, wrapped string) (*o
 		}
 	}
 	result := &operationPolicies{scope: scope, restrictedPersonal: map[int]bool{}, restrictedOrganizations: map[string]map[int]bool{}, memberships: orgs, ciphers: data.Ciphers}
+	// Preserve wire order: fixed clients policiesByType$ -> getFirstPolicy does
+	// not sort or combine URI defaults. Owners/admins can manage policies and
+	// are exempt. Disabled organizations are not a role exemption.
+	for _, p := range data.Policies {
+		o := orgs[p.OrganizationID]
+		if *p.Type != 16 || !*p.Enabled || *o.Type == 0 || *o.Type == 1 || *o.Status < 1 {
+			continue
+		}
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(p.Data, &fields) == nil {
+			var match float64 // JavaScript enum membership uses JSON Number semantics.
+			if raw := fields["uriMatchDetection"]; len(raw) != 0 && string(raw) != "null" && json.Unmarshal(raw, &match) == nil && match >= 0 && match <= 5 && match == float64(int(match)) {
+				result.defaultURIMatch = int(match)
+			}
+		}
+		break // Invalid/null first policy falls back, not to a later policy.
+	}
 	for _, p := range confirmed {
 		o := orgs[p.OrganizationID]
 		if !*p.Enabled || !*o.UsePolicies {

@@ -123,7 +123,7 @@ func decryptSyncWithPolicies(data syncReply, key []byte, policies *operationPoli
 			return result, ErrProtocol
 		}
 		seen[item.ID] = true
-		credential, skipped, err := decryptCipher(item, key)
+		credential, skipped, err := decryptCipher(item, key, policies.defaultURIMatch)
 		if err != nil {
 			return SyncResult{}, err
 		}
@@ -136,7 +136,7 @@ func decryptSyncWithPolicies(data syncReply, key []byte, policies *operationPoli
 	}
 	return result, nil
 }
-func decryptCipher(item encryptedCipher, userKey []byte) (Credential, int, error) {
+func decryptCipher(item encryptedCipher, userKey []byte, defaultMatch ...int) (Credential, int, error) {
 	key := userKey
 	if item.Key != nil && *item.Key != "" {
 		var err error
@@ -166,12 +166,15 @@ func decryptCipher(item encryptedCipher, userKey []byte) (Credential, int, error
 		return Credential{}, 0, ErrProtocol
 	}
 	skipped := 0
-	for _, entry := range item.Login.URIs {
+	for index, entry := range item.Login.URIs {
 		value, err := decryptText(entry.URI, key)
 		if err != nil {
 			return Credential{}, 0, err
 		}
 		match := 0
+		if len(defaultMatch) == 1 {
+			match = defaultMatch[0]
+		}
 		if entry.Match != nil {
 			match = *entry.Match
 		}
@@ -180,6 +183,7 @@ func decryptCipher(item encryptedCipher, userKey []byte) (Credential, int, error
 			skipped++
 			continue
 		}
+		rule.SourceIndex = &index
 		credential.URIs = append(credential.URIs, rule)
 		credential.Hosts = append(credential.Hosts, host)
 		if credential.URL == "" {

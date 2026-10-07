@@ -34,6 +34,13 @@ func (a *app) uriMatchPicker(c *ui.Context, u *editorURI, disabled bool) {
 			label = m.label
 		}
 	}
+	if u.source["match"] == nil && a.editor != nil {
+		for _, m := range uriMatches[1:] {
+			if m.value == json.Number(fmt.Sprint(a.editor.defaultURIMatch)) {
+				ui.Text(c, "当前默认："+m.label+"；保留默认会随组织策略更新。显式规则保持不变。").FontSize(11).MaxLines(3)
+			}
+		}
+	}
 	if action(c, "匹配方式："+label, "", false, disabled).Clicked() {
 		u.showMatch = !u.showMatch
 	}
