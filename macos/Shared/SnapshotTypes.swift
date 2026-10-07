@@ -149,7 +149,8 @@ struct SnapshotState: Codable {
                   UUID(uuidString: snapshot.header.keyID) != nil,
                   !retiredKeys.contains(snapshot.header.keyID),
                   snapshot.header.scope.valid,
-                  snapshot.header.count >= 0, snapshot.header.count <= 10000 else { throw SnapshotError.corrupt }
+                  snapshot.header.count >= 0, snapshot.header.count <= 10000,
+                  snapshot.sealed.count <= SnapshotTransfer.maximumBytes + 28 else { throw SnapshotError.corrupt }
             if let wrapper = snapshot.passwordUnlock {
                 guard wrapper.config.valid, wrapper.sealed.count == 60 else { throw SnapshotError.corrupt }
             }
@@ -241,6 +242,7 @@ func sealSnapshot(credentials: [VaultCredential], scope: SnapshotScope, keyID: S
     let now = Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970))
     let header = SnapshotHeader(format: 1, id: UUID().uuidString, keyID: keyID, scope: scope, createdAt: now, count: credentials.count)
     let plaintext = try snapshotJSON(SnapshotPayload(scope: scope, credentials: credentials, session: session, vault: vault))
+    guard plaintext.count <= SnapshotTransfer.maximumBytes else { throw SnapshotError.invalidInput }
     let box = try AES.GCM.seal(plaintext, using: SymmetricKey(data: key), authenticating: snapshotJSON(header))
     guard let combined = box.combined else { throw SnapshotError.corrupt }
     var snapshot = EncryptedSnapshot(header: header, sealed: combined)

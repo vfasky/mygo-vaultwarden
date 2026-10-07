@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -73,13 +74,24 @@ func loadStorageBridge() error {
 }
 
 func nativeStorageCall(input []byte) ([]byte, error) {
+	return boundedStorageCall(input, nativeStorageFrame)
+}
+
+func nativeStorageFrame(input []byte) ([]byte, error) {
 	if err := loadStorageBridge(); err != nil {
 		return nil, err
 	}
 	if len(input) == 0 || len(input) > 4*1024*1024 {
 		return nil, errSnapshotTooLarge
 	}
-	output := make([]byte, 4*1024*1024)
+	capacity := 4 * 1024 * 1024
+	var frame struct {
+		Operation string `json:"operation"`
+	}
+	if json.Unmarshal(input, &frame) == nil && frame.Operation == "__transfer_v1" {
+		capacity = 512 * 1024
+	}
+	output := make([]byte, capacity)
 	n := storageBridge.call(input, len(input), output, len(output))
 	runtime.KeepAlive(input)
 	runtime.KeepAlive(output)
