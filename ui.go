@@ -106,6 +106,9 @@ func (a *app) view(c *ui.Context) {
 		a.authentication(c)
 		return
 	}
+	if c.Shortcut(ui.Cmd, ui.KeyB) {
+		a.sidebarCollapsed = !a.sidebarCollapsed
+	}
 	ui.Row(c).Fill().TextColor(vaultInk).AlignItems(ui.Stretch).Children(func() {
 		a.sidebar(c)
 		ui.Column(c).Grow(1).MinWidth(0).Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
@@ -188,7 +191,14 @@ func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) 
 func (a *app) header(c *ui.Context) {
 	bar := c.TitleBar()
 	ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).Gap(10).AlignItems(ui.Center).
-		Padding(0, 20, 0, 20).DragWindow().Children(func() {
+		Padding(0, 20, 0, max(float32(20), bar.Left-a.sidebarWidth()+8)).DragWindow().Children(func() {
+		label := "折叠侧栏"
+		if a.sidebarCollapsed {
+			label = "展开侧栏"
+		}
+		if iconButton(c, label, "panel-left").Key("sidebar-toggle").Clicked() {
+			a.sidebarCollapsed = !a.sidebarCollapsed
+		}
 		ui.Spacer(c)
 		state := "未解锁"
 		if a.unlocked() {
@@ -212,10 +222,17 @@ func (a *app) header(c *ui.Context) {
 	})
 }
 
+func (a *app) sidebarWidth() float32 {
+	if a.sidebarCollapsed {
+		return 64
+	}
+	return 236
+}
+
 func (a *app) sidebar(c *ui.Context) {
 	bar := c.TitleBar()
 	ui.Row(c).Shrink(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(236).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c, bar) })
+		ui.Column(c).Width(a.sidebarWidth()).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c, bar) })
 		ui.Box(c).Width(1).Background(vaultLine)
 	})
 }
@@ -223,30 +240,40 @@ func (a *app) sidebar(c *ui.Context) {
 func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 	{
 		ui.Box(c).Height(max(bar.Height, 52) - 8).Shrink(0).DragWindow()
-		ui.Row(c).Padding(2, 8, 8, 8).Gap(10).AlignItems(ui.Center).Children(func() {
+		brandPadding := float32(8)
+		if a.sidebarCollapsed {
+			brandPadding = 4
+		}
+		ui.Row(c).Padding(2, brandPadding, 8, brandPadding).Gap(10).AlignItems(ui.Center).Children(func() {
 			if appLogo != nil {
 				ui.Image(c, appLogo).Size(32, 32).Shrink(0)
 			}
-			ui.Column(c).Gap(1).Children(func() {
-				ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
-				ui.Text(c, "个人密码库 · 只读").FontSize(11).TextColor(vaultMuted).SingleLine()
-			})
+			if !a.sidebarCollapsed {
+				ui.Column(c).Gap(1).Children(func() {
+					ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
+					ui.Text(c, "个人密码库 · 只读").FontSize(11).TextColor(vaultMuted).SingleLine()
+				})
+			}
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
-				sectionLabel(c, "所有密码库")
-				if navItem(c, "我的密码库", "user", "", false, false).Clicked() {
+				if !a.sidebarCollapsed {
+					sectionLabel(c, "所有密码库")
+				}
+				if a.navItem(c, "我的密码库", "user", "", false, false).Clicked() {
 					a.category, a.query, a.showSettings = "all", "", false
 				}
 				ui.Box(c).Height(10)
-				sectionLabel(c, "项目")
+				if !a.sidebarCollapsed {
+					sectionLabel(c, "项目")
+				}
 				for _, category := range vaultCategories {
 					count := ""
 					if category.supported && a.unlocked() {
 						count = fmt.Sprint(len(a.items))
 					}
-					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
-					if !category.supported {
+					b := a.navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
+					if !category.supported && !a.sidebarCollapsed {
 						b.Tooltip("当前只读版本尚未同步此分类")
 					}
 					if b.Clicked() {
@@ -256,7 +283,7 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 				}
 			})
 		})
-		if navItem(c, "账号与设置", "settings", "", a.showSettings, false).Clicked() {
+		if a.navItem(c, "账号与设置", "settings", "", a.showSettings, false).Clicked() {
 			a.showSettings = !a.showSettings
 		}
 	}
@@ -266,8 +293,11 @@ func sectionLabel(c *ui.Context, text string) {
 	ui.Text(c, text).Padding(3, 10).FontSize(11).TextColor(vaultMuted)
 }
 
-func navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
 	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 11).Gap(10).Radius(20).Disabled(disabled).TextColor(vaultMuted)
+	if a.sidebarCollapsed {
+		b.Tooltip(title).Justify(ui.Center)
+	}
 	if selected {
 		b.Background(vaultWhite).TextColor(vaultInk).Shadow(0, 2, 6, 0, ui.RGBA(38, 30, 62, .06))
 	} else if b.Hovered() && !disabled {
@@ -278,6 +308,9 @@ func navItem(c *ui.Context, title, symbol, count string, selected, disabled bool
 	}
 	b.Children(func() {
 		icon(c, symbol, 18)
+		if a.sidebarCollapsed {
+			return
+		}
 		ui.Text(c, title).Grow(1).FontSize(13).SingleLine()
 		if count != "" {
 			ui.Text(c, count).FontSize(11).Background(ui.RGBA(255, 255, 255, .7)).Padding(2, 6).Radius(9)
