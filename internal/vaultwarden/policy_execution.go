@@ -18,6 +18,7 @@ type operationPolicies struct {
 	epoch                   uint64
 	defaultURIMatch         int
 	personalOwnership       bool
+	singleOrganization      bool
 	restrictedPersonal      map[int]bool
 	restrictedOrganizations map[string]map[int]bool
 	memberships             map[string]policyMembership
@@ -173,6 +174,10 @@ func parseOperationPolicies(body []byte, scope Scope, email, wrapped string) (*o
 		// confirmed membership into a PersonalOwnership bypass (server helper uses
 		// membership status and role). The sync endpoint still supplies its policy.
 		switch *p.Type {
+		case 3:
+			if *o.Type != 0 && *o.Type != 1 {
+				result.singleOrganization = true
+			}
 		case 5:
 			if *o.Type != 0 && *o.Type != 1 {
 				result.personalOwnership = true

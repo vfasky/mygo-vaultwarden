@@ -38,6 +38,11 @@ func applyPendingPolicies(p *operationPolicies, pending []PendingPolicyMutation)
 			// recovery clears this exact record, never fill an inherited URI.
 			p.defaultURIMatch = 5
 		}
+		if entry.PolicyType == 3 {
+			// An uncertain policy PUT may forbid creating another organization.
+			// Keep this barrier until the dedicated policy recovery clears it.
+			p.singleOrganization = true
+		}
 		if entry.PolicyType == 5 {
 			p.personalOwnership = true
 		}

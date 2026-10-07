@@ -1,6 +1,6 @@
 # 组织策略执行迁移
 
-**INCOMPLETE — 整卡未完成，禁止Review/merge。** 已新增固定12类策略产品API与原生业务表单，以及跨Go/Swift的持久待核验屏障和显式恢复；策略管理不等于全部策略消费。type16默认URI已接个人/组织投影、原生创建编辑默认说明与Swift旧候选来源核验；兼容zxcvbn、生成器/Send/PIN/账号及组织生命周期的剩余策略消费仍待完成，原完整API范围保持不变。
+**INCOMPLETE — 整卡未完成，禁止Review/merge。** 已新增固定12类策略产品API与原生业务表单，以及跨Go/Swift的持久待核验屏障和显式恢复；策略管理不等于全部策略消费。type16默认URI已接个人/组织投影、原生创建编辑默认说明与Swift旧候选来源核验；固定官方zxcvbn评分基础和组织创建type3预检已接，账号主密码消费者、生成器/Send/PIN及其余组织生命周期策略场景仍待完成，原完整API范围保持不变。
 
 ## 策略管理与恢复（本轮增量）
 
@@ -9,7 +9,7 @@
 | 类型 | 原生控件/数据字段 | 实际消费边界 |
 | --- | --- | --- |
 | 0 双因素 | 启停 | 服务器可能先撤销成员；完整客户端MFA管理待接 |
-| 1 主密码 | minComplexity、minLength、requireUpper/Lower/Numbers/Special、enforceOnLogin | 管理表单已接；兼容zxcvbn及主密码操作消费待接，不用字符类别假冒评分 |
+| 1 主密码 | minComplexity、minLength、requireUpper/Lower/Numbers/Special、enforceOnLogin | 管理表单已接；[固定官方zxcvbn评分基础](../internal/passwordstrength/README.md)已验证，账号改密/登录等消费者仍待接，不用字符类别假冒评分 |
 | 2 生成器 | overridePasswordType、minLength、useUpper/Lower/Numbers/Special、minNumbers/Special、minNumberWords、capitalize、includeNumber | 管理表单已接；生成器产品待接 |
 | 3 单一组织 | 启停 | 服务器可能先撤销其他组织成员；本机生命周期前置消费待补 |
 | 5 个人所有权 | 启停 | 已有个人create/update/copy/import限制；不禁止已有个人读取/删除/共享 |
@@ -77,8 +77,16 @@ Swift57项涵盖MemoryKeys加密快照、lease、隔离/重启/恢复、checkpoi
 
 `TestLivePolicyExecution`使用独有名称/label、回环端口的1.37.4 Docker及example.invalid账号，验证type5/15真实写入、reprompt、bulk缺ID拒绝/服务器部分执行，以及个人/组织同步投影与离线读取随type15启用拒绝、移除后恢复。bulk通过真实创建→认证缓存→服务器删除形成陈旧快照，未给生产guard注入假snapshot。受信Go receipt仅模拟已验证发布；fixture policy PUT和直接partial协议请求不是产品策略管理入口。最终命令/资源/结果见最新handoff。
 
+## 组织创建与固定协议的生命周期边界
+
+`SaveOrganization`创建分支现在先认证GET `/api/sync`，私有`operationPolicies`消费type3 SingleOrg：已confirmed普通成员/经理限制创建，owner/admin豁免，accepted/invited不冒充confirmed。服务器disabled或本机quarantine均不豁免；pending type3未核验期间阻断创建。读取后派发前再核验scope/revision/epoch；刷新checkpoint失败、取消/Close、过期快照都不发创建POST。资料PUT不被创建规则误禁。独有1.37.4回环已验证成员受限、本机隔离不能绕过与owner实际创建成功；角色/状态/取消/刷新另有单元回归。
+
+固定`org_policy.rs:282–343`的`is_applicable_to_user/check_user_allowed`对目标真实role/state及其他组织和2FA进行校验。客户端可判定部分预检；邀请目标角色及跨账号状态由服务器强制校验。`/api/accounts/profile`不返回未接受邀请的目标role，`policies/token`只有policy；管理员不能读取对方完整sync/2FA。不能解析未验证JWT授许、读服务器私钥或把普通成员规则强加给owner/admin。缺可靠事实时仅将用户已确认请求交给现有认证端点最终校验，不宣称本机已判定通过；拒绝/可能部分执行仍按现有未知结果处理，不自动重试、不继续后续密钥步骤。协调者已确认此固定协议边界；真实SMTP下普通member受限/owner-admin豁免等新增场景仍待补，管理员账号恢复产品本身也仍未实现。
+
+评分基础使用固定clients lock对应的原始MIT `zxcvbn 4.4.2`完整JS与词典，goja固定版本、独立运行时、JS Unicode/邮箱/用户输入语义；Node独立28向量和0–4最低评分比较、资源界限/取消/并发隔离均有回归。日期按当前年份，测试固定2026；不返回password/匹配片段/反馈，不承诺GC清零。此基础没有自动接入未完成的账号注册/改密/登录策略，不等于type1完整消费。
+
 ## 下一步，范围不缩减
 
 1. 12种固定服务器策略管理及待核验屏障已接；继续补真实原生两阶段完整交互、平台故障注入与完整策略消费，不能将管理等同执行。
-2. 组织生命周期、生成器/Send/PIN等已有与后续功能的实际政策消费；minComplexity按固定clients/SDK真实zxcvbn词典、用户输入、Unicode语义核对；URI前缀/正则完整匹配仍在整卡范围。
+2. 生成器/Send/PIN等已有与后续功能的实际政策消费；将已验证`internal/passwordstrength`基础接入真实主密码变更/登录/注册时的type1消费者。组织邀请普通member受type3限制、owner/admin真实豁免等SMTP场景仍待补，管理员恢复随产品完成验证；URI前缀/正则完整匹配仍在整卡范围。
 3. 原完整legacy共享、附件、Send、账号/MFA/SSO/通知、大库桥、组织批量/导出、逐项reprompt、无ID数组冲突等继续总矩阵。其余旧opt-in真实协议夹具仍可能使用BindSnapshotRevision或直接改VaultData，运行对应模块前按真实receipt迁移，不放宽生产读取边界。

@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -112,7 +113,25 @@ func (s *Session) SaveOrganization(ctx context.Context, vault *VaultData, orgID 
 	defer data.close()
 	body := map[string]any{"name": settings.Name, "billingEmail": settings.BillingEmail}
 	method, path := http.MethodPut, "/api/organizations/"+orgID
+	guard := s.organizationManagementGuardLocked(s.authorizationRevision)
 	if orgID == "" {
+		policies, err := s.operationPoliciesLocked(ctx, persist)
+		if err != nil {
+			return OrganizationProfile{}, err
+		}
+		if policies.singleOrganization {
+			return OrganizationProfile{}, fmt.Errorf("单一组织策略或待核验的策略变更禁止创建其他组织：%w", ErrPermission)
+		}
+		previousGuard := guard
+		guard = func() error {
+			if err := s.checkOperationPoliciesLocked(ctx, policies); err != nil {
+				return err
+			}
+			return previousGuard()
+		}
+		if err := guard(); err != nil {
+			return OrganizationProfile{}, err
+		}
 		var sync struct{ Profile json.RawMessage }
 		if json.Unmarshal(vault.Sync, &sync) != nil {
 			return OrganizationProfile{}, ErrProtocol
@@ -157,7 +176,6 @@ func (s *Session) SaveOrganization(ctx context.Context, vault *VaultData, orgID 
 	if err != nil {
 		return OrganizationProfile{}, ErrProtocol
 	}
-	guard := s.organizationManagementGuardLocked(s.authorizationRevision)
 	status, response, err := s.authenticatedGuardedLocked(ctx, method, path, "application/json", string(encoded), persist, guard)
 	if err != nil {
 		return OrganizationProfile{}, err

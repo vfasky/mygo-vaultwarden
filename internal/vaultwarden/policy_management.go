@@ -31,7 +31,7 @@ func OrganizationPolicyDefinitions() []PolicyDefinition {
 	}
 	return []PolicyDefinition{
 		{0, "要求双因素认证", "服务器执行成员撤销；本应用完整 MFA 登录与管理待接。", nil},
-		{1, "主密码要求", "主密码变更及兼容 zxcvbn 强度验证待接，保存策略不代表本机执行。", []PolicyFieldDefinition{n("minComplexity", "最低强度评分（0–4）", 0, 4), n("minLength", "最短主密码长度", 12, 128), b("requireUpper", "要求大写字母"), b("requireLower", "要求小写字母"), b("requireNumbers", "要求数字"), b("requireSpecial", "要求特殊字符"), b("enforceOnLogin", "登录时执行")}},
+		{1, "主密码要求", "主密码变更及登录时执行待接，保存策略不代表本机执行。", []PolicyFieldDefinition{n("minComplexity", "最低强度评分（0–4）", 0, 4), n("minLength", "最短主密码长度", 12, 128), b("requireUpper", "要求大写字母"), b("requireLower", "要求小写字母"), b("requireNumbers", "要求数字"), b("requireSpecial", "要求特殊字符"), b("enforceOnLogin", "登录时执行")}},
 		{2, "密码生成器", "本应用受策略约束的生成器待接。", []PolicyFieldDefinition{{Key: "overridePasswordType", Label: "生成方式", Kind: "generator"}, n("minLength", "最短密码长度", 5, 128), b("useUpper", "使用大写字母"), b("useLower", "使用小写字母"), b("useNumbers", "使用数字"), b("useSpecial", "使用特殊字符"), n("minNumbers", "最少数字", 0, 9), n("minSpecial", "最少特殊字符", 0, 9), n("minNumberWords", "最少单词", 3, 20), b("capitalize", "单词首字母大写"), b("includeNumber", "包含数字")}},
 		{3, "单一组织", "服务器执行加入限制与成员撤销；本机组织生命周期前置检查待补。", nil},
 		{5, "限制个人所有权", "已约束个人保存；已有个人条目仍可读取。", nil},

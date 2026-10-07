@@ -26,7 +26,7 @@ func TestOrganizationManagementCreatesIndependentKeyAndPlainMetadata(t *testing.
 	var session *Session
 	var vault *VaultData
 	var createdKeys [][]byte
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newOrganizationPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" || r.URL.Path != "/api/organizations" {
 			t.Error("route")
 		}

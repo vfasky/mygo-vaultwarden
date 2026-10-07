@@ -139,6 +139,33 @@ func TestLivePolicyExecution(t *testing.T) {
 			t.Fatal("policy seed", status, e)
 		}
 	}
+	t.Run("single-organization-creation", func(t *testing.T) {
+		seedPolicy(3, nil)
+		settings := OrganizationSettings{Name: "Policy creation fixture", BillingEmail: owner.email, CollectionName: "Default"}
+		// Neither stale local policy nor local isolation may bypass server policy.
+		if _, e := member.SaveOrganization(ctx, mv, "", settings, nil); !errors.Is(e, ErrPermission) {
+			t.Fatal("member creation not blocked by fresh type3", e)
+		}
+		isolated := *mv
+		isolated.QuarantinedOrganizations = []string{org.ID}
+		installFixtureSnapshot(t, member, &isolated, "single-org-isolated")
+		if _, e := member.SaveOrganization(ctx, &isolated, "", settings, nil); !errors.Is(e, ErrPermission) {
+			t.Fatal("quarantine bypassed type3", e)
+		}
+		// Use the actual product create call with an owner exempt from type3.
+		created, e := owner.SaveOrganization(ctx, ov, "", settings, nil)
+		if e != nil || created.ID == "" {
+			t.Fatal("owner creation exemption", e)
+		}
+		// Keep the remainder of the fixture independent of type3. The additional
+		// organization is confined to this unique disposable container.
+		payload := `{"policy":{"enabled":false,"data":null}}`
+		status, _, e := owner.client.request(ctx, "PUT", fmt.Sprintf("/api/organizations/%s/policies/3", org.ID), "application/json", payload, owner.access)
+		if e != nil || status != 200 {
+			t.Fatal("disable fixture type3", status, e)
+		}
+		mv, ov = syncVault(member), syncVault(owner)
+	})
 	t.Run("uri-default-projection", func(t *testing.T) {
 		login := CipherFields{Type: 1, Name: "URI defaults fixture", Login: map[string]any{"username": "fixture", "password": "fixture-only-secret", "uris": []any{
 			map[string]any{"uri": "https://login.example.invalid/path", "match": nil},
@@ -217,7 +244,16 @@ func TestLivePolicyExecution(t *testing.T) {
 	if err != nil || len(collections) == 0 {
 		t.Fatal("organization collection", err)
 	}
-	collectionID := collections[0].ID
+	collectionID := ""
+	for _, collection := range collections {
+		if collection.OrganizationID == org.ID {
+			collectionID = collection.ID
+			break
+		}
+	}
+	if collectionID == "" {
+		t.Fatal("target organization collection missing")
+	}
 	card, err := owner.CreateOrganizationCipher(ctx, ov, org.ID, collectionID, CipherFields{Type: 3, Name: "Existing organization card"}, nil)
 	if err != nil {
 		t.Fatal("initial organization card", err)
