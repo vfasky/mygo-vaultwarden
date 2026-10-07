@@ -11,6 +11,10 @@ import (
 )
 
 type organizationEditor struct {
+	groups                                                        []vaultwarden.GroupEntry
+	groupID                                                       string
+	groupDraft                                                    *vaultwarden.GroupDraft
+	groupConsent                                                  *vaultwarden.GroupConsent
 	id, revision, name, email, collection, password, confirmation string
 	owner, loaded, uncertain, isolated                            bool
 	collectionID                                                  string
@@ -28,6 +32,8 @@ type organizationEditor struct {
 
 func (a *app) clearOrganizationEditor() {
 	if a.organizationEditor != nil {
+		a.organizationEditor.groupDraft.Close()
+		a.organizationEditor.groupConsent.Close()
 		a.organizationEditor.invitationAcceptance.Close()
 		a.organizationEditor.collectionDraft.Close()
 		a.organizationEditor.members.Close()
@@ -151,6 +157,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 					a.organizationRecoveryKeyView(c, e, disabled)
 				}
 				a.collectionManagementView(c, e, disabled)
+				a.groupManagementView(c, e, disabled)
 				a.memberManagementView(c, e, disabled)
 				if e.confirmation == "" {
 					if action(c, "退出组织", "", false, disabled).Key("organization-leave").Clicked() {
@@ -199,7 +206,7 @@ func (a *app) runOrganizationManagement(operation string) {
 	if a.pending != 0 || e == nil || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision || a.vault == nil {
 		return
 	}
-	if operation != "recovery-key-load" && operation != "recovery-key-create" && operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) {
+	if operation != "recovery-key-load" && operation != "recovery-key-create" && operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) && !groupManagementOperation(operation) {
 		return
 	}
 	if (operation == "recovery-key-load" || operation == "recovery-key-create") && (!e.owner || e.id == "" || (operation == "recovery-key-create" && e.confirmation != operation)) {
@@ -232,11 +239,17 @@ func (a *app) runOrganizationManagement(operation string) {
 	if memberManagementOperation(operation) && !a.validMemberOperation(e, operation) {
 		return
 	}
+	if groupManagementOperation(operation) {
+		if e.id == "" || ((operation == "group-save" || operation == "group-delete") && (e.groupDraft == nil || e.confirmation != operation)) {
+			return
+		}
+	}
 	collectionID := e.collectionID
 	session, ok := a.session.(*vaultwarden.Session)
 	if !ok {
 		return
 	}
+	groupDraft, groupConsent, groupID := e.groupDraft.Clone(), e.groupConsent.Clone(), e.groupID
 	collectionDraft := e.collectionDraft.Clone()
 	members, memberProof := e.members.Clone(), e.memberProof.Clone()
 	memberRole := e.memberRole.Clone()
@@ -260,6 +273,10 @@ func (a *app) runOrganizationManagement(operation string) {
 	a.pending++
 	a.status = "正在处理组织请求…"
 	go func() {
+		defer groupDraft.Close()
+		defer groupConsent.Close()
+		var loadedGroup *vaultwarden.GroupDraft
+		var loadedGroups []vaultwarden.GroupEntry
 		defer invitationAcceptance.Close()
 		defer clear(password)
 		defer collectionDraft.Close()
@@ -313,6 +330,14 @@ func (a *app) runOrganizationManagement(operation string) {
 			err = vaultwarden.ErrConflict
 		} else {
 			switch operation {
+			case "group-list":
+				loadedGroups, err = session.OrganizationGroups(ctx, vault, id, persist)
+			case "group-load":
+				loadedGroup, err = session.GroupDetails(ctx, vault, id, groupID, persist)
+			case "group-save":
+				err = session.SaveGroup(ctx, vault, groupDraft, groupConsent, isolate, persist)
+			case "group-delete":
+				err = session.DeleteGroup(ctx, vault, groupDraft, isolate, persist)
 			case "recovery-key-load", "recovery-key-create":
 				recoveryPublicKey, err = session.OrganizationRecoveryPublicKey(ctx, vault, id, operation == "recovery-key-create", persist)
 			case "invitation-load":
@@ -399,6 +424,21 @@ func (a *app) runOrganizationManagement(operation string) {
 				}
 			}
 			a.completeOrganizationManagement(epoch, e, operation, result, checkpoint, reply, err, cancel)
+			if loadedGroups != nil && a.epoch == epoch && a.organizationEditor == e && err == nil {
+				e.groups = loadedGroups
+			}
+			if loadedGroup != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil && checkpoint == nil {
+					e.groupDraft.Close()
+					e.groupDraft = loadedGroup
+					e.groupConsent.Close()
+					e.groupConsent = nil
+					e.confirmation = ""
+					a.status = "已加载群组，请明确设置本次保存的访问范围"
+				} else {
+					loadedGroup.Close()
+				}
+			}
 			if loadedInvitation != nil {
 				if a.epoch == epoch && a.organizationEditor == e && err == nil && checkpoint != nil {
 					// Publishing a refresh checkpoint advances the bound revision.
@@ -467,6 +507,8 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {
+		e.groupDraft.Close()
+		e.groupConsent.Close()
 		e.invitationAcceptance.Close()
 		e.collectionDraft.Close()
 		e.members.Close()
@@ -506,7 +548,7 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		}
 		return
 	}
-	if operation == "invitation-load" || operation == "recovery-key-load" || operation == "recovery-key-create" || operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
+	if operation == "group-list" || operation == "group-load" || operation == "invitation-load" || operation == "recovery-key-load" || operation == "recovery-key-create" || operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
 		return
 	}
 	if operation == "restore" {
