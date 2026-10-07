@@ -114,7 +114,7 @@ func TestCipherDocumentRejectsUnsafeChanges(t *testing.T) {
 				id := "other"
 				fields.OrganizationID = &id
 			case "history":
-				fields.PasswordHistory = nil
+				fields.PasswordHistory = []map[string]any{{"password": "forged", "lastUsedDate": "2026-01-01T00:00:00Z"}}
 			case "password":
 				fields.Login["password"] = "new"
 			case "uris":

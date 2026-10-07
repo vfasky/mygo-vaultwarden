@@ -44,6 +44,7 @@ type cipherEditor struct {
 	revision                     string
 	confirm                      vaultwarden.CipherAction
 	showHistory                  bool
+	confirmHistoryDelete         bool
 	authorization                *vaultwarden.ItemAuthorization
 	repromptID, repromptPassword string
 	authorizationExpires         time.Time

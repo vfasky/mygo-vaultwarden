@@ -98,6 +98,22 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 	if len(e.fields.PasswordHistory) == 0 {
 		return
 	}
+	if e.confirmHistoryDelete {
+		ui.Text(c, "确认清除全部密码历史？仅在保存项目后提交；同时修改密码仍会记录本次替换的旧密码。").FontSize(12)
+		ui.Row(c).Gap(8).Children(func() {
+			if action(c, "确认清除历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
+				e.fields.PasswordHistory = nil
+				e.confirmHistoryDelete, e.showHistory = false, false
+			}
+			if action(c, "保留历史", "", false, a.pending != 0).Clicked() {
+				e.confirmHistoryDelete = false
+			}
+		})
+		return
+	}
+	if action(c, "清除密码历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
+		e.confirmHistoryDelete = true
+	}
 	label := fmt.Sprintf("显示密码历史明文（%d）", len(e.fields.PasswordHistory))
 	if e.showHistory {
 		label = "隐藏密码历史"

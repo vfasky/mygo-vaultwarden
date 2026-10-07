@@ -199,6 +199,17 @@ func TestLiveVaultwarden(t *testing.T) {
 					if kind == 1 && (copyFields.PasswordHistory[0]["password"] != "initial fixture password" || copyFields.Login["uris"].([]any)[0].(map[string]any)["uriChecksum"] == nil) {
 						t.Fatal("copy lost history/checksum")
 					}
+					if kind == 1 {
+						verified.PasswordHistory = nil
+						withoutHistory, err := session.UpdatePersonalCipher(ctx, result.Scope, updated, verified, nil)
+						if err != nil {
+							t.Fatal("delete password history", err)
+						}
+						cleared, err := DecryptCipherDocument(withoutHistory, key)
+						if err != nil || len(cleared.PasswordHistory) != 0 || cleared.Login["password"] != "updated fixture password" {
+							t.Fatal("history deletion damaged current password", err)
+						}
+					}
 					if err := session.ChangeCipherState(ctx, result.Scope, copyFields.ID, CipherDeletePermanently, nil); err != nil {
 						t.Fatal(err)
 					}

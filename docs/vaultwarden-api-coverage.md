@@ -19,7 +19,7 @@
 | 永久删除 | DELETE `/api/ciphers/{id}`；POST `/api/ciphers/{id}/delete` 为永久删除别名 | `CipherDeletePermanently`；仅 DELETE 已测试 | 回收站打开项目→永久删除→不可恢复提示→确认；顶栏清空回收站只选deleted再确认批量删除 |
 | 归档 / 取消 | PUT `/api/ciphers/{id}/archive`、`/unarchive` | `CipherArchive/CipherUnarchive`；真实回环，归档排除 AutoFill | 编辑页归档按钮；侧栏归档分类；完整 PUT 保留原 `archivedDate` |
 | 分类 | 本地过滤认证后的完整库元数据 | `PersonalEntries`、`filteredItems`；headless 测试 | 八类型、收藏、归档、回收站；未知格式显示受保护占位；reprompt占位可进入主密码再次验证表单；不是虚假的空分类 |
-| 密码历史 / URI 完整性 | 更新体的 passwordHistory、passwordRevisionDate、uriChecksum | 自动保留旧密码，URI SHA256 Base64 再 type-2 加密；单元与真实回环 | 改密码/网址时维护；历史显式显示/隐藏已接入，历史删除未完成。URI默认及0–5策略可编辑，未知策略保留；起始/正则匹配当前仅保存，不进入AutoFill |
+| 密码历史 / URI 完整性 | 更新体的 passwordHistory、passwordRevisionDate、uriChecksum | 自动保留旧密码，URI SHA256 Base64 再 type-2 加密；单元与真实回环 | 改密码/网址时维护；历史显式显示/隐藏与确认清除已接入（保存时提交；同时改密码仍记录刚替换的旧密码）。URI默认及0–5策略可编辑，未知策略保留；起始/正则匹配当前仅保存，不进入AutoFill |
 | 完整离线数据 | 本地 `VaultData{version:1,scope,sync:base64}` | Go Documents 校验、Swift `SnapshotPayload.vault`、bridge、迁移与 checkpoint 测试 | 完整原始 sync 仅放 AES-GCM payload；认证主应用解锁才返回；状态/AutoFill lease不返回。旧 payload 无 vault 时可解锁，下次成功同步迁移 |
 
 实际 Cipher 类型是 1 Login、2 SecureNote、3 Card、4 Identity、5 SSHKey、6 BankAccount、7 DriversLicense、8 Passport。逐字段加密名单来自固定客户端源码，未递归加密所有字符串。`encryptedFor` 是当前稳定账号 UUID。源 `lastKnownRevisionDate` 原样提交；服务端只有约一秒容差的旧版本检测，可能返回 400，并非严格 CAS。当前不轮换用户 key；源中的 `encryptedByKeyId` 若存在原样保留，尚无完整 keyId 生命周期/轮换流程。

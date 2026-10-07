@@ -242,7 +242,7 @@ func encryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 	if fields.Name == "" || len(fields.Name) > 4096 || fields.Reprompt < 0 || fields.Reprompt > 1 {
 		return CipherDocument{}, ErrValidation
 	}
-	if !reflect.DeepEqual(fields.PasswordHistory, original.PasswordHistory) || !sameOptional(fields.ArchivedDate, original.ArchivedDate) || !sameOptional(fields.DeletedDate, original.DeletedDate) {
+	if !historySubsequence(fields.PasswordHistory, original.PasswordHistory) || !sameOptional(fields.ArchivedDate, original.ArchivedDate) || !sameOptional(fields.DeletedDate, original.DeletedDate) {
 		return CipherDocument{}, ErrUnsupportedEdit
 	}
 	key, err := cipherItemKey(object, ownerKey)
@@ -265,6 +265,23 @@ func encryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 			return CipherDocument{}, err
 		}
 		object["fields"] = custom
+	}
+	if !reflect.DeepEqual(fields.PasswordHistory, original.PasswordHistory) {
+		// Only removal is permitted. Clone retained entries so encryption never
+		// mutates the UI draft, including any unknown history extensions.
+		raw, err := json.Marshal(fields.PasswordHistory)
+		if err != nil {
+			return CipherDocument{}, ErrProtocol
+		}
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		var history any
+		err = decoder.Decode(&history)
+		clear(raw)
+		if err != nil {
+			return CipherDocument{}, ErrProtocol
+		}
+		object["passwordHistory"] = history
 	}
 	object["favorite"], object["reprompt"] = fields.Favorite, fields.Reprompt
 	section := cipherSections[fields.Type]
@@ -321,6 +338,22 @@ func encryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 		return CipherDocument{}, ErrProtocol
 	}
 	return CipherDocument{JSON: encoded}, nil
+}
+
+// A draft may delete history entries, but cannot forge or reorder passwords,
+// timestamps or opaque extensions. Duplicate entries consume distinct originals.
+func historySubsequence(kept, original []map[string]any) bool {
+	position := 0
+	for _, entry := range kept {
+		for position < len(original) && !reflect.DeepEqual(entry, original[position]) {
+			position++
+		}
+		if position == len(original) {
+			return false
+		}
+		position++
+	}
+	return true
 }
 
 // NewPersonalCipher creates a fresh item key and only accepts known input fields.
