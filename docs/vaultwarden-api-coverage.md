@@ -37,12 +37,12 @@
 | 桥和快照大小 | vault不混入64 KiB session；沿用4 MiB C ABI上限，超限报错、保旧快照 | 完整大库有界传输尚未扩展；附件禁止通过JSON/此桥传输 |
 | 认证前元数据 | header仅控制元数据；完整库不在displayCredential/status/session日志；Swift认证lease才返回vault；原生开表单后才解密秘密 | 密码/TOTP安全显示复制、reprompt再次验证尚缺；当前密码输入遮掩且没有复制秘密入口 |
 
-## 全卡其余模块（全部保留，不缩减范围）
+## 其余模块与新增覆盖（全部保留，不缩减范围）
 
 | 模块 | 1.37.4 审计事实与边界 | 当前实现 / UI / 验证 |
 |---|---|---|
-| folders CRUD | POST `/api/folders`、PUT `/api/folders/{id}`、DELETE `/api/folders/{id}`；POST 更新及 `/delete` 为服务器别名，客户端未调用；GET 列表/单条由完整 sync 本地读取替代 | `SaveFolder/DeleteFolder/PersonalFolders`；type-2 名称加密、scope、错误未知结果、离线读取测试与真实 1.37.4 回环 | 侧栏新建/管理/筛选；编辑器文件夹选择；删除明确提示只解除项目归属；草稿绑定本地revision、锁定清除。服务器没有文件夹CAS |
-| 个人批量管理 | PUT `/api/ciphers/move`（POST 别名）、`/delete`（软删）、`/restore`、`/archive`、`/unarchive`；DELETE `/api/ciphers`（POST `/delete` 为永久删除别名） | `ChangePersonalCiphers`；验证选中ID属个人快照，永久删除仅允许deleted；httptest方法断言、真实批量及400部分移动回环 | 顶栏批量管理→选择项目/操作→确认；回收站清空只选择deleted，绝不purge。任意批量错误后同步逐项展示当前目标状态，不重试、不宣称原子成功；锁定清除 |
+| folders CRUD | POST `/api/folders`、PUT `/api/folders/{id}`、DELETE `/api/folders/{id}`；POST 更新及 `/delete` 为服务器别名，客户端未调用；GET 列表/单条由完整 sync 本地读取替代 | `SaveFolder/DeleteFolder/PersonalFolders`；type-2 名称加密、scope、错误未知结果、离线读取测试与真实 1.37.4 回环；侧栏新建/管理/筛选；编辑器文件夹选择；删除明确提示只解除项目归属；草稿绑定本地revision、锁定清除。服务器没有文件夹CAS |
+| 个人批量管理 | PUT `/api/ciphers/move`（POST 别名）、`/delete`（软删）、`/restore`、`/archive`、`/unarchive`；DELETE `/api/ciphers`（POST `/delete` 为永久删除别名） | `ChangePersonalCiphers`；验证选中ID属个人快照，永久删除仅允许deleted；httptest方法断言、真实批量及400部分移动回环；顶栏批量管理→选择项目/操作→确认；回收站清空只选择deleted，绝不purge。任意批量错误后同步逐项展示当前目标状态，不重试、不宣称原子成功；锁定清除 |
 | copy / import-export | 个人无 `/export` 或 `/trash`；purge是清全库 | 尚未实现；复制必须新key并处理未知扩展；导出本地转换且明确确认 |
 | 组织 / collections / members / groups / policies / events / recovery | RSA SPKI/PKCS8、OAEP type3/4；权限涉及角色、群组、readOnly/hidePasswords/manage/accessAll；memberId不等于userId | 完整加密组织profile/collections等已随sync保留；RSA解包、组织CRUD、共享、策略/权限与所有管理UI未实现 |
 | 附件 | `attachment/v2`元数据后multipart `data`；二进制 `0x02||IV16||HMAC32||CBC`；root `/attachments/...`或预签名URL | 未实现；需外部URL禁Bearer、大小/MAC、两阶段补偿和安全临时文件 |
