@@ -52,6 +52,7 @@ func TestCollectionAccessMembershipDirectoryAndOpaquePreservation(t *testing.T) 
 			p[name].([]any)[0].(map[string]any)["UseGroups"] = true
 		}
 	})
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	detail = collectionDetailFixture(t, key)
 	draft, err := s.CollectionDetails(context.Background(), vault, "org-1", "collection-1", nil)
 	if err != nil {
@@ -81,6 +82,7 @@ func TestCollectionAccessMembershipDirectoryAndOpaquePreservation(t *testing.T) 
 	if err := s.SaveCollection(context.Background(), vault, access, func(SessionCheckpoint) error { return errors.New("disk") }, nil); err != ErrCheckpoint || writes != 0 || requests != before {
 		t.Fatal("failed isolation", err)
 	}
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	if err := s.SaveCollection(context.Background(), vault, access, func(SessionCheckpoint) error { isolated = true; return nil }, nil); err != nil || writes != 1 {
 		t.Fatal(err, writes)
 	}
@@ -125,7 +127,7 @@ func TestCollectionAccessDirectoryRejectsAccountMemberConfusion(t *testing.T) {
 			defer server.Close()
 			s, vault, _, _ := organizationFixture(t, server.URL)
 			defer s.Close()
-			vault = collectionManagerVault(t, vault)
+			vault = acceptedCollectionManagerVault(t, s, vault)
 			draft, err := s.CollectionDetails(context.Background(), vault, "org-1", "", nil)
 			if err != nil {
 				t.Fatal(err)

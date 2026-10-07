@@ -25,6 +25,9 @@ func (s *Session) PersonalFolders(vault *VaultData) ([]Folder, error) {
 	if err := s.requireScopeLocked(vault.Scope); err != nil {
 		return nil, err
 	}
+	if _, err := s.snapshotPoliciesLocked(vault); err != nil {
+		return nil, err
+	}
 	if _, err := vault.Documents(vault.Scope); err != nil {
 		return nil, err
 	}

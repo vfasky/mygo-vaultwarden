@@ -377,6 +377,10 @@ func (s *Session) ExportPersonalBackup(ctx context.Context, vault *VaultData, id
 	if format != BitwardenJSON && format != MyGoBackup {
 		return nil, ErrValidation
 	}
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return nil, err
+	}
 	documents, err := vault.Documents(vault.Scope)
 	if err != nil {
 		return nil, err
@@ -407,6 +411,17 @@ func (s *Session) ExportPersonalBackup(ctx context.Context, vault *VaultData, id
 			continue
 		}
 		delete(selected, id)
+		var metadata struct {
+			Type, Reprompt int
+			OrganizationID *string
+			ViewPassword   *bool
+		}
+		if json.Unmarshal(doc.JSON, &metadata) != nil {
+			return nil, ErrProtocol
+		}
+		if metadata.OrganizationID != nil || metadata.Reprompt != 0 || metadata.ViewPassword == nil || !*metadata.ViewPassword || policies.restricts(nil, metadata.Type) {
+			return nil, ErrPermission
+		}
 		if err = validateCopyObject(object); err != nil {
 			return nil, backupError(len(file.Items), "包含尚不支持的附件、通行密钥、扩展或权限")
 		}

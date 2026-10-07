@@ -24,6 +24,7 @@ func TestFolderPublicationUpdatesNavigationButNotDraftAuthority(t *testing.T) {
 	raw["ciphers"].([]any)[0].(map[string]any)["folderId"] = "folder-1"
 	a.vault.Sync, _ = json.Marshal(raw)
 	a.category = "folder:folder-1"
+	acceptUIReceipt(t, a, a.vault)
 	if err = a.adoptVault(a.vault); err != nil {
 		t.Fatal(err)
 	}
@@ -36,6 +37,7 @@ func TestFolderPublicationUpdatesNavigationButNotDraftAuthority(t *testing.T) {
 	raw["ciphers"].([]any)[0].(map[string]any)["folderId"] = nil
 	vault := *a.vault
 	vault.Sync, _ = json.Marshal(raw)
+	acceptUIReceipt(t, a, &vault)
 	if err = a.adoptVault(&vault); err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +90,7 @@ func TestCustomAndHistoryEditorCannotBypassCipherPermissions(t *testing.T) {
 				item[restriction] = "org-1"
 			}
 			a.vault.Sync, _ = json.Marshal(raw)
+			acceptUIReceipt(t, a, a.vault)
 			a.openCipherEditor("card-1", 3)
 			if restriction == "reprompt" {
 				if a.editor == nil || a.editor.repromptID != "card-1" || a.editor.fields.Name != "" || len(a.editor.inputs) != 0 || len(a.editor.document.JSON) != 0 {

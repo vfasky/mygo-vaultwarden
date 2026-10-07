@@ -289,6 +289,7 @@ type Session struct {
 	authorizationEpoch                       uint64
 	writePolicies                            *operationPolicies
 	offlinePolicies                          *snapshotPolicies
+	checkpointPolicies                       *snapshotPolicies
 }
 
 func (s *Session) Close() {
@@ -313,6 +314,7 @@ func (s *Session) Close() {
 	s.authorizationRevision = ""
 	s.writePolicies = nil
 	s.offlinePolicies = nil
+	s.checkpointPolicies = nil
 	s.client.http.CloseIdleConnections()
 }
 func (s *Session) refreshLocked(ctx context.Context) error {
@@ -337,8 +339,13 @@ func (s *Session) refreshLocked(ctx context.Context) error {
 	s.access = token.AccessToken
 	s.refresh = token.RefreshToken
 	s.expires = time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
-	// Even a non-persisted online session must not carry policy authority across
-	// a token refresh. Durable sessions are additionally revoked at checkpoint.
+	// Preserve only a currently valid policy context for a same-content durable
+	// checkpoint receipt. Reads and item grants are revoked during rotation.
+	s.checkpointPolicies = nil
+	if p := s.offlinePolicies; p != nil && p.epoch == s.authorizationEpoch && p.revision == s.authorizationRevision {
+		s.checkpointPolicies = p
+	}
+	s.offlinePolicies = nil
 	s.authorizationEpoch++
 	return nil
 }
@@ -357,6 +364,7 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	// Starting a replacement sync revokes the previous offline authority even
 	// when download, identity validation or policy migration subsequently fails.
 	s.offlinePolicies = nil
+	s.checkpointPolicies = nil
 	s.authorizationEpoch++
 	status, data, err := s.authenticatedLocked(ctx, http.MethodGet, "/api/sync", "", "", persist)
 	if err != nil {
@@ -379,6 +387,9 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	if err != nil {
 		return SyncResult{}, err
 	}
+	if err := validateSnapshotOrganizationIdentity(data, syncData.Profile.ID); err != nil {
+		return SyncResult{}, err
+	}
 	// Parsing and filtering must precede every credential decryption.
 	result, err := decryptSyncWithPolicies(syncData, s.key, policies)
 	if err != nil {
@@ -398,6 +409,9 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	}
 	if ctx.Err() != nil {
 		return SyncResult{}, ErrCancelled
+	}
+	if err := s.recoveryCandidateLocked(&result); err != nil {
+		return SyncResult{}, err
 	}
 	if s.passwordUnlock != nil {
 		result.PasswordUnlock = &PasswordUnlock{Config: s.passwordUnlock.Config, Key: append([]byte(nil), s.passwordUnlock.Key...)}

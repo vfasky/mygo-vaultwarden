@@ -126,6 +126,8 @@ final class SnapshotStoreTests: XCTestCase {
         let synced = try store.publish([credential, personal, other], scope: .demo, expected: isolated.revision, passwordUnlock: passwordMaterial, session: Data("sync-token".utf8), vault: vault)
         XCTAssertEqual(synced.credentials.map(\.id), ["personal", "other-org"])
         let checkpoint = try store.saveSession(Data("next-token".utf8), scope: .demo, expected: synced.revision, unlockKey: passwordMaterial.key)
+        XCTAssertEqual(checkpoint.vault, synced.vault ?? isolated.vault)
+        XCTAssertEqual(checkpoint.header.id, synced.header.id)
         try store.lock()
         assertError(.stale) { try self.store.withCurrentLease(checkpoint) {} }
         let latest = try passwordUnlock()
@@ -525,7 +527,7 @@ final class SnapshotStoreTests: XCTestCase {
     }
     func testEmptySyncRevokesOldCredentialsAndClearsIdentityIndex() throws {
         let scope = SnapshotScope(server: "https://vault.example.com", account: "account-a")
-        let old = try store.publish([credential], scope: scope, expected: store.state().revision)
+        let old = try store.publish([credential], scope: scope, expected: store.state().revision, vault: policyVaultFixture(scope: scope, ids: [credential.id]))
         let sink = DeferredIndex()
         let indexed = expectation(description: "old identities published")
         sink.onReplace = { identities, callback in XCTAssertFalse(identities.isEmpty); callback(true) }

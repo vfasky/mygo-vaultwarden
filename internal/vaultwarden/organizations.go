@@ -152,6 +152,15 @@ func accountPrivateKey(profile json.RawMessage, key []byte) (*rsa.PrivateKey, er
 // Keys exist only during an operation and are never attached to display state or
 // persisted independently of the encrypted sync. Callers hold the session lock.
 func (s *Session) organizationVaultLocked(vault *VaultData) (*organizationVault, error) {
+	if _, err := s.snapshotPoliciesLocked(vault); err != nil {
+		return nil, err
+	}
+	return s.decodeOrganizationVaultLocked(vault)
+}
+
+// decodeOrganizationVaultLocked is for authenticated sync and receipt validation
+// before an offline capability exists. It must never authorize public reads.
+func (s *Session) decodeOrganizationVaultLocked(vault *VaultData) (*organizationVault, error) {
 	if !s.itemSessionActiveLocked() || vault == nil {
 		return nil, ErrExpired
 	}
@@ -290,6 +299,14 @@ func (s *Session) Organizations(vault *VaultData) ([]Organization, []Collection,
 }
 
 func (s *Session) organizationDocumentLocked(vault *VaultData, id string, data *organizationVault) (CipherDocument, []byte, error) {
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return CipherDocument{}, nil, err
+	}
+	return organizationDocumentWithPolicies(id, data, policies)
+}
+
+func organizationDocumentWithPolicies(id string, data *organizationVault, policies *operationPolicies) (CipherDocument, []byte, error) {
 	document, ok := data.documents[id]
 	if !ok {
 		return CipherDocument{}, nil, ErrNotFound
@@ -299,11 +316,18 @@ func (s *Session) organizationDocumentLocked(vault *VaultData, id string, data *
 		CollectionIDs      []string
 		Edit, ViewPassword *bool
 		Reprompt           int
+		Type               int
 	}
 	if json.Unmarshal(document.JSON, &m) != nil {
 		return CipherDocument{}, nil, ErrProtocol
 	}
 	if m.OrganizationID == nil || m.Edit == nil || m.ViewPassword == nil || !*m.ViewPassword || m.Reprompt < 0 || m.Reprompt > 1 {
+		return CipherDocument{}, nil, ErrPermission
+	}
+	if policies == nil {
+		return CipherDocument{}, nil, ErrPermission
+	}
+	if policies.restricts(m.OrganizationID, m.Type) {
 		return CipherDocument{}, nil, ErrPermission
 	}
 	key := data.keys[*m.OrganizationID]
@@ -357,6 +381,10 @@ func (s *Session) OrganizationEntries(vault *VaultData) ([]VaultEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return nil, err
+	}
 	var entries []VaultEntry
 	for _, document := range documents {
 		var m struct {
@@ -371,14 +399,14 @@ func (s *Session) OrganizationEntries(vault *VaultData) ([]VaultEntry, error) {
 		if json.Unmarshal(document.JSON, &m) != nil {
 			return nil, ErrProtocol
 		}
-		if m.OrganizationID == nil || data.keys[*m.OrganizationID] == nil {
+		if m.OrganizationID == nil || data.keys[*m.OrganizationID] == nil || policies.restricts(m.OrganizationID, m.Type) {
 			continue
 		}
 		entry := VaultEntry{ID: m.ID, OrganizationID: *m.OrganizationID, CollectionIDs: m.CollectionIDs, Type: m.Type, Title: "受保护或暂不支持的组织项目", Favorite: m.Favorite, Archived: m.ArchivedDate != nil, Deleted: m.DeletedDate != nil}
 		if m.FolderID != nil {
 			entry.FolderID = *m.FolderID
 		}
-		authorized, key, err := s.organizationDocumentLocked(vault, m.ID, data)
+		authorized, key, err := organizationDocumentWithPolicies(m.ID, data, policies)
 		if err == nil {
 			if m.Reprompt == 1 {
 				entry.RequiresPassword = true

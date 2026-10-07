@@ -14,6 +14,9 @@ func (s *Session) IsolatedOrganizations(vault *VaultData) ([]Organization, error
 	if err := s.requireScopeLocked(vault.Scope); err != nil {
 		return nil, err
 	}
+	if _, err := s.snapshotPoliciesLocked(vault); err != nil {
+		return nil, err
+	}
 	if _, err := vault.Documents(vault.Scope); err != nil {
 		return nil, err
 	}

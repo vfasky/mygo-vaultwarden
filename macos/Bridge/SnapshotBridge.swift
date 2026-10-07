@@ -141,7 +141,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             guard let scope = request.scope, let session = request.session, let key = request.unlockKey else { throw SnapshotError.invalidInput }
             let lease = try vault.saveSession(session, scope: scope, expected: expected(), unlockKey: key)
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: "登录凭据已安全更新。", state: BridgeStatus(try vault.files.read()))
+                BridgeReply(ok: true, code: "ok", message: "登录凭据已安全更新。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
         case "lock":
             defer { clearSecretClipboard() }

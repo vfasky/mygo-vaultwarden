@@ -9,6 +9,14 @@ import (
 
 func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope Scope) {
 	t.Helper()
+	// Go-only stand-in for an authenticated publication receipt.
+	authenticatedSync := func() (SyncResult, error) {
+		r, err := s.Sync(ctx)
+		if err == nil {
+			err = s.AcceptAuthenticatedSnapshot(r.Vault, fixtureUUID())
+		}
+		return r, err
+	}
 	folder, err := s.SaveFolder(ctx, scope, "", "个人测试", nil)
 	if err != nil {
 		t.Fatal("create folder", err)
@@ -29,7 +37,7 @@ func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope
 		}
 		ids = append(ids, fields.ID)
 	}
-	snapshot, err := s.Sync(ctx)
+	snapshot, err := authenticatedSync()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +54,7 @@ func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope
 		if err := s.ChangePersonalCiphers(ctx, scope, snapshot.Vault, ids, op, target, nil); err != nil {
 			t.Fatal("bulk", op, err)
 		}
-		snapshot, err = s.Sync(ctx)
+		snapshot, err = authenticatedSync()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -75,7 +83,7 @@ func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope
 	if err = s.DeleteFolder(ctx, scope, folder.ID, nil); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err = s.Sync(ctx)
+	snapshot, err = authenticatedSync()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,27 +107,32 @@ func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope
 	if err != nil {
 		t.Fatal(err)
 	}
-	stale, err := s.Sync(ctx)
+	missingDoc, err := s.CreatePersonalCipher(ctx, scope, CipherFields{Type: 2, Name: "stale missing fixture", SecureNote: map[string]any{}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var raw map[string]json.RawMessage
-	json.Unmarshal(stale.Vault.Sync, &raw)
-	var ciphers []json.RawMessage
-	json.Unmarshal(raw["ciphers"], &ciphers)
-	missing := `{"id":"00000000-0000-0000-0000-000000000000","type":2}`
-	ciphers = append(ciphers, json.RawMessage(missing))
-	raw["ciphers"], _ = json.Marshal(ciphers)
-	stale.Vault.Sync, _ = json.Marshal(raw)
+	missingFields, err := DecryptCipherDocument(missingDoc, s.key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale, err := authenticatedSync()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Cache a real authenticated item, then remove it on the server. Do not
+	// forge public snapshot bytes to simulate an authenticated stale snapshot.
+	if err = s.ChangeCipherState(ctx, scope, missingFields.ID, CipherDeletePermanently, nil); err != nil {
+		t.Fatal(err)
+	}
 	folder, err = s.SaveFolder(ctx, scope, "", "partial destination", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = s.ChangePersonalCiphers(ctx, scope, stale.Vault, []string{fields.ID, "00000000-0000-0000-0000-000000000000"}, CipherMove, &folder.ID, nil)
+	err = s.ChangePersonalCiphers(ctx, scope, stale.Vault, []string{fields.ID, missingFields.ID}, CipherMove, &folder.ID, nil)
 	if err != ErrConflict {
 		t.Fatal("missing server item must block the batch", err)
 	}
-	snapshot, err = s.Sync(ctx)
+	snapshot, err = authenticatedSync()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,12 +140,12 @@ func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope
 	if err != nil || unchanged.FolderID != nil {
 		t.Fatal("preflight rejection changed an item", err)
 	}
-	body, _ := json.Marshal(map[string]any{"ids": []string{fields.ID, "00000000-0000-0000-0000-000000000000"}, "folderId": folder.ID})
+	body, _ := json.Marshal(map[string]any{"ids": []string{fields.ID, missingFields.ID}, "folderId": folder.ID})
 	status, _, err := s.client.request(ctx, "PUT", "/api/ciphers/move", "application/json", string(body), s.access)
 	if err != nil || status != 400 {
 		t.Fatal("fixture partial server rejection", status, err)
 	}
-	snapshot, err = s.Sync(ctx)
+	snapshot, err = authenticatedSync()
 	if err != nil {
 		t.Fatal(err)
 	}

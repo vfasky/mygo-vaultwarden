@@ -22,7 +22,7 @@ func testLiveProtectedItem(t *testing.T, ctx context.Context, s *Session, scope 
 			return e
 		}
 		revision := fixtureUUID()
-		if e = s.BindSnapshotRevision(scope, revision); e != nil {
+		if e = s.AcceptAuthenticatedSnapshot(snapshot.Vault, revision); e != nil {
 			return e
 		}
 		grant, e := s.AuthorizePersonalItem(ctx, snapshot.Vault, revision, id, password)
@@ -49,7 +49,7 @@ func testLiveProtectedItem(t *testing.T, ctx context.Context, s *Session, scope 
 			t.Fatal("reprompt item entered AutoFill")
 		}
 	}
-	if err := s.BindSnapshotRevision(scope, "live-protocol-fixture-revision"); err != nil {
+	if err := s.AcceptAuthenticatedSnapshot(result.Vault, "live-protocol-fixture-revision"); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := s.ReadPersonalCipherAuthorized(result.Vault, fields.ID, nil); err != ErrPermission {

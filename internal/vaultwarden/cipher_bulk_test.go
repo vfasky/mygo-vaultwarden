@@ -48,7 +48,7 @@ func TestBulkRoutesAndPartialFailure(t *testing.T) {
 			session, _ := resumableFixture(t, server.URL)
 			defer session.Close()
 			scope := Scope{Server: server.URL, Account: "account-a"}
-			err := session.ChangePersonalCiphers(context.Background(), scope, bulkFixture(scope, true), []string{"item-1", "item-2"}, tc.op, nil, nil)
+			err := session.ChangePersonalCiphers(context.Background(), scope, acceptedBulkFixture(t, session, scope, true), []string{"item-1", "item-2"}, tc.op, nil, nil)
 			var unknown *MutationUncertainError
 			if !errors.As(err, &unknown) || requests != 1 {
 				t.Fatal("partial error lost or retried", err)
@@ -63,7 +63,7 @@ func TestBulkRejectsRepromptAndHiddenPasswordBeforeRequest(t *testing.T) {
 	defer session.Close()
 	scope := Scope{Server: server.URL, Account: "account-a"}
 	for _, field := range []string{"reprompt", "viewPassword"} {
-		vault := bulkFixture(scope, true)
+		vault := acceptedBulkFixture(t, session, scope, true)
 		var object map[string]any
 		_ = json.Unmarshal(vault.Sync, &object)
 		entry := object["ciphers"].([]any)[0].(map[string]any)
@@ -73,6 +73,7 @@ func TestBulkRejectsRepromptAndHiddenPasswordBeforeRequest(t *testing.T) {
 			entry[field] = false
 		}
 		vault.Sync, _ = json.Marshal(object)
+		installFixtureSnapshot(t, session, vault, "bulk-revision")
 		for _, op := range []CipherAction{CipherMove, CipherTrash, CipherRestore, CipherArchive, CipherUnarchive, CipherDeletePermanently} {
 			if err := session.ChangePersonalCiphers(context.Background(), scope, vault, []string{"item-1", "item-2"}, op, nil, nil); err != ErrPermission {
 				t.Fatal("restricted batch accepted", field, op, err)
@@ -85,7 +86,7 @@ func TestBulkRejectsActivePermanentDeleteAndUnauthorizedIDs(t *testing.T) {
 	session, _ := resumableFixture(t, "https://example.invalid")
 	defer session.Close()
 	scope := Scope{Server: "https://example.invalid", Account: "account-a"}
-	vault := bulkFixture(scope, false)
+	vault := acceptedBulkFixture(t, session, scope, false)
 	for _, tc := range []struct {
 		ids  []string
 		op   CipherAction

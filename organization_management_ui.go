@@ -79,6 +79,10 @@ func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarde
 			}
 		}
 	}
+	session, ok := a.session.(*vaultwarden.Session)
+	if !ok || session.AcceptAuthenticatedSnapshot(vault, state.Revision) != nil {
+		return false
+	}
 	a.snapshot, a.sessionRevision = state, state.Revision
 	if err := a.adoptVault(vault); err != nil {
 		return false
@@ -370,17 +374,7 @@ func (a *app) runOrganizationManagement(operation string) {
 				var synced vaultwarden.SyncResult
 				synced, err = session.SyncWithCheckpoint(ctx, persist)
 				if err == nil {
-					var organizations []vaultwarden.Organization
-					organizations, _, err = session.Organizations(synced.Vault)
-					found := false
-					for _, org := range organizations {
-						if org.ID == id {
-							found = true
-						}
-					}
-					if !found && err == nil {
-						err = vaultwarden.ErrPermission
-					}
+					err = session.ValidateOrganizationRecoveryCandidate(synced, id)
 					if ctx.Err() != nil {
 						err = vaultwarden.ErrCancelled
 					}

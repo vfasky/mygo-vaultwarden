@@ -138,7 +138,7 @@ func (s *Session) OrganizationGroups(ctx context.Context, vault *VaultData, orgI
 	}
 	return s.groupsLocked(ctx, org, persist)
 }
-func (s *Session) groupDraftLocked(ctx context.Context, vault *VaultData, org Organization, id string, persist func(SessionCheckpoint) error) (*GroupDraft, error) {
+func (s *Session) groupDraftLocked(ctx context.Context, vault *VaultData, org Organization, id string, orgKey []byte, persist func(SessionCheckpoint) error) (*GroupDraft, error) {
 	if !org.UseGroups {
 		return nil, ErrGroupsDisabled
 	}
@@ -209,18 +209,16 @@ func (s *Session) groupDraftLocked(ctx context.Context, vault *VaultData, org Or
 	if cols.Data == nil || cols.ContinuationToken != nil || len(cols.Data) > 10000 {
 		return nil, ErrProtocol
 	}
-	data, err := s.organizationVaultLocked(vault)
-	if err != nil {
-		return nil, err
+	if len(orgKey) != 64 {
+		return nil, ErrPermission
 	}
-	defer data.close()
 	seen := map[string]bool{}
 	for _, col := range cols.Data {
 		if !validObjectID(col.ID) || col.OrganizationID != org.ID || seen[col.ID] {
 			return nil, ErrIdentity
 		}
 		seen[col.ID] = true
-		plain, err := DecryptString(col.Name, data.keys[org.ID])
+		plain, err := DecryptString(col.Name, orgKey)
 		if err != nil {
 			return nil, err
 		}
@@ -259,7 +257,12 @@ func (s *Session) GroupDetails(ctx context.Context, vault *VaultData, orgID, id 
 	if err != nil {
 		return nil, err
 	}
-	return s.groupDraftLocked(ctx, vault, org, id, persist)
+	data, err := s.organizationVaultLocked(vault)
+	if err != nil {
+		return nil, err
+	}
+	defer data.close()
+	return s.groupDraftLocked(ctx, vault, org, id, data.keys[org.ID], persist)
 }
 func (d *GroupDraft) body() (map[string]json.RawMessage, error) {
 	if d == nil || strings.TrimSpace(d.Name) == "" || len(d.Name) > 1000 || (d.AccessScope != GroupAllCollections && d.AccessScope != GroupSelectedCollections) {
@@ -347,12 +350,19 @@ func (s *Session) mutateGroup(ctx context.Context, vault *VaultData, d *GroupDra
 	if !org.UseGroups {
 		return ErrGroupsDisabled
 	}
+	// Hold the already-authorized key only for this operation. Isolation revokes
+	// offline access before the directory recheck; it cannot reauthorize reads.
+	data, err := s.organizationVaultLocked(vault)
+	if err != nil {
+		return err
+	}
+	defer data.close()
 	// All existing-group writes may change undisclosed accessAll. Quarantine the
 	// target organization durably before reads or a possibly partial mutation.
 	if d.id != "" && (isolate == nil || s.checkpointLocked(isolate) != nil) {
 		return ErrCheckpoint
 	}
-	fresh, err := s.groupDraftLocked(ctx, vault, org, d.id, persist)
+	fresh, err := s.groupDraftLocked(ctx, vault, org, d.id, data.keys[org.ID], persist)
 	if err != nil {
 		return err
 	}

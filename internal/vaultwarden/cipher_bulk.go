@@ -19,6 +19,12 @@ func (s *Session) ChangePersonalCiphers(ctx context.Context, scope Scope, vault 
 	if vault == nil || vault.Scope != scope {
 		return ErrIdentity
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return err
+	}
 	docs, err := vault.Documents(scope)
 	if err != nil {
 		return err
@@ -30,13 +36,13 @@ func (s *Session) ChangePersonalCiphers(ctx context.Context, scope Scope, vault 
 			OrganizationID *string
 			Edit           *bool
 			DeletedDate    *string
-			Reprompt       int
+			Reprompt, Type int
 			ViewPassword   *bool
 		}
 		if json.Unmarshal(doc.JSON, &meta) != nil {
 			return ErrProtocol
 		}
-		if meta.OrganizationID == nil && (meta.Edit == nil || *meta.Edit) && meta.Reprompt == 0 && (meta.ViewPassword == nil || *meta.ViewPassword) {
+		if !policies.restricts(nil, meta.Type) && meta.OrganizationID == nil && (meta.Edit == nil || *meta.Edit) && meta.Reprompt == 0 && (meta.ViewPassword == nil || *meta.ViewPassword) {
 			records[meta.ID] = struct{ deleted bool }{meta.DeletedDate != nil}
 		}
 	}
@@ -76,8 +82,6 @@ func (s *Session) ChangePersonalCiphers(ctx context.Context, scope Scope, vault 
 		body["folderId"] = folderID
 	}
 	raw, _ := json.Marshal(body)
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	ctx, finish, err := s.beginOperationLocked(ctx)
 	if err != nil {
 		return err

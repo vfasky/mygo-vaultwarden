@@ -53,7 +53,7 @@ func TestSessionRefreshAndIdentityBinding(t *testing.T) {
 			w.WriteHeader(401)
 			return
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"profile": map[string]any{"id": account, "email": "a@example.invalid", "key": profileKey, "organizations": []any{}}, "ciphers": []any{}, "policies": []any{}, "policiesNew": []any{}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"profile": map[string]any{"id": account, "email": "a@example.invalid", "key": profileKey, "organizations": []any{}, "organizationsNew": []any{}}, "ciphers": []any{}, "policies": []any{}, "policiesNew": []any{}})
 	}))
 	defer server.Close()
 	client, _ := NewClient(server.URL+"/sub", fixtureUUID())

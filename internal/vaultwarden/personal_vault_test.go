@@ -211,6 +211,7 @@ func TestCompleteVaultScopeUnknownDataAndPermissions(t *testing.T) {
 	}
 	session, _ := resumableFixture(t, scope.Server)
 	session.key = key
+	installFixtureSnapshot(t, session, vault, "personal-revision")
 	defer session.Close()
 	entries, err := session.PersonalEntries(vault)
 	if err != nil || len(entries) != 1 || !entries[0].Archived {
@@ -226,6 +227,7 @@ func TestCompleteVaultScopeUnknownDataAndPermissions(t *testing.T) {
 	object["reprompt"] = 1
 	doc.JSON, _ = json.Marshal(object)
 	vault.Sync, _ = json.Marshal(map[string]any{"profile": map[string]any{"id": scope.Account}, "ciphers": []json.RawMessage{doc.JSON}})
+	installFixtureSnapshot(t, session, vault, "personal-revision-2")
 	if _, _, err := session.ReadPersonalCipher(vault, "item-1"); err != ErrPermission {
 		t.Fatal("reprompt bypass")
 	}

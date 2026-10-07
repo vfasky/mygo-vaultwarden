@@ -46,6 +46,7 @@ func (s *Session) BindSnapshotRevision(scope Scope, revision string) error {
 	}
 	if s.authorizationRevision != revision {
 		s.offlinePolicies = nil
+		s.checkpointPolicies = nil
 		s.authorizationEpoch++
 		s.authorizationRevision = revision
 	}
@@ -56,6 +57,7 @@ func (s *Session) RevokeItemAuthorizations() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.offlinePolicies = nil
+	s.checkpointPolicies = nil
 	s.authorizationEpoch++
 }
 
@@ -83,6 +85,10 @@ func (s *Session) personalDocumentLocked(vault *VaultData, id string) (CipherDoc
 	if err := s.requireScopeLocked(vault.Scope); err != nil {
 		return CipherDocument{}, err
 	}
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return CipherDocument{}, err
+	}
 	documents, err := vault.Documents(vault.Scope)
 	if err != nil {
 		return CipherDocument{}, err
@@ -91,7 +97,7 @@ func (s *Session) personalDocumentLocked(vault *VaultData, id string) (CipherDoc
 		var metadata struct {
 			ID             string
 			OrganizationID *string
-			Reprompt       int
+			Reprompt, Type int
 			ViewPassword   *bool
 		}
 		if json.Unmarshal(document.JSON, &metadata) != nil {
@@ -100,7 +106,7 @@ func (s *Session) personalDocumentLocked(vault *VaultData, id string) (CipherDoc
 		if metadata.ID != id {
 			continue
 		}
-		if metadata.OrganizationID != nil || metadata.Reprompt < 0 || metadata.Reprompt > 1 || metadata.ViewPassword == nil || !*metadata.ViewPassword {
+		if policies.restricts(metadata.OrganizationID, metadata.Type) || metadata.OrganizationID != nil || metadata.Reprompt < 0 || metadata.Reprompt > 1 || metadata.ViewPassword == nil || !*metadata.ViewPassword {
 			return CipherDocument{}, ErrPermission
 		}
 		return document, nil

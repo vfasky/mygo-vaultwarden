@@ -82,6 +82,7 @@ func TestOrganizationRestorationCannotDiscardOtherIsolation(t *testing.T) {
 	defer a.stopNetwork()
 	vault := *a.vault
 	vault.QuarantinedOrganizations = []string{"organization-1", "other-organization"}
+	acceptUIReceipt(t, a, &vault)
 	if err := a.adoptVault(&vault); err != nil {
 		t.Fatal(err)
 	}

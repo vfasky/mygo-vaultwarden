@@ -81,13 +81,22 @@ func (s *Session) persistPendingLocked(persist func(SessionCheckpoint) error) er
 	if persist == nil {
 		return ErrCheckpoint
 	}
-	if err := s.checkpointLocked(persist); err != nil {
+	receipt := &checkpointPolicyReceipt{prior: s.checkpointPolicies}
+	if err := s.checkpointWithReceiptLocked(persist, receipt); err != nil {
+		s.offlinePolicies = nil
+		s.checkpointPolicies = nil
 		return err
 	}
 	s.checkpointPending = false
-	// A durable checkpoint publishes a new local revision. Never carry a
-	// protected-item grant across it, even before the UI adopts that revision.
+	// Grants always expire, even when a same-content receipt continues policy.
 	s.authorizationEpoch++
+	s.offlinePolicies = nil
+	s.checkpointPolicies = nil
+	if p := receipt.prior; p != nil && receipt.revision != "" {
+		p.epoch, p.revision = s.authorizationEpoch, receipt.revision
+		s.authorizationRevision = receipt.revision
+		s.offlinePolicies = p
+	}
 	return nil
 }
 

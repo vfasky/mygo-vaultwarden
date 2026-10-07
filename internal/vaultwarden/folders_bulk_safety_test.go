@@ -24,7 +24,7 @@ func TestFolderAndBulkCannotBypassCheckpoint(t *testing.T) {
 		func() error { _, err := s.SaveFolder(context.Background(), scope, "", "private", nil); return err },
 		func() error { return s.DeleteFolder(context.Background(), scope, "folder-1", nil) },
 		func() error {
-			return s.ChangePersonalCiphers(context.Background(), scope, bulkFixture(scope, false), []string{"item-1"}, CipherTrash, nil, nil)
+			return s.ChangePersonalCiphers(context.Background(), scope, acceptedBulkFixture(t, s, scope, false), []string{"item-1"}, CipherTrash, nil, nil)
 		},
 	} {
 		if err := work(); !errors.Is(err, ErrCheckpoint) {
@@ -51,7 +51,7 @@ func TestCloseCancelsBulkWithoutRetry(t *testing.T) {
 	scope := Scope{Server: server.URL, Account: "account-a"}
 	done := make(chan error, 1)
 	go func() {
-		done <- s.ChangePersonalCiphers(context.Background(), scope, bulkFixture(scope, false), []string{"item-1"}, CipherTrash, nil, nil)
+		done <- s.ChangePersonalCiphers(context.Background(), scope, acceptedBulkFixture(t, s, scope, false), []string{"item-1"}, CipherTrash, nil, nil)
 	}()
 	select {
 	case <-entered:

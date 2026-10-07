@@ -109,6 +109,10 @@ struct SnapshotPayload: Codable {
     var session: Data? = nil
     // Absent on legacy Login-only snapshots; a successful sync migrates them.
     var vault: VaultData? = nil
+    var safeCandidates: [VaultCredential] {
+        if scope == .demo { return credentials }
+        return vault?.policyCandidates(credentials) ?? []
+    }
 }
 
 struct SnapshotState: Codable {
@@ -264,7 +268,8 @@ func replacingSnapshotSession(_ snapshot: EncryptedSnapshot, key: Data, session:
 }
 
 func openSnapshot(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope) throws -> [VaultCredential] {
-    try openSnapshotPayload(snapshot, key: key, scope: scope).credentials
+    let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
+    return payload.safeCandidates
 }
 
 func openSnapshotPayload(_ snapshot: EncryptedSnapshot, key: Data, scope: SnapshotScope) throws -> SnapshotPayload {

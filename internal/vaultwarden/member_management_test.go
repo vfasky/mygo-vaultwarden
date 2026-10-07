@@ -66,7 +66,7 @@ func TestMemberConfirmationVerifiesIdentityAndWrapsOnlyOrganizationKey(t *testin
 	s, v, key, _ := organizationFixture(t, server.URL)
 	defer s.Close()
 	orgKey = key
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	d, err := s.OrganizationMembers(context.Background(), v, "org-1", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +114,7 @@ func TestMemberDirectoryRejectsIdentityConfusionAndStaleAuthority(t *testing.T) 
 	if calls != 0 {
 		t.Fatal("member dispatched admin GET")
 	}
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	rows[1].UserID = "account-a"
 	if _, err := s.OrganizationMembers(context.Background(), v, "org-1", nil); err != ErrIdentity {
 		t.Fatal(err)
@@ -156,7 +156,7 @@ func TestMemberSelfRemovalIsolationPrecedesEveryRequest(t *testing.T) {
 	defer server.Close()
 	s, v, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	d := &MemberDirectory{organizationID: "org-1", revision: s.authorizationRevision, scope: v.Scope, rows: memberRows()}
 	for _, checkpoint := range []func(SessionCheckpoint) error{nil, func(SessionCheckpoint) error { return errors.New("disk") }} {
 		if err := s.ChangeOrganizationMember(context.Background(), v, d, "member-1", "remove", checkpoint, nil); err != ErrCheckpoint {
@@ -166,6 +166,7 @@ func TestMemberSelfRemovalIsolationPrecedesEveryRequest(t *testing.T) {
 	if calls.Load() != 0 {
 		t.Fatal("HTTP escaped")
 	}
+	installFixtureSnapshot(t, s, v, "revision-1")
 	err := s.ChangeOrganizationMember(context.Background(), v, d, "member-1", "remove", func(SessionCheckpoint) error { isolated = true; return nil }, nil)
 	var unknown *MutationUncertainError
 	if !errors.As(err, &unknown) || calls.Load() != 2 {
@@ -186,7 +187,7 @@ func TestMemberLifecycleRolesCancellationAndConflict(t *testing.T) {
 	defer server.Close()
 	s, v, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	d, err := s.OrganizationMembers(context.Background(), v, "org-1", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +253,7 @@ func TestMemberInvitationSingleEmailAndLinkBinding(t *testing.T) {
 	defer server.Close()
 	s, v, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	d, err := s.OrganizationMembers(context.Background(), v, "org-1", nil)
 	if err != nil {
 		t.Fatal(err)

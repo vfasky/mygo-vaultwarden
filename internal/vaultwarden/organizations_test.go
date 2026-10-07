@@ -46,9 +46,7 @@ func organizationFixture(t *testing.T, endpoint string) (*Session, *VaultData, [
 	document.JSON, _ = json.Marshal(object)
 	raw, _ := json.Marshal(map[string]any{"profile": map[string]any{"id": "account-a", "privateKey": wrapped, "accountKeys": map[string]any{"publicKeyEncryptionKeyPair": map[string]any{"wrappedPrivateKey": wrapped, "publicKey": base64.StdEncoding.EncodeToString(public)}}, "organizations": []Organization{org}, "organizationsNew": []Organization{org}}, "collections": []Collection{{ID: "collection-1", OrganizationID: org.ID, Name: name}}, "ciphers": []json.RawMessage{document.JSON}})
 	vault := &VaultData{Version: 1, Scope: Scope{Server: endpoint, Account: "account-a"}, Sync: raw}
-	if err := session.BindSnapshotRevision(vault.Scope, "revision-1"); err != nil {
-		t.Fatal(err)
-	}
+	installFixtureSnapshot(t, session, vault, "revision-1")
 	return session, vault, key, document
 }
 func changeOrganizationFixture(t *testing.T, vault *VaultData, change func(map[string]any)) *VaultData {
@@ -99,12 +97,11 @@ func TestOrganizationRSAAndIdentity(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			altered := changeOrganizationFixture(t, vault, tc.change)
 			_, _, err := s.ReadOrganizationCipher(altered, "item-org", nil)
-			if tc.name == "cross-organization-collection" { // unrelated collections are not granted or used as destinations
-				_, cs, e := s.Organizations(altered)
-				if e != nil || len(cs) != 0 {
-					t.Fatal("foreign collection", e)
+			if tc.name == "cross-organization-collection" {
+				// Public mutation is not an authenticated replacement receipt.
+				if _, _, e := s.Organizations(altered); e != ErrExpired {
+					t.Fatal("foreign snapshot adopted", e)
 				}
-				return
 			}
 			if err == nil {
 				t.Fatal("accepted invalid organization state")
@@ -169,6 +166,7 @@ func TestOrganizationRestrictionsAndRevocation(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			v := changeOrganizationFixture(t, vault, tc.change)
+			installFixtureSnapshot(t, s, v, "revision-1")
 			doc, fields, err := s.ReadOrganizationCipher(v, "item-org", nil)
 			if (err == nil) != tc.wantReadable {
 				t.Fatal("permission", err)
@@ -211,6 +209,7 @@ func TestOrganizationUpdateCheckpointAndUnknownPreservation(t *testing.T) {
 	defer s.Close()
 	ownerKey = key
 	vault = changeOrganizationFixture(t, vault, func(d map[string]any) { d["ciphers"].([]any)[0].(map[string]any)["opaque"] = "preserve" })
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	doc, fields, err := s.ReadOrganizationCipher(vault, "item-org", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -222,6 +221,7 @@ func TestOrganizationUpdateCheckpointAndUnknownPreservation(t *testing.T) {
 		t.Fatal("checkpoint bypass", err)
 	}
 	s.checkpointPending = false
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	if _, err = s.UpdateOrganizationCipher(context.Background(), vault, doc, fields, nil, nil); err != nil || requests.Load() != 1 {
 		t.Fatal("write", err)
 	}
@@ -281,6 +281,7 @@ func TestOrganizationRepromptGrants(t *testing.T) {
 	defer source.Close()
 	s.passwordUnlock = &PasswordUnlock{Config: source.passwordUnlock.Config, Key: append([]byte(nil), source.passwordUnlock.Key...)}
 	vault = changeOrganizationFixture(t, vault, func(d map[string]any) { d["ciphers"].([]any)[0].(map[string]any)["reprompt"] = 1 })
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	if _, err := s.AuthorizeOrganizationItem(context.Background(), vault, "revision-1", "item-org", []byte("wrong")); err != ErrPermission {
 		t.Fatal("wrong organization master password", err)
 	}
@@ -300,7 +301,7 @@ func TestOrganizationRepromptGrants(t *testing.T) {
 	}
 	hidden := changeOrganizationFixture(t, vault, func(d map[string]any) { d["ciphers"].([]any)[0].(map[string]any)["viewPassword"] = false })
 	for _, kind := range []string{"password", "totp"} {
-		if err := s.WithOrganizationSecret(hidden, "revision-1", "item-org", kind, grant, func(string, []byte, time.Time) error { t.Fatal("hidden-password bypass"); return nil }); err != ErrPermission {
+		if err := s.WithOrganizationSecret(hidden, "revision-1", "item-org", kind, grant, func(string, []byte, time.Time) error { t.Fatal("hidden-password bypass"); return nil }); err != ErrExpired {
 			t.Fatal("hidden secret", err)
 		}
 	}
@@ -308,10 +309,10 @@ func TestOrganizationRepromptGrants(t *testing.T) {
 		t.Fatal("valid grant", err)
 	}
 	_ = s.BindSnapshotRevision(vault.Scope, "revision-2")
-	if _, _, err := s.ReadOrganizationCipher(vault, "item-org", grant); err != ErrPermission {
+	if _, _, err := s.ReadOrganizationCipher(vault, "item-org", grant); err != ErrExpired {
 		t.Fatal("stale grant", err)
 	}
-	if _, err := s.AuthorizePersonalItem(context.Background(), vault, "revision-2", "item-org", []byte("fixture")); err != ErrPermission {
+	if _, err := s.AuthorizePersonalItem(context.Background(), vault, "revision-2", "item-org", []byte("fixture")); err != ErrExpired {
 		t.Fatal("personal grant bypass", err)
 	}
 }

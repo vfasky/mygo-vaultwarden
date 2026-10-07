@@ -24,9 +24,7 @@ func protectedItemFixture(t *testing.T, endpoint string) (*Session, *VaultData, 
 	scope := Scope{Server: endpoint, Account: "account-a"}
 	raw, _ := json.Marshal(map[string]any{"profile": map[string]any{"id": scope.Account}, "ciphers": []json.RawMessage{doc.JSON}})
 	vault := &VaultData{Version: 1, Scope: scope, Sync: raw}
-	if err := s.BindSnapshotRevision(scope, "local-revision"); err != nil {
-		t.Fatal(err)
-	}
+	installFixtureSnapshot(t, s, vault, "local-revision")
 	t.Cleanup(s.Close)
 	return s, vault, doc
 }
@@ -59,7 +57,7 @@ func TestItemAuthorizationPasswordAndScope(t *testing.T) {
 		changed, _ := json.Marshal(o)
 		raw, _ := json.Marshal(map[string]any{"profile": map[string]any{"id": vault.Scope.Account}, "ciphers": []json.RawMessage{changed}})
 		altered := &VaultData{Version: 1, Scope: vault.Scope, Sync: raw}
-		if _, _, err := s.ReadPersonalCipherAuthorized(altered, "item-1", grant); err != ErrPermission {
+		if _, _, err := s.ReadPersonalCipherAuthorized(altered, "item-1", grant); err != ErrExpired {
 			t.Fatal("document substitution accepted", err)
 		}
 	}

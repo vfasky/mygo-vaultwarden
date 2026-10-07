@@ -250,6 +250,29 @@ func TestLivePolicyExecution(t *testing.T) {
 			if e = owner.ValidateAuthenticatedSnapshot(r.Vault, revision); e != nil {
 				t.Fatal(e)
 			}
+			personalEntries, e := owner.PersonalEntries(r.Vault)
+			if e != nil {
+				t.Fatal(e)
+			}
+			organizationEntries, e := owner.OrganizationEntries(r.Vault)
+			if e != nil {
+				t.Fatal(e)
+			}
+			visible := map[string]bool{}
+			for _, entry := range append(personalEntries, organizationEntries...) {
+				visible[entry.ID] = true
+			}
+			if visible[personalID.ID] != want || visible[organizationID.ID] != want {
+				t.Fatal("offline list disagrees with policy")
+			}
+			_, _, personalErr := owner.ReadPersonalCipher(r.Vault, personalID.ID)
+			_, _, organizationErr := owner.ReadOrganizationCipher(r.Vault, organizationID.ID, nil)
+			if want && (personalErr != nil || organizationErr != nil) {
+				t.Fatal("permitted offline read", personalErr, organizationErr)
+			}
+			if !want && (!errors.Is(personalErr, ErrPermission) || !errors.Is(organizationErr, ErrPermission)) {
+				t.Fatal("restricted offline read", personalErr, organizationErr)
+			}
 		}
 		check(true)
 		seedPolicy(15, []int{1, 3})
@@ -257,5 +280,5 @@ func TestLivePolicyExecution(t *testing.T) {
 		seedPolicy(15, []int{3})
 		check(true)
 	})
-	t.Log("owned 1.37.4: authoritative policy sync; personal/organization type15 AutoFill projection revokes and recovers; privileged Go snapshot receipt validates; state/write checks retained; no Swift bridge, offline read enforcement or policy editor claim")
+	t.Log("owned 1.37.4: authoritative policy sync; personal/organization type15 AutoFill projection revokes and recovers; privileged Go snapshot receipt validates; offline personal/organization list and item reads enforce type15 and recover; state/write checks retained; no Swift bridge or policy editor claim")
 }

@@ -75,7 +75,7 @@ func TestCollectionRenamePreservesAccessAndUnknownFields(t *testing.T) {
 	s, vault, orgKey, _ := organizationFixture(t, server.URL)
 	defer s.Close()
 	key = orgKey
-	vault = collectionManagerVault(t, vault)
+	vault = acceptedCollectionManagerVault(t, s, vault)
 	detail = collectionDetailFixture(t, key)
 	draft, err := s.CollectionDetails(context.Background(), vault, "org-1", "collection-1", nil)
 	if err != nil || draft.Name != "集合原名称" {
@@ -116,7 +116,7 @@ func TestCollectionCreateRoleRevisionAndIdentityGuards(t *testing.T) {
 	if _, err := s.CollectionDetails(context.Background(), vault, "org-1", "", nil); err != ErrPermission {
 		t.Fatal(err)
 	}
-	vault = collectionManagerVault(t, vault)
+	vault = acceptedCollectionManagerVault(t, s, vault)
 	draft, err := s.CollectionDetails(context.Background(), vault, "org-1", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -159,7 +159,7 @@ func TestCollectionDeleteRequiresDurableIsolationAndNeverRetries(t *testing.T) {
 	defer server.Close()
 	s, vault, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	vault = collectionManagerVault(t, vault)
+	vault = acceptedCollectionManagerVault(t, s, vault)
 	draft := &CollectionDraft{id: "collection-1", organizationID: "org-1", scope: vault.Scope, revision: s.authorizationRevision}
 	if err := s.DeleteCollection(context.Background(), vault, draft, nil, nil); err != ErrCheckpoint {
 		t.Fatal(err)
@@ -170,6 +170,7 @@ func TestCollectionDeleteRequiresDurableIsolationAndNeverRetries(t *testing.T) {
 	if calls.Load() != 0 {
 		t.Fatal("request escaped")
 	}
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	err := s.DeleteCollection(context.Background(), vault, draft, func(SessionCheckpoint) error { isolated = true; return nil }, nil)
 	var uncertain *MutationUncertainError
 	if !errors.As(err, &uncertain) || calls.Load() != 1 {
@@ -200,7 +201,7 @@ func TestCollectionDeleteCancelAndLockAfterIsolationStayUnknown(t *testing.T) {
 			defer server.Close()
 			s, vault, _, _ := organizationFixture(t, server.URL)
 			defer s.Close()
-			vault = collectionManagerVault(t, vault)
+			vault = acceptedCollectionManagerVault(t, s, vault)
 			draft := &CollectionDraft{id: "collection-1", organizationID: "org-1", scope: vault.Scope, revision: s.authorizationRevision}
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -240,7 +241,7 @@ func TestCollectionCheckpointAndPrecancelBlockAllRequests(t *testing.T) {
 	defer server.Close()
 	s, vault, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	vault = collectionManagerVault(t, vault)
+	vault = acceptedCollectionManagerVault(t, s, vault)
 	draft, err := s.CollectionDetails(context.Background(), vault, "org-1", "", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -257,6 +258,7 @@ func TestCollectionCheckpointAndPrecancelBlockAllRequests(t *testing.T) {
 	if err := s.SaveCollection(ctx, vault, draft, nil, nil); err == nil || calls.Load() != 0 {
 		t.Fatal("pre-cancel dispatch", err)
 	}
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	if err := s.SaveCollection(context.Background(), vault, draft, nil, func(SessionCheckpoint) error { return nil }); err == nil || calls.Load() != 1 || s.checkpointPending {
 		t.Fatal("persisted refresh blocked or retried", err)
 	}

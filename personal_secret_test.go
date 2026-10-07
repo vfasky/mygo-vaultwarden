@@ -24,6 +24,7 @@ func secretUIFixture(t *testing.T) *app {
 	_ = json.Unmarshal(doc.JSON, &object)
 	object["id"], object["revisionDate"], object["edit"], object["viewPassword"] = "login-1", "2026-01-01T00:00:00Z", true, true
 	a.vault.Sync, _ = json.Marshal(map[string]any{"profile": map[string]any{"id": a.liveScope.Account}, "ciphers": []any{object}})
+	acceptUIReceipt(t, a, a.vault)
 	a.openCipherEditor("login-1", 1)
 	if a.editor == nil {
 		t.Fatal("fixture editor")
@@ -90,7 +91,7 @@ func repromptUIFixture(t *testing.T) (*app, *vaultwarden.Session) {
 	saved["passwordUnlock"] = &vaultwarden.PasswordUnlock{Config: *a.snapshot.PasswordUnlock, Key: key}
 	data, _ := json.Marshal(saved)
 	defer clear(data)
-	session, err := vaultwarden.RestoreSession(data, *a.liveScope, a.snapshot.PasswordUnlock)
+	session, err := vaultwarden.RestoreSessionFromAuthenticatedSnapshot(data, *a.liveScope, a.snapshot.PasswordUnlock, a.vault, a.sessionRevision)
 	if err != nil {
 		t.Fatal(err)
 	}

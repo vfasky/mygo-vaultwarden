@@ -68,10 +68,12 @@ type Summary struct {
 }
 
 type SyncResult struct {
-	Scope          Scope
-	Credentials    []Credential
-	Summary        Summary
-	PasswordUnlock *PasswordUnlock
-	Session        []byte
-	Vault          *VaultData
+	Scope                  Scope
+	Credentials            []Credential
+	Summary                Summary
+	PasswordUnlock         *PasswordUnlock
+	Session                []byte
+	Vault                  *VaultData
+	confirmedOrganizations []string
+	candidate              *syncCandidate
 }

@@ -10,11 +10,14 @@ func (s *Session) appendOrganizationCredentialsLocked(result *SyncResult, polici
 	if policies == nil {
 		return ErrPermission
 	}
-	data, err := s.organizationVaultLocked(result.Vault)
+	data, err := s.decodeOrganizationVaultLocked(result.Vault)
 	if err != nil {
 		return err
 	}
 	defer data.close()
+	for _, org := range data.organizations {
+		result.confirmedOrganizations = append(result.confirmedOrganizations, org.ID)
+	}
 	documents, err := result.Vault.Documents(result.Vault.Scope)
 	if err != nil {
 		return err
@@ -27,7 +30,7 @@ func (s *Session) appendOrganizationCredentialsLocked(result *SyncResult, polici
 		if item.OrganizationID == nil || policies.restricts(item.OrganizationID, item.Type) || item.Type != 1 || item.Login == nil || item.Reprompt != 0 || item.DeletedDate != nil || item.ArchivedDate != nil || item.ViewPassword == nil || !*item.ViewPassword {
 			continue
 		}
-		_, key, err := s.organizationDocumentLocked(result.Vault, item.ID, data)
+		_, key, err := organizationDocumentWithPolicies(item.ID, data, policies)
 		if err == ErrPermission || err == ErrNotFound {
 			continue
 		}

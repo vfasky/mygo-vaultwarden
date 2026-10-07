@@ -105,6 +105,7 @@ func TestOrganizationManagementPermissionsCheckpointAndIsolationOrder(t *testing
 	if calls.Load() != 0 {
 		t.Fatal("invalid request sent")
 	}
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	err := s.LeaveOrganization(context.Background(), vault, "org-1", func(cp SessionCheckpoint) error {
 		if cp.Scope != vault.Scope || len(cp.UnlockKey) != 32 || len(cp.Session) == 0 {
 			t.Fatal("isolation authority")
@@ -148,7 +149,7 @@ func TestOrganizationManagementOwnerUpdateIdentityAndPasswordDelete(t *testing.T
 	defer server.Close()
 	s, vault, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	vault = ownerVault(t, vault)
+	vault = acceptedOwnerVault(t, s, vault)
 	if _, err := s.OrganizationProfile(context.Background(), vault, "org-1", nil); err != nil {
 		t.Fatal(err)
 	}
@@ -231,6 +232,7 @@ func TestOrganizationManagementRefreshCheckpointBlocksDispatch(t *testing.T) {
 	if _, err := s.SaveOrganization(context.Background(), vault, "", settings, func(SessionCheckpoint) error { return diskFailure }); !errors.Is(err, diskFailure) {
 		t.Fatal(err)
 	}
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	isolated := false
 	if err := s.LeaveOrganization(context.Background(), vault, "org-1", func(SessionCheckpoint) error { isolated = true; return nil }, func(SessionCheckpoint) error { return diskFailure }); !errors.Is(err, diskFailure) {
 		t.Fatal(err)
@@ -244,6 +246,7 @@ func TestOrganizationManagementRefreshCheckpointBlocksDispatch(t *testing.T) {
 	if err := s.LeaveOrganization(ctx, vault, "org-1", func(SessionCheckpoint) error { isolated = true; return nil }, nil); err == nil || isolated || calls.Load() != 0 {
 		t.Fatal("pre-cancel isolation or dispatch", err)
 	}
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	if _, err := s.SaveOrganization(context.Background(), vault, "", settings, func(SessionCheckpoint) error { return nil }); err == nil || calls.Load() != 1 || s.checkpointPending {
 		t.Fatal("durable refreshed checkpoint did not permit request", err)
 	}
@@ -253,6 +256,7 @@ func TestQuarantinedOrganizationNeverProvidesKeysDocumentsOrProjection(t *testin
 	s, vault, _, _ := organizationFixture(t, "http://127.0.0.1:1")
 	defer s.Close()
 	vault.QuarantinedOrganizations = []string{"org-1"}
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	orgs, collections, err := s.Organizations(vault)
 	if err != nil || len(orgs) != 0 || len(collections) != 0 {
 		t.Fatal("isolated metadata", err)

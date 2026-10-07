@@ -247,7 +247,7 @@ func (a *app) syncVault(login bool) {
 			}
 			if !reply.OK {
 				workErr = reply.failure()
-			} else if reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.Revision == "" || reply.State.Revision == expected {
+			} else if reply.Vault == nil || reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.SnapshotID == "" || reply.State.Revision == "" || reply.State.Revision == expected {
 				workErr = (storageReply{Code: "invalid_reply", Message: "未能确认本次快照的发布版本。"}).failure()
 			}
 		}
@@ -299,6 +299,16 @@ func (a *app) syncVault(login bool) {
 					a.status = "登录已超时，请重新输入主密码。"
 				}
 				return
+			}
+			if concrete, ok := session.(*vaultwarden.Session); ok {
+				if err := concrete.AcceptAuthenticatedSnapshot(reply.Vault, reply.State.Revision); err != nil {
+					if login {
+						go session.Close()
+					}
+					a.stopNetwork()
+					a.status = err.Error()
+					return
+				}
 			}
 			a.snapshot = reply.State
 			a.session = session

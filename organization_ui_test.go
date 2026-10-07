@@ -45,7 +45,9 @@ func organizationUIFixture(t *testing.T, edit, view bool, reprompt int) *app {
 	data["collections"] = []any{map[string]any{"id": "collection-1", "organizationId": "organization-1", "name": name, "readOnly": !edit, "hidePasswords": !view, "manage": false}}
 	data["ciphers"] = append(data["ciphers"].([]any), object)
 	raw, _ := json.Marshal(data)
-	if err := a.adoptVault(&vaultwarden.VaultData{Version: 1, Scope: *a.liveScope, Sync: raw}); err != nil {
+	v := &vaultwarden.VaultData{Version: 1, Scope: *a.liveScope, Sync: raw}
+	acceptUIReceipt(t, a, v)
+	if err := a.adoptVault(v); err != nil {
 		t.Fatal(err)
 	}
 	return a
@@ -138,7 +140,9 @@ func TestNativeOrganizationSyncRevokesDraftAndNavigation(t *testing.T) {
 	raw, _ := json.Marshal(data)
 	a.sessionRevision = "org-revoked"
 	a.snapshot.Revision = a.sessionRevision
-	if err := a.adoptVault(&vaultwarden.VaultData{Version: 1, Scope: *a.liveScope, Sync: raw}); err != nil {
+	v := &vaultwarden.VaultData{Version: 1, Scope: *a.liveScope, Sync: raw}
+	acceptUIReceipt(t, a, v)
+	if err := a.adoptVault(v); err != nil {
 		t.Fatal(err)
 	}
 	if a.editor != nil || draft.fields.Name != "" || len(draft.inputs) != 0 || len(a.organizations) != 0 || len(a.collections) != 0 {

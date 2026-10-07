@@ -81,6 +81,10 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 	if err := s.requireScopeLocked(vault.Scope); err != nil {
 		return nil, err
 	}
+	policies, err := s.snapshotPoliciesLocked(vault)
+	if err != nil {
+		return nil, err
+	}
 	documents, err := vault.Documents(vault.Scope)
 	if err != nil {
 		return nil, err
@@ -101,7 +105,7 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 		if json.Unmarshal(document.JSON, &metadata) != nil {
 			return nil, ErrProtocol
 		}
-		if metadata.OrganizationID != nil {
+		if metadata.OrganizationID != nil || policies.restricts(nil, metadata.Type) {
 			continue
 		}
 		entry := VaultEntry{ID: metadata.ID, Type: metadata.Type, Title: "受保护或暂不支持的项目", Favorite: metadata.Favorite, Archived: metadata.ArchivedDate != nil, Deleted: metadata.DeletedDate != nil}
@@ -132,34 +136,17 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 func (s *Session) ReadPersonalCipher(vault *VaultData, id string) (CipherDocument, CipherFields, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed || vault == nil {
-		return CipherDocument{}, CipherFields{}, ErrExpired
-	}
-	if err := s.requireScopeLocked(vault.Scope); err != nil {
-		return CipherDocument{}, CipherFields{}, err
-	}
-	documents, err := vault.Documents(vault.Scope)
+	document, err := s.personalDocumentLocked(vault, id)
 	if err != nil {
 		return CipherDocument{}, CipherFields{}, err
 	}
-	for _, document := range documents {
-		var metadata struct {
-			ID             string
-			OrganizationID *string
-			Reprompt       int
-			ViewPassword   *bool
-		}
-		if json.Unmarshal(document.JSON, &metadata) != nil {
-			return CipherDocument{}, CipherFields{}, ErrProtocol
-		}
-		if metadata.ID != id {
-			continue
-		}
-		if metadata.OrganizationID != nil || metadata.Reprompt != 0 || (metadata.ViewPassword != nil && !*metadata.ViewPassword) {
-			return CipherDocument{}, CipherFields{}, ErrPermission
-		}
-		fields, err := DecryptCipherDocument(document, s.key)
-		return document, fields, err
+	var metadata struct{ Reprompt int }
+	if json.Unmarshal(document.JSON, &metadata) != nil {
+		return CipherDocument{}, CipherFields{}, ErrProtocol
 	}
-	return CipherDocument{}, CipherFields{}, ErrNotFound
+	if metadata.Reprompt != 0 {
+		return CipherDocument{}, CipherFields{}, ErrPermission
+	}
+	fields, err := DecryptCipherDocument(document, s.key)
+	return document, fields, err
 }

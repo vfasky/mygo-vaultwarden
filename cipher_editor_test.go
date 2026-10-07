@@ -28,8 +28,10 @@ func writableUIFixture(t *testing.T) *app {
 	if err != nil {
 		t.Fatal(err)
 	}
+	vault := &vaultwarden.VaultData{Version: 1, Scope: *a.snapshot.Scope, Sync: raw}
+	prepareUIReceipt(t, a, vault)
 	a.pending, a.epoch = 1, 1
-	a.completeStorage(storageRequest{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1, storageReply{OK: true, State: a.snapshot, Session: savedUIFixture(t, a), Vault: &vaultwarden.VaultData{Version: 1, Scope: *a.snapshot.Scope, Sync: raw}})
+	a.completeStorage(storageRequest{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1, storageReply{OK: true, State: a.snapshot, Session: savedUIFixture(t, a), Vault: vault})
 	if a.vault == nil || len(a.items) != 1 {
 		t.Fatal("complete vault not restored")
 	}

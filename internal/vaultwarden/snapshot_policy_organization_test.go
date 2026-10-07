@@ -7,9 +7,8 @@ import (
 	"testing"
 )
 
-// This fixture presents a complete authenticated snapshot to the privileged
-// constructor. The unmodified organizationFixture remains a low-level RSA and
-// permission fixture until all legacy authorization tests migrate together.
+// This fixture extends the authenticated organization receipt fixture with a
+// complete type15 policy. It never installs policy by public revision binding.
 func snapshotOrganizationFixture(t *testing.T) (*Session, *VaultData) {
 	t.Helper()
 	s, v, key, _ := organizationFixture(t, "https://snapshot.example.invalid")

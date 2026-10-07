@@ -71,7 +71,9 @@ func publishComparisonFixture(t *testing.T, a *app, mutate func(map[string]any))
 	a.snapshot = &next
 	a.sessionRevision = next.Revision
 	a.itemsRevision = next.Revision
-	if err := a.adoptVault(&vaultwarden.VaultData{Version: 1, Scope: *a.liveScope, Sync: raw}); err != nil {
+	v := &vaultwarden.VaultData{Version: 1, Scope: *a.liveScope, Sync: raw}
+	acceptUIReceipt(t, a, v)
+	if err := a.adoptVault(v); err != nil {
 		t.Fatal(err)
 	}
 }

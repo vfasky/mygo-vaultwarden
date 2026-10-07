@@ -75,6 +75,7 @@ func TestOrganizationShareRewrapsIndependentKeyAndPreservesOpaqueData(t *testing
 	_ = json.Unmarshal(vault.Sync, &raw)
 	raw["ciphers"], _ = json.Marshal([]json.RawMessage{personal.JSON})
 	vault.Sync, _ = json.Marshal(raw)
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	fields, err := DecryptCipherDocument(personal, s.key)
 	if err != nil {
 		t.Fatal(err)
@@ -96,6 +97,7 @@ func TestOrganizationShareRewrapsIndependentKeyAndPreservesOpaqueData(t *testing
 	personal.JSON, _ = json.Marshal(source)
 	raw["ciphers"], _ = json.Marshal([]json.RawMessage{personal.JSON})
 	vault.Sync, _ = json.Marshal(raw)
+	installFixtureSnapshot(t, s, vault, "revision-1")
 	if _, err := s.SharePersonalCipher(context.Background(), vault, "org-1", "collection-1", personal, fields, nil, nil); err != ErrUnsupportedEdit || requests.Load() != 1 {
 		t.Fatal("legacy shared account key", err)
 	}
@@ -115,6 +117,7 @@ func TestOrganizationSharePartialFailureAndCreationPermissions(t *testing.T) {
 	}
 	for _, field := range []string{"ReadOnly", "HidePasswords"} {
 		v := changeOrganizationFixture(t, vault, func(d map[string]any) { d["collections"].([]any)[0].(map[string]any)[field] = true })
+		installFixtureSnapshot(t, s, v, "revision-1")
 		if _, err := s.CreateOrganizationCipher(context.Background(), v, "org-1", "collection-1", fields, nil); err != ErrPermission || requests.Load() != 1 {
 			t.Fatal("restricted destination", field, err)
 		}

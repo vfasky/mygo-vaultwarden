@@ -44,14 +44,20 @@ func TestOrganizationPolicyRefreshInvalidatesPreparedWrite(t *testing.T) {
 		t.Fatal("checkpoint bypass", err)
 	}
 	_, err = s.CreateOrganizationCipher(context.Background(), vault, "org-1", "collection-1", fields, func(SessionCheckpoint) error { return nil })
-	if !errors.Is(err, ErrExpired) || reads.Load() != 1 || writes.Load() != 0 || refresh.Load() != 1 {
+	if !errors.Is(err, ErrExpired) || reads.Load() != 0 || writes.Load() != 0 || refresh.Load() != 1 {
 		t.Fatal("prepared key/permission guard survived epoch change", err)
 	}
 	if s.writePolicies != nil {
 		t.Fatal("operation authority leaked")
 	}
+	// Reauthentication is required after a failed persistence callback. Settle
+	// the pending network checkpoint before modelling that authenticated receipt.
+	if err := s.persistPendingLocked(func(SessionCheckpoint) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	installFixtureSnapshot(t, s, vault, "revision-2")
 	_, err = s.CreateOrganizationCipher(context.Background(), vault, "org-1", "collection-1", fields, nil)
-	if err != nil || reads.Load() != 2 || writes.Load() != 1 || refresh.Load() != 1 {
+	if err != nil || reads.Load() != 1 || writes.Load() != 1 || refresh.Load() != 1 {
 		t.Fatal("explicit retry did not obtain new authority", err)
 	}
 }

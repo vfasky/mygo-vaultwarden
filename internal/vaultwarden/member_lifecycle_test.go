@@ -16,7 +16,7 @@ func TestMemberManagementCheckpointAndSelfRoleIsolationFailClosed(t *testing.T) 
 	defer server.Close()
 	s, v, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	v = groupsEnabledVault(t, ownerVault(t, v))
+	v = acceptedGroupsVault(t, s, ownerVault(t, v))
 	s.checkpointPending = true
 	storageFailure := errors.New("storage failed")
 	if _, err := s.OrganizationMembers(context.Background(), v, "org-1", func(SessionCheckpoint) error { return storageFailure }); !errors.Is(err, storageFailure) {
@@ -26,6 +26,7 @@ func TestMemberManagementCheckpointAndSelfRoleIsolationFailClosed(t *testing.T) 
 		t.Fatal("checkpoint failure made HTTP")
 	}
 	s.checkpointPending = false
+	installFixtureSnapshot(t, s, v, "revision-1")
 	directory := &MemberDirectory{scope: v.Scope, organizationID: "org-1", revision: s.authorizationRevision, rows: memberRows()}
 	draft := &MemberRoleDraft{Role: 2, directory: directory, member: memberRows()[0]}
 	if err := s.SaveMemberRole(context.Background(), v, draft, nil, nil, nil); err != ErrCheckpoint {
@@ -52,7 +53,7 @@ func TestMemberMutationCloseAfterDispatchIsUncertainAndNeverRetried(t *testing.T
 	}))
 	defer server.Close()
 	s, v, _, _ := organizationFixture(t, server.URL)
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	directory, err := s.OrganizationMembers(context.Background(), v, "org-1", nil)
 	if err != nil {
 		t.Fatal(err)

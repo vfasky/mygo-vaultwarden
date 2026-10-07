@@ -146,6 +146,7 @@ func TestInvitationRecoveryConsentAndChangedAuthority(t *testing.T) {
 	if writes.Load() != 1 {
 		t.Fatal("stale grant wrote")
 	}
+	installFixtureSnapshot(t, s, v, s.authorizationRevision)
 	policyOrg = "different-org"
 	if _, err = s.PrepareInvitationAcceptance(context.Background(), v, link, nil); err != ErrIdentity {
 		t.Fatal("foreign policy", err)
@@ -239,7 +240,7 @@ func TestOrganizationRecoveryInitializationAndKeySeparation(t *testing.T) {
 	if _, err := s.OrganizationRecoveryPublicKey(context.Background(), v, "org-1", true, nil); err != ErrPermission {
 		t.Fatal("ordinary member initialization", err)
 	}
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	if got, err := s.OrganizationRecoveryPublicKey(context.Background(), v, "org-1", false, nil); err != nil || got != "" || writes != 0 {
 		t.Fatal("read created keys", err)
 	}

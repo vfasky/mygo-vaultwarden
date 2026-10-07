@@ -42,7 +42,9 @@ func backupFixture(t *testing.T, format BackupFormat, kinds ...int) (*Session, *
 	folderName, _ := EncryptString([]byte("备份文件夹"), key)
 	emptyName, _ := EncryptString([]byte("空文件夹"), key)
 	sync, _ := json.Marshal(map[string]any{"profile": map[string]any{"id": scope.Account}, "ciphers": docs, "folders": []Folder{{"00000000-0000-4000-8000-000000000001", folderName}, {"00000000-0000-4000-8000-000000000002", emptyName}}})
-	return s, &VaultData{Version: 1, Scope: scope, Sync: sync}, ids
+	v := &VaultData{Version: 1, Scope: scope, Sync: sync}
+	installFixtureSnapshot(t, s, v, "backup-revision")
+	return s, v, ids
 }
 func TestBackupEightTypesRoundTrip(t *testing.T) {
 	s, v, ids := backupFixture(t, MyGoBackup, 1, 2, 3, 4, 5, 6, 7, 8)

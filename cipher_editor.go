@@ -106,6 +106,9 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	if !ok || a.liveScope == nil || vault.Scope != *a.liveScope {
 		return vaultwarden.ErrIdentity
 	}
+	if err := session.ValidateAuthenticatedSnapshot(vault, a.sessionRevision); err != nil {
+		return err
+	}
 	entries, err := session.PersonalEntries(vault)
 	if err != nil {
 		return err
@@ -130,9 +133,6 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	items := make([]displayCredential, 0, len(entries))
 	for _, e := range entries {
 		items = append(items, displayCredential{OrganizationID: e.OrganizationID, CollectionIDs: e.CollectionIDs, Readable: e.Readable, ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, RequiresPassword: e.RequiresPassword, FolderID: e.FolderID})
-	}
-	if err := session.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
-		return err
 	}
 	a.clearSecretClipboard()
 	if a.editor != nil {

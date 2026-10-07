@@ -58,7 +58,7 @@ func TestPolicyPersonalStateUsesServerTypeAndPermissions(t *testing.T) {
 				doc := CipherDocument{JSON: []byte(`{"id":"item-1","type":1,"edit":true,"viewPassword":true,"reprompt":0}`)}
 				calls := []func() error{
 					func() error {
-						return s.ChangePersonalCiphers(context.Background(), scope, bulkFixture(scope, true), []string{"item-1"}, action, nil, nil)
+						return s.ChangePersonalCiphers(context.Background(), scope, acceptedBulkFixture(t, s, scope, true), []string{"item-1"}, action, nil, nil)
 					},
 				}
 				if action != CipherMove {

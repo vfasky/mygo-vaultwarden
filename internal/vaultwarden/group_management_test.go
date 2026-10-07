@@ -78,7 +78,7 @@ func TestGroupExplicitScopePreservesRelationsAndIsolation(t *testing.T) {
 	defer server.Close()
 	s, v, key, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	v = groupsEnabledVault(t, ownerVault(t, v))
+	v = acceptedGroupsVault(t, s, ownerVault(t, v))
 	name, _ = EncryptString([]byte("集合"), key)
 	d, err := s.GroupDetails(context.Background(), v, "org-1", "group-1", nil)
 	if err != nil {
@@ -108,6 +108,7 @@ func TestGroupExplicitScopePreservesRelationsAndIsolation(t *testing.T) {
 		mode string
 		err  error
 	}{{"changed", ErrConflict}, {"identity", ErrIdentity}, {"page", ErrProtocol}} {
+		installFixtureSnapshot(t, s, v, "revision-1")
 		mode = tc.mode
 		consent = d.Confirm()
 		if err = s.SaveGroup(context.Background(), v, d, consent, isolate, nil); err != tc.err {
@@ -119,6 +120,7 @@ func TestGroupExplicitScopePreservesRelationsAndIsolation(t *testing.T) {
 	}
 	mode = ""
 	for _, scope := range []GroupScope{GroupAllCollections, GroupSelectedCollections} {
+		installFixtureSnapshot(t, s, v, "revision-1")
 		d.AccessScope = scope
 		c := d.Confirm()
 		err = s.SaveGroup(context.Background(), v, d, c, isolate, nil)
@@ -130,6 +132,7 @@ func TestGroupExplicitScopePreservesRelationsAndIsolation(t *testing.T) {
 	if writes != 2 {
 		t.Fatal(writes)
 	}
+	installFixtureSnapshot(t, s, v, "revision-1")
 	mode = "unknown"
 	c := d.Confirm()
 	err = s.SaveGroup(context.Background(), v, d, c, isolate, nil)
@@ -148,6 +151,7 @@ func TestGroupExplicitScopePreservesRelationsAndIsolation(t *testing.T) {
 	if writes != 3 {
 		t.Fatal(writes)
 	}
+	installFixtureSnapshot(t, s, v, "revision-1")
 	mode = "response-identity"
 	c = d.Confirm()
 	if err = s.SaveGroup(context.Background(), v, d, c, isolate, nil); !errors.As(err, &unknown) {
@@ -165,6 +169,7 @@ func TestGroupExplicitScopePreservesRelationsAndIsolation(t *testing.T) {
 	}
 	c.Close()
 	s.authorizationRevision = originalRevision
+	installFixtureSnapshot(t, s, v, originalRevision)
 	s.checkpointPending = true
 	c = d.Confirm()
 	checkpointFailure := errors.New("checkpoint disk failure")
@@ -201,7 +206,7 @@ func TestGroupCloseCancelsDispatchedWriteWithoutRetry(t *testing.T) {
 	defer close(release)
 	s, v, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()
-	v = groupsEnabledVault(t, ownerVault(t, v))
+	v = acceptedGroupsVault(t, s, ownerVault(t, v))
 	d, err := s.GroupDetails(context.Background(), v, "org-1", "", nil)
 	if err != nil {
 		t.Fatal(err)

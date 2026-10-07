@@ -115,10 +115,11 @@ func (a *app) completeStorage(request storageRequest, epoch uint64, reply storag
 		return
 	}
 	if isUnlock {
-		a.restoreUnlockedSession(reply)
-		a.items = reply.Items
-		if err := a.adoptVault(reply.Vault); err != nil {
-			a.status = err.Error()
+		a.items = nil
+		if a.restoreUnlockedSession(reply) {
+			if err := a.adoptVault(reply.Vault); err != nil {
+				a.status = err.Error()
+			}
 		}
 		a.itemsRevision = reply.State.Revision
 		a.showSettings, a.showLogin = false, false

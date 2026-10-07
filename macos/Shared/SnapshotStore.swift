@@ -71,7 +71,7 @@ final class SnapshotStore {
                     }
                 }
             }
-            let credentials = try vault?.excludingQuarantined(credentials) ?? credentials
+            let credentials = scope == .demo ? (try vault?.excludingQuarantined(credentials) ?? credentials) : (vault?.policyCandidates(credentials) ?? [])
             try cleanupLocked(&prior)
             guard prior.retiredKeys.count < 500 else { throw SnapshotError.busy }
             let keyID = UUID().uuidString
@@ -124,7 +124,7 @@ final class SnapshotStore {
                   !(vault.quarantinedOrganizations ?? []).contains(id) else { throw SnapshotError.invalidInput }
             vault.quarantinedOrganizations = ((vault.quarantinedOrganizations ?? []) + [id]).sorted()
             try vault.validate(scope: scope)
-            let credentials = try vault.excludingQuarantined(payload.credentials)
+            let credentials = scope == .demo ? try vault.excludingQuarantined(payload.credentials) : vault.policyCandidates(payload.credentials)
             let replacement = try sealSnapshot(credentials: credentials, scope: scope, keyID: snapshot.header.keyID, key: key,
                 passwordUnlock: PasswordUnlockMaterial(config: config, key: unlockKey), session: session, vault: vault)
             state.snapshot = replacement
@@ -143,7 +143,7 @@ final class SnapshotStore {
         defer { key.resetBytes(in: 0..<key.count) }
         let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
         let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
-                                  expiresAt: clock() + 60, credentials: payload.credentials, session: includeSession ? payload.session : nil,
+                                  expiresAt: clock() + 60, credentials: payload.safeCandidates, session: includeSession ? payload.session : nil,
                                   vault: includeSession ? payload.vault : nil)
         try withCurrentLease(lease) {}
         return lease
@@ -160,7 +160,7 @@ final class SnapshotStore {
         defer { key.resetBytes(in: 0..<key.count) }
         let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
         let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
-                                  expiresAt: clock() + 60, credentials: payload.credentials, session: payload.session, vault: payload.vault)
+                                  expiresAt: clock() + 60, credentials: payload.safeCandidates, session: payload.session, vault: payload.vault)
         try withCurrentLease(lease) {}
         return lease
     }
@@ -177,10 +177,11 @@ final class SnapshotStore {
             guard snapshot.header.scope == scope else { throw SnapshotError.wrongScope }
             var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
             defer { key.resetBytes(in: 0..<key.count) }
+            let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
             state.snapshot = try replacingSnapshotSession(snapshot, key: key, session: session)
             state.revision = UUID().uuidString
             try files.write(state)
-            return SnapshotLease(revision: state.revision, header: snapshot.header, expiresAt: clock() + 60, credentials: [])
+            return SnapshotLease(revision: state.revision, header: snapshot.header, expiresAt: clock() + 60, credentials: [], vault: payload.vault)
         }
     }
 

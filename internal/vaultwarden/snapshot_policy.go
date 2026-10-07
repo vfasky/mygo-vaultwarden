@@ -62,6 +62,7 @@ func (s *Session) AcceptAuthenticatedSnapshot(vault *VaultData, revision string)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.offlinePolicies = nil
+	s.checkpointPolicies = nil
 	s.authorizationEpoch++
 	if !s.itemSessionActiveLocked() || revision == "" || len(revision) > 1024 {
 		return ErrExpired
@@ -91,7 +92,7 @@ func (s *Session) AcceptAuthenticatedSnapshot(vault *VaultData, revision string)
 	}
 	// Validate the complete organization identity/key chain before installing
 	// any capability. Quarantine never removes server policies from parsing.
-	organizations, err := s.organizationVaultLocked(copyVault)
+	organizations, err := s.decodeOrganizationVaultLocked(copyVault)
 	if err != nil {
 		return err
 	}

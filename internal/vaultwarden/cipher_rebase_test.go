@@ -81,7 +81,7 @@ func TestCipherRebaseEightTypesPreserveRemoteOpaqueAndLocalChoice(t *testing.T) 
 				o[cipherSections[kind]].(map[string]any)["newOpaque"] = "NEW nested encrypted"
 			})
 			vault := rebaseVault(t, s, remote)
-			_ = s.BindSnapshotRevision(vault.Scope, "new")
+			installFixtureSnapshot(t, s, vault, "new")
 			plan, changes, err := s.ComparePersonalCipher(vault, "new", base, draft, nil)
 			if err != nil {
 				t.Fatal(err)
@@ -127,7 +127,7 @@ func TestCipherRebaseHistoryRemovesOnlyObservedRecords(t *testing.T) {
 		o["login"].(map[string]any)["password"] = "remote current password"
 	})
 	vault := rebaseVault(t, s, remote)
-	_ = s.BindSnapshotRevision(vault.Scope, "new")
+	installFixtureSnapshot(t, s, vault, "new")
 	plan, _, err := s.ComparePersonalCipher(vault, "new", base, draft, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -171,7 +171,7 @@ func TestCipherRebaseRejectsUnsafeTransitionsAndStalePlans(t *testing.T) {
 				}
 			})
 			vault := rebaseVault(t, s, remote)
-			_ = s.BindSnapshotRevision(vault.Scope, "new")
+			installFixtureSnapshot(t, s, vault, "new")
 			if test == "missing" {
 				vault.Sync = json.RawMessage(`{"profile":{"id":"account-a"},"ciphers":[]}`)
 			}
@@ -210,7 +210,7 @@ func TestCipherRebaseFreshRepromptGrantAndExpiry(t *testing.T) {
 	draft.Name = "local"
 	remote := rebaseRemote(t, base, s.key, func(o map[string]any) { o["notes"] = "remote" })
 	vault = rebaseVault(t, s, remote)
-	_ = s.BindSnapshotRevision(vault.Scope, "new")
+	installFixtureSnapshot(t, s, vault, "new")
 	for _, grant := range []*ItemAuthorization{nil, old} {
 		if _, _, err := s.ComparePersonalCipher(vault, "new", base, draft, grant); err != ErrPermission {
 			t.Fatal("stale grant accepted", err)
@@ -244,7 +244,7 @@ func TestCipherRebaseConcurrentArraysRetainRemoteExtensions(t *testing.T) {
 		o["fields"] = append(o["fields"].([]any), map[string]any{"name": "remote-added", "value": "new secret", "type": json.Number("1"), "future": "new opaque field"})
 	})
 	vault := rebaseVault(t, s, remote)
-	_ = s.BindSnapshotRevision(vault.Scope, "new")
+	installFixtureSnapshot(t, s, vault, "new")
 	plan, changes, err := s.ComparePersonalCipher(vault, "new", base, draft, nil)
 	if err != nil {
 		t.Fatal(err)

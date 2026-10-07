@@ -97,11 +97,12 @@ func TestFolderOfflineSnapshotIsolation(t *testing.T) {
 		return &VaultData{Version: 1, Scope: scope, Sync: raw}
 	}
 	vault := makeVault([]Folder{{ID: "f-1", Name: encrypted}})
+	installFixtureSnapshot(t, session, vault, "folder-revision")
 	folders, err := session.PersonalFolders(vault)
 	if err != nil || len(folders) != 1 || folders[0].Name != "私人文件夹" {
 		t.Fatal(folders, err)
 	}
-	if _, err = session.PersonalFolders(makeVault([]Folder{{ID: "f-1", Name: encrypted}, {ID: "f-1", Name: encrypted}})); err != ErrProtocol {
+	if _, err = session.PersonalFolders(makeVault([]Folder{{ID: "f-1", Name: encrypted}, {ID: "f-1", Name: encrypted}})); err != ErrExpired {
 		t.Fatal("duplicate id accepted")
 	}
 	vault.Scope.Account = "other"

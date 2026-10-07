@@ -91,6 +91,7 @@ func TestOrganizationCipherPolicyScopeAndIdentity(t *testing.T) {
 					_ = json.Unmarshal(vault.Sync, &raw)
 					raw["ciphers"], _ = json.Marshal([]json.RawMessage{doc.JSON})
 					vault.Sync, _ = json.Marshal(raw)
+					installFixtureSnapshot(t, s, vault, "revision-1")
 					fields, e := DecryptCipherDocument(doc, s.key)
 					if e != nil {
 						t.Fatal(e)

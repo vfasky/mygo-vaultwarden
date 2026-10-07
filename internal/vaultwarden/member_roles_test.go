@@ -73,7 +73,7 @@ func TestMemberRolePreservesDirectRelationsAndRejectsIncompleteOrChangedSources(
 	s, v, key, _ := organizationFixture(t, server.URL)
 	collectionName, _ = EncryptString([]byte("直接集合"), key)
 	defer s.Close()
-	v = ownerVault(t, v)
+	v = acceptedOwnerVault(t, s, v)
 	directory, err := s.OrganizationMembers(context.Background(), v, "org-1", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +85,7 @@ func TestMemberRolePreservesDirectRelationsAndRejectsIncompleteOrChangedSources(
 	if writes != 0 {
 		t.Fatal("disabled groups wrote")
 	}
-	v = groupsEnabledVault(t, v)
+	v = acceptedGroupsVault(t, s, v)
 	draft, err := s.PrepareMemberRole(context.Background(), v, directory, "member-2", nil)
 	if err != nil {
 		t.Fatal(err)
@@ -115,12 +115,14 @@ func TestMemberRolePreservesDirectRelationsAndRejectsIncompleteOrChangedSources(
 			d["profile"].(map[string]any)[field].([]any)[0].(map[string]any)["UseGroups"] = false
 		}
 	}))
+	installFixtureSnapshot(t, s, disabled, s.authorizationRevision)
 	if err = s.SaveMemberRole(context.Background(), disabled, draft, nil, nil, nil); err != ErrMemberRoleGroupsDisabled {
 		t.Fatal(err)
 	}
 	if writes != 1 || draft.Role != 4 {
 		t.Fatal("disabled save discarded draft")
 	}
+	installFixtureSnapshot(t, s, v, s.authorizationRevision)
 	draft.ManageAllCollections = true
 	if affected := draft.ResetCollections(); len(affected) != 1 || affected[0].Name != "直接集合" || !affected[0].ReadOnly {
 		t.Fatal("incomplete affected set", affected)

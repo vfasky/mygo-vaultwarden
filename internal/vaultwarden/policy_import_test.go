@@ -95,6 +95,7 @@ func TestPolicyUpdateRejectsOwnershipButPreservesExistingRead(t *testing.T) {
 	data["ciphers"] = []json.RawMessage{document.JSON}
 	encoded, _ := json.Marshal(data)
 	vault := &VaultData{Version: 1, Scope: scope, Sync: encoded, QuarantinedOrganizations: []string{"org-a"}}
+	installFixtureSnapshot(t, s, vault, "policy-revision")
 	// Local quarantine is not a policy exemption. This authenticated snapshot
 	// remains valid for reading personal records under PersonalOwnership.
 	if _, _, err := s.ReadPersonalCipher(vault, fields.ID); err != nil {

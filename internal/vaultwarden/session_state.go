@@ -25,6 +25,7 @@ type SessionCheckpoint struct {
 	Scope     Scope
 	Session   []byte
 	UnlockKey []byte
+	receipt   *checkpointPolicyReceipt
 }
 
 func (s *Session) savedLocked() ([]byte, error) {
@@ -43,6 +44,17 @@ func (s *Session) savedLocked() ([]byte, error) {
 }
 
 func (s *Session) checkpointLocked(persist func(SessionCheckpoint) error) error {
+	// This callback persists isolation, not a token-only update. Its result may
+	// be unknown; neither success nor failure can retain old offline authority.
+	defer func() {
+		s.offlinePolicies = nil
+		s.checkpointPolicies = nil
+		s.authorizationEpoch++
+	}()
+	return s.checkpointWithReceiptLocked(persist, nil)
+}
+
+func (s *Session) checkpointWithReceiptLocked(persist func(SessionCheckpoint) error, receipt *checkpointPolicyReceipt) error {
 	if persist == nil {
 		return nil
 	}
@@ -53,7 +65,7 @@ func (s *Session) checkpointLocked(persist func(SessionCheckpoint) error) error 
 	defer clear(data)
 	key := append([]byte(nil), s.passwordUnlock.Key...)
 	defer clear(key)
-	return persist(SessionCheckpoint{Scope: Scope{Server: s.client.base.String(), Account: s.account}, Session: data, UnlockKey: key})
+	return persist(SessionCheckpoint{Scope: Scope{Server: s.client.base.String(), Account: s.account}, Session: data, UnlockKey: key, receipt: receipt})
 }
 
 // RestoreSession restores network credentials without installing snapshot policy
