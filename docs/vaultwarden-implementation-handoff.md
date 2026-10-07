@@ -1,54 +1,68 @@
-# 同卡续作交接：权威策略执行基础已落地，继续剩余入口迁移
+# 同卡续作交接：写入口策略迁移已提交，下一步离线五链联合迁移
 
-**INCOMPLETE — 整卡未完成，禁止 Review / merge。** 协调者本轮通过`contact_supervisor(need_decision)`批准：按可验证提交迁移；本次上下文不足以安全继续组织/离线/桥的跨模块迁移时，保存本单元、准确清理、干净提交后续启同卡。全部原验收范围不缩减。以本文之后`git log/status`最新HEAD为准，不回退或重新导入。
+**INCOMPLETE — 整卡未完成，禁止 Review / merge。** 本进程协调者批准：保存已经完整验证的写入口增量、记录离线五条接缝与已批准特权构造器契约后，干净提交并续启同卡。原完整范围不缩减。下轮以`git log/status`最新HEAD为准，不重新导入用户baseline、不重做成员/群组/前序个人策略调查。
 
-## 当前基线与提交
+## 当前基线、提交与真实完成边界
 
-- 本轮开始HEAD `a71166e`，全部既有成果与用户baseline保留。实现提交 **`d88af8386f7de257be0b908a5c53a378eb8bdb58`**，本文随后以单独交接提交保存。未读真实凭据、未接生产、未改主目录/用户app/watch/剪贴板，未启动子代理。
-- 新文件：`internal/vaultwarden/policy_execution.go`及6个`policy_*test.go`测试文件（execution、execution_integration、fixture、import、import_refresh、lifecycle）；专题`docs/organization-policies.md`。修改`client.go`、`authenticated.go`、`cipher_create.go`、`ciphers_api.go`、`backup_import.go`及相应copy/backup/reprompt/update夹具，README与coverage同步。
-- 前序群组完整增量在`a71166e`及`docs/organization-groups.md`，不要重做群组/成员/SMTP调查。原手工策略方向和群组范围确认要求仍在git历史与专题。
+开始HEAD `188700b38c429d4a083d369c046e123eb5dfc11d`；本轮实现提交 **`6605057`**（将组织写入与个人状态批量操作接入权威策略检查）。全部历史与baseline保留。本交接另行提交。未读真实凭据、未访问生产、未改主目录或用户app/watch/剪贴板，未启动子代理。只有本卡工作树发生写入。
 
-## 本次实际实现边界
+生产代码增量：
 
-仅个人**create/update/copy/import**（包含已授权reprompt、完整编辑中的收藏/文件夹以及冲突重新应用后的更新）接入type5 PersonalOwnership和type15 RestrictedItemTypes的**保存约束**。原生既有新增/编辑/复制/导入入口复用这些方法，错误用中文政策原因说明。没有policy管理表单，不是其它政策已经执行。
+- `policy_execution.go`的私有`operationPolicies`新增每组织type15限制、已解析server membership与本次认证sync的encrypted ciphers；policy GET仍不发布vault/不取消隔离。
+- `organization_write.go`的create/share与`organizations.go`的UpdateOrganizationCipher接入`organizationCipherPolicyGuardLocked`：type15只检查目标组织；type5不误禁共享。服务器memberID/globalUserID/role须与本地解密出的组织身份相符，confirmed+enabled；原本key链、集合可写性、scope/revision/epoch/reprompt guard继续生效。当前仍仅独立item-key共享，legacy缺口不变。
+- `ciphers_api.go`的个人state及仅供route测试的partial底层、`cipher_bulk.go`的个人批量接入`personalCipherStatePolicyLocked`。每次操作认证GET，从server逐ID核验真实type、个人归属、edit/viewPassword/reprompt；调用方伪造本地文档无法改变这些判断。type15受限则拒绝；type5允许这些状态操作。missing ID报ErrConflict、重复/缺必要字段失败，均在派发前；单项reprompt须grant绑定server原文，批量仍拒绝reprompt。partial尚无独立产品入口，原生收藏/文件夹沿完整编辑保存。
+- 原有`authenticatedGuardedLocked`在已取得policy context后继续派发前复核ctx/stopping/epoch/revision；刷新/checkpoint中途改变epoch即停止，显式下一次操作才重新取policy，不自动重试。组织写入在policy前准备的旧key/权限guard也因此失效。
+- 新增一次GET不提供服务器事务/CAS；GET后到mutation期间远端变化仍会竞争，批量mutation发出后的部分结果仍须逐项sync核对，不盲重试。
 
-- `Session.writePolicies *operationPolicies`完全私有，只有`operationPoliciesLocked(ctx,persist)`的认证`GET /api/sync`可安装。`parseOperationPolicies`内部解析不授予外部能力。`beginOperationLocked`开始/结束清空上下文，`Close`也清空。公开可变`VaultData`或`BindSnapshotRevision`不能构造在线policy许可。
-- profile account/email/wrapped user key与会话一致；固定basepath沿Client。`policies`、`policiesNew`、organizations、ciphers必须显式数组，缺失/null失败。组织id/memberID/userID、role/status/enabled/usePolicies/permissions及policy id/type/enabled/data逐项验证，重复/跨组织/畸形拒绝。固定1.37.4的usePolicies=true/managePolicies=false已在真实fixture确认；confirmed的两个policy数组必须一致，accepted-only不能冒充confirmed所有权限制。
-- 本地quarantine不能过滤权威服务器成员政策。policy GET不发布新vault、不替换UI revision、不解除本机隔离；server enabled=false也不绕过confirmed角色的PersonalOwnership检查。单元`TestPolicyUpdateRejectsOwnershipButPreservesExistingRead`带本地org隔离的vault仍允许type5已有个人读取、禁止更新；多组织测试确保owner在A不豁免B成员政策。
-- 每次成功token refresh都推进authorizationEpoch，含无PasswordUnlock的临时网络会话；持久会话还在checkpoint成功时推进。先checkpoint再policy GET；失败阻断，pending保留，成功恢复后重新GET。派发前`checkOperationPoliciesLocked`复核ctx/stopping/epoch/revision/scope，与现有reprompt guard组合。
-- **操作中途再次refresh/checkpoint选择中止，不自动重取后继续写，更不重发已执行项。** 下一次显式操作才取新上下文。导入全项加密预检后一次policy读取，全部type检查完成后才写第一folder；后续所有写通过authenticated派发前检查。`TestPolicyImportRefreshStopsAfterKnownPartialSuccess`确定性在第一个folder响应后使token过期，证明refresh+checkpoint后停止：只1次policy GET、1个已创建folder、0 cipher，ImportResult保留已创建ID与第二项停止/待核对状态。后续真实API写逻辑仍不得盲重试。
-- type5按每组织owner/admin豁免、member/manager约束，允许既有个人读取/删除/共享（后两者没有因type5新增封禁）。type15包括owner/admin；null默认Card，数组在个人库上跨组织并集。**type15既有项目读取/投影、组织各自范围尚未执行，当前不能称完整type15支持。**
-- `/sync`→写没有服务器事务/CAS，单次批量期间远端policy变化有竞争窗口，明确保留该风险。
+**未实现**：离线type15读取/列表/秘密/历史/TOTP/导出/AutoFill保护、可信snapshot策略上下文、完整policy原生业务表单、组织生命周期等其它policy消费。不能把已定位接缝或批准架构称为已实现。普通RestoreSession目前原有行为仍在，下一单元须改变其离线许可边界；本轮没有增设trusted标志或测试绕过。
 
 ## 实际验证与资源
 
-通过`GO=$(bash scripts/resolve-go.sh)`执行：
+通过`GO=$(bash scripts/resolve-go.sh)`取得工具链：
 
-- `"$GO" test ./... -count=1 -timeout=60s`通过。
-- `"$GO" build ./...`通过。
-- `"$GO" vet ./...`通过。
-- `"$GO" test -race ./... -count=1 -timeout=60s`通过。
-- 之后只新增确定性import中途刷新测试，执行`"$GO" test -race ./internal/vaultwarden -run '^TestPolicy' -count=1 -timeout=30s`通过；没有无理由重跑无关套件。
-- `MYGO_VW_POLICY_TEST=1 "$GO" test ./internal/vaultwarden -run '^TestLivePolicyExecution$' -count=1 -v -timeout=120s`通过（1.39s test body）。独有1.37.4 Docker回环实例、example.invalid两账号；真实产品组织创建/邀请/公钥确认、member无UI resync即被新type5限制create/update、已有读取仍可用、owner豁免type5但受type15 Card保存限制。policy PUT只为fixture布置，**不算policy产品管理接口**。
-- 每个容器使用独有`mygo-policy-UUID`名称及`mygo.fixture`label；cleanup核对完整ID+label后`docker rm -fv ID`。末次`docker ps -a --filter 'name=mygo-policy-' --format '{{.ID}} {{.Names}}'`无输出。未启动SMTP/CLI/窗口、未外发。
-- `git diff --check`通过；实现提交后`git status --porcelain=v1`及`git diff --cached --name-only`均无输出。交接提交后再由最终报告记录最新HEAD和工作区状态。
-- 本次未改Swift/桥，**未跑Swift/bridge**；历史52 Swift证据不是本次新验证，不声称真实安装/窗口/Keychain/AutoFill验证。
-- 开发中先运行全套识别三个旧HTTP夹具缺policy GET，产生wrong-route/protocol失败；补真实HTTP空policy响应后全套与race通过。无生产绕过开关，无直接注入policy授权。一次精确edit旧文本重复签名匹配失败，后修正，无遗漏修改。
+- `"$GO" test ./... -count=1 -timeout=60s`通过（最终完整运行root/internal/scripts全部通过）。
+- `"$GO" build ./...`通过；`"$GO" vet ./...`通过。
+- `"$GO" test -race ./... -count=1 -timeout=60s`通过：root 5.942s、internal 8.507s、dev-debug 7.840s。此后仅文档调整，没有新生产或单元代码；相关live integration变更已在同一次已完成验证之前。
+- `"$GO" test ./internal/vaultwarden -run 'TestOrganizationPolicy|TestOrganizationCloseDuring|TestPolicyPersonalState' -count=1 -timeout=30s`通过。
+- `MYGO_VW_POLICY_TEST=1 "$GO" test ./internal/vaultwarden -run '^TestLivePolicyExecution$' -count=1 -v -timeout=120s`最终通过（test body 1.62s，含protected-state-authorization 0.17s、bulk-preflight-and-server-partial 0.07s）。独有Docker `vaultwarden/server:1.37.4`、回环、example.invalid两个角色：组织Card create/update在最新type15后拒绝，Note允许；member type5允许trash/restore/bulk archive、type15拒绝bulk；真实reprompt grant删除原项及副本；bulk缺ID预检不写，再用fixture直接请求确认server400仍会部分移动。seedPolicy PUT和直接partial协议请求仅是fixture，**不是policy管理或额外产品API入口**。
+- `policy_organization_test.go`：3入口×10场景；`policy_state_test.go`：6动作×10场景，每场景两类入口分别取policy。涉及目标组织/其它组织、缺policy、成员/角色改变、disabled/accepted、type5/type15；伪造类型/归属/reprompt/edit/viewPassword、缺/重复server record。`policy_organization_lifecycle_test.go`：checkpoint失败零GET零写、成功checkpoint后旧guard停止、显式重试新GET、Close中止在途policy GET零写。
+- 更新现有state/partial/bulk/org测试HTTP夹具以真实响应policy GET，未向生产Session注入授权。开发首次新增share夹具遗漏edit/viewPassword，导致10个场景在policy GET前被既有guard拒绝；补正确字段后全套通过。一条精确edit因原文不唯一被工具拒绝，随后正确替换，未留下半编辑。
+- 容器每次由`TestLivePolicyExecution`创建唯一`mygo-policy-UUID`名称和`mygo.fixture`label；cleanup核验完整ID+label后仅删除本实例。最终`docker ps -a --filter 'name=mygo-policy-' --format '{{.ID}} {{.Names}}'`无输出。没有SMTP/CLI/窗口/用户剪贴板资源。
+- `git diff --check`通过。实现提交后仅此交接待提交；最终报告另记最新HEAD及`git status --porcelain=v1`/`git diff --cached --name-only`空输出。
+- **本轮未改Swift/桥，未执行Swift/bridge测试或实际窗口/安装/Keychain/AutoFill平台验证。** 历史52 Swift通过不冒充本轮证据。
 
-## 下一进程直接继续：批准方向，不再重查设计
+## 下一单元的已批准特权构造器契约
 
-协调者明确顺序：
+协调者明确批准新增`RestoreSessionFromAuthenticatedSnapshot`（名称可据实现调整），不要求把Swift桥或主控制器移入vaultwarden包，不新增签名协议。必须诚实标明：这是**供受信app控制器使用的特权跨包构造器**。Go exported意味着同进程受信代码可调用；不能宣称语言层不可伪造，不能宣称该函数自行验证Swift凭证。信任来自既有桥完成认证+当前UI epoch/scope/revision验证的生产调用链，不是抵御任意恶意进程内Go代码。
 
-1. **组织create/update/share等剩余生产写入口**策略迁移。可复用`personalCipherPolicyGuardLocked`/operation context机制，扩展实际组织适用集合；type15是本组织范围，不可把个人并集无差别用于其它组织。操作的真实成员/权限和key链仍需结合已有组织guard，policy读不授予访问或解除隔离。当前`organization_write.go`与`organizations.go`写入口还未迁移。
-2. 个人metadata独立partial、单项状态/bulk、组织生命周期及未来Send/账号行为仍未接完整policy检查。按政策实际作用区分操作，type5不能错误封禁删除/共享；不能因为服务端存在部分强制就永久不接客户端策略。当前`authenticatedGuardedLocked`只在**已建立**policy context时统一复核有效性；其它入口没有context就是尚未迁移，不是完整执行层。
-3. **type15离线读取与真实桥认证lease绑定**。现有`RestoreSession(data,scope,config)`只恢复网络session，公开`VaultData`不能当可信policy来源。协调者批准在真实桥认证解锁返回、当前scope+revision lease边界创建私有snapshot上下文，可新增受信恢复入口或独立封装；维持既有桥认证边界，不另造通用签名协议。纯session恢复若无认证vault，不能假定离线policy为空。统一读取/秘密显示/reprompt/备份导出/AutoFill投影/bulk策略边界，不能静默暴露受限项目；依旧保留personal与其它org/session隔离。
-4. 再完整policy原生业务表单与其它policy真实执行。固定上游12种：0/1/2/3/5/6/7/8/14/15/16/20。GET list/单type、PUT`{"policy":{"enabled":bool,"data":...}}`，0/3启用可能先revoke成员、非事务；危险策略先持久隔离、说明影响/确认取消、重读状态/原值及unknown保留、权限/依赖/失败测试。不能raw JSON表单，不能声称账号/Send/PIN等未有功能已经执行。
-5. master-password minComplexity仍须定向核对固定clients/SDK的zxcvbn词典/用户输入/Unicode评分，选择许可证兼容等价实现和独立向量，不能字符种类代替。此前批准约束不变。
+- 仅在调用者已经确认reply.OK、认证操作类型（list/listPassword）、request.expectedRevision与state.revision、scope/server/account、当前UI epoch未锁定、完整vault/session身份一致后调用。
+- 子包内部再校验vault.scope、sync.profile账号/email/wrappedKey/完整policy和组织字段；所有slice/map/raw bytes深拷贝，建立私有revision/epoch/document hash上下文；失败不可装入部分权限。
+- 普通`RestoreSession`只恢复网络会话，不得假定无policy；公开可变`VaultData`、`BindSnapshotRevision`或`trusted=true`不能直接安装许可。
+- 新同步发布与认证解锁都建立可信上下文；新vault/revision、锁定、关闭、隔离撤销旧上下文。纯token checkpoint只有经过认证回执证明同vault/hash及正确revision推进才可续接，不能借通用binder延续。
+- 缺完整policy的旧认证缓存必须要求成功sync迁移，不能编造成空限制；必要时网络会话可恢复，但离线读取不获许可。
+- 统一列表、条目、秘密、reprompt/历史/TOTP、备份导出、AutoFill与bulk边界；type5已有个人读取保持允许，type15个人并集/组织自身范围保持。Swift敏感输出依旧要求current lease。
 
-协议证据已记录在`docs/organization-policies.md`：固定VW `ciphers.rs:162–169`双政策数组、`:409–426`PersonalOwnership语义，org_policy helper与profile组织字段；固定clients`default-policy.service.ts`角色豁免、`restricted-item-types.service.ts`数组/null和既有读取限制、`uri-match-default.component.ts`字段`data.uriMatchDetection`。本轮直接GitHub原站读成功文件在本轮scratch；一个restricted-item-types.component.ts抓取超时，没有拿到就没当作证据，也未回退main。
+## 离线五条接缝（已定位，尚未改动）
 
-固定VW缓存 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/` commit `7c188967e7a467b19b2757bc3326f9cf3ccae327`；clients固定`5983f56ce0cf924eea56c7d8f066f7885825a7ce`，SDK固定`39dbb510f5eae82f5cbfd527b0f70a01d5626ec1`。本轮scratch `/tmp/pi/01a115c4-99e9-7601-8f62-6509428092e0`，不保证进程结束后存活；协议锚点已入仓。GitHub原站失败才读既定mirror fallback skill。
+1. **首次/后续sync的预解密投影**：`internal/vaultwarden/client.go:SyncWithCheckpoint`认证`GET /api/sync`，核对profile identity/key后调用`decryptSync`，构造`SyncResult.Vault`，再`appendOrganizationCredentialsLocked`。`sync.go:decryptSync`负责个人最小Login投影；`organization_autofill.go:appendOrganizationCredentialsLocked`按组织key/权限/reprompt/deleted/archived筛选。需要在秘密解密/投影前解析认证policy，不能等UI显示才过滤。同步结果到本地认证publish回执之间不要把公开result.Vault当离线许可；内部同步投影与发布后的私有上下文需要清楚区分。`network.go`后台`SyncWithCheckpoint`→`callStorage(publishVault)`，确认scope/新revision及隔离标记保留后，UI callback要求`a.epoch==epoch`才采用state/session/result.Vault。
+2. **认证解锁回执**：`main.go:completeStorage`接收request、captured epoch、reply；先比UI epoch，list/listPassword分支核对reply.OK/state.available/revision==request.expectedRevision/scope相等，再`observeSnapshot`、`restoreUnlockedSession`、`adoptVault`。`session_storage.go:restoreUnlockedSession`目前只用reply.Session+state.scope/password config调用普通RestoreSession；这里换受信入口，并处理缺policy的旧缓存仅可sync。`macos/Bridge/SnapshotBridge.swift:execute`的listPassword先unlockWithPassword，list先LAContext unlock，再`withCurrentLease`返回session/vault/state；status不是认证来源。
+3. **UI采用vault读取之前**：`cipher_editor.go:adoptVault`目前先清旧组织/列表，依次PersonalEntries、PersonalFolders、Organizations、IsolatedOrganizations、OrganizationEntries，最后才BindSnapshotRevision。新可信上下文必须在这些读取前由验证过的调用链建立，不能让adoptVault任意公开数据成为授权工厂；通用binder只能撤销不能创造上下文。`openCipherEditorAuthorized`也调用binder后ReadPersonal/Organization，不能因此复活旧policy。直接读取函数在`vault_data.go`、`item_authorization.go`、`organizations.go`；导出入口在`backup.go`，秘密/TOTP沿对应授权读链。
+4. **checkpoint同vault/hash的revision续接**：`session_storage.go:saveSessionCheckpoint`带prior.revision/scope向桥发saveSession，要求新revision、相同SnapshotID、相同scope。`adoptSessionCheckpoint`目前更新items/editor等revision并BindSnapshotRevision；这里需受控的同vault/hash续接，不能任意revision binder继承旧策略。Swift `SnapshotBridge.swift` saveSession→`SnapshotStore.swift:saveSession`，通过unlockKey/expected并在`withCurrentLease`返回State，目前不返回vault。确保持久token先于任何后续网络使用；回调在Session.mu中执行，不能从persist回调直接调用再次加同一mutex的Go方法而死锁。授权epoch刷新停止当前write的既定策略继续。
+5. **隔离/显式恢复发布**：`organization_management_ui.go`的后台`isolate`发quarantineOrganization，核对reply.OK、scope、新revision、新SnapshotID及目标标记存在，保存`checkpoint/isolatedVault`；恢复分支先SyncWithCheckpoint，Organizations确认目标仍可用，再restoreOrganizationAccess返回state/vault。UI callback需相同epoch，再`adoptOrganizationIsolation`/`adoptOrganizationSnapshot`验证sessionOwnsSnapshot、新revision+SnapshotID、目标标记状态和其余隔离标记保留，然后adoptVault。Swift对应`SnapshotBridge.swift` publish/restore/quarantine均`withCurrentLease`返回vault，`macos/Shared/SnapshotStore.swift:publish/quarantineOrganization/saveSession`持久保留标记。隔离改变vault/hash且撤销组织能力，但政策仍按完整原server sync约束个人/其它项；普通sync不能恢复隔离。恢复不得拿未经发布许可的公开synced.Vault绕过新离线读guard，需专门内部验证路径或受控候选流程。
 
-## 完整其它剩余范围仍保留
+## 下轮定向fixture与验证入口
 
-policies/events/Public API/API keys/完整管理员recovery及既有accepted登记、legacy完整共享、组织import/export/复制/批量/冲突、附件/Send、注册账号轮换/MFA/SSO/platform/devices/emergency/通知、4MiB桥大库、安全离线迁移/AutoFill、个人双改数组逐行选择及reprompt批量/导出、含附件/FIDO2无损备份复制等继续原验收。矩阵与专题必须保留实际边界，未完成前不创建Review/merge。主目录dirty的最终合并协调由父进程处理，子进程不能触碰主目录或用户资源。
+避免全仓再调查，优先这些：
+
+- `internal/vaultwarden/session_state_test.go:resumableFixture`生成网络Session，没有可信vault，不能让它自动授予离线policy；其中RestoreSession测试应新增“网络可恢复但离线无许可”。
+- `organizations_test.go:organizationFixture`目前RSA+org/collection/cipher完整，但profile缺email/wrappedKey/policies等；新读边界启用后须补完整认证fixture并经受信构造/真实sync来源。`changeOrganizationFixture`供篡改/权限测试，不应对任意修改自动重新签发许可。
+- `backup_test.go:backupFixture`、`cipher_document_test.go:cipherDocumentFixture`、`item_authorization_test.go`及`organization_vectors_test.go`（直接调用appendOrganizationCredentialsLocked）需分别区分低层crypto向量与认证读能力测试，不能为通过测试而在生产加宽授权。
+- 根目录`session_storage_test.go`、`personal_secret_test.go`、`personal_editor_safety_test.go`、`organization_management_ui_test.go`以及解锁/发布controller测试需覆盖真实生产回执链；未认证、错误operation/scope/revision/epoch、不完整reply、对象后改、lock/隔离、checkpoint同内容续接/异内容拒绝、sync替换均须失败边界证据。
+- Swift `macos/Tests/SnapshotStoreTests.swift`已有quarantine/restoration/lease夹具，`macos/Bridge/SnapshotBridge.swift`是真实传输入口。新增policy投影和缺旧缓存迁移需Go/Swift桥相关回归；memory/headless不等于平台认证实测。
+- 本轮`TestLivePolicyExecution`内syncVault helper当前只BindSnapshotRevision；离线新边界后也须显式通过受信publish等价回执测试契约，不能宣称其Go-only fixture验证了Swift桥。当前live中type15既有读取尚允许，落地后预期需同步改为受限。
+
+## 完整其余范围保留
+
+完成离线五链后继续完整12种policy业务表单（0/1/2/3/5/6/7/8/14/15/16/20），0/3非事务撤成员副作用确认与持久隔离、unknown data无损、其它实际消费及minComplexity固定兼容zxcvbn；不能raw JSON或假实现。events/Public API/API keys/完整管理员recovery、legacy完整共享、组织import/export/复制/批量/冲突、附件/Send、注册账号轮换/MFA/SSO/platform/devices/emergency/通知、4MiB桥大库、安全离线迁移/AutoFill、个人双改数组逐行选择及reprompt批量/导出、含附件/FIDO2无损备份复制均未完成，继续原验收。
+
+固定协议与缓存仍按`docs/organization-policies.md`和coverage锚点：VW1.37.4 `7c188967e7a467b19b2757bc3326f9cf3ccae327`、clients `5983f56ce0cf924eea56c7d8f066f7885825a7ce`、SDK `39dbb510f5eae82f5cbfd527b0f70a01d5626ec1`。未改版本/未重新猜协议。主目录dirty最终合并由协调者处理；本卡未完整完成前不Review/merge。
