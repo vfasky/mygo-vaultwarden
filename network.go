@@ -6,17 +6,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 type vaultSession interface {
-	Sync(context.Context) (vaultwarden.SyncResult, error)
+	SyncWithCheckpoint(context.Context, func(vaultwarden.SessionCheckpoint) error) (vaultwarden.SyncResult, error)
 	Close()
 }
 
-// Only a successful publication by this session grants its next CAS revision.
-// Reading current state is observational; it never renews write authority.
+// Only this session's successful publication/checkpoint or a fresh authenticated
+// unlock grants a CAS revision. Reading status never renews write authority.
 func (a *app) sessionOwnsSnapshot() bool {
 	return a.session != nil && a.sessionRevision != "" && a.snapshot != nil &&
 		a.snapshot.Available && a.snapshot.Revision == a.sessionRevision &&
@@ -45,7 +46,7 @@ func (a *app) syncFailed(reply storageReply, err error) {
 	}
 	a.status = err.Error()
 	if storageErr != nil {
-		a.status += " 请重新登录后再同步。"
+		a.status += " 请重新解锁后再同步。"
 	}
 }
 
@@ -54,7 +55,7 @@ func (a *app) stopNetwork() {
 		a.cancel()
 		a.cancel = nil
 	}
-	nativeCancelSecretInput()
+	a.resetLoginForm()
 	if a.session != nil {
 		session := a.session
 		a.session = nil
@@ -72,6 +73,7 @@ func (a *app) syncVault(login bool) {
 		return
 	}
 	server, email := a.serverURL, vaultwarden.NormalizeEmail(a.email)
+	var password []byte
 	if login {
 		canonical, err := vaultwarden.CanonicalServer(server)
 		if err != nil {
@@ -82,10 +84,24 @@ func (a *app) syncVault(login bool) {
 			a.status = "请输入登录邮箱。"
 			return
 		}
+		if len(a.masterPassword) == 0 {
+			a.status = "请输入主密码。"
+			return
+		}
+		if len(a.masterPassword) > 8192 {
+			a.clearLoginInputs()
+			a.status = "主密码过长，请检查输入。"
+			return
+		}
+		password = []byte(a.masterPassword)
 		server = canonical
+		a.showLogin = true
 		a.stopNetwork()
 	} else if a.session == nil {
-		a.status = "请先登录。重启或锁定后仍可离线解锁，但在线同步需要重新登录。"
+		if a.unlocked() {
+			a.openUnlockLogin()
+		}
+		a.status = "请重新登录一次以安全保存登录凭据，之后解锁即可同步。"
 		return
 	} else if !a.sessionOwnsSnapshot() {
 		a.stopNetwork()
@@ -93,6 +109,7 @@ func (a *app) syncVault(login bool) {
 		return
 	}
 	existing := a.session
+	initialSnapshot := a.snapshot
 	deviceID := a.deviceID
 	expected := a.snapshot.Revision
 	if !login {
@@ -100,7 +117,13 @@ func (a *app) syncVault(login bool) {
 	}
 	a.epoch++
 	epoch := a.epoch
-	ctx, cancel := context.WithCancel(context.Background())
+	var ctx context.Context
+	var cancel context.CancelFunc
+	if login {
+		ctx, cancel = context.WithTimeout(context.Background(), 5*time.Minute)
+	} else {
+		ctx, cancel = context.WithCancel(context.Background())
+	}
 	a.cancel = cancel
 	a.pending++
 	a.status = "正在登录并同步…"
@@ -108,11 +131,13 @@ func (a *app) syncVault(login bool) {
 		a.status = "正在同步只读密码库…"
 	}
 	go func() {
+		defer clear(password)
 		var session vaultSession = existing
 		var result vaultwarden.SyncResult
 		var metadata []displayCredential
 		var reply storageReply
 		var workErr error
+		var checkpointState *snapshotStatus
 		if login {
 			// Revoke the previous account before prompting, including offline copies.
 			reply = callStorage(storageRequest{Operation: "logout", ExpectedRevision: expected})
@@ -125,41 +150,51 @@ func (a *app) syncVault(login bool) {
 				expected = reply.State.Revision
 			}
 			if workErr == nil && ctx.Err() == nil {
-				secret, err := nativeSecretInput(0, "服务器："+server+"\n账号："+email)
+				client, err := vaultwarden.NewClient(server, deviceID)
 				if err != nil {
-					workErr = vaultwarden.ErrCancelled
+					workErr = err
 				} else {
-					client, err := vaultwarden.NewClient(server, deviceID)
-					if err != nil {
-						workErr = err
-					} else {
-						var loggedIn *vaultwarden.Session
-						loggedIn, workErr = client.Login(ctx, email, secret, func() ([]byte, error) {
-							if ctx.Err() != nil {
-								return nil, vaultwarden.ErrCancelled
-							}
-							return nativeSecretInput(1, "服务器："+server+"\n输入验证器中的 6 位 TOTP 验证码。")
-						})
-						if workErr == nil {
-							session = loggedIn
-						}
+					attempt := 0
+					var loggedIn *vaultwarden.Session
+					loggedIn, workErr = client.Login(ctx, email, password, func() ([]byte, error) {
+						// Login has already derived the keys and authorization hash.
+						// The raw master password is unnecessary while waiting for MFA.
+						clear(password)
+						attempt++
+						return a.requestLoginCode(ctx, epoch, attempt, a.window.Update)
+					})
+					if workErr == nil {
+						session = loggedIn
 					}
-					clear(secret)
 				}
+				clear(password)
 			}
 		}
 		if workErr == nil && ctx.Err() != nil {
 			workErr = vaultwarden.ErrCancelled
 		}
 		if workErr == nil {
-			result, workErr = session.Sync(ctx)
+			var persist func(vaultwarden.SessionCheckpoint) error
+			if !login {
+				prior := initialSnapshot
+				persist = func(checkpoint vaultwarden.SessionCheckpoint) error {
+					var err error
+					reply, err = saveSessionCheckpoint(prior, checkpoint, callStorage)
+					if err == nil {
+						checkpointState, prior = reply.State, reply.State
+						expected = reply.State.Revision
+					}
+					return err
+				}
+			}
+			result, workErr = session.SyncWithCheckpoint(ctx, persist)
 		}
 		if workErr == nil && ctx.Err() == nil {
 			metadata = make([]displayCredential, 0, len(result.Credentials))
 			for _, item := range result.Credentials {
 				metadata = append(metadata, displayCredential{ID: item.ID, Title: item.Title, Username: item.Username, URL: item.URL})
 			}
-			reply = callStorage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials})
+			reply = callStorage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session})
 			if !reply.OK {
 				workErr = reply.failure()
 			} else if reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.Revision == "" || reply.State.Revision == expected {
@@ -167,6 +202,12 @@ func (a *app) syncVault(login bool) {
 			}
 		}
 		// No password-bearing results live in the UI model.
+		clear(result.Session)
+		result.Session = nil
+		if result.PasswordUnlock != nil {
+			clear(result.PasswordUnlock.Key)
+			result.PasswordUnlock = nil
+		}
 		for i := range result.Credentials {
 			result.Credentials[i].Password = ""
 		}
@@ -189,12 +230,24 @@ func (a *app) syncVault(login bool) {
 				return
 			}
 			a.cancel = nil
+			timedOut := errors.Is(ctx.Err(), context.DeadlineExceeded)
 			cancel()
+			if login {
+				a.resetLoginForm()
+			}
+			if checkpointState != nil && !a.adoptSessionCheckpoint(checkpointState) {
+				a.stopNetwork()
+				a.status = vaultwarden.ErrIdentity.Error()
+				return
+			}
 			if workErr != nil {
 				if login && session != nil {
 					go session.Close()
 				}
 				a.syncFailed(reply, workErr)
+				if timedOut {
+					a.status = "登录已超时，请重新输入主密码。"
+				}
 				return
 			}
 			a.snapshot = reply.State
@@ -203,7 +256,7 @@ func (a *app) syncVault(login bool) {
 			a.sessionRevision = reply.State.Revision
 			a.items = metadata
 			a.itemsRevision = a.snapshot.Revision
-			a.showSettings = false
+			a.showSettings, a.showLogin = false, false
 			s := result.Summary
 			a.status = fmt.Sprintf("已同步 %d 条个人登录条目。排除：组织 %d、其他类型 %d、需再次输入主密码 %d；未支持/禁用的网址规则 %d。", s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.UnsupportedURIs)
 		})

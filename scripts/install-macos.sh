@@ -3,7 +3,11 @@
 set -euo pipefail
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
 mode="${1:-debug}"
-case "$mode" in debug|release) ;; *) echo "Usage: $0 [debug|release]" >&2; exit 2 ;; esac
+case "$mode" in debug|release) ;; *) echo "Usage: $0 [debug|release] [--no-launch]" >&2; exit 2 ;; esac
+launch="${2:-}"
+if [[ $# -gt 2 || ( -n "$launch" && "$launch" != --no-launch ) ]]; then
+  echo "Usage: $0 [debug|release] [--no-launch]" >&2; exit 2
+fi
 source_app="$project_root/build/$mode/MyGo Vaultwarden.app"
 destination="$HOME/Applications/MyGo Vaultwarden.app"
 if [[ ! -d "$source_app" ]]; then
@@ -39,5 +43,5 @@ if ! mv "$staging/MyGo Vaultwarden.app" "$destination"; then
 fi
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$destination"
 /usr/bin/pluginkit -a "$destination/Contents/PlugIns/AutoFill.appex"
-open "$destination"
-printf '\nInstalled: %s\nEnable MyGo Vaultwarden in System Settings > AutoFill & Passwords.\n' "$destination"
+if [[ "$launch" != --no-launch ]]; then open "$destination"; fi
+printf '\n已安装：%s\n系统自动填充需在“系统设置 > 自动填充与密码”中启用 MyGo Vaultwarden。\n' "$destination"

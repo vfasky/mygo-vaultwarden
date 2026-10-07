@@ -1,7 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package main
 
-import "github.com/egoist/mygo/ui"
+import (
+	_ "embed"
+
+	"github.com/egoist/mygo/ui"
+)
+
+//go:embed resources/app-logo.png
+var appLogoPNG []byte
+
+var appLogo = func() *ui.Bitmap {
+	b, err := ui.DecodeBitmap(appLogoPNG)
+	if err != nil {
+		return nil
+	}
+	return b
+}()
 
 // Small, local vector icons avoid remote favicon requests from a private vault.
 func lineIcon(paths string) *ui.SVG {

@@ -32,5 +32,3 @@
 - Go 协议适配使用标准库和 `golang.org/x/crypto` 实现基础算法，并与官方固定向量及官方 CLI 核对。测试向量引用保留其来源；项目整体为 GPLv3。
 - URI 规范化使用 `golang.org/x/net/idna` 与 `publicsuffix`；这些依赖的许可证随应用的第三方声明一起收集。
 - Bitwarden CLI 仅用于隔离环境中的兼容性核对，不随产品发行。
-
-`resources/demo-credentials.json` 中的数据为本项目公开测试数据，不是真实账号或密钥。

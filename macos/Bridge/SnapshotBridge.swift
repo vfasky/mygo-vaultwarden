@@ -5,9 +5,11 @@ import LocalAuthentication
 private struct BridgeRequest: Decodable {
     let operation: String
     let expectedRevision: String?
-    let credentials: [DemoCredential]?
-    let credentialID: String?
+    let credentials: [VaultCredential]?
     let scope: SnapshotScope?
+    var passwordUnlock: PasswordUnlockMaterial?
+    var unlockKey: Data?
+    var session: Data?
 }
 
 private struct DisplayCredential: Encodable {
@@ -15,7 +17,7 @@ private struct DisplayCredential: Encodable {
     let title: String
     let username: String
     let url: String
-    init(_ item: DemoCredential) { id=item.id; title=item.title; username=item.username; url=item.url }
+    init(_ item: VaultCredential) { id=item.id; title=item.title; username=item.username; url=item.url }
 }
 
 private struct BridgeStatus: Encodable {
@@ -27,6 +29,7 @@ private struct BridgeStatus: Encodable {
     let snapshotID: String?
     let scope: SnapshotScope?
     let updatedAt: Date?
+    let passwordUnlock: PasswordUnlockConfig?
     init(_ state: SnapshotState) {
         revision = state.revision
         available = state.snapshot != nil && !state.signedOut
@@ -36,6 +39,7 @@ private struct BridgeStatus: Encodable {
         snapshotID = state.snapshot?.header.id
         scope = state.snapshot?.header.scope
         updatedAt = state.snapshot?.header.createdAt
+        passwordUnlock = state.snapshot?.passwordUnlock?.config
     }
 }
 
@@ -47,6 +51,7 @@ private struct BridgeReply: Encodable {
     var items: [DisplayCredential]? = nil
     var truncated: Bool? = nil
     var deviceID: String? = nil
+    var session: Data? = nil
 }
 
 private func execute(_ request: BridgeRequest) -> BridgeReply {
@@ -71,22 +76,18 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
         case "publishVault":
             guard let credentials = request.credentials, credentials.allSatisfy({ $0.uris != nil }),
                   let scope = request.scope, scope.valid, scope != .demo else { throw SnapshotError.invalidInput }
-            let lease = try vault.publish(credentials, scope: scope, expected: expected())
+            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session)
             SnapshotIndex.schedule(store: vault, lease: lease)
             // Do not return a later writer's revision as this session's write authority.
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: "快照已保存。", state: BridgeStatus(try vault.files.read()))
             }
-        case "publish":
-            guard let credentials = request.credentials else { throw SnapshotError.invalidInput }
-            let lease = try vault.publish(credentials, scope: .demo, expected: expected())
-            SnapshotIndex.schedule(store: vault, lease: lease)
-        case "delete":
-            guard let id = request.credentialID else { throw SnapshotError.invalidInput }
-            let context = LAContext()
-            defer { context.invalidate() }
-            let lease = try vault.deleteCredential(id: id, expected: expected(), context: context)
-            SnapshotIndex.schedule(store: vault, lease: lease)
+        case "saveSession":
+            guard let scope = request.scope, let session = request.session, let key = request.unlockKey else { throw SnapshotError.invalidInput }
+            let lease = try vault.saveSession(session, scope: scope, expected: expected(), unlockKey: key)
+            return try vault.withCurrentLease(lease) {
+                BridgeReply(ok: true, code: "ok", message: "登录凭据已安全更新。", state: BridgeStatus(try vault.files.read()))
+            }
         case "lock":
             try vault.lock()
         case "logout":
@@ -98,20 +99,26 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             try vault.logout(expected: expected())
         case "retryCleanup":
             try vault.retryCleanup()
-        case "reindex", "verify", "verifyWithoutUI", "list":
+        case "listPassword":
+            guard let scope = request.scope, let unlockKey = request.unlockKey else { throw SnapshotError.invalidInput }
+            let lease = try vault.unlockWithPassword(scope: scope, expected: expected(), unlockKey: unlockKey)
+            return try vault.withCurrentLease(lease) {
+                BridgeReply(ok: true, code: "ok", message: "密码库已解锁。", state: BridgeStatus(try vault.files.read()),
+                            items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session)
+            }
+        case "reindex", "list":
             let context = LAContext()
             defer { context.invalidate() }
             guard let scope = try vault.state().snapshot?.header.scope else { throw SnapshotError.unavailable }
-            let lease = try vault.unlock(scope: scope, context: context, allowUI: request.operation != "verifyWithoutUI")
+            let lease = try vault.unlock(scope: scope, context: context, allowUI: true, includeSession: request.operation == "list")
             if request.operation == "list" {
                 guard lease.revision == request.expectedRevision else { throw SnapshotError.stale }
                 return try vault.withCurrentLease(lease) {
                     BridgeReply(ok: true, code: "ok", message: "离线快照已解锁。", state: BridgeStatus(try vault.files.read()),
-                                items: lease.credentials.map(DisplayCredential.init), truncated: false)
+                                items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session)
                 }
             }
             if request.operation == "reindex" { SnapshotIndex.schedule(store: vault, lease: lease) }
-            // A diagnostic never returns the decrypted credentials to Go or stdout.
         default: throw SnapshotError.invalidInput
         }
         let state = try vault.state()
@@ -127,8 +134,9 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
 }
 
 // Synchronous C ABI. Go calls on a worker goroutine; no pointer escapes the call.
-// Reply contains control metadata and, after authentication, display metadata only.
-// Passwords and key bytes never leave the snapshot through this interface.
+// Only authenticated list operations return the encrypted payload's saved session
+// to the main app; status/index operations and AutoFill leases never return it.
+// Vault entry passwords and the snapshot encryption key never leave this bridge.
 @_cdecl("mygo_snapshot_execute")
 public func mygoSnapshotExecute(_ request: UnsafePointer<UInt8>?, _ requestLength: Int,
                                 _ output: UnsafeMutablePointer<UInt8>?, _ capacity: Int) -> Int32 {
@@ -137,7 +145,12 @@ public func mygoSnapshotExecute(_ request: UnsafePointer<UInt8>?, _ requestLengt
     return autoreleasepool {
         let reply: BridgeReply
         do {
-            let parsed = try JSONDecoder().decode(BridgeRequest.self, from: Data(bytes: request, count: requestLength))
+            var parsed = try JSONDecoder().decode(BridgeRequest.self, from: Data(bytes: request, count: requestLength))
+            defer {
+                if let count = parsed.passwordUnlock?.key.count { parsed.passwordUnlock?.key.resetBytes(in: 0..<count) }
+                if let count = parsed.unlockKey?.count { parsed.unlockKey?.resetBytes(in: 0..<count) }
+                if let count = parsed.session?.count { parsed.session?.resetBytes(in: 0..<count) }
+            }
             reply = execute(parsed)
         } catch {
             reply = BridgeReply(ok: false, code: "invalid_input", message: "无法识别请求。", state: nil)

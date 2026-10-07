@@ -20,12 +20,12 @@ final class VaultURITests: XCTestCase {
         XCTAssertTrue(exact.matches(serviceIdentifier: "https://example.com/private", isURL: true))
         XCTAssertFalse(exact.matches(serviceIdentifier: "https://example.com/public", isURL: true))
         XCTAssertFalse(exact.matches(serviceIdentifier: "example.com", isURL: false))
-        let item = DemoCredential(id: "real", title: "real", username: "user", password: "fixture", hosts: ["example.com"], url: exact.uri, uris: [exact])
+        let item = VaultCredential(id: "real", title: "real", username: "user", password: "fixture", hosts: ["example.com"], url: exact.uri, uris: [exact])
         XCTAssertTrue(item.matches(serviceIdentifier: exact.uri, isURL: true))
         XCTAssertFalse(item.quickFillMatches(serviceIdentifier: exact.uri, isURL: true))
     }
     func testEmptyOrUnsupportedURIsNeverFallBackToHosts() {
-        let item = DemoCredential(id: "real", title: "real", username: "user", password: "fixture", hosts: ["example.com"], url: "", uris: [])
+        let item = VaultCredential(id: "real", title: "real", username: "user", password: "fixture", hosts: ["example.com"], url: "", uris: [])
         XCTAssertFalse(item.matches(serviceIdentifier: "example.com", isURL: false))
         for mode in [2,4,5] {
             let rule = CredentialURI(uri: "https://example.com", match: mode, baseDomain: "example.com", includeSubdomains: true)
@@ -39,7 +39,7 @@ final class VaultURITests: XCTestCase {
         XCTAssertTrue(scope.valid)
         XCTAssertFalse(SnapshotScope(server: "http://vault.example.com", account: "user-id").valid)
         let rule = CredentialURI(uri: "https://example.com/", match: 0, baseDomain: "example.com", includeSubdomains: true)
-        let item = DemoCredential(id: "entry", title: "login", username: "u", password: "p", hosts: ["example.com"], url: rule.uri, uris: [rule])
+        let item = VaultCredential(id: "entry", title: "login", username: "u", password: "p", hosts: ["example.com"], url: rule.uri, uris: [rule])
         let key = Data(repeating: 7, count: 32)
         let encrypted = try sealSnapshot(credentials: [item], scope: scope, keyID: UUID().uuidString, key: key)
         XCTAssertEqual(try openSnapshot(encrypted, key: key, scope: scope), [item])

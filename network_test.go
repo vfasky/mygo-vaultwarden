@@ -18,7 +18,7 @@ type testVaultSession struct {
 }
 
 func (s *testVaultSession) Close() { s.once.Do(func() { close(s.closed) }) }
-func (s *testVaultSession) Sync(context.Context) (vaultwarden.SyncResult, error) {
+func (s *testVaultSession) SyncWithCheckpoint(context.Context, func(vaultwarden.SessionCheckpoint) error) (vaultwarden.SyncResult, error) {
 	panic("revoked session must never sync")
 }
 func onlineTestApp() (*app, *testVaultSession) {
@@ -46,7 +46,7 @@ func assertSessionRevoked(t *testing.T, a *app, s *testVaultSession) {
 	}
 }
 func TestEmptyVaultPublicationEncodesExplicitArray(t *testing.T) {
-	for _, credentials := range [][]demoCredential{nil, {}} {
+	for _, credentials := range [][]vaultwarden.Credential{nil, {}} {
 		request := storageRequest{Operation: "publishVault", ExpectedRevision: "r", Credentials: credentials,
 			Scope: &vaultwarden.Scope{Server: "https://vault.example.com", Account: "account-a"}}
 		encoded, err := json.Marshal(request)

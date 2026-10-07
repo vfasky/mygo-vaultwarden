@@ -2,18 +2,40 @@
 
 使用 Go + MyGo Native UI 和 Swift/AppKit 构建的 macOS Vaultwarden 客户端。采用 GPL-3.0-only。
 
-当前已接入 Vaultwarden 只读登录与同步：支持 PBKDF2、Argon2id、TOTP 双重验证、token 刷新和个人 Login 条目解密。主密码使用 AppKit 安全输入框；解密结果写入受 Keychain 保护的加密快照，支持离线解锁与 macOS 系统自动填充。暂不支持编辑、组织库或新 COSE 加密格式，兼容边界见 [只读接入说明](docs/vaultwarden-readonly.md)。
+当前已接入 Vaultwarden 只读登录与同步：支持 PBKDF2、Argon2id、TOTP 双重验证、token 刷新和个人 Login 条目解密。主密码和 TOTP 验证码直接在登录页输入；解密结果写入受 Keychain 保护的加密快照，支持离线解锁与 macOS 系统自动填充。暂不支持编辑、组织库或新 COSE 加密格式，兼容边界见 [只读接入说明](docs/vaultwarden-readonly.md)。
 
 ## 开发环境
 
 - macOS 14+，Xcode 完整安装。
 - Go 1.27.1+；MyGo 固定为 v0.2.15。
 - 完整 AutoFill 验证需要 Apple Developer Program、Xcode 中已登录的开发者账号、开发证书和 Developer ID Application 证书。
-- Go 主界面不使用 HTML、JavaScript 或 WebView。`resources/demo-login.html` 仅是 Safari 的外部验收页面。
+- Go 主界面不使用 HTML、JavaScript 或 WebView。
 
 `go` 不在 PATH 时可通过 `GO_BIN=/absolute/path/to/go` 指定。脚本也识别 Homebrew 和本项目的用户缓存工具链。
 
 ## 构建与安装
+
+开发时要体验真实登录、安全存储及系统自动填充，使用一键完整 Debug 入口：
+
+```sh
+bash scripts/dev-debug.sh
+```
+
+脚本默认持续监听 Go、Swift、资源和构建配置的变化，自动完整构建、验证签名、安装并重启包含安全存储组件和 AutoFill 扩展的应用。需要先配置下文的本机签名信息和 Xcode 开发者账号；日志追加到 `build/debug/dev-debug.log`。
+
+首次启动监听前请退出已安装的完整应用。后续保存代码即可自动重载：编译或签名失败时保留正在运行的版本；构建期间再次保存会继续构建最新源码。构建产物不会触发重复构建。同一台机器只允许一套此脚本管理完整应用；关闭应用或按 `Ctrl+C` 会结束监听，并清理本次监听启动的进程。已有的 `mygo dev` 界面预览不会被关闭。
+
+这里与 [MyGo 的 `mygo dev`](https://mygo.egoist.dev/docs/cli#mygo-dev) 一样采用重新编译并重启进程的方式，不保留内存中的登录状态。已有加密快照可在重启后通过主密码或系统认证解锁，并恢复已保存的登录会话以继续同步。完整签名和扩展导出耗时比仅界面预览更长。修改监听器自身（`scripts/dev-debug/`）后需要重新启动脚本。
+
+只构建、安装并启动一次可用：
+
+```sh
+bash scripts/dev-debug.sh --once
+```
+
+启动后点击“登录并同步”体验真实登录。系统自动填充仍需在 macOS“自动填充与密码”中手动启用 MyGo Vaultwarden，并实际验证 Safari 填充。
+
+也可分别执行构建与安装：
 
 ```sh
 bash scripts/build-macos.sh debug
@@ -55,23 +77,23 @@ bash scripts/build-macos.sh release --notarize
 ## 登录、同步与 Safari
 
 1. 填入 Vaultwarden 服务地址和邮箱，点击“登录并同步”。使用 HTTPS；仅本机回环地址允许 HTTP。
-2. 在 AppKit 安全输入框中填写主密码；账号启用 TOTP 时继续填写验证器代码。
+2. 在登录页填写主密码；账号启用 TOTP 时，页面切换到“两步验证”，输入验证器代码并继续。错误提示、重试和取消都在页面内完成。
 3. 同步成功后，主窗口显示个人登录条目和未支持/排除数量，可搜索或打开对应网站。
 4. 在 macOS“自动填充与密码”中启用 MyGo Vaultwarden；需要时点击“更新系统候选”并完成系统认证。
 5. 在 Safari 的匹配网站选择本应用的凭据，经系统认证后填充。严格 Host / Exact 规则只在系统提供可核对的来源时匹配，详见协议说明。
-6. 主应用退出后，扩展仍能独立读取加密快照。重启主应用可点“离线解锁”查看本机列表。
+6. 主应用退出后，扩展仍能独立读取加密快照。重启主应用后，可输入主密码并点击“解锁密码库”，或点击“使用 Touch ID 解锁”查看本机列表。
 
-主窗口采用三栏布局：左侧为密码库与分类，中间为可搜索的项目列表，右侧为选中项目详情。使用 `⌘F` 搜索标题、用户名或网站，列表支持上下键选择；详情支持复制用户名和打开 HTTP(S) 网站。右上角或左下角的“账号与设置”包含登录、离线解锁、候选更新和退出账号。主窗口不读取或展示明文密码，密码仍通过系统认证后自动填充。
+未登录时显示独立的“登录服务器”页面，直接填写服务器地址、邮箱和主密码；需要两步验证时在同一窗口切换至验证码表单，不弹出登录对话框。已有本机快照但未解锁时显示独立锁定页，输入主密码并点击“解锁密码库”（支持回车），或选择“使用 Touch ID 解锁”；系统认证也允许按 macOS 提示使用 Mac 登录密码。旧版快照需重新登录并同步一次，才能启用主密码离线解锁及登录凭据持久化，已有 Touch ID 入口继续可用。也可以选择“使用其他账号”进入登录页，提交前会提示替换已有离线快照。各认证页面均沿用应用 Logo、灰紫渐变和现有圆角控件，采用居中布局。
+
+解锁后进入三栏主界面：左侧为密码库与分类，中间为可搜索的项目列表，右侧为选中项目详情。使用 `⌘F` 搜索标题、用户名或网站，列表支持上下键选择；详情支持复制用户名和打开 HTTP(S) 网站。右上角或左下角的“账号与设置”提供登录服务器入口、离线解锁、候选更新和退出账号。右上角“锁定”会立即隐藏项目列表和详情、清空搜索及敏感输入，并完整切换至解锁页。主密码和验证码使用遮掩输入；密码库条目的密码仍通过系统认证后自动填充。
 
 界面使用浅灰紫背景、白色圆角面板和本地生成的文字图标，不请求远程网站图标。收藏、支付卡、身份、安全笔记、SSH 密钥等未同步分类会明确显示支持边界；文件夹、归档和回收站暂不可用。
 
-登录会先切换并撤销此前本机账号快照。锁定或退出会清除在线令牌和用户密钥；后续在线同步需重新登录，离线解锁和填充使用系统认证。
+登录会先切换并撤销此前本机账号快照。成功同步后，refresh token、设备标识、用户密钥和快照包装密钥保存在 AES-GCM 加密 payload 内；不保存原始主密码或 access token。锁定只清除内存中的会话与显示内容，主密码或 Touch ID 解锁后可恢复登录会话，点击“同步”会刷新 access token 并下载密码库。退出登录则撤销本机快照、已保存登录凭据和密钥。服务器撤销或拒绝登录凭据时才需要重新登录；旧版缓存没有登录凭据时，点击“同步”会引导登录一次。Safari 自动填充仍使用系统认证。
 
-原始主密码不发送到服务器，不写入配置、日志或命令行；它只在本次登录/MFA 流程内用于本地派生。手动查看扩展列表和实际填充分别认证，过期或被锁定的请求不能继续提交。
+原始主密码不发送到服务器，不写入配置、日志或命令行；仅在登录或离线解锁时参与本地派生。手动查看扩展列表和实际填充分别认证，过期或被锁定的请求不能继续提交。
 
-本机测试账号可使用“本机测试页”检查公开 fixture；该页面不是 Vaultwarden 登录页，不应输入真实账号密码。`resources/demo-credentials.json` 不进入扩展包，也不会作为真实同步失败的回退数据。
-
-成功同步全量替换快照；普通网络/解密失败保留上次成功快照并明确报错。账号身份或认证失效要求重新登录。登出先撤销快照，再清理 Keychain 和系统候选。候选回执与旧密钥清理的状态独立显示。
+成功同步全量替换快照；普通网络/解密失败保留上次成功快照并明确报错。refresh token 更新会先加密落盘，再下载密码库，即使后续断网也可在下次解锁后继续同步。账号身份或认证失效要求重新登录。登出先撤销快照，再清理 Keychain 和系统候选。候选回执与旧密钥清理的状态独立显示。
 
 实现边界见 [安全快照设计](docs/secure-snapshots.md) 和 [只读接入说明](docs/vaultwarden-readonly.md)。
 
@@ -83,7 +105,7 @@ go vet ./...
 swift test --package-path macos
 ```
 
-界面交互测试覆盖搜索、键盘选择、详情切换、复制用户名、打开网站与快照撤销后的详情清除。可使用公开虚构数据导出原生渲染预览（不访问真实密码库或 Keychain）：
+界面交互测试覆盖主密码遮掩和复制限制、验证码校验与重试、敏感输入清空后的撤销隔离、认证取消与过期响应、登录/锁定页面切换、回车提交、认证期间的导航禁用、锁定后的内容隐藏，以及搜索、键盘选择、详情切换、复制用户名、打开网站与快照撤销后的详情清除。可使用公开虚构数据导出登录页、两步验证页、锁定页和三栏界面的原生渲染预览（不访问真实密码库或 Keychain）：
 
 ```sh
 MYGO_UI_PREVIEW_DIR="$PWD/build/ui-preview" go test -run TestVaultVisualPreviews .
@@ -100,29 +122,15 @@ log show --last 10m --style compact \
   --predicate 'subsystem == "yz.sh.mygo-vaultwarden.autofill"'
 ```
 
-签名应用还提供不返回密码或密钥的诊断接口：
-
-```sh
-app="$HOME/Applications/MyGo Vaultwarden.app/Contents/MacOS/MyGo Vaultwarden"
-"$app" --storage-action status
-"$app" --storage-action verifyWithoutUI   # 有快照时应拒绝无交互读密钥，退出码 1
-"$app" --storage-action verify            # 需要本人完成系统认证
-```
-
-`publish`、`delete` 仅适用于公开演示快照，不允许覆盖真实账号；`lock`、`logout` 会锁定或撤销当前本机快照。`reindex` 更新候选，`retryCleanup` 重试旧密钥清理。响应中的 `ok` 表示存储操作结果，`indexPending` 和 `cleanupPending` 独立表示后续清理是否完成。短命诊断进程退出时异步索引更新可能未完成，索引验收应通过持续运行的应用或扩展进行。
-
-本地验证记录保存在 Git 忽略的 `.local/`，不将开发者账户和签名信息写入公共文档。
-
 ## 目录
 
 ```text
 main.go                          MyGo 原生主窗口
-ui.go / ui_icons.go               三栏密码库界面、分类、搜索和详情
+ui.go / ui_auth.go / ui_icons.go  登录、解锁与三栏密码库界面
 network.go                       登录、同步、取消与 UI 代次控制
 internal/vaultwarden/            只读协议、KDF、解密及兼容性测试
-demo.go                          本机演示服务器与公开 fixture
 storage*.go                      受限 JSON / C ABI 桥接与错误处理
-resources/                       主应用公开演示数据和 Safari 测试页面
+resources/                       应用图标及品牌资源
 macos/App/                       主应用 Info.plist 与共享权限
 macos/AutoFill/                   AppKit Credential Provider
 macos/Bridge/                    主应用进程内 Swift 动态库入口

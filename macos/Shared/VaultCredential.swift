@@ -64,7 +64,7 @@ struct CredentialURI: Codable, Equatable {
 
 // Kept Codable-compatible with phase-2 fixtures. Real items carry explicit URI
 // rules; only legacy public loopback fixtures may use the old `hosts` fallback.
-struct DemoCredential: Codable, Equatable {
+struct VaultCredential: Codable, Equatable {
     let id: String
     let title: String
     let username: String
@@ -90,9 +90,5 @@ struct DemoCredential: Codable, Equatable {
     func quickFillMatches(serviceIdentifier: String, isURL: Bool) -> Bool {
         if let uris { return uris.contains { $0.quickEligible && $0.matches(serviceIdentifier: serviceIdentifier, isURL: isURL) } }
         return matches(serviceIdentifier: serviceIdentifier, isURL: isURL)
-    }
-    static func load(from bundle: Bundle) throws -> [DemoCredential] {
-        guard let url = bundle.url(forResource: "demo-credentials", withExtension: "json") else { throw CocoaError(.fileNoSuchFile) }
-        return try JSONDecoder().decode([DemoCredential].self, from: Data(contentsOf: url))
     }
 }

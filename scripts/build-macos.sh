@@ -61,9 +61,6 @@ extension="$app/Contents/PlugIns/AutoFill.appex"
 if [[ ! -f "$app/Contents/Frameworks/libSnapshotBridge.dylib" ]]; then
   echo "Missing secure snapshot bridge." >&2; exit 1
 fi
-if [[ -e "$extension/Contents/Resources/demo-credentials.json" ]]; then
-  echo "The extension still contains phase-1 plaintext fixtures; clean and rebuild." >&2; exit 1
-fi
 for bundle in "$app" "$extension"; do
   if [[ ! -f "$bundle/Contents/embedded.provisionprofile" ]]; then
     echo "Missing required provisioning profile: $bundle" >&2; exit 1

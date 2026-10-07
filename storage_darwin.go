@@ -11,17 +11,13 @@ import (
 	"runtime"
 	"sync"
 
-	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
-
 	"github.com/ebitengine/purego"
 )
 
 var storageBridge struct {
-	once         sync.Once
-	call         func([]byte, int, []byte, int) int32
-	prompt       func(int32, string, []byte, int) int32
-	cancelPrompt func()
-	err          error
+	once sync.Once
+	call func([]byte, int, []byte, int) int32
+	err  error
 }
 
 // App Sandbox can change cwd before Go main, while _NSGetExecutablePath still
@@ -72,42 +68,8 @@ func loadStorageBridge() error {
 		}
 		// Keep the library loaded while asynchronous identity-store callbacks exist.
 		purego.RegisterFunc(&storageBridge.call, symbol)
-		prompt, err := purego.Dlsym(handle, "mygo_secure_input")
-		if err != nil {
-			storageBridge.err = err
-			return
-		}
-		cancel, err := purego.Dlsym(handle, "mygo_cancel_secure_input")
-		if err != nil {
-			storageBridge.err = err
-			return
-		}
-		purego.RegisterFunc(&storageBridge.prompt, prompt)
-		purego.RegisterFunc(&storageBridge.cancelPrompt, cancel)
 	})
 	return storageBridge.err
-}
-
-func nativeSecretInput(kind int32, detail string) ([]byte, error) {
-	if err := loadStorageBridge(); err != nil {
-		return nil, err
-	}
-	buffer := make([]byte, 8192)
-	n := storageBridge.prompt(kind, detail, buffer, len(buffer))
-	runtime.KeepAlive(buffer)
-	if n <= 0 || int(n) > len(buffer) {
-		clear(buffer)
-		return nil, vaultwarden.ErrCancelled
-	}
-	value := append([]byte(nil), buffer[:n]...)
-	clear(buffer)
-	return value, nil
-}
-
-func nativeCancelSecretInput() {
-	if loadStorageBridge() == nil {
-		storageBridge.cancelPrompt()
-	}
 }
 
 func nativeStorageCall(input []byte) ([]byte, error) {

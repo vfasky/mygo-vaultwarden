@@ -11,29 +11,32 @@ import (
 var errSnapshotTooLarge = errors.New("snapshot bridge size limit")
 
 type snapshotStatus struct {
-	Revision       string             `json:"revision"`
-	Available      bool               `json:"available"`
-	Count          int                `json:"count"`
-	IndexPending   bool               `json:"indexPending"`
-	CleanupPending bool               `json:"cleanupPending"`
-	SnapshotID     string             `json:"snapshotID,omitempty"`
-	Scope          *vaultwarden.Scope `json:"scope,omitempty"`
-	UpdatedAt      int64              `json:"updatedAt,omitempty"`
+	Revision       string                            `json:"revision"`
+	Available      bool                              `json:"available"`
+	Count          int                               `json:"count"`
+	IndexPending   bool                              `json:"indexPending"`
+	CleanupPending bool                              `json:"cleanupPending"`
+	SnapshotID     string                            `json:"snapshotID,omitempty"`
+	Scope          *vaultwarden.Scope                `json:"scope,omitempty"`
+	UpdatedAt      int64                             `json:"updatedAt,omitempty"`
+	PasswordUnlock *vaultwarden.PasswordUnlockConfig `json:"passwordUnlock,omitempty"`
 }
 
 type storageRequest struct {
-	Operation        string             `json:"operation"`
-	ExpectedRevision string             `json:"expectedRevision,omitempty"`
-	Credentials      []demoCredential   `json:"credentials"`
-	CredentialID     string             `json:"credentialID,omitempty"`
-	Scope            *vaultwarden.Scope `json:"scope,omitempty"`
+	Operation        string                      `json:"operation"`
+	ExpectedRevision string                      `json:"expectedRevision,omitempty"`
+	Credentials      []vaultwarden.Credential    `json:"credentials"`
+	Scope            *vaultwarden.Scope          `json:"scope,omitempty"`
+	PasswordUnlock   *vaultwarden.PasswordUnlock `json:"passwordUnlock,omitempty"`
+	UnlockKey        []byte                      `json:"unlockKey,omitempty"`
+	Session          []byte                      `json:"session,omitempty"`
 }
 
 // A zero-result sync is an explicit replacement, never an absent field.
 func (r storageRequest) MarshalJSON() ([]byte, error) {
 	type wireRequest storageRequest
 	if r.Operation == "publishVault" && r.Credentials == nil {
-		r.Credentials = []demoCredential{}
+		r.Credentials = []vaultwarden.Credential{}
 	}
 	return json.Marshal(wireRequest(r))
 }
@@ -58,6 +61,7 @@ type storageReply struct {
 	Items     []displayCredential `json:"items,omitempty"`
 	Truncated bool                `json:"truncated,omitempty"`
 	DeviceID  string              `json:"deviceID,omitempty"`
+	Session   []byte              `json:"session,omitempty"`
 }
 
 func callStorage(request storageRequest) storageReply {
@@ -78,6 +82,7 @@ func callStorage(request storageRequest) storageReply {
 	defer clear(output)
 	var reply storageReply
 	if err := json.Unmarshal(output, &reply); err != nil {
+		clear(reply.Session)
 		return storageReply{Code: "invalid_reply", Message: "安全存储返回了无效响应。"}
 	}
 	return reply

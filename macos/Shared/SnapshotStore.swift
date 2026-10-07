@@ -27,10 +27,16 @@ final class SnapshotStore {
     func state() throws -> SnapshotState { try files.locked { try files.read() } }
 
     // Journal key IDs before creating them. Crashes cannot leave untracked secrets.
-    // A new AES key is used for every replacement/deletion, never a fixed demo key.
-    func publish(_ credentials: [DemoCredential], scope: SnapshotScope, expected: String) throws -> SnapshotLease {
+    // A new AES key is used for every replacement.
+    func publish(_ credentials: [VaultCredential], scope: SnapshotScope, expected: String,
+                 passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil) throws -> SnapshotLease {
         try validateCredentials(credentials)
+        try validateSessionData(session)
+        if session != nil && passwordUnlock == nil { throw SnapshotError.invalidInput }
         guard scope.valid else { throw SnapshotError.wrongScope }
+        if let material = passwordUnlock {
+            guard material.config.valid, material.key.count == 32 else { throw SnapshotError.invalidInput }
+        }
         defer { changed() }
         return try files.locked {
             var prior = try files.read()
@@ -49,7 +55,7 @@ final class SnapshotStore {
             try files.write(journal)
             do {
                 try keys.create(id: keyID, key: key)
-                let snapshot = try sealSnapshot(credentials: credentials, scope: scope, keyID: keyID, key: key)
+                let snapshot = try sealSnapshot(credentials: credentials, scope: scope, keyID: keyID, key: key, passwordUnlock: passwordUnlock, session: session)
                 var next = journal
                 next.snapshot = snapshot
                 next.signedOut = false
@@ -67,18 +73,53 @@ final class SnapshotStore {
         }
     }
 
-    func unlock(scope: SnapshotScope, context: LAContext, allowUI: Bool) throws -> SnapshotLease {
+    func unlock(scope: SnapshotScope, context: LAContext, allowUI: Bool, includeSession: Bool = false) throws -> SnapshotLease {
         let before = try state()
         guard let encrypted = before.snapshot, !before.signedOut else { throw SnapshotError.unavailable }
         guard encrypted.header.scope == scope else { throw SnapshotError.wrongScope }
         // Never hold the file lock while an authentication dialog is on screen.
         var key = try keys.read(id: encrypted.header.keyID, context: context, allowUI: allowUI)
         defer { key.resetBytes(in: 0..<key.count) }
-        let credentials = try openSnapshot(encrypted, key: key, scope: scope)
+        let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
         let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
-                                  expiresAt: clock() + 60, credentials: credentials)
+                                  expiresAt: clock() + 60, credentials: payload.credentials, session: includeSession ? payload.session : nil)
         try withCurrentLease(lease) {}
         return lease
+    }
+
+    // Main-app password unlock can restore a saved session only after both
+    // the snapshot lease and its server/account scope have been authenticated.
+    func unlockWithPassword(scope: SnapshotScope, expected: String, unlockKey: Data) throws -> SnapshotLease {
+        let before = try state()
+        guard before.revision == expected else { throw SnapshotError.stale }
+        guard let encrypted = before.snapshot, !before.signedOut else { throw SnapshotError.unavailable }
+        guard encrypted.header.scope == scope else { throw SnapshotError.wrongScope }
+        var key = try unwrapSnapshotKey(encrypted, unlockKey: unlockKey)
+        defer { key.resetBytes(in: 0..<key.count) }
+        let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
+        let lease = SnapshotLease(revision: before.revision, header: encrypted.header,
+                                  expiresAt: clock() + 60, credentials: payload.credentials, session: payload.session)
+        try withCurrentLease(lease) {}
+        return lease
+    }
+
+    // Persist refresh-token rotation before downloading a new vault. The same
+    // CAS barrier as publication rejects writers revoked by lock/logout/switch.
+    func saveSession(_ session: Data, scope: SnapshotScope, expected: String, unlockKey: Data) throws -> SnapshotLease {
+        try validateSessionData(session)
+        defer { changed() }
+        return try files.locked {
+            var state = try files.read()
+            guard state.revision == expected else { throw SnapshotError.stale }
+            guard let snapshot = state.snapshot, !state.signedOut else { throw SnapshotError.unavailable }
+            guard snapshot.header.scope == scope else { throw SnapshotError.wrongScope }
+            var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
+            defer { key.resetBytes(in: 0..<key.count) }
+            state.snapshot = try replacingSnapshotSession(snapshot, key: key, session: session)
+            state.revision = UUID().uuidString
+            try files.write(state)
+            return SnapshotLease(revision: state.revision, header: snapshot.header, expiresAt: clock() + 60, credentials: [])
+        }
     }
 
     // Linearization point: hold the same lock as revocation through submission
@@ -92,12 +133,6 @@ final class SnapshotStore {
             guard clock() < lease.expiresAt else { throw SnapshotError.expired }
             return try body()
         }
-    }
-
-    func deleteCredential(id: String, expected: String, context: LAContext) throws -> SnapshotLease {
-        let lease = try unlock(scope: .demo, context: context, allowUI: true)
-        guard lease.revision == expected, lease.credentials.contains(where: { $0.id == id }) else { throw SnapshotError.stale }
-        return try publish(lease.credentials.filter { $0.id != id }, scope: lease.header.scope, expected: expected)
     }
 
     // Lock is unconditional: a screen-lock event must invalidate work even when

@@ -20,13 +20,12 @@
         A10000000000000000000005 = {isa = PBXBuildFile; fileRef = A20000000000000000000008; };
         A20000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = image.icns; path = App/AppIcon.icns; sourceTree = "<group>"; };
         A20000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFill/CredentialProviderViewController.swift; sourceTree = "<group>"; };
-        A20000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/DemoCredential.swift; sourceTree = "<group>"; };
-        A20000000000000000000003 = {isa = PBXFileReference; lastKnownFileType = text.json; path = "../resources/demo-credentials.json"; sourceTree = "<group>"; };
+        A20000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/VaultCredential.swift; sourceTree = "<group>"; };
         A20000000000000000000004 = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "MyGo Vaultwarden.app"; sourceTree = BUILT_PRODUCTS_DIR; };
         A20000000000000000000005 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AutoFill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
         A20000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = App/Info.plist; sourceTree = "<group>"; };
         A20000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = AutoFill/Info.plist; sourceTree = "<group>"; };
-        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000001, A20000000000000000000002, A20000000000000000000003, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A30000000000000000000002, ); sourceTree = "<group>"; };
+        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000001, A20000000000000000000002, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A30000000000000000000002, ); sourceTree = "<group>"; };
         A30000000000000000000002 = {isa = PBXGroup; name = Products; children = (A20000000000000000000004, A20000000000000000000005, ); sourceTree = "<group>"; };
         A40000000000000000000001 = {
             isa = PBXNativeTarget;
