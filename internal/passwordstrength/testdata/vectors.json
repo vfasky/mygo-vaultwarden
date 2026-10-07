@@ -1,0 +1,285 @@
+[
+  {
+    "name": "empty",
+    "password": "",
+    "email": "",
+    "userInputs": [],
+    "expected": null
+  },
+  {
+    "name": "common",
+    "password": "password",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 0,
+      "guessesLog10": 0.4771212547196623
+    }
+  },
+  {
+    "name": "mixed-common",
+    "password": "P@ssw0rd!",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 1,
+      "guessesLog10": 4.045322978786657
+    }
+  },
+  {
+    "name": "keyboard",
+    "password": "qwertyuiop",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 0,
+      "guessesLog10": 1.3617278360175928
+    }
+  },
+  {
+    "name": "repeated",
+    "password": "abcabcabcabc",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 0,
+      "guessesLog10": 1.724275869600789
+    }
+  },
+  {
+    "name": "sequence",
+    "password": "abcdefghi",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 0,
+      "guessesLog10": 1.5682017240669948
+    }
+  },
+  {
+    "name": "date",
+    "password": "1991-12-25",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 1,
+      "guessesLog10": 4.7084293989650945
+    }
+  },
+  {
+    "name": "long-sequence",
+    "password": "abcdefghijk",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 0,
+      "guessesLog10": 1.6532125137753435
+    }
+  },
+  {
+    "name": "keyboard-plus-words",
+    "password": "zxcvbn2024!cat",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 4,
+      "guessesLog10": 10.056905232296376
+    }
+  },
+  {
+    "name": "leet-example",
+    "password": "Tr0ub4dor&3",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 4,
+      "guessesLog10": 11.000000000004341
+    }
+  },
+  {
+    "name": "passphrase",
+    "password": "correct horse battery staple",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 4,
+      "guessesLog10": 20.330032012866745
+    }
+  },
+  {
+    "name": "strong",
+    "password": "u5V!m8#Q2p@L7r$N",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 4,
+      "guessesLog10": 16
+    }
+  },
+  {
+    "name": "brand",
+    "password": "bitwarden123",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 1,
+      "guessesLog10": 4.176091259055681
+    }
+  },
+  {
+    "name": "email-parts",
+    "password": "snowflake2025!",
+    "email": " SnowFlake.Manager+Dev@example.invalid",
+    "userInputs": [],
+    "expected": {
+      "score": 2,
+      "guessesLog10": 7.000434077479318
+    }
+  },
+  {
+    "name": "email-domain-excluded",
+    "password": "snowflake2025!",
+    "email": "different@snowflake.invalid",
+    "userInputs": [],
+    "expected": {
+      "score": 3,
+      "guessesLog10": 9.083738149957977
+    }
+  },
+  {
+    "name": "email-no-at",
+    "password": "snowflake2025!",
+    "email": "snowflake",
+    "userInputs": [],
+    "expected": {
+      "score": 3,
+      "guessesLog10": 9.083738149957977
+    }
+  },
+  {
+    "name": "empty-email-tokens",
+    "password": "example",
+    "email": ".+@example.invalid",
+    "userInputs": [],
+    "expected": {
+      "score": 0,
+      "guessesLog10": 2.5611013836490555
+    }
+  },
+  {
+    "name": "user-dictionary",
+    "password": "quasar12345",
+    "email": "",
+    "userInputs": [
+      "quasar",
+      "quasar",
+      "bitwarden"
+    ],
+    "expected": {
+      "score": 1,
+      "guessesLog10": 4.176091259055681
+    }
+  },
+  {
+    "name": "uppercase-user-input",
+    "password": "QuAsAr12345",
+    "email": "",
+    "userInputs": [
+      "QUASAR"
+    ],
+    "expected": {
+      "score": 1,
+      "guessesLog10": 4.421603926869831
+    }
+  },
+  {
+    "name": "cjk",
+    "password": "密码保险库测试中文短语",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 4,
+      "guessesLog10": 11.000000000004341
+    }
+  },
+  {
+    "name": "emoji",
+    "password": "🔐🔑🦉🌙✨",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 3,
+      "guessesLog10": 9.000000000434293
+    }
+  },
+  {
+    "name": "unicode-user",
+    "password": "İstanbul2025!",
+    "email": "İSTANBUL@example.invalid",
+    "userInputs": [],
+    "expected": {
+      "score": 3,
+      "guessesLog10": 8.60205999132796
+    }
+  },
+  {
+    "name": "unicode-trim",
+    "password": "snowflake2025!",
+    "email": "﻿SnowFlake @example.invalid",
+    "userInputs": [],
+    "expected": {
+      "score": 2,
+      "guessesLog10": 7.000434077479318
+    }
+  },
+  {
+    "name": "decomposed",
+    "password": "cafécafé",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 1,
+      "guessesLog10": 5.1986158545083665
+    }
+  },
+  {
+    "name": "composed",
+    "password": "cafécafé",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 1,
+      "guessesLog10": 4.301095134950942
+    }
+  },
+  {
+    "name": "astral-repeat",
+    "password": "🔐🔐🔐🔐",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 0,
+      "guessesLog10": 2.6074550232146683
+    }
+  },
+  {
+    "name": "nul",
+    "password": "abc\u0000def123!",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 4,
+      "guessesLog10": 10.000000434294265
+    }
+  },
+  {
+    "name": "whitespace",
+    "password": "  lead and trail  ",
+    "email": "",
+    "userInputs": [],
+    "expected": {
+      "score": 4,
+      "guessesLog10": 16.446165776627794
+    }
+  }
+]

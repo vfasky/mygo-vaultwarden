@@ -27,7 +27,20 @@ func (a *app) sessionOwnsSnapshot() bool {
 func (a *app) observeSnapshot(state *snapshotStatus) {
 	a.snapshot = state
 	if state == nil || state.Revision != a.itemsRevision {
+		if a.editor != nil {
+			a.editor.shownSecret = ""
+			a.editor.repromptPassword = ""
+			if a.pending == 0 {
+				*a.editor = cipherEditor{}
+			}
+		}
 		a.items = nil
+		a.vault, a.editor = nil, nil
+		a.organizations, a.collections, a.isolatedOrganizations = nil, nil, nil
+		a.clearOrganizationEditor()
+		a.folders, a.folderEditor = nil, nil
+		a.bulkEditor = nil
+		a.clearBackupEditor()
 		a.itemsRevision = ""
 		a.selectedID = ""
 	}
@@ -51,6 +64,17 @@ func (a *app) syncFailed(reply storageReply, err error) {
 }
 
 func (a *app) stopNetwork() {
+	a.clearSecretClipboard()
+	if a.editor != nil {
+		a.editor.shownSecret = ""
+		a.editor.repromptPassword = ""
+		if a.pending == 0 {
+			*a.editor = cipherEditor{}
+		}
+	}
+	// Invalidate every pending callback, including writes whose server response
+	// arrives after an observed external lock or account switch.
+	a.epoch++
 	if a.cancel != nil {
 		a.cancel()
 		a.cancel = nil
@@ -64,8 +88,14 @@ func (a *app) stopNetwork() {
 	a.liveScope = nil
 	a.sessionRevision = ""
 	a.items = nil
+	a.vault, a.editor = nil, nil
+	a.organizations, a.collections, a.isolatedOrganizations = nil, nil, nil
+	a.clearOrganizationEditor()
+	a.folders, a.folderEditor = nil, nil
 	a.itemsRevision = ""
 	a.selectedID = ""
+	a.bulkEditor = nil
+	a.clearBackupEditor()
 }
 
 func (a *app) syncVault(login bool) {
@@ -110,6 +140,11 @@ func (a *app) syncVault(login bool) {
 	}
 	existing := a.session
 	initialSnapshot := a.snapshot
+	priorVault := a.vault
+	var isolatedIDs []string
+	if a.vault != nil {
+		isolatedIDs = append(isolatedIDs, a.vault.QuarantinedOrganizations...)
+	}
 	deviceID := a.deviceID
 	expected := a.snapshot.Revision
 	if !login {
@@ -128,7 +163,7 @@ func (a *app) syncVault(login bool) {
 	a.pending++
 	a.status = "正在登录并同步…"
 	if !login {
-		a.status = "正在同步只读密码库…"
+		a.status = "正在同步密码库…"
 	}
 	go func() {
 		defer clear(password)
@@ -194,10 +229,29 @@ func (a *app) syncVault(login bool) {
 			for _, item := range result.Credentials {
 				metadata = append(metadata, displayCredential{ID: item.ID, Title: item.Title, Username: item.Username, URL: item.URL})
 			}
-			reply = callStorage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session})
+			reply = callStorage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
+			if reply.OK && reply.Vault != nil {
+				result.Vault = reply.Vault
+			}
+			if !login && !reply.Vault.PreservesPendingPolicies(priorVault) {
+				reply.OK, reply.Code, reply.Message = false, "invalid_reply", "未能确认策略待核验状态，请重新解锁。"
+			}
+			for _, isolatedID := range isolatedIDs {
+				found := false
+				if reply.Vault != nil {
+					for _, id := range reply.Vault.QuarantinedOrganizations {
+						if id == isolatedID {
+							found = true
+						}
+					}
+				}
+				if !found {
+					reply.OK, reply.Code, reply.Message = false, "invalid_reply", "未能确认组织隔离状态，请重新解锁核对。"
+				}
+			}
 			if !reply.OK {
 				workErr = reply.failure()
-			} else if reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.Revision == "" || reply.State.Revision == expected {
+			} else if reply.Vault == nil || reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.SnapshotID == "" || reply.State.Revision == "" || reply.State.Revision == expected {
 				workErr = (storageReply{Code: "invalid_reply", Message: "未能确认本次快照的发布版本。"}).failure()
 			}
 		}
@@ -250,15 +304,37 @@ func (a *app) syncVault(login bool) {
 				}
 				return
 			}
+			if concrete, ok := session.(*vaultwarden.Session); ok {
+				if err := concrete.AcceptAuthenticatedSnapshot(reply.Vault, reply.State.Revision); err != nil {
+					if login {
+						go session.Close()
+					}
+					a.stopNetwork()
+					a.status = err.Error()
+					return
+				}
+			}
 			a.snapshot = reply.State
 			a.session = session
 			a.liveScope = &result.Scope
 			a.sessionRevision = reply.State.Revision
 			a.items = metadata
+			if err := a.adoptVault(result.Vault); err != nil {
+				a.status = err.Error()
+				return
+			}
+			if a.folderEditor != nil && a.folderEditor.saved {
+				a.folderEditor = nil
+			}
+			if a.editor != nil && a.editor.saved {
+				a.editor = nil
+			}
 			a.itemsRevision = a.snapshot.Revision
 			a.showSettings, a.showLogin = false, false
 			s := result.Summary
-			a.status = fmt.Sprintf("已同步 %d 条个人登录条目。排除：组织 %d、其他类型 %d、需再次输入主密码 %d；未支持/禁用的网址规则 %d。", s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.UnsupportedURIs)
+			a.status = fmt.Sprintf("已同步 %d 个项目；可填充登录 %d。填充排除：未授权组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
+			a.reconcileBulk()
+			a.reconcileImport()
 		})
 	}()
 }

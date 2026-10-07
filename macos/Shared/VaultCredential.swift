@@ -7,6 +7,12 @@ struct CredentialURI: Codable, Equatable {
     let match: Int
     let baseDomain: String?
     let includeSubdomains: Bool?
+    let sourceIndex: Int?
+
+    init(uri: String, match: Int, baseDomain: String?, includeSubdomains: Bool?, sourceIndex: Int? = nil) {
+        self.uri = uri; self.match = match; self.baseDomain = baseDomain
+        self.includeSubdomains = includeSubdomains; self.sourceIndex = sourceIndex
+    }
 
     private func components(_ value: String) -> URLComponents? {
         guard let url = URLComponents(string: value), ["https", "http"].contains(url.scheme?.lowercased() ?? ""),

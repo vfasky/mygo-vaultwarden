@@ -41,15 +41,48 @@ type vaultCategory struct {
 
 var vaultCategories = []vaultCategory{
 	{"all", "所有项目", "grid", true},
-	{"favorites", "收藏夹", "star", false},
+	{"favorites", "收藏夹", "star", true},
 	{"login", "登录", "globe", true},
-	{"card", "支付卡", "card", false},
-	{"identity", "身份", "identity", false},
-	{"note", "安全笔记", "note", false},
-	{"ssh", "SSH 密钥", "key", false},
+	{"card", "支付卡", "card", true},
+	{"identity", "身份", "identity", true},
+	{"note", "安全笔记", "note", true},
+	{"ssh", "SSH 密钥", "key", true},
+	{"bank", "银行账户", "card", true},
+	{"license", "驾驶证", "identity", true},
+	{"passport", "护照", "identity", true},
+	{"archive", "归档", "vault", true},
+	{"trash", "回收站", "vault", true},
 }
 
 func (a *app) currentCategory() vaultCategory {
+	if a.category == "personal" {
+		return vaultCategory{"personal", "我的密码库", "user", true}
+	}
+	for _, org := range a.organizations {
+		if a.category == "org:"+org.ID {
+			return vaultCategory{a.category, org.Name, "vault", true}
+		}
+	}
+	for _, collection := range a.collections {
+		if a.category == "collection:"+collection.ID {
+			return vaultCategory{a.category, collection.Name, "vault", true}
+		}
+	}
+	if strings.HasPrefix(a.category, "org:") || strings.HasPrefix(a.category, "collection:") {
+		return vaultCategory{a.category, "组织权限已变化", "vault", false}
+	}
+	if strings.HasPrefix(a.category, "folder:") {
+		id := strings.TrimPrefix(a.category, "folder:")
+		if id == "" {
+			return vaultCategory{a.category, "无文件夹", "vault", true}
+		}
+		for _, f := range a.folders {
+			if f.ID == id {
+				return vaultCategory{a.category, f.Name, "vault", true}
+			}
+		}
+		return vaultCategory{a.category, "文件夹已不存在", "vault", false}
+	}
 	for _, category := range vaultCategories {
 		if category.id == a.category {
 			return category
@@ -65,6 +98,39 @@ func (a *app) filteredItems() []displayCredential {
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	items := make([]displayCredential, 0, len(a.items))
 	for _, item := range a.items {
+		if a.category == "personal" && item.OrganizationID != "" {
+			continue
+		}
+		if strings.HasPrefix(a.category, "org:") && item.OrganizationID != strings.TrimPrefix(a.category, "org:") {
+			continue
+		}
+		if strings.HasPrefix(a.category, "collection:") {
+			found := false
+			for _, id := range item.CollectionIDs {
+				if a.category == "collection:"+id {
+					found = true
+				}
+			}
+			if !found {
+				continue
+			}
+		}
+		if strings.HasPrefix(a.category, "folder:") && item.FolderID != strings.TrimPrefix(a.category, "folder:") {
+			continue
+		}
+		if item.Deleted != (a.category == "trash") {
+			continue
+		}
+		if a.category != "trash" && item.Archived != (a.category == "archive") {
+			continue
+		}
+		if a.category == "favorites" && !item.Favorite {
+			continue
+		}
+		kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
+		if kind != 0 && item.Type != kind && !(kind == 1 && item.Type == 0) {
+			continue
+		}
 		if strings.Contains(strings.ToLower(item.Title+" "+item.Username+" "+item.URL), query) {
 			items = append(items, item)
 		}
@@ -124,7 +190,17 @@ func (a *app) body(c *ui.Context) {
 		a.reconcileSelection(items)
 		a.credentialList(c, items)
 		ui.Column(c).Key("detail-pane").Grow(1).MinWidth(0).Gap(16).Children(func() {
-			if a.showSettings {
+			if a.backupEditor != nil {
+				a.backupEditorView(c)
+			} else if a.bulkEditor != nil {
+				a.bulkEditorView(c)
+			} else if a.organizationEditor != nil {
+				a.organizationEditorView(c)
+			} else if a.folderEditor != nil {
+				a.folderEditorView(c)
+			} else if a.editor != nil {
+				a.cipherEditorView(c)
+			} else if a.showSettings {
 				a.settings(c)
 			} else if a.selectedRow >= 0 && a.selectedRow < len(items) {
 				a.credentialDetail(c, items[a.selectedRow])
@@ -208,6 +284,22 @@ func (a *app) header(c *ui.Context) {
 			state = "可同步"
 		}
 		pill(c, state, vaultLavender, vaultPurple)
+		if toolbarButton(c, "导入导出", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+			a.openBackupEditor()
+		}
+		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+			kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
+			if kind == 0 {
+				kind = 1
+			}
+			a.openCipherEditor("", kind)
+		}
+		if toolbarButton(c, "批量管理", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+			a.openBulkEditor(false)
+		}
+		if a.category == "trash" && toolbarButton(c, "清空回收站", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+			a.openBulkEditor(true)
+		}
 		if toolbarButton(c, "同步", "sync", false, a.pending != 0).Clicked() {
 			a.syncVault(false)
 		}
@@ -238,6 +330,12 @@ func (a *app) sidebar(c *ui.Context) {
 }
 
 func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
+	navItem := a.navItem
+	sectionLabel := func(c *ui.Context, text string) {
+		if !a.sidebarCollapsed {
+			sectionLabel(c, text)
+		}
+	}
 	{
 		ui.Box(c).Height(max(bar.Height, 52) - 8).Shrink(0).DragWindow()
 		brandPadding := float32(8)
@@ -251,39 +349,74 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 			if !a.sidebarCollapsed {
 				ui.Column(c).Gap(1).Children(func() {
 					ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
-					ui.Text(c, "个人密码库 · 只读").FontSize(11).TextColor(vaultMuted).SingleLine()
+					ui.Text(c, "个人密码库").FontSize(11).TextColor(vaultMuted).SingleLine()
 				})
 			}
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
-				if !a.sidebarCollapsed {
-					sectionLabel(c, "所有密码库")
-				}
-				if a.navItem(c, "我的密码库", "user", "", false, false).Clicked() {
-					a.category, a.query, a.showSettings = "all", "", false
+				sectionLabel(c, "所有密码库")
+				if navItem(c, "我的密码库", "user", "", a.category == "personal", false).Clicked() {
+					a.category, a.query, a.showSettings = "personal", "", false
 				}
 				ui.Box(c).Height(10)
-				if !a.sidebarCollapsed {
-					sectionLabel(c, "项目")
-				}
+				sectionLabel(c, "项目")
 				for _, category := range vaultCategories {
 					count := ""
 					if category.supported && a.unlocked() {
 						count = fmt.Sprint(len(a.items))
 					}
-					b := a.navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
+					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
 					if !category.supported && !a.sidebarCollapsed {
-						b.Tooltip("当前只读版本尚未同步此分类")
+						b.Tooltip("此分类尚未同步")
 					}
 					if b.Clicked() {
 						a.category, a.showSettings = category.id, false
 						a.listState.ScrollTo(0, ui.Start)
 					}
 				}
+				sectionLabel(c, "组织")
+				if navItem(c, "创建或加入组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
+					a.openOrganizationEditor("")
+				}
+				if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+					a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
+				}
+				for _, org := range a.organizations {
+					if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
+						a.category, a.showSettings = "org:"+org.ID, false
+					}
+					for _, collection := range a.collections {
+						if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
+							a.category, a.showSettings = "collection:"+collection.ID, false
+						}
+					}
+				}
+				for _, org := range a.isolatedOrganizations {
+					if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+						a.openOrganizationEditor(org.ID)
+					}
+				}
+				sectionLabel(c, "文件夹")
+				if navItem(c, "无文件夹", "vault", "", a.category == "folder:", false).Clicked() {
+					a.category, a.showSettings = "folder:", false
+				}
+				for _, f := range a.folders {
+					if navItem(c, f.Name, "vault", "", a.category == "folder:"+f.ID, false).Clicked() {
+						a.category, a.showSettings = "folder:"+f.ID, false
+					}
+				}
+				if navItem(c, "新建文件夹", "vault", "", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
+					a.openFolderEditor("")
+				}
+				if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
+					if navItem(c, "管理文件夹", "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
+						a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
+					}
+				}
 			})
 		})
-		if a.navItem(c, "账号与设置", "settings", "", a.showSettings, false).Clicked() {
+		if navItem(c, "账号与设置", "settings", "", a.showSettings, false).Clicked() {
 			a.showSettings = !a.showSettings
 		}
 	}
@@ -293,9 +426,17 @@ func sectionLabel(c *ui.Context, text string) {
 	ui.Text(c, text).Padding(3, 10).FontSize(11).TextColor(vaultMuted)
 }
 
+func navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+	return navigationItem(c, title, symbol, count, selected, disabled, false)
+}
+
 func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+	return navigationItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
+}
+
+func navigationItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {
 	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 11).Gap(10).Radius(20).Disabled(disabled).TextColor(vaultMuted)
-	if a.sidebarCollapsed {
+	if collapsed {
 		b.Tooltip(title).Justify(ui.Center)
 	}
 	if selected {
@@ -308,7 +449,7 @@ func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disa
 	}
 	b.Children(func() {
 		icon(c, symbol, 18)
-		if a.sidebarCollapsed {
+		if collapsed {
 			return
 		}
 		ui.Text(c, title).Grow(1).FontSize(13).SingleLine()
@@ -456,9 +597,15 @@ func (a *app) credentialDetail(c *ui.Context, item displayCredential) {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted)
 				icon(c, "chevron", 12).TextColor(vaultMuted)
-				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted)
+				kind := "登录"
+				if item.Type > 0 && item.Type < len(cipherTypeNames) {
+					kind = cipherTypeNames[item.Type]
+				}
+				ui.Text(c, kind).FontSize(12).TextColor(vaultMuted)
 				ui.Spacer(c)
-				pill(c, "只读", vaultWhite, vaultMuted)
+				if action(c, "查看与编辑", "", false, a.pending != 0 || (!item.Editable && !item.Readable && !item.RequiresPassword) || a.vault == nil).Clicked() {
+					a.openCipherEditor(item.ID, item.Type)
+				}
 			})
 			ui.Row(c).Gap(16).Children(func() {
 				credentialAvatar(c, item, 60)
@@ -599,7 +746,7 @@ func (a *app) settings(c *ui.Context) {
 					a.runStorage("logout")
 				}
 			})
-			ui.Text(c, "MyGo Vaultwarden · macOS 原生\n当前版本支持个人登录条目的只读同步。").FontSize(11).TextColor(vaultMuted).LineHeight(1.6)
+			ui.Text(c, "MyGo Vaultwarden · macOS 原生\n支持个人八类型项目编辑；组织与更多功能仍在开发。").FontSize(11).TextColor(vaultMuted).LineHeight(1.6)
 		})
 	})
 }

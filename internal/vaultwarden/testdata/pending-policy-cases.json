@@ -1,0 +1,21 @@
+[
+ {"name":"two-factor","version":2,"pending":[{"organizationId":"org-a","policyType":0,"mutationId":"mutation-0"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"master-password","version":2,"pending":[{"organizationId":"org-a","policyType":1,"mutationId":"mutation-1"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"generator","version":2,"pending":[{"organizationId":"org-a","policyType":2,"mutationId":"mutation-2"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"single-org","version":2,"pending":[{"organizationId":"org-a","policyType":3,"mutationId":"mutation-3"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"ownership","version":2,"pending":[{"organizationId":"org-a","policyType":5,"mutationId":"mutation-5"}],"valid":true,"personalRead":true,"personalWrite":false},
+ {"name":"disable-send","version":2,"pending":[{"organizationId":"org-a","policyType":6,"mutationId":"mutation-6"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"send-options","version":2,"pending":[{"organizationId":"org-a","policyType":7,"mutationId":"mutation-7"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"recovery","version":2,"pending":[{"organizationId":"org-a","policyType":8,"mutationId":"mutation-8"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"pin","version":2,"pending":[{"organizationId":"org-a","policyType":14,"mutationId":"mutation-14"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"restricted","version":2,"pending":[{"organizationId":"org-a","policyType":15,"mutationId":"mutation-15"}],"valid":true,"personalRead":false,"personalWrite":false},
+ {"name":"uri-default","version":2,"pending":[{"organizationId":"org-a","policyType":16,"mutationId":"mutation-16"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"notification","version":2,"pending":[{"organizationId":"org-a","policyType":20,"mutationId":"mutation-20"}],"valid":true,"personalRead":true,"personalWrite":true},
+ {"name":"multiple","version":2,"pending":[{"organizationId":"org-a","policyType":5,"mutationId":"mutation-5"},{"organizationId":"org-b","policyType":15,"mutationId":"mutation-15"}],"valid":true,"personalRead":false,"personalWrite":false},
+ {"name":"duplicate","version":2,"pending":[{"organizationId":"org-a","policyType":5,"mutationId":"mutation-5"},{"organizationId":"org-a","policyType":15,"mutationId":"mutation-15"}],"valid":false,"personalRead":false,"personalWrite":false},
+ {"name":"stripped","version":2,"pending":[],"valid":false,"personalRead":false,"personalWrite":false},
+ {"name":"downgrade","version":1,"pending":[{"organizationId":"org-a","policyType":15,"mutationId":"mutation-15"}],"valid":false,"personalRead":false,"personalWrite":false},
+ {"name":"duplicate-mutation","version":2,"pending":[{"organizationId":"org-a","policyType":5,"mutationId":"same"},{"organizationId":"org-b","policyType":15,"mutationId":"same"}],"valid":false,"personalRead":false,"personalWrite":false},
+ {"name":"unknown-type","version":2,"pending":[{"organizationId":"org-a","policyType":99,"mutationId":"mutation-99"}],"valid":false,"personalRead":false,"personalWrite":false},
+ {"name":"future-version","version":3,"pending":[{"organizationId":"org-a","policyType":15,"mutationId":"mutation-15"}],"valid":false,"personalRead":false,"personalWrite":false}
+]

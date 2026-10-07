@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 // Public, invented metadata only. Rendering never opens the real vault or Keychain.
@@ -52,17 +53,17 @@ func TestVaultSidebarToggle(t *testing.T) {
 	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 {
 		t.Fatal("collapsed toggle overlaps native window controls")
 	}
-	for _, text := range []string{"Vaultwarden", "个人密码库 · 只读", "所有密码库", "项目"} {
+	for _, text := range []string{"Vaultwarden", "个人密码库", "所有密码库", "项目", "组织", "文件夹"} {
 		if slices.Contains(tt.Texts(), text) {
 			t.Fatalf("collapsed sidebar retained text %q", text)
 		}
 	}
 	clickUI(t, tt, "支付卡")
-	if a.category != "card" || !slices.Contains(tt.Texts(), "此分类尚未同步") {
+	if a.category != "card" {
 		t.Fatal("collapsed category navigation failed")
 	}
 	clickUI(t, tt, "我的密码库")
-	if a.category != "all" || a.showSettings {
+	if a.category != "personal" || a.showSettings {
 		t.Fatal("collapsed vault navigation failed")
 	}
 	clickUI(t, tt, "展开侧栏")
@@ -110,8 +111,45 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 		t.Fatal("collapsed sidebar settings did not open")
 	}
 	clickUI(t, tt, "我的密码库")
-	if a.category != "all" || a.showSettings {
+	if a.category != "personal" || a.showSettings {
 		t.Fatal("collapsed vault navigation did not close settings")
+	}
+}
+
+func TestCollapsedSidebarBaselineNavigationAndRevocation(t *testing.T) {
+	a := organizationUIFixture(t, true, true, 0)
+	defer a.stopNetwork()
+	a.sidebarCollapsed = true
+	a.folders = []vaultwarden.Folder{{ID: "folder-1", Name: "测试文件夹"}}
+	tt := ui.NewTester(a.view, 1280, 820)
+	clickUI(t, tt, "团队组织")
+	if a.category != "org:organization-1" || len(a.filteredItems()) != 1 {
+		t.Fatal("collapsed organization navigation lost baseline filter")
+	}
+	clickUI(t, tt, "  团队集合")
+	if a.category != "collection:collection-1" {
+		t.Fatal("collapsed collection navigation lost destination")
+	}
+	clickUI(t, tt, "查看与编辑")
+	if a.editor == nil || a.editor.inputs[1].value != "org secret" {
+		t.Fatal("collapsed navigation lost authorized editor")
+	}
+	a.editor = nil
+	tt.Frame()
+	clickUI(t, tt, "测试文件夹")
+	if a.category != "folder:folder-1" {
+		t.Fatal("collapsed folder navigation lost filter")
+	}
+	clickUI(t, tt, "我的密码库")
+	for _, item := range a.filteredItems() {
+		if item.ID == "organization-item" {
+			t.Fatal("personal navigation leaked organization item")
+		}
+	}
+	a.lockInterface()
+	tt.Frame()
+	if a.editor != nil || len(a.organizations) != 0 || len(a.folders) != 0 || tt.HasText("团队组织") || tt.HasText("org secret") {
+		t.Fatal("collapsed navigation retained revoked content")
 	}
 }
 
@@ -149,8 +187,8 @@ func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 	}
 	clickUI(t, tt, "清除搜索")
 	clickUI(t, tt, "支付卡")
-	if a.selectedID != "" || !slices.Contains(tt.Texts(), "此分类尚未同步") {
-		t.Fatal("unsupported category showed credentials")
+	if a.selectedID != "" || len(a.filteredItems()) != 0 {
+		t.Fatal("empty card category showed login credentials")
 	}
 	clickUI(t, tt, "登录")
 	if a.selectedID == "" {

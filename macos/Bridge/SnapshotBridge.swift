@@ -10,6 +10,13 @@ private struct BridgeRequest: Decodable {
     var passwordUnlock: PasswordUnlockMaterial?
     var unlockKey: Data?
     var session: Data?
+    var vault: VaultData?
+    var clearingPolicy: PendingPolicyMutation?
+    var pendingPolicy: PendingPolicyMutation?
+    var organizationID: String?
+    var secret: String?
+    let secretProtocol: Int?
+    let secretNotAfter: Double?
 }
 
 private struct DisplayCredential: Encodable {
@@ -52,11 +59,30 @@ private struct BridgeReply: Encodable {
     var truncated: Bool? = nil
     var deviceID: String? = nil
     var session: Data? = nil
+    var vault: VaultData? = nil
+}
+
+private var secretClipboard: SensitiveClipboard?
+
+// Copy is called synchronously from the Go UI thread. Worker callers enter the
+// main queue before acquiring a snapshot file lease; never dispatch to the UI
+// while holding a store lock. Cleanup uses the same ordering.
+private func onClipboardThread<T>(_ body: () throws -> T) rethrows -> T {
+    if Thread.isMainThread { return try body() }
+    return try DispatchQueue.main.sync(execute: body)
+}
+
+private func clearSecretClipboard() {
+    onClipboardThread { secretClipboard?.clear() }
 }
 
 private func execute(_ request: BridgeRequest) -> BridgeReply {
     var store: SnapshotStore?
     do {
+        if request.operation == "clearSecretClipboard" {
+            clearSecretClipboard()
+            return BridgeReply(ok: true, code: "ok", message: "", state: nil)
+        }
         let vault = try SnapshotStore.sharedContainer()
         store = vault
         func expected() throws -> String {
@@ -64,6 +90,28 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             return revision
         }
         switch request.operation {
+        case "authorizeSecretDisplay":
+            guard request.secretProtocol == 1, let scope = request.scope,
+                  let key = request.unlockKey, let notAfter = request.secretNotAfter else { throw SnapshotError.invalidInput }
+            return try onClipboardThread {
+                try vault.withSecretCopyAuthorization(scope: scope, expected: expected(), unlockKey: key, notAfter: notAfter) { _ in
+                    BridgeReply(ok: true, code: "ok", message: "", state: nil)
+                }
+            }
+        case "copySecret":
+            guard request.secretProtocol == 1, let secret = request.secret,
+                  !secret.isEmpty, secret.utf8.count <= 65536,
+                  let scope = request.scope, let unlockKey = request.unlockKey,
+                  let notAfter = request.secretNotAfter, notAfter.isFinite else { throw SnapshotError.invalidInput }
+            return try onClipboardThread {
+                return try vault.withSecretCopyAuthorization(scope: scope, expected: expected(), unlockKey: unlockKey, notAfter: notAfter) { remaining in
+                    if secretClipboard == nil { secretClipboard = SensitiveClipboard(board: NativeSensitivePasteboard(.general)) }
+                    guard let clipboard = secretClipboard else { throw SnapshotError.configuration }
+                    let receipt = try clipboard.copy(secret)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + remaining) { clipboard.clear(ifOwned: receipt) }
+                    return BridgeReply(ok: true, code: "ok", message: "", state: nil)
+                }
+            }
         case "status":
             let state = try vault.state()
             // Repair legacy/late candidates on a signed-out vault without authentication.
@@ -73,24 +121,36 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             let deviceID = settings.string(forKey: "vaultwardenDeviceID") ?? UUID().uuidString
             settings.set(deviceID, forKey: "vaultwardenDeviceID")
             return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(try vault.state()), deviceID: deviceID)
-        case "publishVault":
+        case "publishVault", "restoreOrganizationAccess", "restorePolicyAccess":
             guard let credentials = request.credentials, credentials.allSatisfy({ $0.uris != nil }),
                   let scope = request.scope, scope.valid, scope != .demo else { throw SnapshotError.invalidInput }
-            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session)
+            if request.operation == "restorePolicyAccess" && request.clearingPolicy == nil { throw SnapshotError.invalidInput }
+            if request.operation == "restoreOrganizationAccess" && request.organizationID == nil { throw SnapshotError.invalidInput }
+            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session, vault: request.vault, includeVault: true, restoringOrganization: request.operation != "publishVault" ? request.organizationID : nil, clearingPolicy: request.operation == "restorePolicyAccess" ? request.clearingPolicy : nil)
             SnapshotIndex.schedule(store: vault, lease: lease)
             // Do not return a later writer's revision as this session's write authority.
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: "快照已保存。", state: BridgeStatus(try vault.files.read()))
+                BridgeReply(ok: true, code: "ok", message: "快照已保存。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
+            }
+        case "quarantineOrganization":
+            guard let scope = request.scope, let id = request.organizationID, let key = request.unlockKey, let session = request.session else { throw SnapshotError.invalidInput }
+            defer { clearSecretClipboard() }
+            let lease = try vault.quarantineOrganization(id, scope: scope, expected: expected(), unlockKey: key, session: session, pendingPolicy: request.pendingPolicy)
+            SnapshotIndex.schedule(store: vault, lease: lease)
+            return try vault.withCurrentLease(lease) {
+                BridgeReply(ok: true, code: "ok", message: "该组织的本机访问已隔离。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
         case "saveSession":
             guard let scope = request.scope, let session = request.session, let key = request.unlockKey else { throw SnapshotError.invalidInput }
             let lease = try vault.saveSession(session, scope: scope, expected: expected(), unlockKey: key)
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: "登录凭据已安全更新。", state: BridgeStatus(try vault.files.read()))
+                BridgeReply(ok: true, code: "ok", message: "登录凭据已安全更新。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
         case "lock":
+            defer { clearSecretClipboard() }
             try vault.lock()
         case "logout":
+            defer { clearSecretClipboard() }
             // Index clear is scheduled even when key cleanup returns an error after
             // the tombstone was committed. Callers still receive that cleanup failure.
             defer {
@@ -104,7 +164,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             let lease = try vault.unlockWithPassword(scope: scope, expected: expected(), unlockKey: unlockKey)
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: "密码库已解锁。", state: BridgeStatus(try vault.files.read()),
-                            items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session)
+                            items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
             }
         case "reindex", "list":
             let context = LAContext()
@@ -115,7 +175,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 guard lease.revision == request.expectedRevision else { throw SnapshotError.stale }
                 return try vault.withCurrentLease(lease) {
                     BridgeReply(ok: true, code: "ok", message: "离线快照已解锁。", state: BridgeStatus(try vault.files.read()),
-                                items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session)
+                                items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
                 }
             }
             if request.operation == "reindex" { SnapshotIndex.schedule(store: vault, lease: lease) }
@@ -147,6 +207,7 @@ public func mygoSnapshotExecute(_ request: UnsafePointer<UInt8>?, _ requestLengt
         do {
             var parsed = try JSONDecoder().decode(BridgeRequest.self, from: Data(bytes: request, count: requestLength))
             defer {
+                parsed.secret = nil
                 if let count = parsed.passwordUnlock?.key.count { parsed.passwordUnlock?.key.resetBytes(in: 0..<count) }
                 if let count = parsed.unlockKey?.count { parsed.unlockKey?.resetBytes(in: 0..<count) }
                 if let count = parsed.session?.count { parsed.session?.resetBytes(in: 0..<count) }

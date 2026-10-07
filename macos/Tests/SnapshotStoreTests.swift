@@ -79,6 +79,131 @@ final class SnapshotStoreTests: XCTestCase {
         try store.unlockWithPassword(scope: .demo, expected: expected ?? store.state().revision, unlockKey: key ?? passwordMaterial.key)
     }
 
+    func testSecretCopyRequiresAuthenticationRevisionAndUnexpiredDeadline() throws {
+        let lease = try publishPassword()
+        var copies = 0
+        func copy(key: Data, revision: String, deadline: Double = 130000) throws {
+            try store.withSecretCopyAuthorization(scope: .demo, expected: revision, unlockKey: key, notAfter: deadline, now: { 100 }) { remaining in
+                XCTAssertGreaterThan(remaining, 0)
+                copies += 1
+            }
+        }
+        XCTAssertThrowsError(try copy(key: Data(repeating: 0, count: 32), revision: lease.revision))
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: lease.revision, deadline: 100000))
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: lease.revision, deadline: 131000))
+        XCTAssertEqual(copies, 0)
+        try copy(key: passwordMaterial.key, revision: lease.revision)
+        XCTAssertEqual(copies, 1)
+        try store.lock()
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: lease.revision))
+        XCTAssertEqual(copies, 1)
+        let current = try store.state().revision
+        try store.logout(expected: current)
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: current))
+        XCTAssertEqual(copies, 1)
+    }
+
+    func testOrganizationIsolationSurvivesRestartSyncAndCheckpoint() throws {
+        let raw = Data(#"{"profile":{"id":"public-demo-account","organizations":[{"id":"org-1"},{"id":"org-2"}]},"ciphers":[{"id":"entry-1","organizationId":"org-1"},{"id":"personal"},{"id":"other-org","organizationId":"org-2"}],"future":{"n":9007199254740993}}"#.utf8)
+        let vault = VaultData(version: 1, scope: .demo, sync: raw)
+        let personal = VaultCredential(id: "personal", title: "personal", username: "u", password: "p", hosts: ["localhost"], url: "http://localhost/")
+        let other = VaultCredential(id: "other-org", title: "other", username: "u", password: "p", hosts: ["localhost"], url: "http://localhost/")
+        let original = try store.publish([credential, personal, other], scope: .demo, expected: store.state().revision, passwordUnlock: passwordMaterial, session: Data("before".utf8), vault: vault)
+        let isolated = try store.quarantineOrganization("org-1", scope: .demo, expected: original.revision, unlockKey: passwordMaterial.key, session: Data("rotated".utf8))
+        XCTAssertNotEqual(original.header.id, isolated.header.id)
+        assertError(.stale) { try self.store.withCurrentLease(original) {} }
+        XCTAssertEqual(isolated.credentials.map(\.id), ["personal", "other-org"])
+        XCTAssertEqual(isolated.vault?.sync, raw) // opaque encrypted server bytes remain exact
+        XCTAssertEqual(isolated.vault?.quarantinedOrganizations, ["org-1"])
+        let reopened = try SnapshotStore(directory: directory, keys: keys)
+        let app = try reopened.unlockWithPassword(scope: .demo, expected: isolated.revision, unlockKey: passwordMaterial.key)
+        XCTAssertEqual(app.session, Data("rotated".utf8))
+        XCTAssertEqual(app.vault?.quarantinedOrganizations, ["org-1"])
+        let extensionLease = try reopened.unlock(scope: .demo, context: LAContext(), allowUI: true)
+        XCTAssertNil(extensionLease.vault)
+        XCTAssertEqual(extensionLease.credentials.map(\.id), ["personal", "other-org"])
+        // Even a stale server response which still grants access cannot undo isolation.
+        let synced = try store.publish([credential, personal, other], scope: .demo, expected: isolated.revision, passwordUnlock: passwordMaterial, session: Data("sync-token".utf8), vault: vault)
+        XCTAssertEqual(synced.credentials.map(\.id), ["personal", "other-org"])
+        let checkpoint = try store.saveSession(Data("next-token".utf8), scope: .demo, expected: synced.revision, unlockKey: passwordMaterial.key)
+        XCTAssertEqual(checkpoint.vault, synced.vault ?? isolated.vault)
+        XCTAssertEqual(checkpoint.header.id, synced.header.id)
+        try store.lock()
+        assertError(.stale) { try self.store.withCurrentLease(checkpoint) {} }
+        let latest = try passwordUnlock()
+        XCTAssertEqual(latest.vault?.quarantinedOrganizations, ["org-1"])
+        XCTAssertEqual(latest.credentials.map(\.id), ["personal", "other-org"])
+        XCTAssertEqual(latest.session, Data("next-token".utf8))
+        // Dropping complete vault data cannot erase the durable marker.
+        XCTAssertThrowsError(try store.publish([credential], scope: .demo, expected: latest.revision, passwordUnlock: passwordMaterial))
+        XCTAssertEqual(try passwordUnlock().vault?.quarantinedOrganizations, ["org-1"])
+        // Only an explicit recovery operation with fresh confirmed membership may
+        // lift the marker. Accepted, wrong-account and member/account confusion fail.
+        for membership in [
+            #"{"id":"org-1","status":1,"enabled":true,"userId":"public-demo-account","organizationUserId":"member-1","key":"wrapped"}"#,
+            #"{"id":"org-1","status":2,"enabled":true,"userId":"other-account","organizationUserId":"member-1","key":"wrapped"}"#,
+            #"{"id":"org-1","status":2,"enabled":true,"userId":"public-demo-account","organizationUserId":"public-demo-account","key":"wrapped"}"#
+        ] {
+            let fresh = Data((#"{"profile":{"id":"public-demo-account","organizations":["# + membership + #"]},"ciphers":[{"id":"entry-1","organizationId":"org-1"},{"id":"personal"},{"id":"other-org","organizationId":"org-2"}]}"#).utf8)
+            XCTAssertThrowsError(try store.publish([credential, personal, other], scope: .demo, expected: latest.revision, passwordUnlock: passwordMaterial, vault: VaultData(version: 1, scope: .demo, sync: fresh), restoringOrganization: "org-1"))
+        }
+        let confirmed = Data(#"{"profile":{"id":"public-demo-account","organizations":[{"id":"org-1","status":2,"enabled":true,"userId":"public-demo-account","organizationUserId":"member-1","key":"wrapped"}]},"ciphers":[{"id":"entry-1","organizationId":"org-1"},{"id":"personal"},{"id":"other-org","organizationId":"org-2"}]}"#.utf8)
+        let restored = try store.publish([credential, personal, other], scope: .demo, expected: latest.revision, passwordUnlock: passwordMaterial, session: Data("revalidated-token".utf8), vault: VaultData(version: 1, scope: .demo, sync: confirmed), restoringOrganization: "org-1")
+        XCTAssertEqual(restored.credentials.map(\.id), ["entry-1", "personal", "other-org"])
+        XCTAssertEqual(try passwordUnlock().vault?.quarantinedOrganizations, [])
+        assertError(.stale) { try self.store.withCurrentLease(latest) {} }
+    }
+
+    func testOrganizationIsolationRejectsWrongAuthorityAndLateWriter() throws {
+        let raw = Data(#"{"profile":{"id":"public-demo-account","organizations":[{"id":"org-1"}]},"ciphers":[{"id":"entry-1","organizationId":"org-1"}]}"#.utf8)
+        let original = try store.publish([credential], scope: .demo, expected: store.state().revision, passwordUnlock: passwordMaterial, vault: VaultData(version: 1, scope: .demo, sync: raw))
+        for id in ["other", "../org-1"] {
+            XCTAssertThrowsError(try store.quarantineOrganization(id, scope: .demo, expected: original.revision, unlockKey: passwordMaterial.key, session: Data("session".utf8)))
+        }
+        assertError(.wrongScope) { _ = try self.store.quarantineOrganization("org-1", scope: SnapshotScope(server: "https://other.invalid", account: "public-demo-account"), expected: original.revision, unlockKey: self.passwordMaterial.key, session: Data("session".utf8)) }
+        assertError(.invalidPassword) { _ = try self.store.quarantineOrganization("org-1", scope: .demo, expected: original.revision, unlockKey: Data(repeating: 7, count: 32), session: Data("session".utf8)) }
+        XCTAssertEqual(try store.state().revision, original.revision)
+        try store.lock()
+        assertError(.stale) { _ = try self.store.quarantineOrganization("org-1", scope: .demo, expected: original.revision, unlockKey: self.passwordMaterial.key, session: Data("session".utf8)) }
+        XCTAssertEqual(try passwordUnlock().credentials, [credential])
+    }
+
+    func testCompleteVaultIsAuthenticatedRetainedAndOmittedFromAutoFill() throws {
+        let raw = Data(#"{"profile":{"id":"public-demo-account","privateKey":"encrypted-private"},"ciphers":[{"id":"archived-1","type":8,"archivedDate":"2026-01-01"}],"folders":[{"id":"folder-1","name":"encrypted-folder"}],"future":{"id":9007199254740993}}"#.utf8)
+        let vault = VaultData(version: 1, scope: .demo, sync: raw)
+        let lease = try store.publish([], scope: .demo, expected: store.state().revision,
+                                      passwordUnlock: passwordMaterial, session: Data("old-session".utf8), vault: vault)
+        XCTAssertNil(lease.vault)
+        XCTAssertNil(try unlock().vault)
+        XCTAssertEqual(try passwordUnlock().vault, vault)
+        let app = try store.unlock(scope: .demo, context: LAContext(), allowUI: true, includeSession: true)
+        XCTAssertEqual(app.vault?.sync, raw)
+        XCTAssertTrue(app.credentials.isEmpty)
+        let state = try store.state()
+        let checkpoint = try store.saveSession(Data("new-session".utf8), scope: .demo, expected: state.revision, unlockKey: passwordMaterial.key)
+        XCTAssertNotEqual(checkpoint.revision, app.revision)
+        XCTAssertEqual(try passwordUnlock().vault, vault)
+        assertError(.stale) { try self.store.withCurrentLease(app) {} }
+        let disk = try Data(contentsOf: directory.appendingPathComponent("snapshot-v1.json"))
+        XCTAssertFalse(String(decoding: disk, as: UTF8.self).contains("encrypted-private"))
+        try store.lock()
+        assertError(.stale) { try self.store.withCurrentLease(app) {} }
+    }
+
+    func testLegacyMigrationAndInvalidCompleteVaultKeepOldSnapshot() throws {
+        try publishPassword()
+        XCTAssertNil(try passwordUnlock().vault)
+        let before = try store.state()
+        let wrong = VaultData(version: 1, scope: .demo, sync: Data(#"{"profile":{"id":"other-account"},"ciphers":[]}"#.utf8))
+        XCTAssertThrowsError(try store.publish([], scope: .demo, expected: before.revision, vault: wrong))
+        XCTAssertEqual(try store.state().revision, before.revision)
+        XCTAssertEqual(try passwordUnlock().credentials, [credential])
+        let empty = VaultData(version: 1, scope: .demo, sync: Data(#"{"profile":{"id":"public-demo-account"},"ciphers":[]}"#.utf8))
+        _ = try store.publish([], scope: .demo, expected: before.revision, passwordUnlock: passwordMaterial, vault: empty)
+        XCTAssertEqual(try passwordUnlock().vault, empty)
+        XCTAssertTrue(try passwordUnlock().credentials.isEmpty)
+    }
+
     func testPasswordUnlockAfterLockAndReopenWithoutKeychain() throws {
         try publishPassword()
         try store.lock()
@@ -126,6 +251,10 @@ final class SnapshotStoreTests: XCTestCase {
             try store.files.write(state)
         }
         assertError(.invalidPassword) { _ = try self.passwordUnlock() }
+        // Replacing a protected snapshot now authenticates its prior isolation
+        // state. A damaged wrapper requires explicit local revocation first.
+        assertError(.invalidPassword) { _ = try self.publishPassword() }
+        try store.logout(expected: store.state().revision)
         try publishPassword()
         try store.files.locked {
             var state = try store.files.read()
@@ -161,7 +290,7 @@ final class SnapshotStoreTests: XCTestCase {
     func testPasswordUnlockRejectsReplacedAccountAndOldWrappingKey() throws {
         let original = try publishPassword()
         let replacement = PasswordUnlockMaterial(config: passwordMaterial.config, key: Data(repeating: 71, count: 32))
-        let current = try store.publish([credential], scope: .demo, expected: original.revision, passwordUnlock: replacement)
+        let current = try store.publish([credential], scope: .demo, expected: original.revision, passwordUnlock: replacement, priorUnlockKey: passwordMaterial.key)
         assertError(.invalidPassword) { _ = try self.passwordUnlock() }
         XCTAssertEqual(try passwordUnlock(key: replacement.key).credentials, [credential])
         try store.logout(expected: current.revision)
@@ -398,7 +527,15 @@ final class SnapshotStoreTests: XCTestCase {
     }
     func testEmptySyncRevokesOldCredentialsAndClearsIdentityIndex() throws {
         let scope = SnapshotScope(server: "https://vault.example.com", account: "account-a")
-        let old = try store.publish([credential], scope: scope, expected: store.state().revision)
+        let rule = CredentialURI(uri: "https://localhost/", match: 0, baseDomain: "localhost", includeSubdomains: false, sourceIndex: 0)
+        let currentCredential = VaultCredential(id: credential.id, title: credential.title, username: credential.username, password: credential.password, hosts: ["localhost"], url: rule.uri, uris: [rule])
+        var vault = try policyVaultFixture(scope: scope, ids: [credential.id])
+        var object = try JSONSerialization.jsonObject(with: vault.sync) as! [String: Any]
+        var ciphers = object["ciphers"] as! [[String: Any]]
+        ciphers[0]["login"] = ["uris": [["match": NSNull()]]]
+        object["ciphers"] = ciphers
+        vault = VaultData(version: 1, scope: scope, sync: try JSONSerialization.data(withJSONObject: object))
+        let old = try store.publish([currentCredential], scope: scope, expected: store.state().revision, vault: vault)
         let sink = DeferredIndex()
         let indexed = expectation(description: "old identities published")
         sink.onReplace = { identities, callback in XCTAssertFalse(identities.isEmpty); callback(true) }
@@ -473,6 +610,68 @@ final class SnapshotStoreTests: XCTestCase {
         try FileManager.default.createSymbolicLink(at: directory.appendingPathComponent("snapshot-v1.json"), withDestinationURL: target)
         assertError(.corrupt) { _ = try self.store.state() }
     }
+    func testPendingPolicySurvivesSyncCheckpointRestartAndExplicitRecovery() throws {
+        let fixture = SnapshotPolicyTests()
+        let scope = fixture.scope
+        let base = try fixture.vault { object in
+            var profile = object["profile"] as! [String: Any]
+            var members = profile["organizations"] as! [[String: Any]]
+            for i in members.indices { members[i]["key"] = "encrypted-fixture-key" }
+            profile["organizations"] = members; profile["organizationsNew"] = members; object["profile"] = profile
+        }
+        let material = PasswordUnlockMaterial(config: passwordMaterial.config, key: Data(repeating: 8, count: 32))
+        let first = try store.publish(fixture.credentials, scope: scope, expected: store.state().revision, passwordUnlock: material, session: Data("token".utf8), vault: base)
+        let pending = PendingPolicyMutation(organizationId: "org-a", policyType: 15, mutationId: "mutation-1")
+        let isolated = try store.quarantineOrganization("org-a", scope: scope, expected: first.revision, unlockKey: material.key, session: Data("token".utf8), pendingPolicy: pending)
+        XCTAssertEqual(isolated.credentials.map(\.id), ["other-item"])
+        XCTAssertEqual(isolated.vault?.version, 2)
+        XCTAssertThrowsError(try store.withCurrentLease(first) {})
+        let reopened = try SnapshotStore(directory: directory, keys: keys)
+        let unlocked = try reopened.unlockWithPassword(scope: scope, expected: isolated.revision, unlockKey: material.key)
+        XCTAssertEqual(unlocked.credentials.map(\.id), ["other-item"])
+        XCTAssertEqual(unlocked.vault?.pendingPolicyMutations, [pending])
+        let synced = try store.publish(fixture.credentials, scope: scope, expected: isolated.revision, passwordUnlock: material, session: Data("token-2".utf8), vault: base, includeVault: true)
+        XCTAssertEqual(synced.vault?.pendingPolicyMutations, [pending])
+        XCTAssertEqual(synced.credentials.map(\.id), ["other-item"])
+        let checkpoint = try store.saveSession(Data("token-3".utf8), scope: scope, expected: synced.revision, unlockKey: material.key)
+        XCTAssertEqual(checkpoint.vault?.pendingPolicyMutations, [pending])
+        let ordinary = try store.publish(fixture.credentials, scope: scope, expected: checkpoint.revision, passwordUnlock: material, session: Data("token-3".utf8), vault: base, includeVault: true, restoringOrganization: "org-a")
+        XCTAssertEqual(ordinary.vault?.pendingPolicyMutations, [pending])
+        XCTAssertFalse(ordinary.credentials.contains(where: { $0.id == "personal" }))
+        let wrong = PendingPolicyMutation(organizationId: "org-a", policyType: 15, mutationId: "wrong")
+        XCTAssertThrowsError(try store.publish(fixture.credentials, scope: scope, expected: ordinary.revision, passwordUnlock: material, session: Data("token-3".utf8), vault: base, includeVault: true, restoringOrganization: "org-a", clearingPolicy: wrong))
+        // Restore the organization marker first: a policy barrier is independent.
+        let again = try store.quarantineOrganization("org-a", scope: scope, expected: ordinary.revision, unlockKey: material.key, session: Data("token-3".utf8))
+        let recovered = try store.publish(fixture.credentials, scope: scope, expected: again.revision, passwordUnlock: material, session: Data("token-3".utf8), vault: base, includeVault: true, restoringOrganization: "org-a", clearingPolicy: pending)
+        XCTAssertEqual(recovered.vault?.pendingPolicyMutations, [])
+        XCTAssertEqual(recovered.vault?.version, 1)
+        XCTAssertEqual(recovered.credentials.count, 3)
+    }
+
+    func testClearingOnePendingPolicyRetainsOtherBarrierAndOrganizationIsolation() throws {
+        let fixture = SnapshotPolicyTests()
+        let scope = fixture.scope
+        let base = try fixture.vault { _ in }
+        let first = try store.publish(fixture.credentials, scope: scope, expected: store.state().revision, passwordUnlock: passwordMaterial, session: Data("token".utf8), vault: base)
+        let a = PendingPolicyMutation(organizationId: "org-a", policyType: 15, mutationId: "mutation-a")
+        let b = PendingPolicyMutation(organizationId: "org-b", policyType: 5, mutationId: "mutation-b")
+        let one = try store.quarantineOrganization("org-a", scope: scope, expected: first.revision, unlockKey: passwordMaterial.key, session: Data("token".utf8), pendingPolicy: a)
+        let two = try store.quarantineOrganization("org-b", scope: scope, expected: one.revision, unlockKey: passwordMaterial.key, session: Data("token".utf8), pendingPolicy: b)
+        XCTAssertTrue(two.credentials.isEmpty)
+        XCTAssertThrowsError(try store.publish(fixture.credentials, scope: scope, expected: one.revision, passwordUnlock: passwordMaterial, session: Data("token".utf8), vault: base, includeVault: true, clearingPolicy: a))
+        // A revoked/absent member may clear only the reviewed personal barrier;
+        // no organization restoration is requested or inferred.
+        let next = try store.publish(fixture.credentials, scope: scope, expected: two.revision, passwordUnlock: passwordMaterial, session: Data("token".utf8), vault: base, includeVault: true, clearingPolicy: a)
+        XCTAssertEqual(next.vault?.pendingPolicyMutations, [b])
+        XCTAssertEqual(next.vault?.quarantinedOrganizations, ["org-a", "org-b"])
+        XCTAssertEqual(next.credentials.map(\.id), ["personal"])
+        XCTAssertEqual(next.vault?.version, 2)
+        let reopened = try SnapshotStore(directory: directory, keys: keys)
+        let lease = try reopened.unlockWithPassword(scope: scope, expected: next.revision, unlockKey: passwordMaterial.key)
+        XCTAssertEqual(lease.session, Data("token".utf8))
+        XCTAssertEqual(lease.vault?.pendingPolicyMutations, [b])
+    }
+
     func testIndexServiceCannotBlockRevocationOrOvertakeClear() throws {
         let lease = try publish()
         let firstStarted = expectation(description: "index write started")
