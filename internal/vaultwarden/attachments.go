@@ -109,7 +109,31 @@ type attachmentAuthority struct {
 
 // The snapshot establishes the local lease/quarantine and decryption key; a
 // fresh authenticated sync independently establishes server policy/permissions.
+type attachmentPurpose uint8
+
+const (
+	attachmentPurposeRead attachmentPurpose = iota
+	attachmentPurposeWrite
+	attachmentPurposeCreate
+	attachmentBackupRead
+)
+
 func (s *Session) attachmentAuthorityLocked(ctx context.Context, vault *VaultData, id string, grant *ItemAuthorization, write, create bool, persist func(SessionCheckpoint) error) (*attachmentAuthority, error) {
+	purpose := attachmentPurposeRead
+	if write {
+		purpose = attachmentPurposeWrite
+	}
+	if create {
+		purpose = attachmentPurposeCreate
+	}
+	return s.attachmentPurposeAuthorityLocked(ctx, vault, id, grant, purpose, persist)
+}
+
+func (s *Session) attachmentPurposeAuthorityLocked(ctx context.Context, vault *VaultData, id string, grant *ItemAuthorization, purpose attachmentPurpose, persist func(SessionCheckpoint) error) (*attachmentAuthority, error) {
+	if purpose > attachmentBackupRead {
+		return nil, ErrValidation
+	}
+	write, create := purpose == attachmentPurposeWrite || purpose == attachmentPurposeCreate, purpose == attachmentPurposeCreate
 	if !validObjectID(id) {
 		return nil, ErrValidation
 	}
@@ -163,7 +187,7 @@ func (s *Session) attachmentAuthorityLocked(ctx context.Context, vault *VaultDat
 	if err != nil {
 		return nil, err
 	}
-	if meta.RevisionDate == "" || meta.DeletedDate != nil || meta.ViewPassword == nil || !*meta.ViewPassword || meta.Edit == nil || (write && !*meta.Edit) {
+	if meta.RevisionDate == "" || (meta.DeletedDate != nil && purpose != attachmentBackupRead) || meta.ViewPassword == nil || !*meta.ViewPassword || meta.Edit == nil || (write && !*meta.Edit) {
 		return nil, ErrPermission
 	}
 	revision, epoch := s.authorizationRevision, s.authorizationEpoch

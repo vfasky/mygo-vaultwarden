@@ -12,10 +12,11 @@ import (
 // CipherChange describes presence of changes, never their secret values. Paths
 // are fixed schema names, not user supplied field names or plaintext.
 type CipherChange struct {
-	Path          string
-	Local, Remote bool
-	CanApply      bool
-	SameValue     bool
+	Path                  string
+	Local, Remote         bool
+	CanApply              bool
+	SameValue             bool
+	LocalRows, RemoteRows []string
 }
 
 // CipherRebase is an in-process comparison against one authenticated snapshot.
@@ -127,6 +128,8 @@ func (s *Session) ComparePersonalCipher(vault *VaultData, revision string, base 
 		// matched by position; retain remote rows and require editing the fresh form.
 		if (path == "fields" || path == "login.uris") && change.Local && change.Remote && !reflect.DeepEqual(l[path], r[path]) {
 			change.CanApply = false
+			change.LocalRows = cipherArrayLabels(path, l[path])
+			change.RemoteRows = cipherArrayLabels(path, r[path])
 		}
 		if path == "passwordHistory" && change.Local {
 			// Remove only observed entries, preserving remote additions and extensions.
@@ -175,6 +178,10 @@ func (s *Session) ComparePersonalCipher(vault *VaultData, revision string, base 
 // ApplyPersonalCipherComparison only returns a fresh draft; saving is a separate
 // explicit operation and still uses the server's non-CAS revision check.
 func (s *Session) ApplyPersonalCipherComparison(vault *VaultData, revision string, plan *CipherRebase, localPaths []string) (CipherDocument, CipherFields, error) {
+	return s.ApplyPersonalCipherComparisonRows(vault, revision, plan, localPaths, nil)
+}
+
+func (s *Session) ApplyPersonalCipherComparisonRows(vault *VaultData, revision string, plan *CipherRebase, localPaths []string, rows []CipherRowChoice) (CipherDocument, CipherFields, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if plan == nil || plan.session != s || revision != plan.revision || revision != s.authorizationRevision {
@@ -230,6 +237,9 @@ func (s *Session) ApplyPersonalCipherComparison(vault *VaultData, revision strin
 				}
 			}
 		}
+	}
+	if err := applyCipherRowChoices(plan, &fields, rows); err != nil {
+		return CipherDocument{}, CipherFields{}, err
 	}
 	// Detach selected maps and pointers from the reusable immutable plan.
 	encoded, err := json.Marshal(fields)

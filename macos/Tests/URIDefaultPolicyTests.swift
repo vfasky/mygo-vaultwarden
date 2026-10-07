@@ -33,7 +33,7 @@ extension SnapshotPolicyTests {
                 object["ciphers"] = [["id": "personal", "type": 1, "reprompt": 0, "viewPassword": true,
                                       "login": ["uris": [["match": NSNull()], ["match": 0]]]]]
             }
-            for match in [0, 1, 3] {
+            for match in [0, 1, 2, 3] {
                 let inherited = CredentialURI(uri: "https://login.example.invalid/path", match: match, baseDomain: "example.invalid", includeSubdomains: true, sourceIndex: 0)
                 let explicit = CredentialURI(uri: "https://explicit.example.invalid/path", match: 0, baseDomain: "example.invalid", includeSubdomains: true, sourceIndex: 1)
                 let c = VaultCredential(id: "personal", title: "fixture", username: "u", password: "secret", hosts: ["example.invalid"], url: inherited.uri, uris: [inherited, explicit])

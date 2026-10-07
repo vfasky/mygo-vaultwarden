@@ -4,8 +4,10 @@ package vaultwarden
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"net/http"
+	"reflect"
 )
 
 func (v *organizationVault) writableCollection(orgID, collectionID string) bool {
@@ -23,20 +25,39 @@ func (v *organizationVault) writableCollection(orgID, collectionID string) bool 
 // CreateOrganizationCipher wraps a new random item key in the target organization
 // key. Collection write permission comes from server-resolved sync details.
 func (s *Session) CreateOrganizationCipher(ctx context.Context, vault *VaultData, orgID, collectionID string, fields CipherFields, persist func(SessionCheckpoint) error) (CipherDocument, error) {
-	return s.writeOrganizationCipher(ctx, vault, orgID, collectionID, CipherDocument{}, fields, nil, persist)
+	return s.writeOrganizationCipher(ctx, vault, orgID, collectionID, CipherDocument{}, fields, nil, persist, nil)
 }
 
-// SharePersonalCipher moves ownership using the existing independent item key.
-// Opaque/FIDO2 and attachment keys stay encrypted under that same key. Legacy
-// records without an item key cannot wrap the account key into an organization.
+// SharePersonalCipher moves ownership using an independent item key. Existing
+// item keys retain opaque fields; audited legacy fields receive a new random key.
+// Keyless attachments must be upgraded before sharing.
 func (s *Session) SharePersonalCipher(ctx context.Context, vault *VaultData, orgID, collectionID string, document CipherDocument, fields CipherFields, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (CipherDocument, error) {
 	if fields.ID == "" {
 		return CipherDocument{}, ErrValidation
 	}
-	return s.writeOrganizationCipher(ctx, vault, orgID, collectionID, document, fields, grant, persist)
+	return s.writeOrganizationCipher(ctx, vault, orgID, collectionID, document, fields, grant, persist, nil)
 }
 
-func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData, orgID, collectionID string, document CipherDocument, fields CipherFields, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (CipherDocument, error) {
+// SharePersonalCipherWithRecovery requires the production caller to atomically
+// persist the account-bound encrypted recovery file before a legacy attachment
+// rewrap. The callback must not reenter Session; a failed save sends no share.
+func (s *Session) SharePersonalCipherWithRecovery(ctx context.Context, vault *VaultData, orgID, collectionID string, document CipherDocument, fields CipherFields, grant *ItemAuthorization, persist func(SessionCheckpoint) error, persistRecovery func([]byte) error) (CipherDocument, error) {
+	if fields.ID == "" {
+		return CipherDocument{}, ErrValidation
+	}
+	return s.writeOrganizationCipher(ctx, vault, orgID, collectionID, document, fields, grant, persist, persistRecovery)
+}
+
+func CipherShareRequiresRecovery(document CipherDocument) bool {
+	object, err := documentObject(document)
+	if err != nil {
+		return true
+	}
+	key, _ := object["key"].(string)
+	return key == "" && !emptyCopyArray(object["attachments"])
+}
+
+func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData, orgID, collectionID string, document CipherDocument, fields CipherFields, grant *ItemAuthorization, persist func(SessionCheckpoint) error, persistRecovery func([]byte) error) (CipherDocument, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ctx, finish, err := s.beginOperationLocked(ctx)
@@ -85,16 +106,58 @@ func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData,
 	if err != nil {
 		return CipherDocument{}, err
 	}
+	recoveryKey := ""
 	if fields.ID != "" {
-		wrapped, ok := object["key"].(string)
-		if !ok || wrapped == "" {
-			return CipherDocument{}, ErrUnsupportedEdit
+		// Even with an independent item key, a keyless binary still uses the
+		// current owner key. It must be upgraded before ownership changes.
+		if raw := object["attachments"]; raw != nil {
+			rows, ok := raw.([]any)
+			if !ok {
+				return CipherDocument{}, ErrProtocol
+			}
+			for _, raw := range rows {
+				row, ok := raw.(map[string]any)
+				if !ok {
+					return CipherDocument{}, ErrProtocol
+				}
+				if key, ok := row["key"].(string); !ok || key == "" {
+					return CipherDocument{}, ErrUnsupportedEdit
+				}
+			}
 		}
-		key, err := cipherItemKey(object, s.key)
-		if err != nil {
-			return CipherDocument{}, err
+		wrapped, hasKey := object["key"].(string)
+		legacy := object["key"] == nil || (hasKey && wrapped == "")
+		var key []byte
+		if legacy {
+			key = make([]byte, 64)
+			if _, err = rand.Read(key); err != nil {
+				return CipherDocument{}, ErrEncryption
+			}
+			defer clear(key)
+			if err = rekeyLegacyShare(object, s.key, key); err != nil {
+				return CipherDocument{}, err
+			}
+			if !emptyCopyArray(object["attachments"]) {
+				if persistRecovery == nil {
+					return CipherDocument{}, ErrUnsupportedEdit
+				}
+				wrappers, e := shareRecoveryAttachments(object)
+				if e != nil {
+					return CipherDocument{}, e
+				}
+				object["attachments2"] = wrappers
+				recoveryKey, err = EncryptString(key, s.key)
+				if err != nil {
+					return CipherDocument{}, err
+				}
+			}
+		} else {
+			key, err = cipherItemKey(object, s.key)
+			if err != nil {
+				return CipherDocument{}, err
+			}
+			defer clear(key)
 		}
-		defer clear(key)
 		// Never grant an organization the account key, even if a malformed item
 		// happens to wrap the account key as its allegedly independent item key.
 		if bytes.Equal(key, s.key) {
@@ -123,6 +186,20 @@ func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData,
 	if err != nil {
 		return CipherDocument{}, err
 	}
+	if recoveryKey != "" {
+		file, err := encodeCipherShareRecovery(vault.Scope, document, object, orgID, recoveryKey, s.key)
+		if err != nil {
+			return CipherDocument{}, err
+		}
+		err = persistRecovery(file)
+		clear(file)
+		if err != nil {
+			return CipherDocument{}, err
+		}
+		if ctx.Err() != nil {
+			return CipherDocument{}, ErrCancelled
+		}
+	}
 	status, response, err := s.authenticatedGuardedLocked(ctx, method, endpoint, "application/json", string(body), persist, guard)
 	if err != nil {
 		return CipherDocument{}, err
@@ -139,6 +216,16 @@ func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData,
 	}
 	if !validObjectID(updated.ID) || (fields.ID != "" && updated.ID != fields.ID) || updated.OrganizationID == nil || *updated.OrganizationID != orgID {
 		return CipherDocument{}, &MutationUncertainError{Cause: ErrIdentity}
+	}
+	if recoveryKey != "" {
+		actual, e := documentObject(result)
+		if e != nil {
+			return CipherDocument{}, &MutationUncertainError{Cause: e}
+		}
+		wrappers, e := shareRecoveryAttachments(actual)
+		if e != nil || !reflect.DeepEqual(wrappers, object["attachments2"]) {
+			return CipherDocument{}, &MutationUncertainError{Cause: ErrConflict}
+		}
 	}
 	if ctx.Err() != nil {
 		return CipherDocument{}, &MutationUncertainError{Cause: ErrCancelled}

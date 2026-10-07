@@ -25,7 +25,19 @@ struct CredentialURI: Codable, Equatable {
         if host.hasPrefix("[") && host.hasSuffix("]") { host = String(host.dropFirst().dropLast()) }
         return host
     }
+    private var validPrefix: Bool {
+        !uri.isEmpty && uri.utf8.count <= 8192 && !uri.utf8.contains { $0 <= 0x20 || $0 == 0x7f }
+    }
     func matches(serviceIdentifier: String, isURL: Bool) -> Bool {
+        if match == 2 {
+            guard isURL, validPrefix, serviceIdentifier.utf8.count <= 8192,
+                  !serviceIdentifier.utf8.contains(where: { $0 <= 0x20 || $0 == 0x7f }),
+                  components(serviceIdentifier) != nil else { return false }
+            // JS startsWith compares code units without Unicode normalization.
+            // For valid Unicode strings UTF-8 byte prefixes have those semantics;
+            // Swift String.hasPrefix would also match canonically equivalent text.
+            return serviceIdentifier.utf8.starts(with: uri.utf8)
+        }
         guard let expected = components(uri), let originalHost = host(expected) else { return false }
         let requested = isURL ? components(serviceIdentifier) : nil
         let domain = !isURL && !serviceIdentifier.contains(where: { "/?#@".contains($0) }) ? components("https://" + serviceIdentifier) : nil
@@ -59,6 +71,7 @@ struct CredentialURI: Codable, Equatable {
         return includeSubdomains == true || base == "localhost" || address
     }
     var valid: Bool {
+        if match == 2 { return validPrefix }
         guard [0, 1, 3].contains(match), uri.utf8.count <= 8192, let value = components(uri), let host = host(value) else { return false }
         if match == 0 {
             guard let base = baseDomain, !base.isEmpty, host == base || host.hasSuffix("." + base) else { return false }

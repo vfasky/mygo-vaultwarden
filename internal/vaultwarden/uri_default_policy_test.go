@@ -48,7 +48,7 @@ func TestURIDefaultPolicySharedVectorsAndEncryptedProjection(t *testing.T) {
 				t.Fatalf("default got %+v error %v want %d", p, err, tc.Expected)
 			}
 			// Real cipher encryption covers both inherited null and explicit rules,
-			// including skip behavior for prefix/regex/never without domain fallback.
+			// including literal-prefix support and regex/never exclusion without domain fallback.
 			doc, err := NewPersonalCipher(CipherFields{Type: 1, Name: "fixture", Login: map[string]any{"username": "u", "password": "secret", "uris": []any{map[string]any{"uri": "https://login.example.invalid/path", "match": nil}, map[string]any{"uri": "https://explicit.example.invalid/path", "match": 0}}}}, key, "account-a")
 			if err != nil {
 				t.Fatal(err)
@@ -63,7 +63,7 @@ func TestURIDefaultPolicySharedVectorsAndEncryptedProjection(t *testing.T) {
 				t.Fatal(err)
 			}
 			c := result.Credentials[0]
-			supported := tc.Expected == 0 || tc.Expected == 1 || tc.Expected == 3
+			supported := tc.Expected == 0 || tc.Expected == 1 || tc.Expected == 2 || tc.Expected == 3
 			want := 1
 			if supported {
 				want = 2

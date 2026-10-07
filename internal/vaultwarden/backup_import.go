@@ -11,7 +11,7 @@ import (
 // ImportResult records each attempted create. Stop at the first failure; never
 // repeat the import automatically, including when only folder creation succeeded.
 type ImportResult struct{ Entries []ImportEntry }
-type ImportEntry struct{ Kind, Name, ID, State string }
+type ImportEntry struct{ Kind, Name, ID, State, SourceID string }
 
 func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *ImportPlan, persist func(SessionCheckpoint) error) (ImportResult, error) {
 	result := ImportResult{}
@@ -109,7 +109,7 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 				return fail("项目（已创建，回收站状态待核对）", name, fields.ID, err)
 			}
 		}
-		result.Entries = append(result.Entries, ImportEntry{Kind: "项目", Name: name, ID: fields.ID, State: "已创建，待同步核对"})
+		result.Entries = append(result.Entries, ImportEntry{Kind: "项目", Name: name, ID: fields.ID, State: "已创建，待同步核对", SourceID: item["id"].(string)})
 	}
 	if ctx.Err() != nil {
 		return result, &MutationUncertainError{Cause: ErrCancelled}

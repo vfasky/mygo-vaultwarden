@@ -12,6 +12,20 @@ import (
 // and FIDO2 fail before HTTP; they are never silently discarded. The source is
 // unchanged. The new item has a new key, ID and creation/revision dates.
 func (s *Session) CopyOrganizationCipher(ctx context.Context, vault *VaultData, sourceID, targetOrgID, targetCollectionID string, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (CipherDocument, error) {
+	return s.copyOrganizationCipher(ctx, vault, sourceID, targetOrgID, targetCollectionID, grant, persist, nil)
+}
+
+// CopyOrganizationResourceMetadata starts a complete staged copy after all
+// binary resources have been verified. Restore and verify the plan's files
+// against the returned new ID before reporting completion.
+func (s *Session) CopyOrganizationResourceMetadata(ctx context.Context, vault *VaultData, sourceID, targetOrgID, targetCollectionID string, plan *ResourceImportPlan, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (CipherDocument, error) {
+	if plan == nil {
+		return CipherDocument{}, ErrValidation
+	}
+	return s.copyOrganizationCipher(ctx, vault, sourceID, targetOrgID, targetCollectionID, grant, persist, plan)
+}
+
+func (s *Session) copyOrganizationCipher(ctx context.Context, vault *VaultData, sourceID, targetOrgID, targetCollectionID string, grant *ItemAuthorization, persist func(SessionCheckpoint) error, resources *ResourceImportPlan) (CipherDocument, error) {
 	if !validObjectID(sourceID) || !validObjectID(targetOrgID) || !validObjectID(targetCollectionID) {
 		return CipherDocument{}, ErrValidation
 	}
@@ -46,7 +60,22 @@ func (s *Session) CopyOrganizationCipher(ctx context.Context, vault *VaultData, 
 	if *metadata.Reprompt != 0 && !authorized {
 		return CipherDocument{}, ErrPermission
 	}
-	document, err := copyOrganizationDocument(source, sourceKey, data.keys[targetOrgID], s.account, targetOrgID, authorized)
+	copySource := source
+	if resources != nil {
+		if err := validateOrganizationResourceCopyPlan(resources, source, sourceKey, sourceID, *identity.OrganizationID); err != nil {
+			return CipherDocument{}, err
+		}
+		object, err := documentObject(source)
+		if err != nil {
+			return CipherDocument{}, err
+		}
+		delete(object, "attachments")
+		copySource.JSON, err = json.Marshal(object)
+		if err != nil {
+			return CipherDocument{}, ErrProtocol
+		}
+	}
+	document, err := copyOrganizationDocument(copySource, sourceKey, data.keys[targetOrgID], s.account, targetOrgID, authorized)
 	if err != nil {
 		return CipherDocument{}, err
 	}

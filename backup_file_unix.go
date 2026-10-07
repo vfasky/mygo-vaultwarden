@@ -98,11 +98,22 @@ func (s *stagedBackup) Commit() error {
 	if err := unix.Linkat(s.dir, s.temporary, s.dir, s.target, 0); err != nil {
 		return errBackupFile
 	}
+	err := unix.Fsync(s.dir)
 	s.Close()
+	if err != nil {
+		return errBackupFile
+	}
 	return nil
 }
 func stageBackupFile(ctx context.Context, path string, data []byte) (*stagedBackup, error) {
 	if len(data) > vaultwarden.MaxBackupSize || ctx.Err() != nil {
+		return nil, vaultwarden.ErrCancelled
+	}
+	return stageBackupStream(ctx, path, func(file *os.File) error { _, err := file.Write(data); return err })
+}
+
+func stageBackupStream(ctx context.Context, path string, produce func(*os.File) error) (*stagedBackup, error) {
+	if ctx.Err() != nil || produce == nil {
 		return nil, vaultwarden.ErrCancelled
 	}
 	fd, name, err := openBackupParent(path)
@@ -126,7 +137,10 @@ func stageBackupFile(ctx context.Context, path string, data []byte) (*stagedBack
 		return nil, errBackupFile
 	}
 	file := os.NewFile(uintptr(raw), "export")
-	_, err = file.Write(data)
+	stopClosing := context.AfterFunc(ctx, func() { _ = file.Close() })
+	defer stopClosing()
+	productionErr := produce(file)
+	err = productionErr
 	if err == nil {
 		err = file.Sync()
 	}
@@ -138,6 +152,12 @@ func stageBackupFile(ctx context.Context, path string, data []byte) (*stagedBack
 		stage.Close()
 		if ctx.Err() != nil {
 			return nil, vaultwarden.ErrCancelled
+		}
+		if productionErr != nil {
+			var pathErr *os.PathError
+			if !errors.As(productionErr, &pathErr) {
+				return nil, productionErr
+			}
 		}
 		return nil, errBackupFile
 	}

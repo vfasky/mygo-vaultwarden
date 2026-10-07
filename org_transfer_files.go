@@ -3,6 +3,9 @@ package main
 
 import (
 	"context"
+	"io"
+	"os"
+	"time"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -52,4 +55,94 @@ func readOrgImportFormatPlan(ctx context.Context, path string, official bool) (*
 		return vaultwarden.ParseBitwardenOrganizationJSON(raw)
 	}
 	return vaultwarden.ParseOrganizationImport(raw)
+}
+
+func exportOrgResourceFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed bool, lease func() error, persist func(vaultwarden.SessionCheckpoint) error) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if session == nil {
+		return vaultwarden.ErrExpired
+	}
+	if lease == nil {
+		return vaultwarden.ErrPermission
+	}
+	if err := lease(); err != nil {
+		return err
+	}
+	var proof *vaultwarden.ResourceBackupPublication
+	stage, err := stageBackupStream(ctx, path, func(file *os.File) error {
+		var err error
+		proof, err = session.WriteResourceBackup(ctx, vault, nil, orgID, grants, confirmed, file, persist)
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	defer stage.Close()
+	return session.PublishResourceBackup(ctx, proof, grants, func() error {
+		if err := lease(); err != nil {
+			return err
+		}
+		return stage.Commit()
+	})
+}
+
+func readOrgResourceImportPlan(ctx context.Context, path string) (*vaultwarden.ResourceImportPlan, *vaultwarden.OrganizationImportPlan, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	file, err := openAttachmentInput(path)
+	if err != nil {
+		return nil, nil, err
+	}
+	resources, err := vaultwarden.ParseResourceImport(ctx, file)
+	if err != nil {
+		return nil, nil, err
+	}
+	metadata, err := resources.OrganizationRestoreMetadata()
+	if err != nil {
+		resources.Clear()
+		return nil, nil, err
+	}
+	return resources, metadata, nil
+}
+
+// prepareOrgResourceCopy validates every source binary before creating the new
+// metadata. Its returned plan remains owned by the caller for explicit per-file
+// restore/verification, including when a create response is ambiguous.
+func prepareOrgResourceCopy(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, sourceID, targetOrgID, targetCollectionID string, grant *vaultwarden.ItemAuthorization, lease func() error, persist func(vaultwarden.SessionCheckpoint) error) (*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
+	defer cancel()
+	if session == nil {
+		return nil, vaultwarden.CipherDocument{}, vaultwarden.ErrExpired
+	}
+	if lease == nil {
+		return nil, vaultwarden.CipherDocument{}, vaultwarden.ErrPermission
+	}
+	if err := lease(); err != nil {
+		return nil, vaultwarden.CipherDocument{}, err
+	}
+	file, err := os.CreateTemp("", "mygo-org-resource-copy-*")
+	if err != nil {
+		return nil, vaultwarden.CipherDocument{}, err
+	}
+	defer func() { file.Close(); os.Remove(file.Name()) }()
+	proof, err := session.WriteOrganizationCipherResourceCopy(ctx, vault, sourceID, grant, file, persist)
+	if err != nil {
+		return nil, vaultwarden.CipherDocument{}, err
+	}
+	if err = session.PublishResourceBackup(ctx, proof, map[string]*vaultwarden.ItemAuthorization{sourceID: grant}, func() error { return nil }); err != nil {
+		return nil, vaultwarden.CipherDocument{}, err
+	}
+	if _, err = file.Seek(0, io.SeekStart); err != nil {
+		return nil, vaultwarden.CipherDocument{}, err
+	}
+	plan, err := vaultwarden.ParseResourceImport(ctx, file)
+	if err != nil {
+		return nil, vaultwarden.CipherDocument{}, err
+	}
+	if err := lease(); err != nil {
+		return plan, vaultwarden.CipherDocument{}, err
+	}
+	created, err := session.CopyOrganizationResourceMetadata(ctx, vault, sourceID, targetOrgID, targetCollectionID, plan, grant, persist)
+	return plan, created, err
 }

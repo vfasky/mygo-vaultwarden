@@ -158,6 +158,28 @@ func transformCipher(object map[string]any, key []byte, encrypt bool) error {
 	}
 	return transformArray(object, "passwordHistory", []string{"password"}, key, encrypt)
 }
+
+// normalizeResponseLoginAlias is for server-response comparison only. Fixed
+// Vaultwarden 1.37.4 cipher.rs:259-279 always derives login.uri from uris[0], or
+// null. Do not apply this to editing/backup payloads as an unknown-field filter.
+func normalizeResponseLoginAlias(object map[string]any) {
+	login, ok := object["login"].(map[string]any)
+	if !ok {
+		return
+	}
+	copy := map[string]any{}
+	for key, value := range login {
+		copy[key] = value
+	}
+	copy["uri"] = nil
+	if rows, ok := login["uris"].([]any); ok && len(rows) > 0 {
+		if first, ok := rows[0].(map[string]any); ok {
+			copy["uri"] = first["uri"]
+		}
+	}
+	object["login"] = copy
+}
+
 func transformArray(object map[string]any, name string, fields []string, key []byte, encrypt bool) error {
 	if object[name] == nil {
 		return nil

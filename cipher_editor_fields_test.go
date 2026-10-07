@@ -62,12 +62,8 @@ func TestHistoryIsHiddenUntilExplicitReveal(t *testing.T) {
 	if tt.HasText("historical-secret") {
 		t.Fatal("history shown without reveal")
 	}
-	clickUI(t, tt, "显示密码历史明文（1）")
-	if !tt.HasText("historical-secret") {
-		t.Fatal("history inaccessible")
-	}
-	clickUI(t, tt, "隐藏密码历史")
+	clickUI(t, tt, "显示已保存密码历史明文（1）")
 	if tt.HasText("historical-secret") {
-		t.Fatal("history not hidden")
+		t.Fatal("history revealed without current snapshot/native authorization")
 	}
 }
