@@ -25,7 +25,11 @@ func (s *Session) CreatePersonalCipher(ctx context.Context, scope Scope, fields 
 }
 
 func (s *Session) createCipherDocumentLocked(ctx context.Context, document CipherDocument, persist func(SessionCheckpoint) error) (CipherDocument, error) {
-	status, data, err := s.authenticatedLocked(ctx, http.MethodPost, "/api/ciphers", "application/json", string(document.JSON), persist)
+	return s.createGuardedCipherDocumentLocked(ctx, document, persist, nil)
+}
+
+func (s *Session) createGuardedCipherDocumentLocked(ctx context.Context, document CipherDocument, persist func(SessionCheckpoint) error, guard func() error) (CipherDocument, error) {
+	status, data, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, "/api/ciphers", "application/json", string(document.JSON), persist, guard)
 	if err != nil {
 		return CipherDocument{}, err
 	}

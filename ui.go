@@ -503,7 +503,7 @@ func (a *app) credentialDetail(c *ui.Context, item displayCredential) {
 				}
 				ui.Text(c, kind).FontSize(12).TextColor(vaultMuted)
 				ui.Spacer(c)
-				if action(c, "查看与编辑", "", false, a.pending != 0 || !item.Editable || a.vault == nil).Clicked() {
+				if action(c, "查看与编辑", "", false, a.pending != 0 || (!item.Editable && !item.RequiresPassword) || a.vault == nil).Clicked() {
 					a.openCipherEditor(item.ID, item.Type)
 				}
 			})

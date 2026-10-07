@@ -66,7 +66,11 @@ func TestCustomAndHistoryEditorCannotBypassCipherPermissions(t *testing.T) {
 			}
 			a.vault.Sync, _ = json.Marshal(raw)
 			a.openCipherEditor("card-1", 3)
-			if a.editor != nil {
+			if restriction == "reprompt" {
+				if a.editor == nil || a.editor.repromptID != "card-1" || a.editor.fields.Name != "" || len(a.editor.inputs) != 0 || len(a.editor.document.JSON) != 0 {
+					t.Fatal("reauthentication form exposed protected data")
+				}
+			} else if a.editor != nil {
 				t.Fatal("restricted secrets/editor revealed")
 			}
 		})

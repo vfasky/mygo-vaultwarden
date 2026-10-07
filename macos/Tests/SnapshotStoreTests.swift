@@ -79,6 +79,30 @@ final class SnapshotStoreTests: XCTestCase {
         try store.unlockWithPassword(scope: .demo, expected: expected ?? store.state().revision, unlockKey: key ?? passwordMaterial.key)
     }
 
+    func testSecretCopyRequiresAuthenticationRevisionAndUnexpiredDeadline() throws {
+        let lease = try publishPassword()
+        var copies = 0
+        func copy(key: Data, revision: String, deadline: Double = 130000) throws {
+            try store.withSecretCopyAuthorization(scope: .demo, expected: revision, unlockKey: key, notAfter: deadline, now: { 100 }) { remaining in
+                XCTAssertGreaterThan(remaining, 0)
+                copies += 1
+            }
+        }
+        XCTAssertThrowsError(try copy(key: Data(repeating: 0, count: 32), revision: lease.revision))
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: lease.revision, deadline: 100000))
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: lease.revision, deadline: 131000))
+        XCTAssertEqual(copies, 0)
+        try copy(key: passwordMaterial.key, revision: lease.revision)
+        XCTAssertEqual(copies, 1)
+        try store.lock()
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: lease.revision))
+        XCTAssertEqual(copies, 1)
+        let current = try store.state().revision
+        try store.logout(expected: current)
+        XCTAssertThrowsError(try copy(key: passwordMaterial.key, revision: current))
+        XCTAssertEqual(copies, 1)
+    }
+
     func testCompleteVaultIsAuthenticatedRetainedAndOmittedFromAutoFill() throws {
         let raw = Data(#"{"profile":{"id":"public-demo-account","privateKey":"encrypted-private"},"ciphers":[{"id":"archived-1","type":8,"archivedDate":"2026-01-01"}],"folders":[{"id":"folder-1","name":"encrypted-folder"}],"future":{"id":9007199254740993}}"#.utf8)
         let vault = VaultData(version: 1, scope: .demo, sync: raw)

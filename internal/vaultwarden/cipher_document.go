@@ -218,6 +218,10 @@ func DecryptCipherDocument(document CipherDocument, ownerKey []byte) (CipherFiel
 // ownership, type, revision or opaque extensions. Copy/share/key rotation need a
 // separate complete transform and must not reuse this operation.
 func EncryptCipherDocument(document CipherDocument, fields CipherFields, ownerKey []byte, account string) (CipherDocument, error) {
+	return encryptCipherDocument(document, fields, ownerKey, account, false)
+}
+
+func encryptCipherDocument(document CipherDocument, fields CipherFields, ownerKey []byte, account string, authorized bool) (CipherDocument, error) {
 	object, err := documentObject(document)
 	if err != nil {
 		return CipherDocument{}, err
@@ -232,7 +236,7 @@ func EncryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 	if _, err := time.Parse(time.RFC3339Nano, original.RevisionDate); err != nil {
 		return CipherDocument{}, ErrConflict
 	}
-	if !original.Edit || original.Reprompt != 0 || !original.ViewPassword {
+	if !original.Edit || (original.Reprompt != 0 && (original.Reprompt != 1 || !authorized)) || !original.ViewPassword {
 		return CipherDocument{}, ErrPermission
 	}
 	if fields.Name == "" || len(fields.Name) > 4096 || fields.Reprompt < 0 || fields.Reprompt > 1 {

@@ -48,6 +48,7 @@ type VaultEntry struct {
 	FolderID                              string
 	Type                                  int
 	Favorite, Archived, Deleted, Editable bool
+	RequiresPassword                      bool
 }
 
 // PersonalEntries returns display metadata only, never notes or secret fields.
@@ -73,6 +74,7 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 			Type                      int
 			OrganizationID            *string
 			Reprompt                  int
+			Edit                      bool
 			ViewPassword              *bool
 			Favorite                  bool
 			ArchivedDate, DeletedDate *string
@@ -97,6 +99,9 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 					}
 				}
 			}
+		}
+		if metadata.Reprompt == 1 && metadata.Edit && metadata.ViewPassword != nil && *metadata.ViewPassword {
+			entry.RequiresPassword = true // Opens the password reauthentication form only.
 		}
 		entries = append(entries, entry)
 	}

@@ -31,6 +31,9 @@ type storageRequest struct {
 	UnlockKey        []byte                      `json:"unlockKey,omitempty"`
 	Session          []byte                      `json:"session,omitempty"`
 	Vault            *vaultwarden.VaultData      `json:"vault,omitempty"`
+	Secret           string                      `json:"secret,omitempty"`
+	SecretProtocol   int                         `json:"secretProtocol,omitempty"`
+	SecretNotAfter   int64                       `json:"secretNotAfter,omitempty"`
 }
 
 // A zero-result sync is an explicit replacement, never an absent field.
@@ -48,16 +51,17 @@ func (e *storageFailure) Error() string { return e.Message }
 func (r storageReply) failure() error   { return &storageFailure{Code: r.Code, Message: r.Message} }
 
 type displayCredential struct {
-	ID       string `json:"id"`
-	Title    string `json:"title"`
-	Username string `json:"username"`
-	URL      string `json:"url"`
-	Type     int    `json:"type,omitempty"`
-	Favorite bool   `json:"favorite,omitempty"`
-	Archived bool   `json:"archived,omitempty"`
-	Deleted  bool   `json:"deleted,omitempty"`
-	Editable bool   `json:"editable,omitempty"`
-	FolderID string `json:"folderId,omitempty"`
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	Username         string `json:"username"`
+	URL              string `json:"url"`
+	Type             int    `json:"type,omitempty"`
+	Favorite         bool   `json:"favorite,omitempty"`
+	Archived         bool   `json:"archived,omitempty"`
+	Deleted          bool   `json:"deleted,omitempty"`
+	Editable         bool   `json:"editable,omitempty"`
+	RequiresPassword bool   `json:"requiresPassword,omitempty"`
+	FolderID         string `json:"folderId,omitempty"`
 }
 
 type storageReply struct {

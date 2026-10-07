@@ -11,6 +11,9 @@ private struct BridgeRequest: Decodable {
     var unlockKey: Data?
     var session: Data?
     var vault: VaultData?
+    var secret: String?
+    let secretProtocol: Int?
+    let secretNotAfter: Double?
 }
 
 private struct DisplayCredential: Encodable {
@@ -56,9 +59,27 @@ private struct BridgeReply: Encodable {
     var vault: VaultData? = nil
 }
 
+private var secretClipboard: SensitiveClipboard?
+
+// Copy is called synchronously from the Go UI thread. Worker callers enter the
+// main queue before acquiring a snapshot file lease; never dispatch to the UI
+// while holding a store lock. Cleanup uses the same ordering.
+private func onClipboardThread<T>(_ body: () throws -> T) rethrows -> T {
+    if Thread.isMainThread { return try body() }
+    return try DispatchQueue.main.sync(execute: body)
+}
+
+private func clearSecretClipboard() {
+    onClipboardThread { secretClipboard?.clear() }
+}
+
 private func execute(_ request: BridgeRequest) -> BridgeReply {
     var store: SnapshotStore?
     do {
+        if request.operation == "clearSecretClipboard" {
+            clearSecretClipboard()
+            return BridgeReply(ok: true, code: "ok", message: "", state: nil)
+        }
         let vault = try SnapshotStore.sharedContainer()
         store = vault
         func expected() throws -> String {
@@ -66,6 +87,28 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             return revision
         }
         switch request.operation {
+        case "authorizeSecretDisplay":
+            guard request.secretProtocol == 1, let scope = request.scope,
+                  let key = request.unlockKey, let notAfter = request.secretNotAfter else { throw SnapshotError.invalidInput }
+            return try onClipboardThread {
+                try vault.withSecretCopyAuthorization(scope: scope, expected: expected(), unlockKey: key, notAfter: notAfter) { _ in
+                    BridgeReply(ok: true, code: "ok", message: "", state: nil)
+                }
+            }
+        case "copySecret":
+            guard request.secretProtocol == 1, let secret = request.secret,
+                  !secret.isEmpty, secret.utf8.count <= 65536,
+                  let scope = request.scope, let unlockKey = request.unlockKey,
+                  let notAfter = request.secretNotAfter, notAfter.isFinite else { throw SnapshotError.invalidInput }
+            return try onClipboardThread {
+                return try vault.withSecretCopyAuthorization(scope: scope, expected: expected(), unlockKey: unlockKey, notAfter: notAfter) { remaining in
+                    if secretClipboard == nil { secretClipboard = SensitiveClipboard(board: NativeSensitivePasteboard(.general)) }
+                    guard let clipboard = secretClipboard else { throw SnapshotError.configuration }
+                    let receipt = try clipboard.copy(secret)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + remaining) { clipboard.clear(ifOwned: receipt) }
+                    return BridgeReply(ok: true, code: "ok", message: "", state: nil)
+                }
+            }
         case "status":
             let state = try vault.state()
             // Repair legacy/late candidates on a signed-out vault without authentication.
@@ -91,8 +134,10 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 BridgeReply(ok: true, code: "ok", message: "登录凭据已安全更新。", state: BridgeStatus(try vault.files.read()))
             }
         case "lock":
+            defer { clearSecretClipboard() }
             try vault.lock()
         case "logout":
+            defer { clearSecretClipboard() }
             // Index clear is scheduled even when key cleanup returns an error after
             // the tombstone was committed. Callers still receive that cleanup failure.
             defer {
@@ -149,6 +194,7 @@ public func mygoSnapshotExecute(_ request: UnsafePointer<UInt8>?, _ requestLengt
         do {
             var parsed = try JSONDecoder().decode(BridgeRequest.self, from: Data(bytes: request, count: requestLength))
             defer {
+                parsed.secret = nil
                 if let count = parsed.passwordUnlock?.key.count { parsed.passwordUnlock?.key.resetBytes(in: 0..<count) }
                 if let count = parsed.unlockKey?.count { parsed.unlockKey?.resetBytes(in: 0..<count) }
                 if let count = parsed.session?.count { parsed.session?.resetBytes(in: 0..<count) }

@@ -39,6 +39,15 @@ func (a *app) adoptSessionCheckpoint(state *snapshotStatus) bool {
 		a.bulkEditor.revision = state.Revision
 	}
 	a.snapshot, a.sessionRevision = state, state.Revision
+	if session, ok := a.session.(*vaultwarden.Session); ok {
+		if session.BindSnapshotRevision(*a.liveScope, state.Revision) != nil {
+			return false
+		}
+	}
+	if a.editor != nil && a.editor.authorization != nil {
+		a.editor = nil
+		a.secretInputVersion++
+	}
 	return true
 }
 

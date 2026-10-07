@@ -272,6 +272,8 @@ type Session struct {
 	operationMu                              sync.Mutex
 	cancelOperation                          context.CancelFunc
 	stopping                                 bool
+	authorizationRevision                    string
+	authorizationEpoch                       uint64
 }
 
 func (s *Session) Close() {
@@ -292,6 +294,8 @@ func (s *Session) Close() {
 	s.access = ""
 	s.refresh = ""
 	s.closed = true
+	s.authorizationEpoch++
+	s.authorizationRevision = ""
 	s.client.http.CloseIdleConnections()
 }
 func (s *Session) refreshLocked(ctx context.Context) error {

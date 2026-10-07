@@ -148,6 +148,7 @@ func TestLiveVaultwarden(t *testing.T) {
 				}
 			}
 			if tc.name == "pbkdf2" {
+				testLiveProtectedItem(t, ctx, session, result.Scope, password)
 				testLiveBackups(t, ctx, session, result.Scope, email, password)
 				testLiveFoldersAndBulk(t, ctx, session, result.Scope)
 				for kind := 1; kind <= 8; kind++ {

@@ -27,6 +27,10 @@ func (a *app) sessionOwnsSnapshot() bool {
 func (a *app) observeSnapshot(state *snapshotStatus) {
 	a.snapshot = state
 	if state == nil || state.Revision != a.itemsRevision {
+		if a.editor != nil {
+			a.editor.shownSecret = ""
+			a.editor.repromptPassword = ""
+		}
 		a.items = nil
 		a.vault, a.editor = nil, nil
 		a.folders, a.folderEditor = nil, nil
@@ -55,6 +59,11 @@ func (a *app) syncFailed(reply storageReply, err error) {
 }
 
 func (a *app) stopNetwork() {
+	a.clearSecretClipboard()
+	if a.editor != nil {
+		a.editor.shownSecret = ""
+		a.editor.repromptPassword = ""
+	}
 	// Invalidate every pending callback, including writes whose server response
 	// arrives after an observed external lock or account switch.
 	a.epoch++

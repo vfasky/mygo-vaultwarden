@@ -36,6 +36,7 @@ type app struct {
 	secretInputVersion                        uint64
 	showVerification                          bool
 	loginChallenge                            *loginChallenge
+	secretClipboardOwned                      bool
 }
 
 func (a *app) lockInterface() {
@@ -139,6 +140,7 @@ func main() {
 		mygo.Power.OnLockScreen(func() { a.window.Update(func() { a.runStorage("lock") }) })
 		mygo.Power.OnSuspend(func() { a.window.Update(func() { a.runStorage("lock") }) })
 	})
+	mygo.App.OnWillQuit(func(_ *mygo.QuitEvent) { a.clearSecretClipboard() })
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}

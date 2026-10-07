@@ -68,6 +68,9 @@ func (s *Session) persistPendingLocked(persist func(SessionCheckpoint) error) er
 		return err
 	}
 	s.checkpointPending = false
+	// A durable checkpoint publishes a new local revision. Never carry a
+	// protected-item grant across it, even before the UI adopts that revision.
+	s.authorizationEpoch++
 	return nil
 }
 
@@ -89,6 +92,12 @@ func (s *Session) refreshAndCheckpointLocked(ctx context.Context, persist func(S
 // authenticatedLocked is internal to typed API operations. Mutations are never
 // retried, including a 401: the caller must reconcile server state before retry.
 func (s *Session) authenticatedLocked(ctx context.Context, method, endpoint, contentType, body string, persist func(SessionCheckpoint) error) (int, []byte, error) {
+	return s.authenticatedGuardedLocked(ctx, method, endpoint, contentType, body, persist, nil)
+}
+
+// guard runs after refresh/checkpoint, immediately before dispatch. A slow key
+// store or refresh must not extend an expired item authorization.
+func (s *Session) authenticatedGuardedLocked(ctx context.Context, method, endpoint, contentType, body string, persist func(SessionCheckpoint) error, guard func() error) (int, []byte, error) {
 	if err := ctx.Err(); err != nil {
 		return 0, nil, ErrCancelled
 	}
@@ -97,6 +106,11 @@ func (s *Session) authenticatedLocked(ctx context.Context, method, endpoint, con
 	}
 	if time.Until(s.expires) < 30*time.Second {
 		if err := s.refreshAndCheckpointLocked(ctx, persist); err != nil {
+			return 0, nil, err
+		}
+	}
+	if guard != nil {
+		if err := guard(); err != nil {
 			return 0, nil, err
 		}
 	}

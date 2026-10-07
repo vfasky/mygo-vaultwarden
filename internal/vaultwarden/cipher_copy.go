@@ -10,6 +10,10 @@ import (
 // CopyPersonalCipher copies the edited draft without modifying the source. The
 // caller must hold the snapshot revision lease used to open the source document.
 func (s *Session) CopyPersonalCipher(ctx context.Context, scope Scope, source CipherDocument, fields CipherFields, persist func(SessionCheckpoint) error) (CipherDocument, error) {
+	return s.CopyPersonalCipherAuthorized(ctx, scope, source, fields, nil, persist)
+}
+
+func (s *Session) CopyPersonalCipherAuthorized(ctx context.Context, scope Scope, source CipherDocument, fields CipherFields, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (CipherDocument, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ctx, finish, err := s.beginOperationLocked(ctx)
@@ -32,15 +36,29 @@ func (s *Session) CopyPersonalCipher(ctx context.Context, scope Scope, source Ci
 	if err = validateCopyObject(object); err != nil {
 		return CipherDocument{}, err
 	}
-	edited, err := EncryptCipherDocument(source, fields, s.key, s.account)
+	var metadata struct{ Reprompt int }
+	if json.Unmarshal(source.JSON, &metadata) != nil {
+		return CipherDocument{}, ErrProtocol
+	}
+	guard := func() error {
+		if metadata.Reprompt != 0 && !s.validItemAuthorizationLocked(grant, source) {
+			return ErrPermission
+		}
+		return nil
+	}
+	if err := guard(); err != nil {
+		return CipherDocument{}, err
+	}
+	authorized := s.validItemAuthorizationLocked(grant, source)
+	edited, err := encryptCipherDocument(source, fields, s.key, s.account, authorized)
 	if err != nil {
 		return CipherDocument{}, err
 	}
-	document, err := copyPersonalCipherDocument(edited, s.key, s.account)
+	document, err := copyAuthorizedPersonalCipherDocument(edited, s.key, s.account, authorized)
 	if err != nil {
 		return CipherDocument{}, err
 	}
-	result, err := s.createCipherDocumentLocked(ctx, document, persist)
+	result, err := s.createGuardedCipherDocumentLocked(ctx, document, persist, guard)
 	if err != nil {
 		return CipherDocument{}, err
 	}
@@ -155,6 +173,10 @@ func copyArrayKeys(raw any, names ...string) error {
 	return nil
 }
 func copyPersonalCipherDocument(source CipherDocument, ownerKey []byte, account string) (CipherDocument, error) {
+	return copyAuthorizedPersonalCipherDocument(source, ownerKey, account, false)
+}
+
+func copyAuthorizedPersonalCipherDocument(source CipherDocument, ownerKey []byte, account string, authorized bool) (CipherDocument, error) {
 	object, err := documentObject(source)
 	if err != nil {
 		return CipherDocument{}, err
@@ -166,7 +188,7 @@ func copyPersonalCipherDocument(source CipherDocument, ownerKey []byte, account 
 	if err != nil {
 		return CipherDocument{}, err
 	}
-	if account == "" || fields.Reprompt != 0 {
+	if account == "" || (fields.Reprompt != 0 && (fields.Reprompt != 1 || !authorized)) {
 		return CipherDocument{}, ErrPermission
 	}
 	oldKey, err := cipherItemKey(object, ownerKey)

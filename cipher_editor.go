@@ -33,17 +33,22 @@ type editorCustom struct {
 }
 
 type cipherEditor struct {
-	document    vaultwarden.CipherDocument
-	fields      vaultwarden.CipherFields
-	inputs      []editorField
-	notes       string
-	uris        []editorURI
-	custom      []editorCustom
-	uncertain   bool
-	saved       bool
-	revision    string
-	confirm     vaultwarden.CipherAction
-	showHistory bool
+	document                     vaultwarden.CipherDocument
+	fields                       vaultwarden.CipherFields
+	inputs                       []editorField
+	notes                        string
+	uris                         []editorURI
+	custom                       []editorCustom
+	uncertain                    bool
+	saved                        bool
+	revision                     string
+	confirm                      vaultwarden.CipherAction
+	showHistory                  bool
+	authorization                *vaultwarden.ItemAuthorization
+	repromptID, repromptPassword string
+	authorizationExpires         time.Time
+	shownSecret                  string
+	shownSecretExpires           time.Time
 }
 
 var cipherTypeNames = []string{"", "登录", "安全笔记", "支付卡", "身份", "SSH 密钥", "银行账户", "驾驶证", "护照"}
@@ -99,7 +104,7 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	}
 	items := make([]displayCredential, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, displayCredential{ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, FolderID: e.FolderID})
+		items = append(items, displayCredential{ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, RequiresPassword: e.RequiresPassword, FolderID: e.FolderID})
 	}
 	a.vault, a.items, a.folders = vault, items, folders
 	if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
@@ -117,6 +122,10 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	return nil
 }
 func (a *app) openCipherEditor(id string, kind int) {
+	a.openCipherEditorAuthorized(id, kind, nil)
+}
+
+func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden.ItemAuthorization) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
@@ -124,11 +133,23 @@ func (a *app) openCipherEditor(id string, kind int) {
 	if !ok {
 		return
 	}
-	editor := &cipherEditor{revision: a.sessionRevision}
+	editor := &cipherEditor{revision: a.sessionRevision, authorization: grant}
+	if grant != nil {
+		editor.authorizationExpires = grant.ExpiresAt()
+	}
+	if err := session.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
+		a.status = err.Error()
+		return
+	}
 	if id != "" {
 		var err error
-		editor.document, editor.fields, err = session.ReadPersonalCipher(a.vault, id)
+		editor.document, editor.fields, err = session.ReadPersonalCipherAuthorized(a.vault, id, grant)
 		if err != nil {
+			if errors.Is(err, vaultwarden.ErrPermission) && grant == nil && session.PersonalItemRequiresPassword(a.vault, id) {
+				editor.repromptID = id
+				a.editor = editor
+				a.secretInputVersion++
+			}
 			a.status = err.Error()
 			return
 		}
@@ -173,6 +194,30 @@ func (a *app) openCipherEditor(id string, kind int) {
 }
 func (a *app) cipherEditorView(c *ui.Context) {
 	e := a.editor
+	if e.repromptID != "" {
+		a.itemAuthorizationView(c)
+		return
+	}
+	if !e.authorizationExpires.IsZero() {
+		if !time.Now().Before(e.authorizationExpires) {
+			e.shownSecret = ""
+			if a.pending == 0 {
+				*e = cipherEditor{}
+			}
+			a.editor = nil
+			a.secretInputVersion++
+			a.status = "项目授权已到期，请重新验证主密码。"
+			return
+		}
+		c.After(time.Until(e.authorizationExpires))
+	}
+	if e.shownSecret != "" {
+		if !time.Now().Before(e.shownSecretExpires) || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
+			e.shownSecret = ""
+		} else {
+			c.After(time.Until(e.shownSecretExpires))
+		}
+	}
 	ui.Scroll(c).Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion)).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(12).Padding(18).Children(func() {
 			title := "编辑"
@@ -199,6 +244,29 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				})
 			}
 			if e.fields.Type == 1 {
+				if e.fields.ID != "" {
+					ui.Row(c).Gap(8).Children(func() {
+						if action(c, "显示已保存密码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+							a.showPersonalSecret("password", callStorage)
+						}
+						if action(c, "显示当前验证码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+							a.showPersonalSecret("totp", callStorage)
+						}
+						if action(c, "复制已保存密码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+							a.copyPersonalSecret("password", callStorage)
+						}
+						if action(c, "复制当前验证码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+							a.copyPersonalSecret("totp", callStorage)
+						}
+					})
+					if e.shownSecret != "" {
+						ui.Text(c, e.shownSecret).FontSize(20)
+						if action(c, "隐藏", "", false, false).Clicked() {
+							e.shownSecret = ""
+						}
+					}
+					ui.Text(c, "显示与复制使用已保存内容，最多显示 30 秒；剪贴板可被其他应用读取。").FontSize(12)
+				}
 				ui.Text(c, "网站").FontSize(12)
 				remove := -1
 				for i := range e.uris {
@@ -333,6 +401,13 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	if a.pending != 0 || a.editor == nil || a.editor.uncertain || !a.sessionOwnsSnapshot() {
 		return
 	}
+	if !a.editor.authorizationExpires.IsZero() && !time.Now().Before(a.editor.authorizationExpires) {
+		*a.editor = cipherEditor{}
+		a.editor = nil
+		a.secretInputVersion++
+		a.status = "项目授权已到期，请重新验证主密码。"
+		return
+	}
 	if a.editor.revision != a.sessionRevision {
 		a.status = "密码库版本已变化，已保留表单内容。请核对最新项目后重新编辑。"
 		return
@@ -369,13 +444,13 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 		} else {
 			switch {
 			case action == copyCipherAction:
-				_, err = session.CopyPersonalCipher(ctx, scope, editor.document, editor.fields, persist)
+				_, err = session.CopyPersonalCipherAuthorized(ctx, scope, editor.document, editor.fields, editor.authorization, persist)
 			case action != "":
-				err = session.ChangeCipherState(ctx, scope, editor.fields.ID, action, persist)
+				err = session.ChangePersonalCipherStateAuthorized(ctx, scope, editor.document, action, editor.authorization, persist)
 			case editor.fields.ID == "":
 				_, err = session.CreatePersonalCipher(ctx, scope, editor.fields, persist)
 			default:
-				_, err = session.UpdatePersonalCipher(ctx, scope, editor.document, editor.fields, persist)
+				_, err = session.UpdatePersonalCipherAuthorized(ctx, scope, editor.document, editor.fields, editor.authorization, persist)
 			}
 		}
 		a.window.Update(func() { a.completeCipherMutation(epoch, editor, checkpointState, reply, err, cancel) })
