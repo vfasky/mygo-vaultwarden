@@ -1,6 +1,28 @@
-# 同卡续作交接：组织创建策略与官方主密码评分基础
+# 同卡续作交接：附件 binary / transport 内部基础
 
-**INCOMPLETE — 整卡未完成，禁止 Review / merge。** 本轮从恢复后的 `96bc7efdbf27ffd5a75ee523219714f2f90545fb` 直接续作，没有重做恢复、重置历史或移动持久恢复引用。最新 HEAD 以 `git log -1` 为准。协调者已通过 `contact_supervisor` 明确批准：因本进程剩余上下文不足，完成本增量验证、精确交接、干净提交后续启同一 #3。原完整范围不缩减。
+**INCOMPLETE — 整卡未完成，禁止 Review / merge。** 本进程从 `16308ec0cb212e26d6f91c85b0944702d757f21d` 续作。协调者经 `contact_supervisor` 明确批准：因本进程剩余上下文不足，完成本增量验证、精确交接、干净提交后续启同一 #3；只计内部基础，不能宣称附件功能可用。最新 HEAD 以 `git log -1` 为准。恢复历史与 `recovery/vaultwarden-96bc7ef` 均未改动，主目录及用户资源未操作。
+
+## 本轮直接交接
+
+- 新增 `internal/vaultwarden/attachment_crypto.go`：`attachmentEncryptedSize`、`encryptAttachment`、`decryptAttachment`、包内 `attachmentSpool.file/size/close/rewind`。0x02+IV16+MAC32+CBC-PKCS#7；HMAC输入IV+ciphertext；明文0–512MiB，密文65–536870977字节。64KiB分块、0600临时spool；先验证完整MAC再写明文spool，失败/取消不返回结果；空文件/截断/额外尾字节/溢出/坏MAC/坏填充均有测试。没有文件发布API，后续必须以受控lease原子不覆盖发布。
+- 新增 `attachment_transport.go`：`(*Client).downloadAttachment(ctx,signedURL,ciphertextSize,key)` 与 `uploadAttachment(ctx,cipherID,attachmentID,token,encryptedSpool)`。下载独立client、无Bearer/cookie/device/referer、HTTPS外部URL或已配置同HTTP回环origin、禁redirect、精确大小与identity encoding、5分钟上限。上传只支持当前vault下direct v2，multipart字段data、固定attachment.bin、已知Content-Length、磁盘流，不通过JSON/4MiB桥。**外部预签名上传未实现**；任意uploadURL不得交给带Bearer的direct函数。底层不refresh/retry/delete，Session须负责checkpoint与未知结果。
+- 官方固定SDK39dbb5 `attachment.rs::AttachmentFile::decrypt`已确认：无attachment.key的legacy v1内容用user/org key；有key内容用attachment key，filename/key用cipher key。无key附件跨组织需要binary迁移，不能把账户key包装给组织。官方`test_attachment_without_key`向量已纳入本地测试。固定来源链接、准确API形状和限制见 **[docs/attachments.md](attachments.md)**，下一轮不要重新研究已核实的布局。
+- Vaultwarden1.37.4 `post_attachment_v2`返回attachmentId/url/fileUploadType=0和cipherResponse或cipherMiniResponse；url是`/ciphers/{id}/attachment/{attachmentId}`API相对路径。`post_attachment_share`先删除再上传，非原子，未调用。源码缓存 `/tmp/pi/01a11459-aaf7-7501-aa57-d5854f080e4b/vw/`。本轮固定SDK原文下载到 `/tmp/pi/01a116cb-ae3d-7666-9072-dffae31009a5/sdk-attachment.rs`、`sdk-symmetric.rs`，临时文件会清理，持久来源锚点已写专题。
+- 新增测试 `attachment_crypto_test.go`、`attachment_transport_test.go`、`attachment_transfer_failure_test.go`。官方binary oracle、8MiB+3/边界/碎片Reader、逐字节篡改/所有截断、0600/取消清理；真实httptest HTTPS跨origin signed下载无凭据/签名保持/302禁跳；8MiB multipart、恶意ID零请求、307禁跳、401/500/过长响应/断开只一次POST且无DELETE。测试不是自有1.37.4回环，不能替代真实个人/组织附件验证。
+- 本轮使用 `GO=$(bash scripts/resolve-go.sh)`；`go test ./...`通过（root3.344s、vaultwarden8.932s、dev-debug4.814s），`go vet ./...`、`go build -o "$TMPDIR/mygo-attachment-foundation" .`通过；最终`go test -race ./...`通过（root8.982s、vaultwarden14.908s、dev-debug7.317s，passwordstrength cached）。早期定向`-run '^TestAttachment'`两次均通过；补齐加密返回前最后一次ctx检查后，`go test -race ./internal/vaultwarden -run '^TestAttachment' -count=1`通过（1.753s），`git diff --check`通过。没有Swift/ABI改动，不重跑或冒称本轮Swift/AutoFill/Keychain/窗口/签名验证。未启动容器/外部账号，临时产物只在本会话TMPDIR。
+
+## 下一进程明确入口
+
+1. 直接接Session v2元数据回执身份/attachmentID/uploadURL核验→direct上传→sync核对；先refresh+checkpoint，再在各阶段检查scope/revision/epoch/reprompt/type15/pending/组织隔离。`authenticatedGuardedLocked`在`authenticated.go`，写policies应在binary派发前重新核验；checkpoint不得绕过已撤销授权。未知結果不自动重试或DELETE可能成功的文件，失败补偿须有确定回执/状态核对。底层HTTP方法目前不暴露为公开产品API。
+2. 接原生文件选择/附件列表/下载发布/删除/取消与锁定，不经JSON桥输文件；复用安全不覆盖写入模式，但文件临时发布必须在MAC与最终授权通过后。blocked arbitrary Reader无法仅靠ctx中断，产品文件/HTTP输入需自有可关闭资源。大小/超时限制明确显示，不能把512MiB当无限传输。
+3. 自有隔离1.37.4个人和组织附件回环+官方互操作，再legacy完整跨key迁移（FIDO2、standard/history/URI aliases/attachment key+filename、无key binary）与Send。现有独立item-key共享未改，legacy和所有附件产品仍未完成。
+4. 旧交接账号/MFA/策略/组织/桥等全范围保持。协调者另有用户新请求的moejs兼容性/性能只读评估，本卡本轮保持goja，不主动迁移评分实现/依赖，等待协调者结论。
+
+---
+
+# 历史交接：组织创建策略与官方主密码评分基础（16308ec）
+
+**以下是前轮历史证据，非本轮新增或重跑。** 前轮从恢复后的 `96bc7efdbf27ffd5a75ee523219714f2f90545fb` 直接续作，没有重做恢复、重置历史或移动持久恢复引用。原完整范围不缩减。
 
 当前工作树：`/Users/vfasky/Library/Application Support/Waku/worktrees/board/56a21c6a-f119-465b-ae4e-7e77f68151bd/board-3-vaultwarden`，分支 `waku/board-3-vaultwarden`。`recovery/vaultwarden-96bc7ef` 必须保留，不移动/删除；不操作已清理 #2 目录。没有修改主目录、用户 app/watch/真实凭据/生产服务，没有启动子代理。前轮 type16/sourceIndex/恢复 controller 等详细历史见 `git show 96bc7ef:docs/vaultwarden-implementation-handoff.md` 与专题，不重做。
 

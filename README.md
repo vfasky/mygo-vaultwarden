@@ -97,7 +97,7 @@ bash scripts/build-macos.sh release --notarize
 
 成功同步全量替换快照；普通网络/解密失败保留上次成功快照并明确报错。refresh token 更新会先加密落盘，再下载密码库，即使后续断网也可在下次解锁后继续同步。账号身份或认证失效要求重新登录。登出先撤销快照，再清理 Keychain 和系统候选。候选回执与旧密钥清理的状态独立显示。
 
-实现边界见 [安全快照设计](docs/secure-snapshots.md)、[登录与同步说明](docs/vaultwarden-readonly.md) 和 [API 覆盖矩阵](docs/vaultwarden-api-coverage.md)。
+实现边界见 [安全快照设计](docs/secure-snapshots.md)、[登录与同步说明](docs/vaultwarden-readonly.md) 和 [API 覆盖矩阵](docs/vaultwarden-api-coverage.md)。附件新增有界流式加解密与独立传输基础，但尚未接入 Session 和原生界面，当前仍不可用；协议来源、测试和后续入口见 [附件进度](docs/attachments.md)。
 
 ## 测试
 
