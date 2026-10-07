@@ -21,6 +21,10 @@ func (s *Session) CreatePersonalCipher(ctx context.Context, scope Scope, fields 
 	if err != nil {
 		return CipherDocument{}, err
 	}
+	return s.createCipherDocumentLocked(ctx, document, persist)
+}
+
+func (s *Session) createCipherDocumentLocked(ctx context.Context, document CipherDocument, persist func(SessionCheckpoint) error) (CipherDocument, error) {
 	status, data, err := s.authenticatedLocked(ctx, http.MethodPost, "/api/ciphers", "application/json", string(document.JSON), persist)
 	if err != nil {
 		return CipherDocument{}, err

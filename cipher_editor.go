@@ -280,11 +280,17 @@ func (a *app) cipherEditorView(c *ui.Context) {
 		})
 	})
 }
+
+const copyCipherAction vaultwarden.CipherAction = "copyDraft"
+
 func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 	if e.confirm != "" {
 		text := "确认将项目移入回收站？"
 		if e.confirm == vaultwarden.CipherDeletePermanently {
 			text = "永久删除无法恢复。确认删除此项目及其附件？"
+		}
+		if e.confirm == copyCipherAction {
+			text = "将当前表单复制为独立项目，原项目不变。副本保留文件夹、收藏和密码历史，恢复为未归档状态。含附件、通行密钥或尚不支持的数据时会拒绝复制。"
 		}
 		ui.Text(c, text).TextColor(vaultPurple)
 		ui.Row(c).Gap(8).Children(func() {
@@ -298,6 +304,9 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 		return
 	}
 	ui.Row(c).Gap(8).Children(func() {
+		if action(c, "复制为新项目", "", false, a.pending != 0 || e.uncertain).Clicked() {
+			e.confirm = copyCipherAction
+		}
 		if e.fields.DeletedDate != nil {
 			if action(c, "恢复", "", false, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(vaultwarden.CipherRestore)
@@ -359,6 +368,8 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 			err = vaultwarden.ErrConflict
 		} else {
 			switch {
+			case action == copyCipherAction:
+				_, err = session.CopyPersonalCipher(ctx, scope, editor.document, editor.fields, persist)
 			case action != "":
 				err = session.ChangeCipherState(ctx, scope, editor.fields.ID, action, persist)
 			case editor.fields.ID == "":

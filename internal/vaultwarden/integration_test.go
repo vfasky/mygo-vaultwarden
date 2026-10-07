@@ -186,6 +186,20 @@ func TestLiveVaultwarden(t *testing.T) {
 					if kind == 1 && (len(verified.PasswordHistory) != 1 || verified.PasswordHistory[0]["password"] != "initial fixture password" || verified.Login["uris"].([]any)[0].(map[string]any)["uriChecksum"] == nil) {
 						t.Fatal("password history or URI checksum lost")
 					}
+					copied, err := session.CopyPersonalCipher(ctx, result.Scope, updated, verified, nil)
+					if err != nil {
+						t.Fatalf("copy type %d: %v", kind, err)
+					}
+					copyFields, err := DecryptCipherDocument(copied, key)
+					if err != nil || copyFields.ID == verified.ID || copyFields.Name != verified.Name || len(copyFields.PasswordHistory) != len(verified.PasswordHistory) {
+						t.Fatalf("copy roundtrip type %d: %v", kind, err)
+					}
+					if kind == 1 && (copyFields.PasswordHistory[0]["password"] != "initial fixture password" || copyFields.Login["uris"].([]any)[0].(map[string]any)["uriChecksum"] == nil) {
+						t.Fatal("copy lost history/checksum")
+					}
+					if err := session.ChangeCipherState(ctx, result.Scope, copyFields.ID, CipherDeletePermanently, nil); err != nil {
+						t.Fatal(err)
+					}
 					for _, action := range []CipherAction{CipherArchive, CipherUnarchive, CipherTrash, CipherRestore, CipherDeletePermanently} {
 						if err := session.ChangeCipherState(ctx, result.Scope, fields.ID, action, nil); err != nil {
 							t.Fatalf("state type %d %s: %v", kind, action, err)

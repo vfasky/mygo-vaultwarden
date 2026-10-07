@@ -143,6 +143,11 @@ func transformCipher(object map[string]any, key []byte, encrypt bool) error {
 			}
 		}
 		if section == "login" {
+			// Vaultwarden also returns the encrypted first-URI alias for legacy
+			// clients. It must be rekeyed alongside the canonical URI list.
+			if err := transformField(values, "uri", key, encrypt); err != nil {
+				return err
+			}
 			if err := transformArray(values, "uris", []string{"uri", "uriChecksum"}, key, encrypt); err != nil {
 				return err
 			}
@@ -284,6 +289,12 @@ func EncryptCipherDocument(document CipherDocument, fields CipherFields, ownerKe
 	if fields.Type == 1 && !reflect.DeepEqual(fields.Login["uris"], original.Login["uris"]) {
 		if err := checksumURIs(existing); err != nil {
 			return CipherDocument{}, err
+		}
+		if _, hasLegacyURI := existing["uri"]; hasLegacyURI {
+			existing["uri"] = nil
+			if uris, ok := existing["uris"].([]any); ok && len(uris) > 0 {
+				existing["uri"] = uris[0].(map[string]any)["uri"]
+			}
 		}
 	}
 	if fields.Type == 1 && !reflect.DeepEqual(fields.Login["password"], original.Login["password"]) {
