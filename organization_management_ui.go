@@ -28,7 +28,7 @@ func (a *app) adoptOrganizationIsolation(state *snapshotStatus, vault *vaultward
 }
 
 func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarden.VaultData, orgID string, isolated bool) bool {
-	if !a.sessionOwnsSnapshot() || state == nil || !state.Available || state.Scope == nil || *state.Scope != *a.liveScope || state.Revision == "" || state.SnapshotID == "" || state.SnapshotID == a.snapshot.SnapshotID || vault == nil || vault.Scope != *a.liveScope {
+	if !a.sessionOwnsSnapshot() || state == nil || !state.Available || state.Scope == nil || *state.Scope != *a.liveScope || state.Revision == "" || state.Revision == a.sessionRevision || state.SnapshotID == "" || state.SnapshotID == a.snapshot.SnapshotID || vault == nil || vault.Scope != *a.liveScope {
 		return false
 	}
 	found := false
@@ -39,6 +39,22 @@ func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarde
 	}
 	if found != isolated {
 		return false
+	}
+	if a.vault != nil {
+		for _, priorID := range a.vault.QuarantinedOrganizations {
+			if !isolated && priorID == orgID {
+				continue
+			}
+			retained := false
+			for _, id := range vault.QuarantinedOrganizations {
+				if id == priorID {
+					retained = true
+				}
+			}
+			if !retained {
+				return false
+			}
+		}
 	}
 	a.snapshot, a.sessionRevision = state, state.Revision
 	if err := a.adoptVault(vault); err != nil {

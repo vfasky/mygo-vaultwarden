@@ -77,6 +77,27 @@ func TestOrganizationIsolationRecoveryRequiresExplicitEntry(t *testing.T) {
 	}
 }
 
+func TestOrganizationRestorationCannotDiscardOtherIsolation(t *testing.T) {
+	a := organizationUIFixture(t, true, true, 0)
+	defer a.stopNetwork()
+	vault := *a.vault
+	vault.QuarantinedOrganizations = []string{"organization-1", "other-organization"}
+	if err := a.adoptVault(&vault); err != nil {
+		t.Fatal(err)
+	}
+	state := *a.snapshot
+	state.Revision, state.SnapshotID = "restore-next-revision", "restore-next-snapshot"
+	restored := vault
+	restored.QuarantinedOrganizations = nil
+	if a.adoptOrganizationSnapshot(&state, &restored, "organization-1", false) {
+		t.Fatal("restoring one organization dropped another isolation")
+	}
+	restored.QuarantinedOrganizations = []string{"other-organization"}
+	if !a.adoptOrganizationSnapshot(&state, &restored, "organization-1", false) || len(a.isolatedOrganizations) != 1 {
+		t.Fatal("independent isolation was not preserved")
+	}
+}
+
 func TestOrganizationIsolationReceiptKeepsSessionAndPersonalVault(t *testing.T) {
 	a := organizationUIFixture(t, true, true, 0)
 	defer a.stopNetwork()
@@ -88,6 +109,11 @@ func TestOrganizationIsolationReceiptKeepsSessionAndPersonalVault(t *testing.T) 
 	isolated.QuarantinedOrganizations = []string{"organization-1"}
 	state := *a.snapshot
 	state.Revision, state.SnapshotID = "isolated-revision", "isolated-snapshot"
+	stale := state
+	stale.Revision = a.sessionRevision
+	if a.adoptOrganizationIsolation(&stale, &isolated, "organization-1") {
+		t.Fatal("unchanged revision accepted")
+	}
 	if !a.adoptOrganizationIsolation(&state, &isolated, "organization-1") {
 		t.Fatal("valid isolation receipt rejected")
 	}
