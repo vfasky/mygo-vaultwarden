@@ -28,15 +28,22 @@ type emergencyViewer struct {
 func newEmergencyViewer(contact vaultwarden.EmergencyContact, fetch func(context.Context, string) ([]vaultwarden.CipherFields, error), dispatch func(func())) *emergencyViewer {
 	return &emergencyViewer{contact: contact, selected: -1, fetch: fetch, dispatch: dispatch}
 }
-func (v *emergencyViewer) Close() {
+func (v *emergencyViewer) cancelLoad() {
 	if v.cancel != nil {
 		v.cancel()
 	}
 	v.generation++
-	v.closed = true
+	v.running = false
+	v.cancel = nil
 	clear(v.rows)
 	v.rows = nil
+	v.selected = -1
 	v.revealed = false
+	v.status = "已取消查看。"
+}
+func (v *emergencyViewer) Close() {
+	v.cancelLoad()
+	v.closed = true
 	v.status = ""
 }
 func (v *emergencyViewer) load() {
@@ -142,7 +149,7 @@ func (v *emergencyViewer) View(c *ui.Context) {
 		}
 	}
 	if v.running && action(c, "取消查看", "", false, false).Key("emergency-view-cancel").Clicked() {
-		v.cancel()
+		v.cancelLoad()
 	}
 	if v.status != "" {
 		ui.Text(c, v.status)

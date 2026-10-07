@@ -42,7 +42,7 @@ type recoveryPanel struct {
 	operation, email, token, public, password, otp, newPassword, repeatPassword, waitDays string
 	accessType                                                                            int
 	resetPassword, resetMFA                                                               bool
-	running, terminal, closed                                                             bool
+	running, submitting, terminal, closed                                                 bool
 	generation                                                                            uint64
 	cancel                                                                                context.CancelFunc
 	plan                                                                                  *vaultwarden.RecoveryPlan
@@ -65,17 +65,40 @@ func (p *recoveryPanel) clearSecrets() {
 	p.token = ""
 	p.otp = ""
 }
+
+// cancelOperation invalidates preparation only. A dispatched commit remains
+// owned by its worker and host callback until its result has been recorded.
+func (p *recoveryPanel) cancelOperation() {
+	if p.cancel != nil {
+		p.cancel()
+	}
+	p.clearSecrets()
+	if p.submitting {
+		p.status = "正在取消；已发送操作不会自动回滚。"
+		return
+	}
+	p.generation++
+	p.running = false
+	p.cancel = nil
+	if p.plan != nil {
+		p.plan.Close()
+		p.plan = nil
+	}
+	p.status = "已取消；未提交。"
+}
 func (p *recoveryPanel) Close() {
 	if p.cancel != nil {
 		p.cancel()
 	}
 	p.generation++
 	p.closed = true
+	p.running = false
+	p.cancel = nil
 	p.clearSecrets()
 	p.contacts = nil
 	p.members = nil
 	p.public = ""
-	if !p.running && p.plan != nil {
+	if p.plan != nil {
 		p.plan.Close()
 	}
 	p.plan = nil
@@ -166,6 +189,7 @@ func (p *recoveryPanel) commitPlan() {
 	plan := p.plan
 	p.plan = nil
 	p.running = true
+	p.submitting = true
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	generation := p.generation
@@ -179,6 +203,7 @@ func (p *recoveryPanel) commitPlan() {
 				return
 			}
 			p.running = false
+			p.submitting = false
 			p.terminal = true
 			p.cancel = nil
 			p.clearSecrets()
@@ -317,8 +342,7 @@ func (p *recoveryPanel) View(c *ui.Context) {
 		p.preparePlan()
 	}
 	if p.running && action(c, "取消并核对结果", "", false, false).Key("recovery-cancel").Clicked() {
-		p.cancel()
-		p.status = "正在取消；已发送操作不会自动回滚。"
+		p.cancelOperation()
 	}
 	if p.status != "" {
 		ui.Text(c, p.status)

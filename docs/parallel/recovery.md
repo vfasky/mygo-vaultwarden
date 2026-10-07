@@ -69,6 +69,23 @@ type RecoveryBeforeDispatch func(RecoveryDispatch) error
 - commit 回调调用 `CommitRecoveryOperation` 并将结果交真实操作记录/target失效处理；不把 Confirmed 当成新会话授权。`dispatch` 必须回到 UI 线程，并检查宿主 scope/epoch。锁定、切换账号、重新接受 snapshot 时关闭所有组件。Close 取消在途、丢弃迟到结果；计划与 worker 各自独占，避免并发清除。
 - 组件没有改 main/network/storage；没有真实导航入口，因此不得在发布说明里写成已向用户开放。Go string/UI历史/GC副本无法证明物理归零；借用 byte buffer 清理不应被宣传为完整内存擦除。
 
+## Review 退回修复：取消与派发队列窗口
+
+本轮只修改独立 UI、永久回归测试及本文，未修改协议、账号核心或主应用。准备和只读查看取消现在同时取消 context、推进 generation、退出 running 并清理当前持有秘密；排队中的旧成功/错误结果不能覆盖新尝试。迟到 RecoveryPlan 必须 Close；迟到查看 rows 清除引用，不能恢复内容或展开状态。锁定仍由宿主调用 Close，关闭后不再接纳 UI 结果。
+
+提交阶段单独标记 submitting：取消不推进 generation、不退出运行态、不开放重新准备；等待提交 adapter 返回 Confirmed/Unknown 后冻结流程。宿主仍必须在 commit callback 内按 actor/target/operationId 记录结果，不能把持久处理放在可能因锁定丢弃的 UI dispatch 中。Close 只丢弃迟到 UI 展示，不阻止宿主结果处理。
+
+永久测试 `recovery_cancel_ui_test.go` 用可控 dispatch 队列精确暂停在 worker 完成与 UI 接纳之间，覆盖取消、重新开始、Close/锁定、迟到成功/错误、旧 plan Close 与旧 rows 清理；另覆盖取消提交和锁定后 Confirmed/Unknown 仍到达宿主，身份字段保留且 UI 不开放重试。
+
+本轮实际通过：
+
+- `go test -race -tags headless . -run 'TestRecovery|TestEmergency' -count=1`
+- `go test -tags headless ./...`
+- `go vet -tags headless ./...`
+- `git diff --check`
+
+本轮没有重跑真实 SMTP/1.37.4 回环，协议未变；前文真实回环证据属于原实现验证。未运行真实平台窗口/系统锁定，锁定测试验证宿主调用 Close 的契约。新提交仍须新独立 Review，不能沿用旧 HEAD 的审查。
+
 ## 已执行验证与边界
 
 新增测试位于本 lane 的 `account_recovery*test.go`、`emergency*test.go` 和 `recovery_ui_test.go`。
