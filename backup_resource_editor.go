@@ -344,6 +344,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 		}
 		var grant *vaultwarden.ItemAuthorization
 		var result vaultwarden.AttachmentUploadResult
+		var trashResult vaultwarden.CipherStateResult
 		var err error
 		state := storage(storageRequest{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
@@ -369,7 +370,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 					doc, _, err = session.ReadPersonalCipherAuthorized(vault, target, grant)
 				}
 				if err == nil {
-					err = session.ChangePersonalCipherStateAuthorized(ctx, scope, doc, vaultwarden.CipherTrash, grant, persist)
+					trashResult, err = session.ChangePersonalCipherStateAuthorizedResult(ctx, scope, doc, vaultwarden.CipherTrash, grant, persist)
 				}
 			} else if verify {
 				err = session.VerifyRestoredResource(ctx, vault, target, attachment, plan, index, grant, persist)
@@ -393,7 +394,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 				return
 			}
 			if trashSource != "" {
-				m.trashPending[trashSource] = true
+				m.trashPending[trashSource] = trashResult.Dispatched
 				m.finalized[trashSource] = false // acknowledgement alone is not reconciliation
 			} else if verify {
 				if err == nil {
@@ -404,12 +405,15 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 				m.rows[index].attachmentID = result.AttachmentID
 			}
 			a.status = "附件操作结束；请同步核对，未知结果不会自动重发。"
+			if trashSource != "" && !trashResult.Dispatched {
+				a.status = "尚未提交回收站变更；修正问题后请重新明确确认。"
+			}
 			m.rows[index].problem = ""
 			if err != nil {
 				m.rows[index].problem = err.Error()
 				a.status = err.Error() + " " + a.status
 			}
-			if !verify && (attempted || trashSource != "") && a.sessionOwnsSnapshot() {
+			if !verify && (attempted || trashResult.Dispatched) && a.sessionOwnsSnapshot() {
 				refresh()
 			}
 		})

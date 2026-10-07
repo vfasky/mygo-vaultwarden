@@ -120,6 +120,16 @@ Go 保留非空合法 UTF-8 原始前缀，不给予 host/baseDomain/快捷候�
 
 本增量未重新执行无关 CLI、Vaultwarden 容器及 Swift 全套，未新增平台或硬件支持声明；上述旧轮次证据仍仅代表旧轮次实际执行。
 
+## Review #36 后的回收站末阶段修复
+
+本轮保留 `ad9ce49` 的 P1 续接证明，仅修正个人完整恢复最后一步把未派发失败误标为 pending 的 P2。
+
+- 新增兼容 API `ChangePersonalCipherStateAuthorizedResult`，原 error-only 入口委托它。`CipherStateResult.Dispatched` 只在授权、policy、checkpoint、取消检查完成后、进入 mutation transport 前设为 true；不是从通用 error 名称推断。该标志表示进入可能修改服务器的路径，不承诺服务器已经收到请求。进入后任何响应/断线均保持待同步，成功回执也不是最终确认。
+- 资源控制器的 lease、fresh reprompt、读取目标或全部文件重新下载核验失败，保持具体行错误、SourceID/TargetID/附件 ID 及已核验阶段，显示“尚未提交”，保留明确确认入口；不会自动重试或触发无必要的自动 sync。修正后由用户再次确认。只有真实进入 mutation 路径才置 `trashPending`；活动状态 sync 不解除未知 pending，正常新 sync 的 deleted metadata 才最终确认。
+- 定向检查同一回调：verify 仅在成功后设已核验；上传前的 lease/reprompt/读取失败仍保留未执行。进入公开 `UploadResource` 后沿用保守待核对，因为依赖附件 API 没有精确派发字段，本轮未修改附件接口/协议，不能据通用错误开放上传重试。
+- 永久 controller 回归走真实 Session/HTTP 两文件上传→sync→完整下载核验，然后覆盖空密码失败→正确 fresh reprompt→恰好一次 trash、lease/下载失败→显式再试、真实写请求断线→反复 sync/点击仍零额外 mutation、正常回执→新 sync 确认 deleted；原生表单断言错误及确认入口可见。夹具补真实 password verifier 后才成功授权；最初该夹具遗漏导致一次 reprompt 测试失败，修正后通过。
+- API 回归区分前置权限/policy/取消失败与正常回执/HTTP 拒绝/真实断线的派发记录。执行通过：定向 root race（`TestResourceController|TestResourceForm|TestNativeEditor|TestReprompt|TestStale|TestRefreshCheckpoint`）、`go test ./...`、`go vet ./...`、`go build -o "$TMPDIR/board13-trash-fix" .`、包内状态 API/policy 定向 race。未重跑 Swift、CLI、真实 Vaultwarden 容器或硬件验收，不把旧证据冒称本轮执行。
+
 ## 尚未声称的结果与最终集成边界
 
 - 真实窗口/Open/Save 视觉、Keychain/Touch ID、签名安装、系统 AutoFill 实填及硬件 passkey 均未实测。headless、Swift 测试存储与 Go-only receipt 不替代这些平台验收；#14 还需注册组织新组件和真实 lease/持久化/刷新回调。

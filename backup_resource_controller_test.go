@@ -22,16 +22,18 @@ import (
 )
 
 type resourceControllerFixture struct {
-	t                          *testing.T
-	a                          *app
-	q                          chan func()
-	mu                         sync.Mutex
-	body                       map[string]any
-	files                      map[string][]byte
-	state                      *snapshotStatus
-	vault                      *vaultwarden.VaultData
-	serial, creates, uploads   int
-	failPublish, unknownUpload bool
+	t                                     *testing.T
+	a                                     *app
+	q                                     chan func()
+	mu                                    sync.Mutex
+	body                                  map[string]any
+	files                                 map[string][]byte
+	state                                 *snapshotStatus
+	vault                                 *vaultwarden.VaultData
+	serial, creates, uploads              int
+	failPublish, unknownUpload            bool
+	failLease, failDownload, unknownTrash bool
+	trashes                               int
 }
 
 func newResourceControllerFixture(t *testing.T, beforeFirstSync ...bool) *resourceControllerFixture {
@@ -48,7 +50,21 @@ func newResourceControllerFixture(t *testing.T, beforeFirstSync ...bool) *resour
 	a.snapshot.Scope = &scope
 	a.snapshot.SnapshotID = "initial-snapshot"
 	a.vault.Scope = scope
-	session, err := vaultwarden.RestoreSessionFromAuthenticatedSnapshot(savedUIFixture(t, a), scope, a.snapshot.PasswordUnlock, a.vault, a.sessionRevision)
+	// Model a password-unlocked session so fresh reprompt uses a real verifier.
+	var saved map[string]any
+	json.Unmarshal(savedUIFixture(t, a), &saved)
+	key, err := vaultwarden.DeriveSnapshotUnlockKey([]byte("fixture-master"), *a.snapshot.PasswordUnlock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(key)
+	saved["passwordUnlock"] = &vaultwarden.PasswordUnlock{Config: *a.snapshot.PasswordUnlock, Key: key}
+	data, err := json.Marshal(saved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clear(data)
+	session, err := vaultwarden.RestoreSessionFromAuthenticatedSnapshot(data, scope, a.snapshot.PasswordUnlock, a.vault, a.sessionRevision)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +151,24 @@ func (f *resourceControllerFixture) serve(w http.ResponseWriter, r *http.Request
 			}
 		}
 		w.WriteHeader(404)
+	case strings.HasSuffix(r.URL.Path, "/delete") && r.Method == http.MethodPut:
+		f.trashes++
+		if f.unknownTrash {
+			conn, _, err := w.(http.Hijacker).Hijack()
+			if err != nil {
+				f.t.Error(err)
+				return
+			}
+			conn.Close()
+			return
+		}
+		f.cipher(strings.Split(r.URL.Path, "/")[3])["deletedDate"] = "2026-01-02T00:00:00Z"
+		w.WriteHeader(http.StatusOK)
 	case strings.HasPrefix(r.URL.Path, "/download/"):
+		if f.failDownload {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
 		w.Write(f.files[strings.TrimPrefix(r.URL.Path, "/download/")])
 	default:
 		f.t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
@@ -155,6 +188,9 @@ func (f *resourceControllerFixture) storage(r storageRequest) storageReply {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r.Operation == "status" {
+		if f.failLease {
+			return storageReply{OK: false}
+		}
 		return storageReply{OK: true, State: f.state}
 	}
 	if r.ExpectedRevision != f.state.Revision {

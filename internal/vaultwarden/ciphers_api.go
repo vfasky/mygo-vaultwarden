@@ -23,6 +23,19 @@ const (
 // authenticated document. The caller confirms permanent deletion and reconciles
 // via sync; the dispatch guard enforces reprompt even after token checkpointing.
 func (s *Session) ChangePersonalCipherStateAuthorized(ctx context.Context, scope Scope, document CipherDocument, action CipherAction, grant *ItemAuthorization, persist func(SessionCheckpoint) error) error {
+	_, err := s.ChangePersonalCipherStateAuthorizedResult(ctx, scope, document, action, grant, persist)
+	return err
+}
+
+// CipherStateResult records entry into the mutation transport. Dispatched remains
+// true even when the response is lost; only an authenticated sync confirms state.
+type CipherStateResult struct {
+	Dispatched bool
+}
+
+// ChangePersonalCipherStateAuthorizedResult distinguishes preflight failure from
+// a mutation that must be reconciled before the caller permits another attempt.
+func (s *Session) ChangePersonalCipherStateAuthorizedResult(ctx context.Context, scope Scope, document CipherDocument, action CipherAction, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (result CipherStateResult, err error) {
 	var metadata struct {
 		ID                 string
 		OrganizationID     *string
@@ -30,7 +43,7 @@ func (s *Session) ChangePersonalCipherStateAuthorized(ctx context.Context, scope
 		Edit, ViewPassword bool
 	}
 	if json.Unmarshal(document.JSON, &metadata) != nil {
-		return ErrProtocol
+		return result, ErrProtocol
 	}
 	guard := func() error {
 		if metadata.OrganizationID != nil || !metadata.Edit || !metadata.ViewPassword || metadata.Reprompt < 0 || metadata.Reprompt > 1 {
@@ -41,10 +54,15 @@ func (s *Session) ChangePersonalCipherStateAuthorized(ctx context.Context, scope
 		}
 		return nil
 	}
-	return s.changeCipherState(ctx, scope, metadata.ID, action, persist, guard, grant)
+	err = s.changeCipherStateResult(ctx, scope, metadata.ID, action, persist, guard, grant, &result)
+	return result, err
 }
 
 func (s *Session) changeCipherState(ctx context.Context, scope Scope, id string, action CipherAction, persist func(SessionCheckpoint) error, guard func() error, grant *ItemAuthorization) error {
+	return s.changeCipherStateResult(ctx, scope, id, action, persist, guard, grant, &CipherStateResult{})
+}
+
+func (s *Session) changeCipherStateResult(ctx context.Context, scope Scope, id string, action CipherAction, persist func(SessionCheckpoint) error, guard func() error, grant *ItemAuthorization, result *CipherStateResult) error {
 	if !validObjectID(id) {
 		return ErrValidation
 	}
@@ -81,9 +99,13 @@ func (s *Session) changeCipherState(ctx context.Context, scope Scope, id string,
 	if err := s.personalCipherStatePolicyLocked(ctx, []string{id}, grant, persist); err != nil {
 		return err
 	}
-	status, _, err := s.authenticatedGuardedLocked(ctx, method, endpoint, "", "", persist, guard)
-	if err != nil {
+	if err := s.prepareAuthenticatedDispatchLocked(ctx, true, persist, guard); err != nil {
 		return err
+	}
+	result.Dispatched = true
+	status, _, err := s.client.request(ctx, method, endpoint, "", "", s.access)
+	if err != nil {
+		return &MutationUncertainError{Cause: err}
 	}
 	if status != http.StatusOK && status != http.StatusNoContent {
 		return mutationStatusError(status)
