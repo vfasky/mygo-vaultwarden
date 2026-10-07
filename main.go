@@ -13,6 +13,7 @@ import (
 type app struct {
 	category, selectedID                      string
 	showSettings, showLogin                   bool
+	sidebarCollapsed                          bool
 	listState                                 ui.ListState
 	selectedRow                               int
 	window                                    *mygo.Window

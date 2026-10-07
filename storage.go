@@ -91,7 +91,7 @@ func callStorage(request storageRequest) storageReply {
 	output, err := nativeStorageCall(input)
 	if err != nil {
 		if errors.Is(err, errSnapshotTooLarge) {
-			return storageReply{Code: "snapshot_too_large", Message: "密码库或显示数据超过本版 4 MiB 传输上限，请缩小范围后重试。"}
+			return storageReply{Code: "snapshot_too_large", Message: "密码库超过本版有界传输上限，无法保存。"}
 		}
 		// Loader/ABI failures contain paths and codes only, never the request body.
 		log.Printf("snapshot bridge unavailable: %v", err)

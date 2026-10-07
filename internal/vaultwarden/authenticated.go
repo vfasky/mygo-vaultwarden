@@ -123,27 +123,39 @@ func (s *Session) authenticatedLocked(ctx context.Context, method, endpoint, con
 
 // guard runs after refresh/checkpoint, immediately before dispatch. A slow key
 // store or refresh must not extend an expired item authorization.
-func (s *Session) authenticatedGuardedLocked(ctx context.Context, method, endpoint, contentType, body string, persist func(SessionCheckpoint) error, guard func() error) (int, []byte, error) {
+func (s *Session) prepareAuthenticatedDispatchLocked(ctx context.Context, mutation bool, persist func(SessionCheckpoint) error, guard func() error) error {
 	if err := ctx.Err(); err != nil {
-		return 0, nil, ErrCancelled
+		return ErrCancelled
 	}
 	if err := s.persistPendingLocked(persist); err != nil {
-		return 0, nil, err
+		return err
 	}
 	if time.Until(s.expires) < 30*time.Second {
 		if err := s.refreshAndCheckpointLocked(ctx, persist); err != nil {
-			return 0, nil, err
+			return err
 		}
 	}
-	if method != http.MethodGet && method != http.MethodHead && s.writePolicies != nil {
+	if mutation && s.writePolicies != nil {
 		if err := s.checkOperationPoliciesLocked(ctx, s.writePolicies); err != nil {
-			return 0, nil, err
+			return err
 		}
 	}
 	if guard != nil {
 		if err := guard(); err != nil {
-			return 0, nil, err
+			return err
 		}
+	}
+	// Persistence callbacks can take time or cancel the caller. Check again at
+	// the boundary shared by JSON and streaming requests.
+	if ctx.Err() != nil {
+		return ErrCancelled
+	}
+	return nil
+}
+
+func (s *Session) authenticatedGuardedLocked(ctx context.Context, method, endpoint, contentType, body string, persist func(SessionCheckpoint) error, guard func() error) (int, []byte, error) {
+	if err := s.prepareAuthenticatedDispatchLocked(ctx, method != http.MethodGet && method != http.MethodHead, persist, guard); err != nil {
+		return 0, nil, err
 	}
 	status, data, err := s.client.request(ctx, method, endpoint, contentType, body, s.access)
 	if err != nil {
@@ -154,6 +166,9 @@ func (s *Session) authenticatedGuardedLocked(ctx context.Context, method, endpoi
 	}
 	if status == http.StatusUnauthorized && method == http.MethodGet {
 		if err := s.refreshAndCheckpointLocked(ctx, persist); err != nil {
+			return status, nil, err
+		}
+		if err := s.prepareAuthenticatedDispatchLocked(ctx, false, persist, guard); err != nil {
 			return status, nil, err
 		}
 		return s.client.request(ctx, method, endpoint, contentType, body, s.access)

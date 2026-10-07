@@ -555,6 +555,65 @@ final class SnapshotStoreTests: XCTestCase {
         wait(for: [cleared], timeout: 3)
         XCTAssertFalse(try store.state().indexPending)
     }
+    func testLargeVaultIndependentStoreCheckpointAndEmptyReplacement() throws {
+        let fixture = SnapshotPolicyTests()
+        let scope = fixture.scope
+        let vault = try fixture.vault { $0["largeUnknownServerField"] = String(repeating: "x", count: 10 * 1024 * 1024) }
+        let material = passwordMaterial
+        let session = Data("large-vault-session".utf8)
+        let first = try store.publish(fixture.credentials, scope: scope, expected: store.state().revision,
+                                      passwordUnlock: material, session: session, vault: vault)
+        let file = directory.appendingPathComponent("snapshot-v1.json")
+        let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize!
+        XCTAssertGreaterThan(size, 16 * 1024 * 1024)
+        XCTAssertLessThanOrEqual(size, 96 * 1024 * 1024)
+        let independent = try SnapshotStore(directory: directory, keys: keys, clock: { self.now })
+        let restored = try independent.unlockWithPassword(scope: scope, expected: first.revision, unlockKey: material.key)
+        XCTAssertEqual(restored.session, session)
+        XCTAssertEqual(restored.vault, vault)
+        XCTAssertFalse(restored.credentials.isEmpty)
+        let autofill = try independent.unlock(scope: scope, context: LAContext(), allowUI: true)
+        XCTAssertEqual(autofill.credentials.map(\.id), restored.credentials.map(\.id))
+        XCTAssertNil(autofill.session)
+        XCTAssertNil(autofill.vault)
+        let transport = SnapshotTransfer()
+        let requestBytes = Data("{}".utf8)
+        let handle = try transport.exchange(SnapshotTransferFrame(action: "begin", total: requestBytes.count, digest: SnapshotTransfer.hash(requestBytes))) { _ in throw SnapshotError.invalidInput }.handle!
+        _ = try transport.exchange(SnapshotTransferFrame(action: "append", handle: handle, data: requestBytes)) { _ in throw SnapshotError.invalidInput }
+        _ = try transport.exchange(SnapshotTransferFrame(action: "finish", handle: handle)) { _ in
+            (vault.sync, { data, range in try independent.withCurrentLease(restored) { data.subdata(in: range) } })
+        }
+        _ = try transport.exchange(SnapshotTransferFrame(action: "read", handle: handle)) { _ in throw SnapshotError.invalidInput }
+        let checkpoint = try independent.saveSession(Data("rotated-token".utf8), scope: scope, expected: first.revision, unlockKey: material.key)
+        assertError(.stale) {
+            _ = try transport.exchange(SnapshotTransferFrame(action: "read", handle: handle, offset: SnapshotTransfer.chunkBytes)) { _ in throw SnapshotError.invalidInput }
+        }
+        XCTAssertEqual(checkpoint.vault, vault)
+        assertError(.stale) { try independent.withCurrentLease(restored) {} }
+        try independent.lock()
+        assertError(.stale) { try independent.withCurrentLease(autofill) {} }
+        let current = try store.unlockWithPassword(scope: scope, expected: store.state().revision, unlockKey: material.key)
+        XCTAssertEqual(current.session, Data("rotated-token".utf8))
+        let empty = try policyVaultFixture(scope: scope, ids: [])
+        let replacement = try store.publish([], scope: scope, expected: current.revision,
+                                            passwordUnlock: material, session: session, vault: empty)
+        XCTAssertTrue(try independent.unlock(scope: scope, context: LAContext(), allowUI: true).credentials.isEmpty)
+        XCTAssertNotEqual(replacement.header.id, first.header.id)
+        XCTAssertNil(keys.values[first.header.keyID])
+    }
+
+    func testWriteDeniedPreservesSuccessfulSnapshot() throws {
+        let first = try publishPassword()
+        let original = try Data(contentsOf: directory.appendingPathComponent("snapshot-v1.json"))
+        try FileManager.default.setAttributes([.posixPermissions: 0o500], ofItemAtPath: directory.path)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path) }
+        if FileManager.default.isWritableFile(atPath: directory.path) { throw XCTSkip("test requires filesystem to enforce directory write denial") }
+        XCTAssertThrowsError(try store.publish([], scope: .demo, expected: first.revision, passwordUnlock: passwordMaterial))
+        XCTAssertEqual(try Data(contentsOf: directory.appendingPathComponent("snapshot-v1.json")), original)
+        XCTAssertEqual(keys.values.count, 1)
+        XCTAssertEqual(try passwordUnlock().credentials.map(\.id), [credential.id])
+    }
+
     func testFirstLoginCanPublishAnEmptyVault() throws {
         let scope = SnapshotScope(server: "https://vault.example.com", account: "empty-account")
         let lease = try store.publish([], scope: scope, expected: store.state().revision)

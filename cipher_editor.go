@@ -33,6 +33,9 @@ type editorCustom struct {
 }
 
 type cipherEditor struct {
+	attachments                            []vaultwarden.AttachmentInfo
+	attachmentsLoaded, attachmentBusy      bool
+	attachmentDelete                       string
 	defaultURIMatch                        int
 	organizationID, collectionID           string
 	shareOrganizationID, shareCollectionID string
@@ -421,6 +424,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				}
 			})
 			a.passwordHistoryView(c, e)
+			a.attachmentView(c, e)
 			ui.Text(c, "备注").FontSize(12)
 			ui.TextArea(c, &e.notes).Label("备注").MinHeight(100).Disabled(a.pending != 0 || e.uncertain)
 			if e.uncertain {

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 // Public, invented metadata only. Rendering never opens the real vault or Keychain.
@@ -35,6 +36,174 @@ func clickUI(t *testing.T, tt *ui.Tester, label string) {
 	t.Helper()
 	if err := tt.Click(label); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestDumpAlignment(t *testing.T) {
+	tt := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(vaultTheme)
+		ui.Column(c).Fill().Padding(20).Gap(24).Background(vaultPanel).Children(func() {
+			ui.Row(c).Padding(10, 8, 0, 8).Background(ui.Hex("#EEE")).Children(func() {
+				ui.Text(c, "所有项目").FontSize(22).FontWeight(650).Label("heading")
+				ui.Spacer(c)
+				pill(c, "947", vaultWhite, vaultMuted)
+			})
+			ui.Row(c).Gap(8).Background(ui.Hex("#EEE")).Children(func() {
+				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted).Label("crumb-vault")
+				icon(c, "chevron", 12).TextColor(vaultMuted).Label("crumb-chevron")
+				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted).Label("crumb-login")
+				ui.Spacer(c)
+				pill(c, "只读", vaultWhite, vaultMuted)
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Background(ui.Hex("#DDD")).Children(func() {
+				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted).Label("c2-vault")
+				icon(c, "chevron", 12).TextColor(vaultMuted).Label("c2-chevron")
+				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted).Label("c2-login")
+				ui.Spacer(c)
+				pill(c, "只读", vaultWhite, vaultMuted)
+			})
+			ui.Row(c).Height(32).AlignItems(ui.Center).Background(ui.Hex("#CCC")).Children(func() {
+				ui.Text(c, "所有项目").FontSize(22).FontWeight(650).Label("h2")
+				ui.Spacer(c)
+				pill(c, "947", vaultWhite, vaultMuted)
+			})
+		})
+	}, 640, 220)
+	for _, s := range []string{"heading", "947", "crumb-vault", "crumb-chevron", "crumb-login", "只读", "c2-vault", "c2-chevron", "c2-login", "h2"} {
+		if r, ok := tt.Find(s); ok {
+			t.Logf("%q x=%.1f y=%.1f w=%.1f h=%.1f cy=%.1f", s, r.X, r.Y, r.W, r.H, r.Y+r.H/2)
+		} else {
+			t.Logf("%q missing", s)
+		}
+	}
+	path := filepath.Join(os.Getenv("TMPDIR"), "align-rows.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, tt.Image()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(path)
+}
+
+func TestVaultSidebarToggle(t *testing.T) {
+	a := previewApp()
+	tt := ui.NewTester(a.view, 1060, 700)
+	if a.sidebarCollapsed || a.sidebarWidth() != 236 {
+		t.Fatal("sidebar should start expanded")
+	}
+	tt.SetTitleBar(ui.TitleBar{Height: 52, Left: 88})
+	if r, ok := tt.Find("折叠侧栏"); !ok || r.X < 88 || r.X+r.W > a.sidebarWidth() || r.Y < 0 || r.Y+r.H > 52 {
+		t.Fatal("expanded toggle must remain in sidebar title bar past native window controls")
+	}
+	clickUI(t, tt, "折叠侧栏")
+	if !a.sidebarCollapsed || a.sidebarWidth() != 64 {
+		t.Fatal("sidebar did not collapse")
+	}
+	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 || r.Y < 0 || r.Y+r.H > 52 {
+		t.Fatal("collapsed toggle overlaps native window controls")
+	}
+	for _, text := range []string{"Vaultwarden", "个人密码库", "所有密码库", "项目", "组织", "文件夹"} {
+		if slices.Contains(tt.Texts(), text) {
+			t.Fatalf("collapsed sidebar retained text %q", text)
+		}
+	}
+	clickUI(t, tt, "支付卡")
+	if a.category != "card" {
+		t.Fatal("collapsed category navigation failed")
+	}
+	clickUI(t, tt, "我的密码库")
+	if a.category != "personal" || a.showSettings {
+		t.Fatal("collapsed vault navigation failed")
+	}
+	clickUI(t, tt, "展开侧栏")
+	if a.sidebarCollapsed || !slices.Contains(tt.Texts(), "所有密码库") {
+		t.Fatal("sidebar did not expand")
+	}
+	tt.Key(ui.Cmd, ui.KeyB)
+	if !a.sidebarCollapsed {
+		t.Fatal("keyboard shortcut did not collapse sidebar")
+	}
+	tt.Key(ui.Cmd, ui.KeyB)
+	if a.sidebarCollapsed {
+		t.Fatal("keyboard shortcut did not expand sidebar")
+	}
+}
+
+func TestCollapsedSidebarNavigation(t *testing.T) {
+	a := previewApp()
+	a.sidebarCollapsed = true
+	tt := ui.NewTester(func(c *ui.Context) {
+		ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() { a.sidebar(c) })
+	}, 65, 700)
+	if slices.Contains(tt.Texts(), "8") {
+		t.Fatal("collapsed sidebar retained count badge")
+	}
+	for _, category := range vaultCategories {
+		clickUI(t, tt, category.title)
+		if a.category != category.id || a.showSettings {
+			t.Fatalf("collapsed navigation failed for %s", category.title)
+		}
+		// Texts includes accessibility labels; each icon button keeps its label,
+		// but must not also render a text child.
+		count := 0
+		for _, text := range tt.Texts() {
+			if text == category.title {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("collapsed button %q has %d labels/texts, want 1", category.title, count)
+		}
+	}
+	clickUI(t, tt, "账号与设置")
+	if !a.showSettings {
+		t.Fatal("collapsed sidebar settings did not open")
+	}
+	clickUI(t, tt, "我的密码库")
+	if a.category != "personal" || a.showSettings {
+		t.Fatal("collapsed vault navigation did not close settings")
+	}
+}
+
+func TestCollapsedSidebarBaselineNavigationAndRevocation(t *testing.T) {
+	a := organizationUIFixture(t, true, true, 0)
+	defer a.stopNetwork()
+	a.sidebarCollapsed = true
+	a.folders = []vaultwarden.Folder{{ID: "folder-1", Name: "测试文件夹"}}
+	tt := ui.NewTester(a.view, 1280, 820)
+	clickUI(t, tt, "团队组织")
+	if a.category != "org:organization-1" || len(a.filteredItems()) != 1 {
+		t.Fatal("collapsed organization navigation lost baseline filter")
+	}
+	clickUI(t, tt, "  团队集合")
+	if a.category != "collection:collection-1" {
+		t.Fatal("collapsed collection navigation lost destination")
+	}
+	clickUI(t, tt, "查看与编辑")
+	if a.editor == nil || a.editor.inputs[1].value != "org secret" {
+		t.Fatal("collapsed navigation lost authorized editor")
+	}
+	a.editor = nil
+	tt.Frame()
+	clickUI(t, tt, "测试文件夹")
+	if a.category != "folder:folder-1" {
+		t.Fatal("collapsed folder navigation lost filter")
+	}
+	clickUI(t, tt, "我的密码库")
+	for _, item := range a.filteredItems() {
+		if item.ID == "organization-item" {
+			t.Fatal("personal navigation leaked organization item")
+		}
+	}
+	a.lockInterface()
+	tt.Frame()
+	if a.editor != nil || len(a.organizations) != 0 || len(a.folders) != 0 || tt.HasText("团队组织") || tt.HasText("org secret") {
+		t.Fatal("collapsed navigation retained revoked content")
 	}
 }
 

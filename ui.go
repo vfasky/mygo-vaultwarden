@@ -172,6 +172,9 @@ func (a *app) view(c *ui.Context) {
 		a.authentication(c)
 		return
 	}
+	if c.Shortcut(ui.Cmd, ui.KeyB) {
+		a.sidebarCollapsed = !a.sidebarCollapsed
+	}
 	ui.Row(c).Fill().TextColor(vaultInk).AlignItems(ui.Stretch).Children(func() {
 		a.sidebar(c)
 		ui.Column(c).Grow(1).MinWidth(0).Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
@@ -240,6 +243,28 @@ func iconButton(c *ui.Context, label, symbol string) *ui.Element {
 		Children(func() { icon(c, symbol, 18) })
 }
 
+// titleBarButton is a borderless toolbar icon button, like the sidebar toggle
+// of native macOS apps: no fill until hovered, sitting on the title bar row.
+func titleBarButton(c *ui.Context, label, symbol string) *ui.Element {
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(5).Radius(7).Shrink(0).TextColor(vaultMuted)
+	if b.Pressed() {
+		b.Background(ui.RGBA(38, 30, 62, .12)).TextColor(vaultInk)
+	} else if b.Hovered() {
+		b.Background(ui.RGBA(38, 30, 62, .07)).TextColor(vaultInk)
+	}
+	return b.Children(func() { icon(c, symbol, 18) })
+}
+
+func (a *app) sidebarToggle(c *ui.Context) {
+	label := "折叠侧栏"
+	if a.sidebarCollapsed {
+		label = "展开侧栏"
+	}
+	if titleBarButton(c, label, "panel-left").Key("sidebar-toggle").Clicked() {
+		a.sidebarCollapsed = !a.sidebarCollapsed
+	}
+}
+
 func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Element {
 	var b *ui.Element
 	if primary {
@@ -264,7 +289,12 @@ func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) 
 func (a *app) header(c *ui.Context) {
 	bar := c.TitleBar()
 	ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).Gap(10).AlignItems(ui.Center).
-		Padding(0, 20, 0, 20).DragWindow().Children(func() {
+		Padding(0, 20, 0, max(float32(20), bar.Left-a.sidebarWidth())).DragWindow().Children(func() {
+		// The expanded sidebar carries the toggle; the collapsed rail is
+		// narrower than the traffic lights, so it moves just past them.
+		if a.sidebarCollapsed {
+			a.sidebarToggle(c)
+		}
 		ui.Spacer(c)
 		state := "未解锁"
 		if a.unlocked() {
@@ -304,25 +334,60 @@ func (a *app) header(c *ui.Context) {
 	})
 }
 
+func (a *app) sidebarWidth() float32 {
+	if a.sidebarCollapsed {
+		return 64
+	}
+	return 236
+}
+
 func (a *app) sidebar(c *ui.Context) {
 	bar := c.TitleBar()
-	ui.Row(c).Shrink(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(236).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c, bar) })
-		ui.Box(c).Width(1).Background(vaultLine)
+	height := max(bar.Height, 52)
+	ui.Column(c).Width(a.sidebarWidth() + 1).Shrink(0).Children(func() {
+		top := ui.Row(c).Height(height).Shrink(0).AlignItems(ui.Stretch).DragWindow()
+		if a.sidebarCollapsed {
+			// The traffic lights overflow the rail: share the content
+			// background so they sit on one continuous title bar.
+			top.Background(ui.Hex("#EAEAEF"))
+		} else {
+			top.Children(func() {
+				ui.Row(c).Grow(1).AlignItems(ui.Center).Padding(0, 14, 0, 0).Background(ui.Hex("#F2F1F7")).Children(func() {
+					ui.Spacer(c)
+					a.sidebarToggle(c)
+				})
+				ui.Box(c).Width(1).Background(vaultLine)
+			})
+		}
+		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+			ui.Column(c).Width(a.sidebarWidth()).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c) })
+			ui.Box(c).Width(1).Background(vaultLine)
+		})
 	})
 }
 
-func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
+func (a *app) sidebarContent(c *ui.Context) {
+	navItem := a.navItem
+	sectionLabel := func(c *ui.Context, text string) {
+		if !a.sidebarCollapsed {
+			sectionLabel(c, text)
+		}
+	}
 	{
-		ui.Box(c).Height(max(bar.Height, 52) - 8).Shrink(0).DragWindow()
-		ui.Row(c).Padding(2, 8, 8, 8).Gap(10).AlignItems(ui.Center).Children(func() {
+		brandPadding := float32(8)
+		if a.sidebarCollapsed {
+			brandPadding = 4
+		}
+		ui.Row(c).Padding(2, brandPadding, 8, brandPadding).Gap(10).AlignItems(ui.Center).Children(func() {
 			if appLogo != nil {
 				ui.Image(c, appLogo).Size(32, 32).Shrink(0)
 			}
-			ui.Column(c).Gap(1).Children(func() {
-				ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
-				ui.Text(c, "个人密码库").FontSize(11).TextColor(vaultMuted).SingleLine()
-			})
+			if !a.sidebarCollapsed {
+				ui.Column(c).Gap(1).Children(func() {
+					ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
+					ui.Text(c, "个人密码库").FontSize(11).TextColor(vaultMuted).SingleLine()
+				})
+			}
 		})
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(2).Children(func() {
@@ -338,7 +403,7 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 						count = fmt.Sprint(len(a.items))
 					}
 					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
-					if !category.supported {
+					if !category.supported && !a.sidebarCollapsed {
 						b.Tooltip("此分类尚未同步")
 					}
 					if b.Clicked() {
@@ -398,7 +463,18 @@ func sectionLabel(c *ui.Context, text string) {
 }
 
 func navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+	return navigationItem(c, title, symbol, count, selected, disabled, false)
+}
+
+func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+	return navigationItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
+}
+
+func navigationItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {
 	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 11).Gap(10).Radius(20).Disabled(disabled).TextColor(vaultMuted)
+	if collapsed {
+		b.Tooltip(title).Justify(ui.Center)
+	}
 	if selected {
 		b.Background(vaultWhite).TextColor(vaultInk).Shadow(0, 2, 6, 0, ui.RGBA(38, 30, 62, .06))
 	} else if b.Hovered() && !disabled {
@@ -409,6 +485,9 @@ func navItem(c *ui.Context, title, symbol, count string, selected, disabled bool
 	}
 	b.Children(func() {
 		icon(c, symbol, 18)
+		if collapsed {
+			return
+		}
 		ui.Text(c, title).Grow(1).FontSize(13).SingleLine()
 		if count != "" {
 			ui.Text(c, count).FontSize(11).Background(ui.RGBA(255, 255, 255, .7)).Padding(2, 6).Radius(9)

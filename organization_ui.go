@@ -110,6 +110,7 @@ func (a *app) readOnlyOrganizationCipherView(c *ui.Context, e *cipherEditor) {
 				a.copyPersonalSecret("totp", callStorage)
 			}
 		}
+		a.attachmentView(c, e)
 		if action(c, "关闭", "", false, false).Clicked() {
 			*e = cipherEditor{}
 			a.editor = nil
