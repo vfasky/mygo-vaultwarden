@@ -13,10 +13,13 @@ import (
 type organizationEditor struct {
 	id, revision, name, email, collection, password, confirmation string
 	owner, loaded, uncertain, isolated                            bool
+	collectionID                                                  string
+	collectionDraft                                               *vaultwarden.CollectionDraft
 }
 
 func (a *app) clearOrganizationEditor() {
 	if a.organizationEditor != nil {
+		a.organizationEditor.collectionDraft.Close()
 		*a.organizationEditor = organizationEditor{}
 		a.organizationEditor = nil
 		a.secretInputVersion++
@@ -127,6 +130,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				}
 			}
 			if e.id != "" && !e.isolated {
+				a.collectionManagementView(c, e, disabled)
 				if e.confirmation == "" {
 					if action(c, "退出组织", "", false, disabled).Key("organization-leave").Clicked() {
 						e.confirmation = "leave"
@@ -134,7 +138,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 					if e.owner && action(c, "删除组织", "", false, disabled).Key("organization-delete").Clicked() {
 						e.confirmation = "delete"
 					}
-				} else {
+				} else if e.confirmation == "leave" || e.confirmation == "delete" {
 					label := "确认退出组织"
 					if e.confirmation == "delete" {
 						label = "确认永久删除组织"
@@ -174,7 +178,7 @@ func (a *app) runOrganizationManagement(operation string) {
 	if a.pending != 0 || e == nil || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision || a.vault == nil {
 		return
 	}
-	if operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" {
+	if operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && operation != "collection-access" {
 		return
 	}
 	if (operation == "leave" || operation == "delete") && (e.confirmation != operation || e.id == "") {
@@ -192,10 +196,21 @@ func (a *app) runOrganizationManagement(operation string) {
 	if operation == "save" && !e.loaded {
 		return
 	}
+	if operation == "collection-delete" && e.confirmation != operation {
+		return
+	}
+	if (operation == "collection-save" || operation == "collection-delete" || operation == "collection-access") && e.collectionDraft == nil {
+		return
+	}
+	if operation == "collection-save" && e.collectionDraft != nil && e.collectionDraft.AccessChanged() && e.confirmation != "collection-access-save" {
+		return
+	}
+	collectionID := e.collectionID
 	session, ok := a.session.(*vaultwarden.Session)
 	if !ok {
 		return
 	}
+	collectionDraft := e.collectionDraft.Clone()
 	id, settings, vault := e.id, vaultwarden.OrganizationSettings{Name: e.name, BillingEmail: e.email, CollectionName: e.collection}, a.vault
 	password := []byte(e.password)
 	e.password = ""
@@ -209,6 +224,8 @@ func (a *app) runOrganizationManagement(operation string) {
 	a.status = "正在处理组织请求…"
 	go func() {
 		defer clear(password)
+		defer collectionDraft.Close()
+		var loadedCollection *vaultwarden.CollectionDraft
 		var reply storageReply
 		var checkpoint *snapshotStatus
 		var isolatedVault *vaultwarden.VaultData
@@ -249,6 +266,14 @@ func (a *app) runOrganizationManagement(operation string) {
 			err = vaultwarden.ErrConflict
 		} else {
 			switch operation {
+			case "collection-load":
+				loadedCollection, err = session.CollectionDetails(ctx, vault, id, collectionID, persist)
+			case "collection-access":
+				loadedCollection, err = session.CollectionAccessDetails(ctx, vault, collectionDraft, persist)
+			case "collection-save":
+				err = session.SaveCollection(ctx, vault, collectionDraft, isolate, persist)
+			case "collection-delete":
+				err = session.DeleteCollection(ctx, vault, collectionDraft, isolate, persist)
 			case "restore":
 				var synced vaultwarden.SyncResult
 				synced, err = session.SyncWithCheckpoint(ctx, persist)
@@ -307,6 +332,15 @@ func (a *app) runOrganizationManagement(operation string) {
 				}
 			}
 			a.completeOrganizationManagement(epoch, e, operation, result, checkpoint, reply, err, cancel)
+			if loadedCollection != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil {
+					e.collectionDraft.Close()
+					e.collectionDraft = loadedCollection
+					a.status = "集合详情已加载；保存名称会保留原访问配置。"
+				} else {
+					loadedCollection.Close()
+				}
+			}
 		})
 	}()
 }
@@ -315,6 +349,7 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {
+		e.collectionDraft.Close()
 		*e = organizationEditor{}
 		return
 	}
@@ -338,6 +373,9 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		}
 		return
 	}
+	if operation == "collection-load" || operation == "collection-access" {
+		return
+	}
 	if operation == "restore" {
 		a.status = "已重新核验成员身份并恢复该组织的本机访问。"
 		return
@@ -354,5 +392,8 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		return
 	}
 	a.status = "组织修改已提交，正在同步核对…"
+	if operation == "collection-save" || operation == "collection-delete" {
+		a.status = "集合修改已提交，正在同步核对；若侧栏出现“重新核验”，请完成核验以恢复组织访问。"
+	}
 	a.syncVault(false)
 }

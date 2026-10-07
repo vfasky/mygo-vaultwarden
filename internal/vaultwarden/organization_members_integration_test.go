@@ -117,6 +117,47 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 	if _, err := member.UpdateOrganizationCipher(ctx, sync.Vault, doc, fields, nil, nil); err != nil {
 		t.Fatal("member update", err)
 	}
+	// Exercise the product with a collection-scoped manager, then an accessAll
+	// manager. Profile uses three permission flags, never an accessAll field.
+	managerPermissions := map[string]bool{"createNewCollections": false, "editAnyCollection": false, "deleteAnyCollection": false}
+	managerCollection := map[string]any{"id": collectionID, "readOnly": false, "hidePasswords": false, "manage": true}
+	request("PUT", "/users/"+memberID, map[string]any{"type": 4, "permissions": managerPermissions, "groups": []string{}, "collections": []any{managerCollection}})
+	managerSync, err := member.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = member.BindSnapshotRevision(managerSync.Scope, "scoped-manager-collection")
+	if _, err := member.CollectionDetails(ctx, managerSync.Vault, orgID, "", nil); err != ErrPermission {
+		t.Fatal("scoped manager created collection", err)
+	}
+	managerDraft, err := member.CollectionDetails(ctx, managerSync.Vault, orgID, collectionID, nil)
+	if err != nil {
+		t.Fatal("scoped manager details", err)
+	}
+	managerAccess, err := member.CollectionAccessDetails(ctx, managerSync.Vault, managerDraft, nil)
+	if err != nil {
+		t.Fatal("scoped manager mini-directory", err)
+	}
+	managerAccess.Close()
+	managerDraft.Name = "经理更名后的集合"
+	if err := member.SaveCollection(ctx, managerSync.Vault, managerDraft, nil, nil); err != nil {
+		t.Fatal("scoped manager rename", err)
+	}
+	managerDraft.Close()
+	for key := range managerPermissions {
+		managerPermissions[key] = true
+	}
+	request("PUT", "/users/"+memberID, map[string]any{"type": 4, "permissions": managerPermissions, "groups": []string{}, "collections": []any{managerCollection}})
+	testLiveCollections(t, ctx, member, managerSync.Scope, orgID)
+	request("PUT", "/users/"+memberID, map[string]any{"type": 2, "groups": []string{}, "collections": []any{permission(false, false)}})
+	memberSync, err := member.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = member.BindSnapshotRevision(memberSync.Scope, "ordinary-member-no-collection-admin")
+	if _, err := member.CollectionDetails(ctx, memberSync.Vault, orgID, collectionID, nil); err != ErrPermission {
+		t.Fatal("ordinary member management", err)
+	}
 	groupRaw := request("POST", "/groups", map[string]any{"name": "Writable fixture group", "accessAll": false, "users": []string{memberID}, "collections": []any{permission(false, false)}})
 	var group struct{ ID string }
 	_ = json.Unmarshal(groupRaw, &group)
@@ -127,7 +168,7 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 		name   string
 		ro, hp bool
 	}{{"read-only", true, false}, {"hidden-password", false, true}} {
-		request("PUT", "/users/"+memberID, map[string]any{"type": 2, "groups": []string{group.ID}, "collections": []any{permission(tc.ro, tc.hp)}})
+		setLiveCollectionMemberAccess(t, ctx, owner, orgID, collectionID, memberID, true, tc.ro, tc.hp)
 		sync, err = member.Sync(ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -163,7 +204,7 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 		}
 	}
 	// Removing the direct assignment exposes the existing group grant.
-	request("PUT", "/users/"+memberID, map[string]any{"type": 2, "groups": []string{group.ID}, "collections": []any{}})
+	setLiveCollectionMemberAccess(t, ctx, owner, orgID, collectionID, memberID, false, false, false)
 	sync, err = member.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)

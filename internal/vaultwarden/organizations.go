@@ -28,7 +28,14 @@ type Organization struct {
 	Status             int
 	Type               int
 	Enabled            bool
+	UseGroups          bool
 	Permissions        map[string]bool
+}
+
+// CanCreateCollections follows 1.37.4's manager-as-custom profile permissions.
+// ProfileOrganization does not expose the membership accessAll property.
+func (o Organization) CanCreateCollections() bool {
+	return o.Type == 0 || o.Type == 1 || (o.Type == 4 && o.Permissions["createNewCollections"] && o.Permissions["editAnyCollection"] && o.Permissions["deleteAnyCollection"])
 }
 
 type Collection struct {

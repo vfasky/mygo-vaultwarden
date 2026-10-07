@@ -64,6 +64,7 @@ func testLiveOrganizations(t *testing.T, ctx context.Context, s *Session, scope 
 	if err != nil || len(organizations) != 1 || len(collections) != 1 || collections[0].Name != "真实集合" || organizations[0].UserID != scope.Account || organizations[0].OrganizationUserID == scope.Account {
 		t.Fatal("live organization decode", err)
 	}
+	testLiveCollections(t, ctx, s, scope, org.ID)
 	if err := s.BindSnapshotRevision(scope, "live-organization-1"); err != nil {
 		t.Fatal(err)
 	}
