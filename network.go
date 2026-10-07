@@ -36,7 +36,8 @@ func (a *app) observeSnapshot(state *snapshotStatus) {
 		}
 		a.items = nil
 		a.vault, a.editor = nil, nil
-		a.organizations, a.collections = nil, nil
+		a.organizations, a.collections, a.isolatedOrganizations = nil, nil, nil
+		a.clearOrganizationEditor()
 		a.folders, a.folderEditor = nil, nil
 		a.bulkEditor = nil
 		a.clearBackupEditor()
@@ -88,7 +89,8 @@ func (a *app) stopNetwork() {
 	a.sessionRevision = ""
 	a.items = nil
 	a.vault, a.editor = nil, nil
-	a.organizations, a.collections = nil, nil
+	a.organizations, a.collections, a.isolatedOrganizations = nil, nil, nil
+	a.clearOrganizationEditor()
 	a.folders, a.folderEditor = nil, nil
 	a.itemsRevision = ""
 	a.selectedID = ""
@@ -138,6 +140,10 @@ func (a *app) syncVault(login bool) {
 	}
 	existing := a.session
 	initialSnapshot := a.snapshot
+	var isolatedIDs []string
+	if a.vault != nil {
+		isolatedIDs = append(isolatedIDs, a.vault.QuarantinedOrganizations...)
+	}
 	deviceID := a.deviceID
 	expected := a.snapshot.Revision
 	if !login {
@@ -223,6 +229,22 @@ func (a *app) syncVault(login bool) {
 				metadata = append(metadata, displayCredential{ID: item.ID, Title: item.Title, Username: item.Username, URL: item.URL})
 			}
 			reply = callStorage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
+			if reply.OK && reply.Vault != nil {
+				result.Vault = reply.Vault
+			}
+			for _, isolatedID := range isolatedIDs {
+				found := false
+				if reply.Vault != nil {
+					for _, id := range reply.Vault.QuarantinedOrganizations {
+						if id == isolatedID {
+							found = true
+						}
+					}
+				}
+				if !found {
+					reply.OK, reply.Code, reply.Message = false, "invalid_reply", "未能确认组织隔离状态，请重新解锁核对。"
+				}
+			}
 			if !reply.OK {
 				workErr = reply.failure()
 			} else if reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.Revision == "" || reply.State.Revision == expected {

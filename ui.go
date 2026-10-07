@@ -191,6 +191,8 @@ func (a *app) body(c *ui.Context) {
 				a.backupEditorView(c)
 			} else if a.bulkEditor != nil {
 				a.bulkEditorView(c)
+			} else if a.organizationEditor != nil {
+				a.organizationEditorView(c)
 			} else if a.folderEditor != nil {
 				a.folderEditorView(c)
 			} else if a.editor != nil {
@@ -345,6 +347,12 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 					}
 				}
 				sectionLabel(c, "组织")
+				if navItem(c, "创建组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
+					a.openOrganizationEditor("")
+				}
+				if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+					a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
+				}
 				for _, org := range a.organizations {
 					if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
 						a.category, a.showSettings = "org:"+org.ID, false
@@ -353,6 +361,11 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 						if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
 							a.category, a.showSettings = "collection:"+collection.ID, false
 						}
+					}
+				}
+				for _, org := range a.isolatedOrganizations {
+					if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+						a.openOrganizationEditor(org.ID)
 					}
 				}
 				sectionLabel(c, "文件夹")

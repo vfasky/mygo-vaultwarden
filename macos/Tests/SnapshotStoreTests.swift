@@ -103,6 +103,69 @@ final class SnapshotStoreTests: XCTestCase {
         XCTAssertEqual(copies, 1)
     }
 
+    func testOrganizationIsolationSurvivesRestartSyncAndCheckpoint() throws {
+        let raw = Data(#"{"profile":{"id":"public-demo-account","organizations":[{"id":"org-1"},{"id":"org-2"}]},"ciphers":[{"id":"entry-1","organizationId":"org-1"},{"id":"personal"},{"id":"other-org","organizationId":"org-2"}],"future":{"n":9007199254740993}}"#.utf8)
+        let vault = VaultData(version: 1, scope: .demo, sync: raw)
+        let personal = VaultCredential(id: "personal", title: "personal", username: "u", password: "p", hosts: ["localhost"], url: "http://localhost/")
+        let other = VaultCredential(id: "other-org", title: "other", username: "u", password: "p", hosts: ["localhost"], url: "http://localhost/")
+        let original = try store.publish([credential, personal, other], scope: .demo, expected: store.state().revision, passwordUnlock: passwordMaterial, session: Data("before".utf8), vault: vault)
+        let isolated = try store.quarantineOrganization("org-1", scope: .demo, expected: original.revision, unlockKey: passwordMaterial.key, session: Data("rotated".utf8))
+        XCTAssertNotEqual(original.header.id, isolated.header.id)
+        assertError(.stale) { try self.store.withCurrentLease(original) {} }
+        XCTAssertEqual(isolated.credentials.map(\.id), ["personal", "other-org"])
+        XCTAssertEqual(isolated.vault?.sync, raw) // opaque encrypted server bytes remain exact
+        XCTAssertEqual(isolated.vault?.quarantinedOrganizations, ["org-1"])
+        let reopened = try SnapshotStore(directory: directory, keys: keys)
+        let app = try reopened.unlockWithPassword(scope: .demo, expected: isolated.revision, unlockKey: passwordMaterial.key)
+        XCTAssertEqual(app.session, Data("rotated".utf8))
+        XCTAssertEqual(app.vault?.quarantinedOrganizations, ["org-1"])
+        let extensionLease = try reopened.unlock(scope: .demo, context: LAContext(), allowUI: true)
+        XCTAssertNil(extensionLease.vault)
+        XCTAssertEqual(extensionLease.credentials.map(\.id), ["personal", "other-org"])
+        // Even a stale server response which still grants access cannot undo isolation.
+        let synced = try store.publish([credential, personal, other], scope: .demo, expected: isolated.revision, passwordUnlock: passwordMaterial, session: Data("sync-token".utf8), vault: vault)
+        XCTAssertEqual(synced.credentials.map(\.id), ["personal", "other-org"])
+        let checkpoint = try store.saveSession(Data("next-token".utf8), scope: .demo, expected: synced.revision, unlockKey: passwordMaterial.key)
+        try store.lock()
+        assertError(.stale) { try self.store.withCurrentLease(checkpoint) {} }
+        let latest = try passwordUnlock()
+        XCTAssertEqual(latest.vault?.quarantinedOrganizations, ["org-1"])
+        XCTAssertEqual(latest.credentials.map(\.id), ["personal", "other-org"])
+        XCTAssertEqual(latest.session, Data("next-token".utf8))
+        // Dropping complete vault data cannot erase the durable marker.
+        XCTAssertThrowsError(try store.publish([credential], scope: .demo, expected: latest.revision, passwordUnlock: passwordMaterial))
+        XCTAssertEqual(try passwordUnlock().vault?.quarantinedOrganizations, ["org-1"])
+        // Only an explicit recovery operation with fresh confirmed membership may
+        // lift the marker. Accepted, wrong-account and member/account confusion fail.
+        for membership in [
+            #"{"id":"org-1","status":1,"enabled":true,"userId":"public-demo-account","organizationUserId":"member-1","key":"wrapped"}"#,
+            #"{"id":"org-1","status":2,"enabled":true,"userId":"other-account","organizationUserId":"member-1","key":"wrapped"}"#,
+            #"{"id":"org-1","status":2,"enabled":true,"userId":"public-demo-account","organizationUserId":"public-demo-account","key":"wrapped"}"#
+        ] {
+            let fresh = Data((#"{"profile":{"id":"public-demo-account","organizations":["# + membership + #"]},"ciphers":[{"id":"entry-1","organizationId":"org-1"},{"id":"personal"},{"id":"other-org","organizationId":"org-2"}]}"#).utf8)
+            XCTAssertThrowsError(try store.publish([credential, personal, other], scope: .demo, expected: latest.revision, passwordUnlock: passwordMaterial, vault: VaultData(version: 1, scope: .demo, sync: fresh), restoringOrganization: "org-1"))
+        }
+        let confirmed = Data(#"{"profile":{"id":"public-demo-account","organizations":[{"id":"org-1","status":2,"enabled":true,"userId":"public-demo-account","organizationUserId":"member-1","key":"wrapped"}]},"ciphers":[{"id":"entry-1","organizationId":"org-1"},{"id":"personal"},{"id":"other-org","organizationId":"org-2"}]}"#.utf8)
+        let restored = try store.publish([credential, personal, other], scope: .demo, expected: latest.revision, passwordUnlock: passwordMaterial, session: Data("revalidated-token".utf8), vault: VaultData(version: 1, scope: .demo, sync: confirmed), restoringOrganization: "org-1")
+        XCTAssertEqual(restored.credentials.map(\.id), ["entry-1", "personal", "other-org"])
+        XCTAssertEqual(try passwordUnlock().vault?.quarantinedOrganizations, [])
+        assertError(.stale) { try self.store.withCurrentLease(latest) {} }
+    }
+
+    func testOrganizationIsolationRejectsWrongAuthorityAndLateWriter() throws {
+        let raw = Data(#"{"profile":{"id":"public-demo-account","organizations":[{"id":"org-1"}]},"ciphers":[{"id":"entry-1","organizationId":"org-1"}]}"#.utf8)
+        let original = try store.publish([credential], scope: .demo, expected: store.state().revision, passwordUnlock: passwordMaterial, vault: VaultData(version: 1, scope: .demo, sync: raw))
+        for id in ["other", "../org-1"] {
+            XCTAssertThrowsError(try store.quarantineOrganization(id, scope: .demo, expected: original.revision, unlockKey: passwordMaterial.key, session: Data("session".utf8)))
+        }
+        assertError(.wrongScope) { _ = try self.store.quarantineOrganization("org-1", scope: SnapshotScope(server: "https://other.invalid", account: "public-demo-account"), expected: original.revision, unlockKey: self.passwordMaterial.key, session: Data("session".utf8)) }
+        assertError(.invalidPassword) { _ = try self.store.quarantineOrganization("org-1", scope: .demo, expected: original.revision, unlockKey: Data(repeating: 7, count: 32), session: Data("session".utf8)) }
+        XCTAssertEqual(try store.state().revision, original.revision)
+        try store.lock()
+        assertError(.stale) { _ = try self.store.quarantineOrganization("org-1", scope: .demo, expected: original.revision, unlockKey: self.passwordMaterial.key, session: Data("session".utf8)) }
+        XCTAssertEqual(try passwordUnlock().credentials, [credential])
+    }
+
     func testCompleteVaultIsAuthenticatedRetainedAndOmittedFromAutoFill() throws {
         let raw = Data(#"{"profile":{"id":"public-demo-account","privateKey":"encrypted-private"},"ciphers":[{"id":"archived-1","type":8,"archivedDate":"2026-01-01"}],"folders":[{"id":"folder-1","name":"encrypted-folder"}],"future":{"id":9007199254740993}}"#.utf8)
         let vault = VaultData(version: 1, scope: .demo, sync: raw)
@@ -186,6 +249,10 @@ final class SnapshotStoreTests: XCTestCase {
             try store.files.write(state)
         }
         assertError(.invalidPassword) { _ = try self.passwordUnlock() }
+        // Replacing a protected snapshot now authenticates its prior isolation
+        // state. A damaged wrapper requires explicit local revocation first.
+        assertError(.invalidPassword) { _ = try self.publishPassword() }
+        try store.logout(expected: store.state().revision)
         try publishPassword()
         try store.files.locked {
             var state = try store.files.read()
@@ -221,7 +288,7 @@ final class SnapshotStoreTests: XCTestCase {
     func testPasswordUnlockRejectsReplacedAccountAndOldWrappingKey() throws {
         let original = try publishPassword()
         let replacement = PasswordUnlockMaterial(config: passwordMaterial.config, key: Data(repeating: 71, count: 32))
-        let current = try store.publish([credential], scope: .demo, expected: original.revision, passwordUnlock: replacement)
+        let current = try store.publish([credential], scope: .demo, expected: original.revision, passwordUnlock: replacement, priorUnlockKey: passwordMaterial.key)
         assertError(.invalidPassword) { _ = try self.passwordUnlock() }
         XCTAssertEqual(try passwordUnlock(key: replacement.key).credentials, [credential])
         try store.logout(expected: current.revision)

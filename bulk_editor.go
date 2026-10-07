@@ -20,7 +20,7 @@ type bulkEditor struct {
 }
 
 func (a *app) openBulkEditor(emptyTrash bool) {
-	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
+	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.organizationEditor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
 	e := &bulkEditor{revision: a.sessionRevision, selected: map[string]bool{}}

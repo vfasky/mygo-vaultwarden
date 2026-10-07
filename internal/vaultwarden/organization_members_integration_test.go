@@ -225,5 +225,22 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 			t.Fatal("revoked projection resurrected")
 		}
 	}
-	t.Log("isolated organization member: accepted denied, confirmed write, direct-over-group readOnly/hidePasswords, group fallback, mixed collections, collection removal, revoke and AutoFill replacement passed")
+	request("PUT", "/users/"+memberID+"/restore", nil)
+	sync, err = member.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = member.BindSnapshotRevision(sync.Scope, "member-voluntary-leave")
+	if err := member.LeaveOrganization(ctx, sync.Vault, orgID, func(SessionCheckpoint) error { return nil }, nil); err != nil {
+		t.Fatal("product member leave", err)
+	}
+	sync, err = member.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	remaining, _, err := member.Organizations(sync.Vault)
+	if err != nil || len(remaining) != 0 {
+		t.Fatal("member leave persisted", err)
+	}
+	t.Log("isolated organization member: accepted denied, confirmed write, direct-over-group readOnly/hidePasswords, group fallback, mixed collections, collection removal, revoke, product voluntary leave and AutoFill replacement passed")
 }

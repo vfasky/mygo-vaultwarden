@@ -29,7 +29,8 @@ final class SnapshotStore {
     // Journal key IDs before creating them. Crashes cannot leave untracked secrets.
     // A new AES key is used for every replacement.
     func publish(_ credentials: [VaultCredential], scope: SnapshotScope, expected: String,
-                 passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil) throws -> SnapshotLease {
+                 passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil,
+                 priorUnlockKey: Data? = nil, includeVault: Bool = false, restoringOrganization: String? = nil) throws -> SnapshotLease {
         try validateCredentials(credentials)
         try validateSessionData(session)
         try vault?.validate(scope: scope)
@@ -43,6 +44,34 @@ final class SnapshotStore {
             var prior = try files.read()
             guard prior.revision == expected else { throw SnapshotError.stale }
             if let existing = prior.snapshot, existing.header.scope != scope { throw SnapshotError.wrongScope }
+            var vault = vault
+            if let existing = prior.snapshot {
+                // Authenticated prior isolation cannot be erased by an ordinary sync.
+                // Legacy callers without password material may not replace a protected vault.
+                if existing.passwordUnlock != nil {
+                    guard let material = passwordUnlock else { throw SnapshotError.invalidInput }
+                    var oldKey = try unwrapSnapshotKey(existing, unlockKey: priorUnlockKey ?? material.key)
+                    defer { oldKey.resetBytes(in: 0..<oldKey.count) }
+                    let old = try openSnapshotPayload(existing, key: oldKey, scope: scope)
+                    if let id = restoringOrganization, !(old.vault?.quarantinedOrganizations ?? []).contains(id) { throw SnapshotError.invalidInput }
+                    if let isolated = old.vault?.quarantinedOrganizations, !isolated.isEmpty {
+                        guard vault != nil else { throw SnapshotError.invalidInput }
+                        if let id = restoringOrganization {
+                            guard isolated.contains(id), let fresh = vault,
+                                  let object = try JSONSerialization.jsonObject(with: fresh.sync) as? [String: Any],
+                                  let profile = object["profile"] as? [String: Any],
+                                  let orgs = profile["organizations"] as? [[String: Any]],
+                                  orgs.contains(where: { org in
+                                      org["id"] as? String == id && org["status"] as? Int == 2 && org["enabled"] as? Bool == true &&
+                                      org["userId"] as? String == scope.account && (org["organizationUserId"] as? String).map({ !$0.isEmpty && $0 != scope.account }) == true &&
+                                      (org["key"] as? String).map({ !$0.isEmpty }) == true
+                                  }) else { throw SnapshotError.invalidInput }
+                        }
+                        vault!.quarantinedOrganizations = Array(Set(isolated + (vault!.quarantinedOrganizations ?? []))).filter { $0 != restoringOrganization }.sorted()
+                    }
+                }
+            }
+            let credentials = try vault?.excludingQuarantined(credentials) ?? credentials
             try cleanupLocked(&prior)
             guard prior.retiredKeys.count < 500 else { throw SnapshotError.busy }
             let keyID = UUID().uuidString
@@ -66,11 +95,42 @@ final class SnapshotStore {
                 // Key cleanup failure does not hide a committed replacement.
                 try? cleanupLocked(&next)
                 return SnapshotLease(revision: next.revision, header: snapshot.header,
-                                     expiresAt: clock() + 60, credentials: credentials)
+                                     expiresAt: clock() + 60, credentials: credentials, vault: includeVault ? vault : nil)
             } catch {
                 try? cleanupLocked(&journal)
                 throw error
             }
+        }
+    }
+
+    // Write-ahead isolation: complete before sending leave/delete. It retains the
+    // session and unrelated encrypted data and rotates the candidate identity.
+    func quarantineOrganization(_ id: String, scope: SnapshotScope, expected: String, unlockKey: Data, session: Data) throws -> SnapshotLease {
+        try validateSessionData(session)
+        defer { changed() }
+        return try files.locked {
+            var state = try files.read()
+            guard state.revision == expected else { throw SnapshotError.stale }
+            guard let snapshot = state.snapshot, !state.signedOut else { throw SnapshotError.unavailable }
+            guard snapshot.header.scope == scope else { throw SnapshotError.wrongScope }
+            var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
+            defer { key.resetBytes(in: 0..<key.count) }
+            let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
+            guard var vault = payload.vault, let config = snapshot.passwordUnlock?.config else { throw SnapshotError.invalidInput }
+            let object = try JSONSerialization.jsonObject(with: vault.sync) as? [String: Any]
+            let profile = object?["profile"] as? [String: Any]
+            let organizations = profile?["organizations"] as? [[String: Any]] ?? []
+            guard organizations.contains(where: { ($0["id"] as? String ?? $0["ID"] as? String) == id }),
+                  !(vault.quarantinedOrganizations ?? []).contains(id) else { throw SnapshotError.invalidInput }
+            vault.quarantinedOrganizations = ((vault.quarantinedOrganizations ?? []) + [id]).sorted()
+            try vault.validate(scope: scope)
+            let credentials = try vault.excludingQuarantined(payload.credentials)
+            let replacement = try sealSnapshot(credentials: credentials, scope: scope, keyID: snapshot.header.keyID, key: key,
+                passwordUnlock: PasswordUnlockMaterial(config: config, key: unlockKey), session: session, vault: vault)
+            state.snapshot = replacement
+            state.revision = UUID().uuidString
+            try files.write(state)
+            return SnapshotLease(revision: state.revision, header: replacement.header, expiresAt: clock() + 60, credentials: credentials, vault: vault)
         }
     }
 

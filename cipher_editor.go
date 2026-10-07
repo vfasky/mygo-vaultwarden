@@ -93,10 +93,11 @@ func sectionFields(f *vaultwarden.CipherFields) map[string]any {
 	return nil
 }
 func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
+	a.clearOrganizationEditor()
 	organizationPrompt := a.editor != nil && a.organizationItem(a.editor.repromptID)
 	a.vault = nil
 	a.folders = nil
-	a.organizations, a.collections = nil, nil
+	a.organizations, a.collections, a.isolatedOrganizations = nil, nil, nil
 	if vault == nil {
 		return nil
 	}
@@ -114,6 +115,10 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 		return err
 	}
 	organizations, collections, err := session.Organizations(vault)
+	if err != nil {
+		return err
+	}
+	isolated, err := session.IsolatedOrganizations(vault)
 	if err != nil {
 		return err
 	}
@@ -146,7 +151,7 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 			a.secretInputVersion++
 		}
 	}
-	a.organizations, a.collections = organizations, collections
+	a.organizations, a.collections, a.isolatedOrganizations = organizations, collections, isolated
 	a.vault, a.items, a.folders = vault, items, folders
 	if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
 		found := false
@@ -167,7 +172,7 @@ func (a *app) openCipherEditor(id string, kind int) {
 }
 
 func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden.ItemAuthorization) {
-	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.bulkEditor != nil || a.backupEditor != nil {
+	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.organizationEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
 	session, ok := a.session.(*vaultwarden.Session)

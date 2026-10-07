@@ -74,12 +74,26 @@ struct VaultData: Codable, Equatable {
     let version: Int
     let scope: SnapshotScope
     let sync: Data
+    var quarantinedOrganizations: [String]? = nil
+
+    func excludingQuarantined(_ credentials: [VaultCredential]) throws -> [VaultCredential] {
+        guard let ids = quarantinedOrganizations, !ids.isEmpty else { return credentials }
+        try validate(scope: scope)
+        let object = try JSONSerialization.jsonObject(with: sync) as! [String: Any]
+        let ciphers = object["ciphers"] as! [[String: Any]]
+        let forbidden = Set(ciphers.filter { ids.contains($0["organizationId"] as? String ?? "") }.compactMap { $0["id"] as? String })
+        return credentials.filter { !forbidden.contains($0.id) }
+    }
 
     func validate(scope expected: SnapshotScope) throws {
         guard version == 1, scope == expected, !sync.isEmpty, sync.count <= 32 * 1024 * 1024,
               let object = try JSONSerialization.jsonObject(with: sync) as? [String: Any],
               let profile = object["profile"] as? [String: Any], profile["id"] as? String == scope.account,
               let ciphers = object["ciphers"] as? [[String: Any]], ciphers.count <= 100000 else { throw SnapshotError.invalidInput }
+        if let isolated = quarantinedOrganizations {
+            guard isolated.count <= 1024, Set(isolated).count == isolated.count,
+                  isolated.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 128 && $0.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 45 }) }) else { throw SnapshotError.invalidInput }
+        }
         var ids = Set<String>()
         for cipher in ciphers {
             guard let id = cipher["id"] as? String, !id.isEmpty, id.utf8.count <= 128,
@@ -264,6 +278,9 @@ func openSnapshotPayload(_ snapshot: EncryptedSnapshot, key: Data, scope: Snapsh
         try validateCredentials(payload.credentials)
         try validateSessionData(payload.session)
         try payload.vault?.validate(scope: scope)
+        if let vault = payload.vault {
+            guard try vault.excludingQuarantined(payload.credentials).count == payload.credentials.count else { throw SnapshotError.corrupt }
+        }
         return payload
     } catch { throw SnapshotError.corrupt }
 }

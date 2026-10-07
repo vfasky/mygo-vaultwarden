@@ -32,6 +32,9 @@ func (a *app) adoptSessionCheckpoint(state *snapshotStatus) bool {
 	if a.editor != nil && a.editor.revision == a.sessionRevision {
 		a.editor.revision = state.Revision
 	}
+	if a.organizationEditor != nil && a.organizationEditor.revision == a.sessionRevision {
+		a.organizationEditor.revision = state.Revision
+	}
 	if a.folderEditor != nil && a.folderEditor.revision == a.sessionRevision {
 		a.folderEditor.revision = state.Revision
 	}

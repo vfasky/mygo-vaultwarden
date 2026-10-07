@@ -11,6 +11,7 @@ private struct BridgeRequest: Decodable {
     var unlockKey: Data?
     var session: Data?
     var vault: VaultData?
+    var organizationID: String?
     var secret: String?
     let secretProtocol: Int?
     let secretNotAfter: Double?
@@ -118,14 +119,23 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             let deviceID = settings.string(forKey: "vaultwardenDeviceID") ?? UUID().uuidString
             settings.set(deviceID, forKey: "vaultwardenDeviceID")
             return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(try vault.state()), deviceID: deviceID)
-        case "publishVault":
+        case "publishVault", "restoreOrganizationAccess":
             guard let credentials = request.credentials, credentials.allSatisfy({ $0.uris != nil }),
                   let scope = request.scope, scope.valid, scope != .demo else { throw SnapshotError.invalidInput }
-            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session, vault: request.vault)
+            if request.operation == "restoreOrganizationAccess" && request.organizationID == nil { throw SnapshotError.invalidInput }
+            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session, vault: request.vault, includeVault: true, restoringOrganization: request.operation == "restoreOrganizationAccess" ? request.organizationID : nil)
             SnapshotIndex.schedule(store: vault, lease: lease)
             // Do not return a later writer's revision as this session's write authority.
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: "快照已保存。", state: BridgeStatus(try vault.files.read()))
+                BridgeReply(ok: true, code: "ok", message: "快照已保存。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
+            }
+        case "quarantineOrganization":
+            guard let scope = request.scope, let id = request.organizationID, let key = request.unlockKey, let session = request.session else { throw SnapshotError.invalidInput }
+            defer { clearSecretClipboard() }
+            let lease = try vault.quarantineOrganization(id, scope: scope, expected: expected(), unlockKey: key, session: session)
+            SnapshotIndex.schedule(store: vault, lease: lease)
+            return try vault.withCurrentLease(lease) {
+                BridgeReply(ok: true, code: "ok", message: "该组织的本机访问已隔离。", state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
         case "saveSession":
             guard let scope = request.scope, let session = request.session, let key = request.unlockKey else { throw SnapshotError.invalidInput }

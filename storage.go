@@ -23,6 +23,7 @@ type snapshotStatus struct {
 }
 
 type storageRequest struct {
+	OrganizationID   string                      `json:"organizationID,omitempty"`
 	Operation        string                      `json:"operation"`
 	ExpectedRevision string                      `json:"expectedRevision,omitempty"`
 	Credentials      []vaultwarden.Credential    `json:"credentials"`
@@ -39,7 +40,7 @@ type storageRequest struct {
 // A zero-result sync is an explicit replacement, never an absent field.
 func (r storageRequest) MarshalJSON() ([]byte, error) {
 	type wireRequest storageRequest
-	if r.Operation == "publishVault" && r.Credentials == nil {
+	if (r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess") && r.Credentials == nil {
 		r.Credentials = []vaultwarden.Credential{}
 	}
 	return json.Marshal(wireRequest(r))

@@ -30,7 +30,7 @@ func (a *app) clearBackupEditor() {
 	}
 }
 func (a *app) openBackupEditor() {
-	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
+	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.organizationEditor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
 	e := &backupEditor{revision: a.sessionRevision, format: vaultwarden.BitwardenJSON, selected: map[string]bool{}}

@@ -3,60 +3,63 @@ package vaultwarden
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/json"
+	"errors"
 	"testing"
 )
 
 func testLiveOrganizations(t *testing.T, ctx context.Context, s *Session, scope Scope, password []byte) {
 	t.Helper()
-	request := func(method, path string, body any) []byte {
-		raw, _ := json.Marshal(body)
-		status, response, err := s.client.request(ctx, method, path, "application/json", string(raw), s.access)
-		if err != nil || status < 200 || status >= 300 {
-			t.Fatalf("organization fixture %s %s status %d: %v", method, path, status, err)
-		}
-		return response
-	}
 	sync, err := s.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var data struct{ Profile json.RawMessage }
-	_ = json.Unmarshal(sync.Vault.Sync, &data)
-	private, err := accountPrivateKey(data.Profile, s.key)
+	_ = s.BindSnapshotRevision(scope, "live-organization-management")
+	org, err := s.SaveOrganization(ctx, sync.Vault, "", OrganizationSettings{Name: "MyGo isolated organization", BillingEmail: s.email, CollectionName: "真实集合"}, nil)
 	if err != nil {
-		t.Fatal("live account RSA", err)
+		t.Fatal("product create organization", err)
 	}
-	key := make([]byte, 64)
-	_, _ = rand.Read(key)
-	defer clear(key)
-	wrapped, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &private.PublicKey, key, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	collectionName, _ := EncryptString([]byte("真实集合"), key)
-	response := request("POST", "/api/organizations", map[string]any{"name": "MyGo isolated organization", "billingEmail": s.email, "collectionName": collectionName, "key": "3." + base64.StdEncoding.EncodeToString(wrapped), "planType": 0})
-	var org struct{ ID string }
-	if json.Unmarshal(response, &org) != nil || !validObjectID(org.ID) {
-		t.Fatal("organization create identity")
-	}
+	// The fixture has no persistent local store; Swift tests exercise the durable
+	// isolation callback separately. Never use this no-op callback in product code.
+	fixtureIsolate := func(SessionCheckpoint) error { return nil }
 	defer func() {
-		master, err := DeriveMaster(password, s.email, s.passwordUnlock.Config.KDF)
+		latest, err := s.Sync(ctx)
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		defer clear(master)
-		request("DELETE", "/api/organizations/"+org.ID, map[string]any{"masterPasswordHash": AuthorizationHash(master, password)})
+		_ = s.BindSnapshotRevision(scope, "live-organization-delete")
+		if err := s.DeleteOrganization(ctx, latest.Vault, org.ID, password, fixtureIsolate, nil); err != nil {
+			t.Error("product organization delete", err)
+		}
 	}()
 	sync, err = s.Sync(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
+	profile, err := s.OrganizationProfile(ctx, sync.Vault, org.ID, nil)
+	if err != nil || profile.BillingEmail != s.email {
+		t.Fatal("organization profile", err)
+	}
+	if _, err := s.SaveOrganization(ctx, sync.Vault, org.ID, OrganizationSettings{Name: "Product organization updated", BillingEmail: s.email}, nil); err != nil {
+		t.Fatal("organization update", err)
+	}
+	profile, err = s.OrganizationProfile(ctx, sync.Vault, org.ID, nil)
+	if err != nil || profile.Name != "Product organization updated" {
+		t.Fatal("organization update roundtrip", err)
+	}
+	err = s.LeaveOrganization(ctx, sync.Vault, org.ID, fixtureIsolate, nil)
+	var uncertain *MutationUncertainError
+	if !errors.As(err, &uncertain) {
+		t.Fatal("last owner allowed to leave", err)
+	}
+	s.mu.Lock()
+	data, err := s.organizationVaultLocked(sync.Vault)
+	s.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer data.close()
+	key := data.keys[org.ID]
 	organizations, collections, err := s.Organizations(sync.Vault)
 	if err != nil || len(organizations) != 1 || len(collections) != 1 || collections[0].Name != "真实集合" || organizations[0].UserID != scope.Account || organizations[0].OrganizationUserID == scope.Account {
 		t.Fatal("live organization decode", err)

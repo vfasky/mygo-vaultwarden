@@ -10,6 +10,8 @@ type VaultData struct {
 	Version int    `json:"version"`
 	Scope   Scope  `json:"scope"`
 	Sync    []byte `json:"sync"`
+	// Durable local isolation survives sync and is authenticated by the snapshot.
+	QuarantinedOrganizations []string `json:"quarantinedOrganizations,omitempty"`
 }
 
 func (v *VaultData) Documents(scope Scope) ([]CipherDocument, error) {
@@ -28,16 +30,30 @@ func (v *VaultData) Documents(scope Scope) ([]CipherDocument, error) {
 	if json.Unmarshal(v.Sync, &data) != nil || data.Profile.ID != scope.Account || data.Ciphers == nil || len(data.Ciphers) > 100000 {
 		return nil, ErrProtocol
 	}
+	quarantined := map[string]bool{}
+	if len(v.QuarantinedOrganizations) > 1024 {
+		return nil, ErrProtocol
+	}
+	for _, id := range v.QuarantinedOrganizations {
+		if !validObjectID(id) || quarantined[id] {
+			return nil, ErrProtocol
+		}
+		quarantined[id] = true
+	}
 	seen := map[string]bool{}
 	result := make([]CipherDocument, 0, len(data.Ciphers))
 	for _, raw := range data.Ciphers {
 		var identity struct {
-			ID string `json:"id"`
+			ID             string `json:"id"`
+			OrganizationID string `json:"organizationId"`
 		}
 		if json.Unmarshal(raw, &identity) != nil || !validObjectID(identity.ID) || seen[identity.ID] {
 			return nil, ErrProtocol
 		}
 		seen[identity.ID] = true
+		if quarantined[identity.OrganizationID] {
+			continue
+		}
 		result = append(result, CipherDocument{JSON: raw})
 	}
 	return result, nil

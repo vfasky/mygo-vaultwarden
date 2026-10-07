@@ -178,6 +178,15 @@ func (s *Session) organizationVaultLocked(vault *VaultData) (*organizationVault,
 	fail := func(err error) (*organizationVault, error) { result.close(); return nil, err }
 	seen, members := map[string]bool{}, map[string]bool{}
 	for _, org := range profile.Organizations {
+		isolated := false
+		for _, id := range vault.QuarantinedOrganizations {
+			if id == org.ID {
+				isolated = true
+			}
+		}
+		if isolated {
+			continue
+		}
 		if !validObjectID(org.ID) || !validObjectID(org.OrganizationUserID) || org.UserID != s.account || org.OrganizationUserID == s.account || seen[org.ID] || members[org.OrganizationUserID] {
 			return fail(ErrIdentity)
 		}
