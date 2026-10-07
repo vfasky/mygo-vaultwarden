@@ -12,6 +12,8 @@
         A10000000000000000000013 = {isa = PBXBuildFile; fileRef = A20000000000000000000013; };
         A10000000000000000000014 = {isa = PBXBuildFile; fileRef = A20000000000000000000014; };
         A10000000000000000000015 = {isa = PBXBuildFile; fileRef = A20000000000000000000015; };
+        A10000000000000000000016 = {isa = PBXBuildFile; fileRef = A20000000000000000000016; };
+        A20000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/AccountRecovery.swift; sourceTree = "<group>"; };
         A20000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SnapshotPolicy.swift; sourceTree = "<group>"; };
         A20000000000000000000010 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SnapshotTypes.swift; sourceTree = "<group>"; };
         A20000000000000000000011 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SnapshotFiles.swift; sourceTree = "<group>"; };
@@ -27,7 +29,7 @@
         A20000000000000000000005 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AutoFill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
         A20000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = App/Info.plist; sourceTree = "<group>"; };
         A20000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = AutoFill/Info.plist; sourceTree = "<group>"; };
-        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000001, A20000000000000000000002, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A20000000000000000000015, A30000000000000000000002, ); sourceTree = "<group>"; };
+        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000001, A20000000000000000000002, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A20000000000000000000015, A20000000000000000000016, A30000000000000000000002, ); sourceTree = "<group>"; };
         A30000000000000000000002 = {isa = PBXGroup; name = Products; children = (A20000000000000000000004, A20000000000000000000005, ); sourceTree = "<group>"; };
         A40000000000000000000001 = {
             isa = PBXNativeTarget;
@@ -63,7 +65,7 @@
             shellPath = /bin/bash;
             shellScript = "bash \"$SRCROOT/../scripts/xcode-build-go.sh\"\n";
         };
-        A50000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000010, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015, ); runOnlyForDeploymentPostprocessing = 0; };
+        A50000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000010, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015, A10000000000000000000016, ); runOnlyForDeploymentPostprocessing = 0; };
         A50000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
         A50000000000000000000004 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (A10000000000000000000004, ); name = "Embed AutoFill extension"; runOnlyForDeploymentPostprocessing = 0; };
         A50000000000000000000005 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000005, ); runOnlyForDeploymentPostprocessing = 0; };
