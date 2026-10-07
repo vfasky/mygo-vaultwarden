@@ -1,6 +1,6 @@
 # #17 账号轮换的持久恢复适配
 
-本卡基于当前 Board main 工作树实现，未重置基线、未改主目录、恢复 ref、账号算法、组织/Send 业务、主 UI 或工程注册。账号合同来自 `docs/parallel/accounts.md` 与 `internal/vaultwarden/account_change.go` 的真实 `AccountRecovery` v1；桥沿用 #9 的 C ABI / 256 KiB 分块 / 64 MiB 硬上限。新增根 `account_rotation_storage.go` 和其测试属于本卡明确授权范围；`macos/Shared/AccountRecovery.swift` **需要 #14 注册到正式工程 Shared 源集合**。Swift Package / 本卡动态库与 AutoFill typecheck 使用整个 Shared 目录，已经包含它。
+本卡基于当前 Board main 工作树实现，未重置基线、未改主目录、恢复 ref、账号算法、组织/Send 业务或主 UI。账号合同来自 `docs/parallel/accounts.md` 与 `internal/vaultwarden/account_change.go` 的真实 `AccountRecovery` v1；桥沿用 #9 的 C ABI / 256 KiB 分块 / 64 MiB 硬上限。新增根 `account_rotation_storage.go` 和其测试属于本卡明确授权范围。按 Review 返修授权，本卡已将 `macos/Shared/AccountRecovery.swift` 注册到正式 Xcode 工程的 AutoFill Sources，补齐已编译 Shared 源的强依赖；主 app 的生产桥脚本通过 Shared glob 包含它。#14 仍负责后续业务入口/认证桥装配。
 
 ## 持久状态和兼容边界
 
@@ -66,5 +66,45 @@ MYGO_RECOVERY_TEST_URL=http://127.0.0.1:32798 SNAPSHOT_TEST_HARNESS="$TMPDIR/lib
 - 真实 Vaultwarden **1.37.4** image `sha256:faa140d1177106cf8802d06e6c42e607985f7944994e5bd38e2feb5cefa17216`，独占 `mygo-recovery17-01a11755`，label `mygo.account.card=17`，127.0.0.1随机端口，`--tmpfs /data` / `--rm`，自建example.invalid账号。真实注册/登录/创建独立item-key登录条目；目录权限拒写使 `CommitAccountChange` 零POST；第一轮正常确认并持久完成；第二轮代理在服务器已响应后丢弃响应返回502，账号结果Unknown，记录与两套key仍可恢复。lock/重建adapter后重新登录完整sync，核对新session user key与journal新key一致，条目标题/密码正确，然后专用完成并安装真实认证回执。总计恰好2次轮换POST，故障无自动重试；`-race`通过。已停止独占容器，--rm清除了易失数据和测试账号。
 
 - 最终新增 `recoveryPending` 回执核验后，以 `libSnapshotBridgeHarness-final.dylib` / `libSnapshotBridge-final.dylib` 重建两种桥，再跑包含生产C ABI分块的定向race；重新创建独占容器端口32799复跑真实故障回环，均通过并再次清理容器。`go vet -tags headless ./...`、最终全包race、`git diff --check` 均通过。
+
+## Xcode 工程登记返修验证
+
+本次保留 `8202cbb` 全部存储实现，仅改 `project.pbxproj` 中 AccountRecovery.swift 的 PBXFileReference、PBXBuildFile、group 与 AutoFill Sources，以及本文档。没有 Go/Swift 源码变化，因此没有重跑上一节的全量 Go/race/Swift 测试。
+
+逐一解析实际 PBXNativeTarget/buildPhases/fileRef 清单：
+
+- `AutoFill` 的 Sources 为 `AutoFill/CredentialProviderViewController.swift`，以及 `Shared/` 下的 `VaultCredential.swift`、`SnapshotTypes.swift`、`SnapshotFiles.swift`、`ProtectedSnapshotKeys.swift`、`SnapshotStore.swift`、`SnapshotIndex.swift`、`SnapshotPolicy.swift`、新增 `AccountRecovery.swift`。新源恰好登记一次。原有 `SecretCopyAuthorization.swift` / `SensitiveClipboard.swift` 不在扩展清单，本次不扩大登记范围；最初采用“所有 Shared 文件必须进扩展”的检查因此失败，改为检查实际依赖此类型的 target 后通过。
+- `MyGoVaultwarden` 没有 PBXSourcesBuildPhase，通过 `scripts/xcode-build-go.sh` 调用 `scripts/xcode-build-bridge.sh`；后者原有 `Shared/*.swift` / `Bridge/*.swift` 包含 AccountRecovery.swift，无需新增 app Sources。
+
+以下命令在本卡 scratch 内执行，未读取 `.local` 签名配置、未安装或运行用户 app：
+
+```sh
+# 修复前在8202cbb复现：exit 65，BUILD FAILED。
+xcodebuild -project macos/MyGoVaultwarden.xcodeproj -scheme AutoFill \
+  -configuration Debug -derivedDataPath "$TMPDIR/account-recovery-before" \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+
+# 修复后只构建实际AutoFill target，产物/中间件/模块缓存全在独立scratch。
+xcodebuild -project macos/MyGoVaultwarden.xcodeproj -target AutoFill \
+  -configuration Debug \
+  SYMROOT="$TMPDIR/account-recovery-after/Build/Products" \
+  OBJROOT="$TMPDIR/account-recovery-after/Build/Intermediates.noindex" \
+  SHARED_PRECOMPS_DIR="$TMPDIR/account-recovery-after/Build/PrecompiledHeaders" \
+  CLANG_MODULE_CACHE_PATH="$TMPDIR/account-recovery-after/ModuleCache.noindex" \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+
+# 使用未改动的生产桥脚本，验证主app的Shared glob路径。
+TARGET_BUILD_DIR="$TMPDIR/account-recovery-bridge/Products" \
+  CONTENTS_FOLDER_PATH=MyGo.app/Contents \
+  DERIVED_FILE_DIR="$TMPDIR/account-recovery-bridge/Derived" \
+  ARCHS='arm64 x86_64' MACOSX_DEPLOYMENT_TARGET=14.0 \
+  CODE_SIGNING_ALLOWED=NO bash scripts/xcode-build-bridge.sh
+xcrun lipo -info "$TMPDIR/account-recovery-bridge/Products/MyGo.app/Contents/Frameworks/libSnapshotBridge.dylib"
+git diff --check
+```
+
+修复前错误明确为 `SnapshotTypes.swift:125/240` 找不到 `AccountRecoveryJournal`，以及 `SnapshotStore.swift:276–278` 找不到 `AccountRecoveryBinding/Resolution/Journal`。修复后真实 Xcode AutoFill **BUILD SUCCEEDED**，arm64 和 x86_64 的 `AutoFill.SwiftFileList` 均包含新源，完成两架构编译/链接并产出未签名扩展。构建仅有无 AppIntents 依赖的 metadata 提示，以及无 active architecture 时构建全部架构的提示。生产脚本成功产出 arm64+x86_64 通用桥动态库。日志分别为 `$TMPDIR/account-recovery-before.log`、`account-recovery-after.log`、`account-recovery-bridge.log`（scratch 会随会话清理）。这是真实 target 构建证据，不以 SwiftPM/glob typecheck 代替。未执行主 app 的完整 Go 构建/安装，未宣称 #14 轮换入口已经装配。
+
+## 未验证边界
 
 未验证：真实Keychain/Touch ID、签名App Group安装和系统AutoFill填充、OS进程kill/机器断电故障。独立store/adapter重开与写失败注入是崩溃边界的代理证据，不声称实际断电测试。真实轮换回环有一个独立item-key条目，其他资源经过真实枚举为空；非空组织/紧急/Send/legacy跨资源partial修复仍需相应转换lane和最终集成验证。新旧全部材料在未知阶段保留，未知/部分状态不允许完成，本卡不宣称能自动修复服务器非事务部分轮换。GC/Swift Data/string副本不能证明物理清零；这里只清理可控Go缓冲并按密文/Keychain提交顺序销毁持久材料。
