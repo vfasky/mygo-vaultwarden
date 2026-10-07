@@ -16,8 +16,27 @@ func testLiveProtectedItem(t *testing.T, ctx context.Context, s *Session, scope 
 	if err != nil {
 		t.Fatal(err)
 	}
+	deleteProtected := func(id string) error {
+		snapshot, e := s.Sync(ctx)
+		if e != nil {
+			return e
+		}
+		revision := fixtureUUID()
+		if e = s.BindSnapshotRevision(scope, revision); e != nil {
+			return e
+		}
+		grant, e := s.AuthorizePersonalItem(ctx, snapshot.Vault, revision, id, password)
+		if e != nil {
+			return e
+		}
+		document, _, e := s.ReadPersonalCipherAuthorized(snapshot.Vault, id, grant)
+		if e != nil {
+			return e
+		}
+		return s.ChangePersonalCipherStateAuthorized(ctx, scope, document, CipherDeletePermanently, grant, nil)
+	}
 	defer func() {
-		if err := s.ChangeCipherState(ctx, scope, fields.ID, CipherDeletePermanently, nil); err != nil {
+		if err := deleteProtected(fields.ID); err != nil {
 			t.Error("protected fixture cleanup", err)
 		}
 	}()
@@ -63,7 +82,7 @@ func testLiveProtectedItem(t *testing.T, ctx context.Context, s *Session, scope 
 	if err != nil || copyFields.Reprompt != 1 {
 		t.Fatal("live copy removed reprompt", err)
 	}
-	if err := s.ChangeCipherState(ctx, scope, copyFields.ID, CipherDeletePermanently, nil); err != nil {
+	if err := deleteProtected(copyFields.ID); err != nil {
 		t.Fatal(err)
 	}
 }

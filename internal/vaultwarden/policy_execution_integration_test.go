@@ -150,8 +150,39 @@ func TestLivePolicyExecution(t *testing.T) {
 	if _, _, err = member.ReadPersonalCipher(mv, fields.ID); err != nil {
 		t.Fatal("ownership existing read", err)
 	}
+	for _, action := range []CipherAction{CipherTrash, CipherRestore} {
+		current, _, e := member.ReadPersonalCipher(mv, fields.ID)
+		if e != nil {
+			t.Fatal(e)
+		}
+		if e = member.ChangePersonalCipherStateAuthorized(ctx, mv.Scope, current, action, nil, nil); e != nil {
+			t.Fatal("ownership state must remain permitted", action, e)
+		}
+		mv = syncVault(member)
+	}
+	if err = member.ChangePersonalCiphers(ctx, mv.Scope, mv, []string{fields.ID}, CipherArchive, nil, nil); err != nil {
+		t.Fatal("ownership bulk archive", err)
+	}
 	if _, err = owner.CreatePersonalCipher(ctx, ov.Scope, note, nil); err != nil {
 		t.Fatal("owner exemption", err)
+	}
+	_, collections, err := owner.Organizations(ov)
+	if err != nil || len(collections) == 0 {
+		t.Fatal("organization collection", err)
+	}
+	collectionID := collections[0].ID
+	card, err := owner.CreateOrganizationCipher(ctx, ov, org.ID, collectionID, CipherFields{Type: 3, Name: "Existing organization card"}, nil)
+	if err != nil {
+		t.Fatal("initial organization card", err)
+	}
+	ov = syncVault(owner)
+	var cardMeta struct{ ID string }
+	if json.Unmarshal(card.JSON, &cardMeta) != nil {
+		t.Fatal("card response")
+	}
+	card, cardFields, err := owner.ReadOrganizationCipher(ov, cardMeta.ID, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 	seedPolicy(15, []int{3})
 	if _, err = owner.CreatePersonalCipher(ctx, ov.Scope, CipherFields{Type: 3, Name: "Restricted card"}, nil); !errors.Is(err, ErrPermission) {
@@ -160,5 +191,25 @@ func TestLivePolicyExecution(t *testing.T) {
 	if _, err = owner.CreatePersonalCipher(ctx, ov.Scope, note, nil); err != nil {
 		t.Fatal("unrestricted type rejected", err)
 	}
-	t.Log("owned 1.37.4: authoritative sync identity/policiesNew accepted; member PersonalOwnership create/update denial without UI resync; existing read allowed; owner ownership exemption; owner RestrictedItemTypes create denied; no policy management UI or offline restriction claim")
+	if _, err = owner.CreateOrganizationCipher(ctx, ov, org.ID, collectionID, CipherFields{Type: 3, Name: "Restricted organization card"}, nil); !errors.Is(err, ErrPermission) {
+		t.Fatal("organization create restriction", err)
+	}
+	if _, err = owner.UpdateOrganizationCipher(ctx, ov, card, cardFields, nil, nil); !errors.Is(err, ErrPermission) {
+		t.Fatal("organization update restriction", err)
+	}
+	if _, err = owner.CreateOrganizationCipher(ctx, ov, org.ID, collectionID, note, nil); err != nil {
+		t.Fatal("organization unrestricted type", err)
+	}
+	seedPolicy(15, []int{3, 2})
+	if err = member.ChangePersonalCiphers(ctx, mv.Scope, mv, []string{fields.ID}, CipherTrash, nil, nil); !errors.Is(err, ErrPermission) {
+		t.Fatal("restricted bulk state", err)
+	}
+	seedPolicy(15, []int{3})
+	t.Run("protected-state-authorization", func(t *testing.T) {
+		testLiveProtectedItem(t, ctx, owner, ov.Scope, []byte("Public-member-fixture-password!"))
+	})
+	t.Run("bulk-preflight-and-server-partial", func(t *testing.T) {
+		testLiveFoldersAndBulk(t, ctx, owner, ov.Scope)
+	})
+	t.Log("owned 1.37.4: authoritative policy sync; member ownership denial and owner exemption; restricted personal and organization create/update denied without UI resync; unrestricted organization note succeeds; type5 allows state/bulk and type15 blocks bulk; no offline or policy editor claim")
 }

@@ -441,6 +441,13 @@ func (s *Session) UpdateOrganizationCipher(ctx context.Context, vault *VaultData
 	if err != nil {
 		return CipherDocument{}, err
 	}
+	if fields.OrganizationID == nil {
+		return CipherDocument{}, ErrPermission
+	}
+	guard, err = s.organizationCipherPolicyGuardLocked(ctx, data, *fields.OrganizationID, fields.Type, persist, guard)
+	if err != nil {
+		return CipherDocument{}, err
+	}
 	status, body, err := s.authenticatedGuardedLocked(ctx, http.MethodPut, "/api/ciphers/"+fields.ID, "application/json", string(encrypted.JSON), persist, guard)
 	if err != nil {
 		return CipherDocument{}, err

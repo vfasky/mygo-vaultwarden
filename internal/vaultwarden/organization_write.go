@@ -119,6 +119,10 @@ func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData,
 		}
 		return nil
 	}
+	guard, err = s.organizationCipherPolicyGuardLocked(ctx, data, orgID, fields.Type, persist, guard)
+	if err != nil {
+		return CipherDocument{}, err
+	}
 	status, response, err := s.authenticatedGuardedLocked(ctx, method, endpoint, "application/json", string(body), persist, guard)
 	if err != nil {
 		return CipherDocument{}, err

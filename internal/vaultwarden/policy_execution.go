@@ -13,11 +13,14 @@ import (
 // It is never exported, serialized, or constructed from caller-owned VaultData.
 // Local organization quarantine must not filter these server membership rules.
 type operationPolicies struct {
-	scope              Scope
-	revision           string
-	epoch              uint64
-	personalOwnership  bool
-	restrictedPersonal map[int]bool
+	scope                   Scope
+	revision                string
+	epoch                   uint64
+	personalOwnership       bool
+	restrictedPersonal      map[int]bool
+	restrictedOrganizations map[string]map[int]bool
+	memberships             map[string]policyMembership
+	ciphers                 []json.RawMessage
 }
 
 type policyMembership struct {
@@ -142,7 +145,7 @@ func parseOperationPolicies(body []byte, scope Scope, email, wrapped string) (*o
 			return nil, ErrProtocol
 		}
 	}
-	result := &operationPolicies{scope: scope, restrictedPersonal: map[int]bool{}}
+	result := &operationPolicies{scope: scope, restrictedPersonal: map[int]bool{}, restrictedOrganizations: map[string]map[int]bool{}, memberships: orgs, ciphers: data.Ciphers}
 	for _, p := range confirmed {
 		o := orgs[p.OrganizationID]
 		if !*p.Enabled || !*o.UsePolicies {
@@ -164,6 +167,7 @@ func parseOperationPolicies(body []byte, scope Scope, email, wrapped string) (*o
 				}
 			}
 			seen := map[int]bool{}
+			result.restrictedOrganizations[o.ID] = seen
 			for _, kind := range kinds {
 				if kind < 1 || kind > 8 || seen[kind] {
 					return nil, ErrProtocol
@@ -173,6 +177,94 @@ func parseOperationPolicies(body []byte, scope Scope, email, wrapped string) (*o
 		}
 	}
 	return result, nil
+}
+
+// organizationCipherPolicyGuardLocked applies only the destination's type policy.
+// The policy read cannot grant collection access or lift local quarantine; those
+// checks and the decrypted key remain owned by organizationVaultLocked.
+func (s *Session) organizationCipherPolicyGuardLocked(ctx context.Context, data *organizationVault, orgID string, kind int, persist func(SessionCheckpoint) error, guard func() error) (func() error, error) {
+	policies, err := s.operationPoliciesLocked(ctx, persist)
+	if err != nil {
+		return nil, err
+	}
+	member, found := policies.memberships[orgID]
+	if !found || *member.Status != 2 || !*member.Enabled {
+		return nil, ErrPermission
+	}
+	matched := false
+	for _, local := range data.organizations {
+		if local.ID == orgID {
+			if local.OrganizationUserID != member.MemberID || local.UserID != member.UserID || local.Type != *member.Type {
+				return nil, ErrExpired
+			}
+			matched = true
+		}
+	}
+	if !matched || data.keys[orgID] == nil {
+		return nil, ErrPermission
+	}
+	if policies.restrictedOrganizations[orgID][kind] {
+		return nil, fmt.Errorf("目标组织策略限制此项目类型，不能保存或共享：%w", ErrPermission)
+	}
+	return func() error {
+		if err := s.checkOperationPoliciesLocked(ctx, policies); err != nil {
+			return err
+		}
+		if guard != nil {
+			return guard()
+		}
+		return nil
+	}, nil
+}
+
+// personalCipherStatePolicyLocked authorizes the exact server record for state
+// changes. Caller-provided documents cannot disguise a restricted type or move a
+// shared item into a personal-only route. Type 5 does not prohibit these actions.
+func (s *Session) personalCipherStatePolicyLocked(ctx context.Context, ids []string, grant *ItemAuthorization, persist func(SessionCheckpoint) error) error {
+	policies, err := s.operationPoliciesLocked(ctx, persist)
+	if err != nil {
+		return err
+	}
+	wanted := make(map[string]bool, len(ids))
+	for _, id := range ids {
+		wanted[id] = true
+	}
+	found := make(map[string]bool, len(ids))
+	for _, raw := range policies.ciphers {
+		var meta struct {
+			ID                 string
+			Type               *int
+			OrganizationID     *string
+			Edit, ViewPassword *bool
+			Reprompt           *int
+		}
+		if json.Unmarshal(raw, &meta) != nil {
+			return ErrProtocol
+		}
+		if !wanted[meta.ID] {
+			continue
+		}
+		if found[meta.ID] || meta.Type == nil || *meta.Type < 1 || *meta.Type > 8 {
+			return ErrProtocol
+		}
+		if meta.Edit == nil || meta.ViewPassword == nil || meta.Reprompt == nil || *meta.Reprompt < 0 || *meta.Reprompt > 1 {
+			return ErrProtocol
+		}
+		if meta.OrganizationID != nil || !*meta.Edit || !*meta.ViewPassword {
+			return ErrPermission
+		}
+		if *meta.Reprompt != 0 && !s.validItemAuthorizationLocked(grant, CipherDocument{JSON: raw}) {
+			return ErrPermission
+		}
+		if policies.restrictedPersonal[*meta.Type] {
+			return fmt.Errorf("组织策略限制此项目类型，不能修改其状态：%w", ErrPermission)
+		}
+		found[meta.ID] = true
+	}
+	if len(found) != len(wanted) {
+		return ErrConflict
+	}
+	return s.checkOperationPoliciesLocked(ctx, policies)
 }
 
 func rawJSONEqual(a, b json.RawMessage) bool {

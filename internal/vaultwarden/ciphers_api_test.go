@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 )
@@ -17,7 +16,7 @@ func TestCipherStateRouteMethodsAndScope(t *testing.T) {
 	}{{CipherTrash, "PUT", "/delete"}, {CipherRestore, "PUT", "/restore"}, {CipherArchive, "PUT", "/archive"}, {CipherUnarchive, "PUT", "/unarchive"}, {CipherDeletePermanently, "DELETE", ""}} {
 		t.Run(string(tc.action), func(t *testing.T) {
 			var requests atomic.Int32
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newPersonalStatePolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests.Add(1)
 				if r.Method != tc.method || r.URL.Path != "/api/ciphers/item-1"+tc.path || r.Header.Get("Authorization") != "Bearer access-not-persisted" {
 					t.Error("wrong authenticated mutation")
@@ -47,7 +46,7 @@ func TestCipherStateRouteMethodsAndScope(t *testing.T) {
 	}
 }
 func TestCipherPartialDoesNotOverwriteEncryptedFields(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newPersonalStatePolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "PUT" || r.URL.Path != "/api/ciphers/item-1/partial" {
 			t.Fatal("wrong route")
 		}

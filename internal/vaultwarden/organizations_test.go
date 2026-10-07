@@ -14,7 +14,6 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/http/httptest"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -190,7 +189,7 @@ func TestOrganizationRestrictionsAndRevocation(t *testing.T) {
 func TestOrganizationUpdateCheckpointAndUnknownPreservation(t *testing.T) {
 	var requests atomic.Int32
 	var ownerKey []byte
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newOrganizationPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		if r.Method != "PUT" || r.URL.Path != "/api/ciphers/item-org" {
 			t.Error("route")
@@ -234,7 +233,7 @@ func TestOrganizationUpdateCheckpointAndUnknownPreservation(t *testing.T) {
 }
 func TestOrganizationCloseCancelsInFlightWrite(t *testing.T) {
 	started := make(chan struct{})
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newOrganizationPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = io.Copy(io.Discard, r.Body)
 		close(started)
 		<-r.Context().Done()

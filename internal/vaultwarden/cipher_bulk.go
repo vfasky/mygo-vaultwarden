@@ -86,6 +86,9 @@ func (s *Session) ChangePersonalCiphers(ctx context.Context, scope Scope, vault 
 	if err = s.requireScopeLocked(scope); err != nil {
 		return err
 	}
+	if err := s.personalCipherStatePolicyLocked(ctx, ids, nil, persist); err != nil {
+		return err
+	}
 	status, _, err := s.authenticatedLocked(ctx, method, endpoint, "application/json", string(raw), persist)
 	if err != nil {
 		return err

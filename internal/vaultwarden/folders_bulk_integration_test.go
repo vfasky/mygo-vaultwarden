@@ -88,8 +88,9 @@ func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope
 	for _, op := range []CipherAction{CipherArchive, CipherUnarchive, CipherTrash, CipherRestore, CipherTrash, CipherDeletePermanently} {
 		verify(op)
 	}
-	// A stale snapshot can contain IDs already removed remotely. Bulk move writes
-	// the accessible item and still returns 400: verify this against the real server.
+	// The authenticated policy preflight detects a missing server ID before the
+	// batch is dispatched. A deletion after this GET can still cause a partial
+	// server result; exercise that protocol separately with a fixture request.
 	doc, err := s.CreatePersonalCipher(ctx, scope, CipherFields{Type: 2, Name: "partial fixture", SecureNote: map[string]any{}}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -115,8 +116,21 @@ func testLiveFoldersAndBulk(t *testing.T, ctx context.Context, s *Session, scope
 		t.Fatal(err)
 	}
 	err = s.ChangePersonalCiphers(ctx, scope, stale.Vault, []string{fields.ID, "00000000-0000-0000-0000-000000000000"}, CipherMove, &folder.ID, nil)
-	if _, ok := err.(*MutationUncertainError); !ok {
-		t.Fatal("partial batch must be uncertain", err)
+	if err != ErrConflict {
+		t.Fatal("missing server item must block the batch", err)
+	}
+	snapshot, err = s.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, unchanged, err := s.ReadPersonalCipher(snapshot.Vault, fields.ID)
+	if err != nil || unchanged.FolderID != nil {
+		t.Fatal("preflight rejection changed an item", err)
+	}
+	body, _ := json.Marshal(map[string]any{"ids": []string{fields.ID, "00000000-0000-0000-0000-000000000000"}, "folderId": folder.ID})
+	status, _, err := s.client.request(ctx, "PUT", "/api/ciphers/move", "application/json", string(body), s.access)
+	if err != nil || status != 400 {
+		t.Fatal("fixture partial server rejection", status, err)
 	}
 	snapshot, err = s.Sync(ctx)
 	if err != nil {

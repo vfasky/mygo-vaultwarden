@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -17,7 +16,7 @@ func TestOrganizationShareRewrapsIndependentKeyAndPreservesOpaqueData(t *testing
 	var source map[string]any
 	var orgKey, originalItemKey []byte
 	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newOrganizationPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		if r.Method != "PUT" || r.URL.Path != "/api/ciphers/share-me/share" {
 			t.Error("share route")
@@ -104,7 +103,7 @@ func TestOrganizationShareRewrapsIndependentKeyAndPreservesOpaqueData(t *testing
 
 func TestOrganizationSharePartialFailureAndCreationPermissions(t *testing.T) {
 	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(http.StatusBadRequest) }))
+	server := newOrganizationPolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { requests.Add(1); w.WriteHeader(http.StatusBadRequest) }))
 	defer server.Close()
 	s, vault, _, _ := organizationFixture(t, server.URL)
 	defer s.Close()

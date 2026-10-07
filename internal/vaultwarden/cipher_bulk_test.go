@@ -25,7 +25,7 @@ func TestBulkRoutesAndPartialFailure(t *testing.T) {
 	}{{CipherMove, "PUT", "/move"}, {CipherTrash, "PUT", "/delete"}, {CipherRestore, "PUT", "/restore"}, {CipherArchive, "PUT", "/archive"}, {CipherUnarchive, "PUT", "/unarchive"}, {CipherDeletePermanently, "DELETE", ""}} {
 		t.Run(string(tc.op), func(t *testing.T) {
 			requests := 0
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			server := newPersonalStatePolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				requests++
 				if r.Method != tc.method || r.URL.Path != "/api/ciphers"+tc.path {
 					t.Error("wrong route")

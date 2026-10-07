@@ -39,7 +39,7 @@ func TestFolderAndBulkCannotBypassCheckpoint(t *testing.T) {
 func TestCloseCancelsBulkWithoutRetry(t *testing.T) {
 	entered := make(chan struct{})
 	var requests atomic.Int32
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newPersonalStatePolicyServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		io.Copy(io.Discard, r.Body)
 		close(entered)

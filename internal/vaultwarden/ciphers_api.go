@@ -41,10 +41,10 @@ func (s *Session) ChangePersonalCipherStateAuthorized(ctx context.Context, scope
 		}
 		return nil
 	}
-	return s.changeCipherState(ctx, scope, metadata.ID, action, persist, guard)
+	return s.changeCipherState(ctx, scope, metadata.ID, action, persist, guard, grant)
 }
 
-func (s *Session) changeCipherState(ctx context.Context, scope Scope, id string, action CipherAction, persist func(SessionCheckpoint) error, guard func() error) error {
+func (s *Session) changeCipherState(ctx context.Context, scope Scope, id string, action CipherAction, persist func(SessionCheckpoint) error, guard func() error, grant *ItemAuthorization) error {
 	if !validObjectID(id) {
 		return ErrValidation
 	}
@@ -71,6 +71,14 @@ func (s *Session) changeCipherState(ctx context.Context, scope Scope, id string,
 	}
 	defer finish()
 	if err := s.requireScopeLocked(scope); err != nil {
+		return err
+	}
+	if guard != nil {
+		if err := guard(); err != nil {
+			return err
+		}
+	}
+	if err := s.personalCipherStatePolicyLocked(ctx, []string{id}, grant, persist); err != nil {
 		return err
 	}
 	status, _, err := s.authenticatedGuardedLocked(ctx, method, endpoint, "", "", persist, guard)
@@ -111,6 +119,9 @@ func (s *Session) setCipherPersonalMetadataUnchecked(ctx context.Context, scope 
 	}
 	defer finish()
 	if err := s.requireScopeLocked(scope); err != nil {
+		return err
+	}
+	if err := s.personalCipherStatePolicyLocked(ctx, []string{id}, nil, persist); err != nil {
 		return err
 	}
 	status, _, err := s.authenticatedLocked(ctx, http.MethodPut, "/api/ciphers/"+id+"/partial", "application/json", string(body), persist)
