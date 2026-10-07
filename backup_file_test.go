@@ -21,6 +21,29 @@ func backupTestDirectory(t *testing.T) string {
 	}
 	return dir
 }
+func TestBackupFormatCannotMasqueradeAsOfficialJSON(t *testing.T) {
+	for _, format := range []vaultwarden.BackupFormat{vaultwarden.BitwardenJSON, vaultwarden.MyGoBackup} {
+		path, err := backupOutputPath("/local/backup", format)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := "/local/backup.json"
+		wrong := "/local/backup.mygovault"
+		if format == vaultwarden.MyGoBackup {
+			want, wrong = wrong, want
+		}
+		if path != want {
+			t.Fatal("wrong extension")
+		}
+		if _, err := backupOutputPath(wrong, format); err == nil {
+			t.Fatal("mixed extension allowed")
+		}
+	}
+	if _, err := backupOutputPath("", vaultwarden.MyGoBackup); err == nil {
+		t.Fatal("cancelled path accepted")
+	}
+}
+
 func TestBackupFileNoOverwriteSymlinkAndCancel(t *testing.T) {
 	dir := backupTestDirectory(t)
 	target := filepath.Join(dir, "vault.mygovault")

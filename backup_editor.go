@@ -4,6 +4,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -144,6 +146,25 @@ func backupDialogFilter(format vaultwarden.BackupFormat) mygo.FileFilter {
 	}
 	return mygo.FileFilter{Name: "Bitwarden JSON", Extensions: []string{"json"}}
 }
+func backupOutputPath(path string, format vaultwarden.BackupFormat) (string, error) {
+	if path == "" {
+		return "", vaultwarden.ErrCancelled
+	}
+	extension := ".json"
+	if format == vaultwarden.MyGoBackup {
+		extension = ".mygovault"
+	} else if format != vaultwarden.BitwardenJSON {
+		return "", vaultwarden.ErrValidation
+	}
+	if filepath.Ext(path) == "" {
+		return path + extension, nil
+	}
+	if strings.ToLower(filepath.Ext(path)) != extension {
+		return "", fmt.Errorf("此格式请使用 %s 文件扩展名，未写入文件。", extension)
+	}
+	return path, nil
+}
+
 func (a *app) chooseImportFile() {
 	e := a.backupEditor
 	if a.pending != 0 || e == nil || e.plan != nil || !e.importing || !a.backupCurrent(e, a.epoch) {
@@ -234,6 +255,11 @@ func (a *app) chooseExportFile() {
 			var path string
 			path, err = mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
 			if err == nil && path != "" && ctx.Err() == nil {
+				path, err = backupOutputPath(path, format)
+				if err != nil {
+					a.window.Update(func() { a.completeBackupExport(e, epoch, ctx, nil, err, cancel) })
+					return
+				}
 				status = callStorage(storageRequest{Operation: "status"})
 				if !status.OK || !backupLease(status.State, scope, revision) {
 					err = vaultwarden.ErrConflict
