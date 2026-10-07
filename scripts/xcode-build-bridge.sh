@@ -11,7 +11,10 @@ for architecture in $ARCHS; do
     -module-cache-path "$DERIVED_FILE_DIR/swift-bridge/modules" \
     -target "$architecture-apple-macos$MACOSX_DEPLOYMENT_TARGET" \
     -Xlinker -install_name -Xlinker @rpath/libSnapshotBridge.dylib \
-    "$project_root"/macos/Shared/*.swift "$project_root"/macos/Bridge/*.swift -o "$binary"
+    -framework AuthenticationServices \
+    "$project_root"/macos/Shared/*.swift "$project_root"/macos/Bridge/*.swift \
+    "$project_root"/macos/Authentication/VaultAuthentication.swift \
+    "$project_root"/macos/Authentication/AuthenticationBridge.swift -o "$binary"
   binaries+=("$binary")
 done
 if [[ ${#binaries[@]} -eq 1 ]]; then

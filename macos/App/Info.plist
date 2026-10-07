@@ -13,6 +13,11 @@
     <key>LSApplicationCategoryType</key><string>public.app-category.productivity</string>
     <key>SnapshotAppGroup</key><string>$(TeamIdentifierPrefix)yz.sh.mygo-vaultwarden.shared</string>
     <key>SnapshotKeychainGroup</key><string>$(AppIdentifierPrefix)yz.sh.mygo-vaultwarden.shared</string>
+    <key>CFBundleURLTypes</key><array><dict>
+        <key>CFBundleURLName</key><string>Vaultwarden authentication callbacks</string>
+        <key>CFBundleURLSchemes</key><array><string>bitwarden</string></array>
+        <key>CFBundleTypeRole</key><string>Viewer</string>
+    </dict></array>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>NSHighResolutionCapable</key><true/>
     <key>NSSupportsAutomaticGraphicsSwitching</key><true/>

@@ -101,3 +101,61 @@ Review #23修复后验证（本轮未重跑历史SMTP/硬件回环）：
 - `git diff --check`：通过。可复现说明见`macos/Authentication/README.md`；SwiftPM构建输出存于session scratch。
 
 尚未验证：真实Duo租户、YubiKey硬件、WebAuthn/Touch ID签名系统窗口与associated domains、真实SSO IdP/nonce交换、多provider SSO邮件重发、生产存储与主应用桥接。HTTP fixture不是这些环境的替代证据；Swift字节测试亦不是实际认证测试。主应用接线、完整平台注册及UI完整旅程留给最终集成卡。
+
+## Card #32：生产异步桥（取代上文尚未装配原生源的历史状态）
+
+本卡基于已合入 #30 的 `13ce383`，核对 MyGo v0.2.15 `Window.NativeHandle`（NSWindow*）、`RunOnMain`（短同步主线程调用，退出后丢弃）、`Window.Update`（异步UI派发）实际源码。#30 Board最终报告读取因工具 timeout/host unavailable 未取得；上述结论由源码复核。主controller仍由 #14 装配，本卡不采用/发布Session、不修改存储或协议。
+
+### Go调用和scope责任
+
+```go
+platform := NewAuthenticationPlatform(window) // window 必须是本scope持有的MyGo窗口
+ctx, cancel := context.WithCancel(scopeContext)
+// scope退出、锁定、换账号、关闭窗口时调用 cancel。
+// 以下必须在工作goroutine，不在UI回调中等待：
+response, err := platform.MFA(server, epoch)(ctx, challenge, provider)
+// provider只接受2/7；交既有LoginMFA，Token由其消费清除。
+// 管理注册：raw, err := platform.WebAuthn(ctx, server, metadata, true, epoch)
+// SSO：token, err := platform.SSO(ctx, client, epoch, prompt)
+// 使用返回的raw/token后clear；不要日志打印。UI更新用window.Update。
+_ = response
+_ = err
+cancel()
+```
+
+`MFA(server,epoch)`直接符合 `DeviceLoginHost.Platform` 签名；其闭包只绑定服务器与epoch。`WebAuthn`强制复用ParseWebAuthnOptions和Binding.Validate，返回前验证服务器/RP、challenge、origin、epoch和一次消费；`Duo`内部创建/关闭DuoFlow，`SSO`内部BeginSSO固定scheme并Exchange，均只采用对应系统会话的返回URL。没有任意深链注入入口，不能把app URL事件当作本桥结果。
+
+#14仍必须在派发和采用结果前核验当前scope/epoch/sequence，ctx退出后丢弃结果，继续SSO解锁、账号身份/sync/policy/快照核验、Remember安全存储与管理注册确认。适配器不跨scope持有凭据/flow，不持有全局app；返回JSON/Token仍属秘密，Go string/系统内部副本无法保证物理清零。
+
+### C ABI与一次所有权
+
+三个公开C符号在同一 `libSnapshotBridge.dylib` 中，使用本进程调用约定（64位Int/UInt）：
+
+| 符号 | 参数/结果 | 契约 |
+|---|---|---|
+| `mygo_auth_start` | `uintptr_t window, const uint8_t *input, intptr_t length -> uint64_t` | 主线程短调用，立即复制JSON并启动异步系统请求；0拒绝，正值是原生单调不复用ID |
+| `mygo_auth_take` | `uint64_t id, uint8_t *out, intptr_t capacity -> int32_t` | 0仍等待；正值为复制长度且消费记录；负值错误且终态记录消费 |
+| `mygo_auth_release` | `uint64_t id -> void` | 取消并移除记录，重复释放/迟到系统回调无效 |
+
+错误码：-2无记录/窗口失效；-3系统失败或用户取消；-4长度错误；-5平台/签名RP能力不可用。Go加载所有三个符号成功后才启用桥；无永久Go回调注册，系统callback只写MainActor拥有的有界请求表。Go每20ms经RunOnMain短take，不在UI等待系统认证；请求工作者唯一拥有ID并defer release。结果始终复制到Go提供的buffer，不向Go转移malloc/Swift对象指针，因此不存在需要另行free的跨语言结果内存。take消费后release仍安全。Go擦除中间buffer，最终返回slice所有权交调用者。
+
+两端最多16个请求；输入/输出最大128KiB；WebAuthn系统超时2分钟，浏览器/Go租约最多5分钟。原生校验NSApp实际windows的指针相等，再使用找到的NSWindow，绝不对传入整数做Unmanaged.fromOpaque解引用。Go在主线程读取真实NativeHandle、检查IsDestroyed及开始前ctx；原生观察willClose同步释放请求。MainActor串行一次完成，释放先移除再cancel，因此cancel重入callback/重复callback不能复活记录。完成后take/release移除结果；app退出后Go短派发被MyGo丢弃，原生随进程退出释放。headless/非macOS明确不可用。
+
+### 能力与注册配置
+
+浏览器macOS12+、WebAuthn13+、非空excluded注册14+；不支持U2F AppID或外部安全密钥。WebAuthn启动前用Security.framework读取**当前进程代码签名信息**中的 `com.apple.developer.associated-domains`，只接受精确 `webcredentials:<RP>` 条目，拒绝通配/URL/带查询开发模式条目。此读取不访问Keychain、签名私钥或用户凭据。未提供任意UI开关绕过此检查。
+
+默认 `macos/App/App.entitlements` 没有associated domains，本卡不添加虚假RP。部署者须为实际RP添加上述精确签名entitlement、配置该RP的HTTPS AASA `webcredentials.apps`为真实TeamID.bundleID，并使用匹配的签名/授权配置重新构建。代码签名条目仅是先决条件，AASA/系统关联/凭据可用性由AuthenticationServices最终核验；本卡没有签名系统实测，不能宣称任意自托管RP可用。缺配置时保留服务器其它认证方法。
+
+实际工程为 `macos/MyGoVaultwarden.xcodeproj`，App为Go shell build target；它经既有xcode-build-go.sh调用xcode-build-bridge.sh，后者显式加入两个生产Authentication Swift源及AuthenticationServices框架，不包含Package.swift/Tests，也不把认证代码编入AutoFill target。工程新增源引用便于检查。实际 `macos/App/Info.plist`登记bitwarden scheme，用于既有 `bitwarden://sso-callback` 和 `bitwarden://duo-callback`，Go flow仍严格检查host/path/state/PKCE/一次消费。
+
+同机Bitwarden等客户端也可能登记该scheme；不能保证系统默认路由归本app。本桥仅信任所启动ASWebAuthenticationSession的completion；路由冲突导致该会话不完成时，应取消并提示用户处理默认客户端/选择服务器其它认证方法，不能接收外来深链作为补救。**未实现loopback listener**，没有增加sandbox network.server权限，不能把HTTP scheme冒充8065–8070监听；#14若需loopback必须另行决定实现范围。
+
+### 本卡验证与恢复记录
+
+- SwiftPM：9项通过（原4项生产编码测试+5项异步registry测试），覆盖重复/迟到完成、取消重入、重复释放、容量/结果界限、错误、未知/不可信窗口ID。没有创建NSWindow或真实认证窗口；真实willClose通知及系统认证仍未实测。
+- resolve-go工具链：全包 `go test -tags headless ./... -timeout=90s`、`go vet -tags headless ./...`、定向 `go test -race -tags headless . -run '^TestAuth' -count=1`通过；定向覆盖取消/迟到成功清理、16并发上限、结果复制/释放、平台stub和Go binding拒绝恶意结果。非headless `go build`通过。
+- Xcode：`xcodebuild -project macos/MyGoVaultwarden.xcodeproj -scheme MyGoVaultwarden -configuration Debug -derivedDataPath "$TMPDIR/auth-xcode" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO REGISTER_APP_WITH_LAUNCH_SERVICES=NO 'ARCHS=arm64 x86_64' ONLY_ACTIVE_ARCH=NO build`通过，实际生产桥及Go可执行双架构构建；nm逐架构确认三个公开C符号。
+- `MYGO_AUTH_TEST_LIBRARY=<本次scratch app>/Contents/Frameworks/libSnapshotBridge.dylib go test . -run '^TestAuthProductionABI$' -count=1 -v`通过：真实dlopen/dlsym/purego调用与无效参数拒绝，不启动app或系统认证。
+- 初次Swift编译发现SecCode需先SecCodeCopyStaticCode后查询，已修复。首次符号核验发现非public C入口只有局部符号，已修复并通过真实dlopen检查。增量Xcode构建曾因既有许可证复制脚本覆盖scratch只读LICENSE失败；保留 `$TMPDIR/auth-xcode-license-permission-failure.log`，仅将本次scratch ThirdPartyLicenses改为用户可写，同一Xcode命令重跑通过，未改共享许可证脚本。首轮Xcode默认登记scratch app到LaunchServices，已对该精确产物执行lsregister -u；后续关闭REGISTER_APP_WITH_LAUNCH_SERVICES。
+- 未读取用户Keychain/签名秘密/生产密码库，未启动watch/app/真实认证。无签名构建、mock和ABI测试都不证明真实SSO/Duo/Touch ID/AASA可用；独立Review及Board合入仍由父会话完成。

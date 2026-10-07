@@ -29,7 +29,9 @@
         A20000000000000000000005 = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = AutoFill.appex; sourceTree = BUILT_PRODUCTS_DIR; };
         A20000000000000000000006 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = App/Info.plist; sourceTree = "<group>"; };
         A20000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = AutoFill/Info.plist; sourceTree = "<group>"; };
-        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000001, A20000000000000000000002, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A20000000000000000000015, A20000000000000000000016, A30000000000000000000002, ); sourceTree = "<group>"; };
+        A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/VaultAuthentication.swift; sourceTree = "<group>"; };
+        A20000000000000000000031 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/AuthenticationBridge.swift; sourceTree = "<group>"; };
+        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000030, A20000000000000000000031, A20000000000000000000001, A20000000000000000000002, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A20000000000000000000015, A20000000000000000000016, A30000000000000000000002, ); sourceTree = "<group>"; };
         A30000000000000000000002 = {isa = PBXGroup; name = Products; children = (A20000000000000000000004, A20000000000000000000005, ); sourceTree = "<group>"; };
         A40000000000000000000001 = {
             isa = PBXNativeTarget;
@@ -59,7 +61,7 @@
             buildActionMask = 2147483647;
             files = ();
             inputPaths = ();
-            name = "Build MyGo executable";
+            name = "Build MyGo executable and AuthenticationServices bridge";
             outputPaths = ("$(TARGET_BUILD_DIR)/$(EXECUTABLE_PATH)", "$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Frameworks/libSnapshotBridge.dylib", );
             runOnlyForDeploymentPostprocessing = 0;
             shellPath = /bin/bash;
