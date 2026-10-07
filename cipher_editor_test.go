@@ -66,6 +66,7 @@ func TestStaleEditorAndLateMutationCannotReuseAuthority(t *testing.T) {
 	a.openCipherEditor("card-1", 3)
 	draft := a.editor
 	draft.fields.Name = "unsaved local name"
+	draft.fields.PasswordHistory = []map[string]any{{"password": "retained history", "lastUsedDate": "2026-01-01T00:00:00Z"}}
 	oldRevision := a.sessionRevision
 	next := *a.snapshot
 	next.Revision = "checkpoint"
@@ -75,7 +76,7 @@ func TestStaleEditorAndLateMutationCannotReuseAuthority(t *testing.T) {
 	// A full sync has a different snapshot identity and cannot renew this draft.
 	a.sessionRevision, a.snapshot.Revision = "replacement", "replacement"
 	a.saveCipher()
-	if a.pending != 0 || a.editor != draft || draft.fields.Name != "unsaved local name" {
+	if a.pending != 0 || a.editor != draft || draft.fields.Name != "unsaved local name" || len(draft.fields.PasswordHistory) != 1 {
 		t.Fatal("stale draft dispatched or lost")
 	}
 	a.sessionRevision, a.snapshot.Revision = oldRevision, oldRevision
@@ -84,7 +85,7 @@ func TestStaleEditorAndLateMutationCannotReuseAuthority(t *testing.T) {
 	a.lockInterface()
 	ctx, cancel := context.WithCancel(context.Background())
 	a.completeCipherMutation(epoch, draft, &next, storageReply{OK: true, State: &next}, nil, cancel)
-	if a.editor != nil || a.vault != nil || a.session != nil || a.itemsRevision != "" || draft.fields.Name != "" || ctx.Err() == nil {
+	if a.editor != nil || a.vault != nil || a.session != nil || a.itemsRevision != "" || draft.fields.Name != "" || len(draft.fields.PasswordHistory) != 0 || ctx.Err() == nil {
 		t.Fatal("late mutation revived locked data")
 	}
 }

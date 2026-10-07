@@ -61,7 +61,7 @@ func (a *app) bulkEditorView(c *ui.Context) {
 					a.syncVault(false)
 				}
 			} else {
-				ui.Text(c, "请选择项目及操作。永久删除仅允许回收站中的项目。").MaxLines(2).FontSize(12)
+				ui.Text(c, "请选择项目及操作。永久删除仅允许回收站中的项目；需主密码再次验证的项目请单独处理。").MaxLines(3).FontSize(12)
 				for _, item := range e.candidates {
 					label := "□ " + item.Title
 					if e.selected[item.ID] {
@@ -115,6 +115,10 @@ func (a *app) mutateBulk() {
 	for _, item := range e.candidates {
 		if !e.selected[item.ID] {
 			continue
+		}
+		if item.RequiresPassword {
+			a.status = "所选项目需要再次验证主密码，请在单项编辑中完成操作。未发送批量请求。"
+			return
 		}
 		if e.action == vaultwarden.CipherDeletePermanently && !item.Deleted {
 			a.status = "永久删除仅允许回收站中的项目。"

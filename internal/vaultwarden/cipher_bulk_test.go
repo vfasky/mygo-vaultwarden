@@ -56,6 +56,31 @@ func TestBulkRoutesAndPartialFailure(t *testing.T) {
 		})
 	}
 }
+func TestBulkRejectsRepromptAndHiddenPasswordBeforeRequest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("restricted batch reached server") }))
+	defer server.Close()
+	session, _ := resumableFixture(t, server.URL)
+	defer session.Close()
+	scope := Scope{Server: server.URL, Account: "account-a"}
+	for _, field := range []string{"reprompt", "viewPassword"} {
+		vault := bulkFixture(scope, true)
+		var object map[string]any
+		_ = json.Unmarshal(vault.Sync, &object)
+		entry := object["ciphers"].([]any)[0].(map[string]any)
+		if field == "reprompt" {
+			entry[field] = 1
+		} else {
+			entry[field] = false
+		}
+		vault.Sync, _ = json.Marshal(object)
+		for _, op := range []CipherAction{CipherMove, CipherTrash, CipherRestore, CipherArchive, CipherUnarchive, CipherDeletePermanently} {
+			if err := session.ChangePersonalCiphers(context.Background(), scope, vault, []string{"item-1", "item-2"}, op, nil, nil); err != ErrPermission {
+				t.Fatal("restricted batch accepted", field, op, err)
+			}
+		}
+	}
+}
+
 func TestBulkRejectsActivePermanentDeleteAndUnauthorizedIDs(t *testing.T) {
 	session, _ := resumableFixture(t, "https://example.invalid")
 	defer session.Close()

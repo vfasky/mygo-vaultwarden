@@ -30,11 +30,13 @@ func (s *Session) ChangePersonalCiphers(ctx context.Context, scope Scope, vault 
 			OrganizationID *string
 			Edit           *bool
 			DeletedDate    *string
+			Reprompt       int
+			ViewPassword   *bool
 		}
 		if json.Unmarshal(doc.JSON, &meta) != nil {
 			return ErrProtocol
 		}
-		if meta.OrganizationID == nil && (meta.Edit == nil || *meta.Edit) {
+		if meta.OrganizationID == nil && (meta.Edit == nil || *meta.Edit) && meta.Reprompt == 0 && (meta.ViewPassword == nil || *meta.ViewPassword) {
 			records[meta.ID] = struct{ deleted bool }{meta.DeletedDate != nil}
 		}
 	}

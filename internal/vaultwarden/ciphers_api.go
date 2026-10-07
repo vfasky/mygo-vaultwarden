@@ -19,12 +19,9 @@ const (
 	CipherDeletePermanently CipherAction = "deletePermanently"
 )
 
-// ChangeCipherState performs exactly one mutation and returns no optimistic local
-// state. After success the caller must sync using its existing revision lease.
-func (s *Session) ChangeCipherState(ctx context.Context, scope Scope, id string, action CipherAction, persist func(SessionCheckpoint) error) error {
-	return s.changeCipherState(ctx, scope, id, action, persist, nil)
-}
-
+// ChangePersonalCipherStateAuthorized performs one mutation from a current
+// authenticated document. The caller confirms permanent deletion and reconciles
+// via sync; the dispatch guard enforces reprompt even after token checkpointing.
 func (s *Session) ChangePersonalCipherStateAuthorized(ctx context.Context, scope Scope, document CipherDocument, action CipherAction, grant *ItemAuthorization, persist func(SessionCheckpoint) error) error {
 	var metadata struct {
 		ID                 string
@@ -96,9 +93,9 @@ func (s *Session) requireScopeLocked(scope Scope) error {
 	return nil
 }
 
-// SetCipherPersonalMetadata uses Vaultwarden's partial update so a favorite or
-// folder change never overwrites encrypted content or another user's metadata.
-func (s *Session) SetCipherPersonalMetadata(ctx context.Context, scope Scope, id string, folderID *string, favorite bool, persist func(SessionCheckpoint) error) error {
+// setCipherPersonalMetadataUnchecked is a transport primitive, currently used
+// only by route tests. Any future UI must supply a document authorization guard.
+func (s *Session) setCipherPersonalMetadataUnchecked(ctx context.Context, scope Scope, id string, folderID *string, favorite bool, persist func(SessionCheckpoint) error) error {
 	if !validObjectID(id) || (folderID != nil && !validObjectID(*folderID)) {
 		return ErrValidation
 	}
