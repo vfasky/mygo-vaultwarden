@@ -39,6 +39,57 @@ func clickUI(t *testing.T, tt *ui.Tester, label string) {
 	}
 }
 
+func TestDumpAlignment(t *testing.T) {
+	tt := ui.NewTester(func(c *ui.Context) {
+		c.SetTheme(vaultTheme)
+		ui.Column(c).Fill().Padding(20).Gap(24).Background(vaultPanel).Children(func() {
+			ui.Row(c).Padding(10, 8, 0, 8).Background(ui.Hex("#EEE")).Children(func() {
+				ui.Text(c, "所有项目").FontSize(22).FontWeight(650).Label("heading")
+				ui.Spacer(c)
+				pill(c, "947", vaultWhite, vaultMuted)
+			})
+			ui.Row(c).Gap(8).Background(ui.Hex("#EEE")).Children(func() {
+				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted).Label("crumb-vault")
+				icon(c, "chevron", 12).TextColor(vaultMuted).Label("crumb-chevron")
+				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted).Label("crumb-login")
+				ui.Spacer(c)
+				pill(c, "只读", vaultWhite, vaultMuted)
+			})
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Background(ui.Hex("#DDD")).Children(func() {
+				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted).Label("c2-vault")
+				icon(c, "chevron", 12).TextColor(vaultMuted).Label("c2-chevron")
+				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted).Label("c2-login")
+				ui.Spacer(c)
+				pill(c, "只读", vaultWhite, vaultMuted)
+			})
+			ui.Row(c).Height(32).AlignItems(ui.Center).Background(ui.Hex("#CCC")).Children(func() {
+				ui.Text(c, "所有项目").FontSize(22).FontWeight(650).Label("h2")
+				ui.Spacer(c)
+				pill(c, "947", vaultWhite, vaultMuted)
+			})
+		})
+	}, 640, 220)
+	for _, s := range []string{"heading", "947", "crumb-vault", "crumb-chevron", "crumb-login", "只读", "c2-vault", "c2-chevron", "c2-login", "h2"} {
+		if r, ok := tt.Find(s); ok {
+			t.Logf("%q x=%.1f y=%.1f w=%.1f h=%.1f cy=%.1f", s, r.X, r.Y, r.W, r.H, r.Y+r.H/2)
+		} else {
+			t.Logf("%q missing", s)
+		}
+	}
+	path := filepath.Join(os.Getenv("TMPDIR"), "align-rows.png")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := png.Encode(f, tt.Image()); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	t.Log(path)
+}
+
 func TestVaultSidebarToggle(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1060, 700)
@@ -46,11 +97,14 @@ func TestVaultSidebarToggle(t *testing.T) {
 		t.Fatal("sidebar should start expanded")
 	}
 	tt.SetTitleBar(ui.TitleBar{Height: 52, Left: 88})
+	if r, ok := tt.Find("折叠侧栏"); !ok || r.X < 88 || r.X+r.W > a.sidebarWidth() || r.Y < 0 || r.Y+r.H > 52 {
+		t.Fatal("expanded toggle must remain in sidebar title bar past native window controls")
+	}
 	clickUI(t, tt, "折叠侧栏")
 	if !a.sidebarCollapsed || a.sidebarWidth() != 64 {
 		t.Fatal("sidebar did not collapse")
 	}
-	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 {
+	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 || r.Y < 0 || r.Y+r.H > 52 {
 		t.Fatal("collapsed toggle overlaps native window controls")
 	}
 	for _, text := range []string{"Vaultwarden", "个人密码库", "所有密码库", "项目", "组织", "文件夹"} {

@@ -64,3 +64,11 @@
 | `swift test --package-path macos --scratch-path "$TMPDIR/swift-card5"` | 独立临时构建目录，63 项 XCTest 全通过 |
 
 本次没有执行签名安装、真实 Keychain/Touch ID、Safari AutoFill 或新建真实 Vaultwarden 实例端到端测试。Swift 模拟存储和原生命名剪贴板测试不能替代这些平台验收。附件、Send、账号、组织补齐、存储迁移及后续模块仍属于其它卡；本卡只交付可审查的共同基线。
+
+## #5 主线推进后的冲突修复
+
+候选 `a9551a3` 的旧 Review 通过后，Board merge 因主线推进发生冲突并自动中止；该候选没有合入主线。本次从干净的 `a9551a3` 工作树合入已提交的 `9fee5bd420a76d0cf6ab678cb4a13f5de0221e51`，保留它包含的 `aa632e2` 标题栏侧栏布局和行对齐测试。没有读取或复制主工作区未提交内容，也没有操作主分支。
+
+唯一文本冲突位于 `ui.go` 的 `sidebarContent`：采用主线的无 `TitleBar` 参数签名，保留基线的 `a.navItem` 包装及折叠时隐藏 section label 的逻辑。主线的 `titleBarButton`、`sidebarToggle`、展开顶栏按钮、折叠交通灯避让、标题栏背景连续、header padding 原样保留；基线的组织、集合、文件夹导航及授权编辑/撤销边界保留。`ui_test.go` 自动合并后，额外断言展开/折叠按钮位于标题栏高度内，且展开按钮位于侧栏范围内并避开交通灯。主线新增的行对齐测试完整保留。
+
+本次执行并通过 `go test . -run 'Test(VaultSidebarToggle|CollapsedSidebar.*|DumpAlignment)$' -count=1`、`go build ./...`、`go vet ./...`、`go test ./... -count=1` 和 `git diff --check`。此轮只涉及 UI、UI 测试与本文档，不重复 Swift 全套；上面的 63 项 Swift 结果属于原候选验证记录。本次没有真实窗口交互或平台端到端验证。协议、存储、依赖和其它业务文件仍保持 `14bbaf0` 内容，两截图及原基线历史保留。新提交必须重新独立 Review，不能复用旧候选的 PASS。

@@ -243,6 +243,28 @@ func iconButton(c *ui.Context, label, symbol string) *ui.Element {
 		Children(func() { icon(c, symbol, 18) })
 }
 
+// titleBarButton is a borderless toolbar icon button, like the sidebar toggle
+// of native macOS apps: no fill until hovered, sitting on the title bar row.
+func titleBarButton(c *ui.Context, label, symbol string) *ui.Element {
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(5).Radius(7).Shrink(0).TextColor(vaultMuted)
+	if b.Pressed() {
+		b.Background(ui.RGBA(38, 30, 62, .12)).TextColor(vaultInk)
+	} else if b.Hovered() {
+		b.Background(ui.RGBA(38, 30, 62, .07)).TextColor(vaultInk)
+	}
+	return b.Children(func() { icon(c, symbol, 18) })
+}
+
+func (a *app) sidebarToggle(c *ui.Context) {
+	label := "折叠侧栏"
+	if a.sidebarCollapsed {
+		label = "展开侧栏"
+	}
+	if titleBarButton(c, label, "panel-left").Key("sidebar-toggle").Clicked() {
+		a.sidebarCollapsed = !a.sidebarCollapsed
+	}
+}
+
 func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Element {
 	var b *ui.Element
 	if primary {
@@ -267,13 +289,11 @@ func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) 
 func (a *app) header(c *ui.Context) {
 	bar := c.TitleBar()
 	ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).Gap(10).AlignItems(ui.Center).
-		Padding(0, 20, 0, max(float32(20), bar.Left-a.sidebarWidth()+8)).DragWindow().Children(func() {
-		label := "折叠侧栏"
+		Padding(0, 20, 0, max(float32(20), bar.Left-a.sidebarWidth())).DragWindow().Children(func() {
+		// The expanded sidebar carries the toggle; the collapsed rail is
+		// narrower than the traffic lights, so it moves just past them.
 		if a.sidebarCollapsed {
-			label = "展开侧栏"
-		}
-		if iconButton(c, label, "panel-left").Key("sidebar-toggle").Clicked() {
-			a.sidebarCollapsed = !a.sidebarCollapsed
+			a.sidebarToggle(c)
 		}
 		ui.Spacer(c)
 		state := "未解锁"
@@ -323,13 +343,30 @@ func (a *app) sidebarWidth() float32 {
 
 func (a *app) sidebar(c *ui.Context) {
 	bar := c.TitleBar()
-	ui.Row(c).Shrink(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(a.sidebarWidth()).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c, bar) })
-		ui.Box(c).Width(1).Background(vaultLine)
+	height := max(bar.Height, 52)
+	ui.Column(c).Width(a.sidebarWidth() + 1).Shrink(0).Children(func() {
+		top := ui.Row(c).Height(height).Shrink(0).AlignItems(ui.Stretch).DragWindow()
+		if a.sidebarCollapsed {
+			// The traffic lights overflow the rail: share the content
+			// background so they sit on one continuous title bar.
+			top.Background(ui.Hex("#EAEAEF"))
+		} else {
+			top.Children(func() {
+				ui.Row(c).Grow(1).AlignItems(ui.Center).Padding(0, 14, 0, 0).Background(ui.Hex("#F2F1F7")).Children(func() {
+					ui.Spacer(c)
+					a.sidebarToggle(c)
+				})
+				ui.Box(c).Width(1).Background(vaultLine)
+			})
+		}
+		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
+			ui.Column(c).Width(a.sidebarWidth()).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c) })
+			ui.Box(c).Width(1).Background(vaultLine)
+		})
 	})
 }
 
-func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
+func (a *app) sidebarContent(c *ui.Context) {
 	navItem := a.navItem
 	sectionLabel := func(c *ui.Context, text string) {
 		if !a.sidebarCollapsed {
@@ -337,7 +374,6 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 		}
 	}
 	{
-		ui.Box(c).Height(max(bar.Height, 52) - 8).Shrink(0).DragWindow()
 		brandPadding := float32(8)
 		if a.sidebarCollapsed {
 			brandPadding = 4
