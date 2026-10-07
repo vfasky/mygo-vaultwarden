@@ -318,6 +318,9 @@ func (s *Session) PrepareAccountRotation(ctx context.Context, vault *VaultData, 
 		if err != nil {
 			return nil, err
 		}
+		if path == emergencyAvailabilityPath {
+			return recoveryAvailabilityResponse(status, body)
+		}
 		if status != 200 {
 			return nil, statusError(status)
 		}
