@@ -249,10 +249,10 @@ func (a *app) header(c *ui.Context) {
 			}
 			a.openCipherEditor("", kind)
 		}
-		if toolbarButton(c, "批量管理", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil).Clicked() {
+		if toolbarButton(c, "批量管理", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBulkEditor(false)
 		}
-		if a.category == "trash" && toolbarButton(c, "清空回收站", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil).Clicked() {
+		if a.category == "trash" && toolbarButton(c, "清空回收站", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBulkEditor(true)
 		}
 		if toolbarButton(c, "同步", "sync", false, a.pending != 0).Clicked() {
@@ -320,11 +320,11 @@ func (a *app) sidebarContent(c *ui.Context, bar ui.TitleBar) {
 						a.category, a.showSettings = "folder:"+f.ID, false
 					}
 				}
-				if navItem(c, "新建文件夹", "vault", "", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil).Clicked() {
+				if navItem(c, "新建文件夹", "vault", "", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
 					a.openFolderEditor("")
 				}
 				if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
-					if navItem(c, "管理文件夹", "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil).Clicked() {
+					if navItem(c, "管理文件夹", "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
 						a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
 					}
 				}
