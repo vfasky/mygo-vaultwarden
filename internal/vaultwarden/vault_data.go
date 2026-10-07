@@ -11,11 +11,12 @@ type VaultData struct {
 	Scope   Scope  `json:"scope"`
 	Sync    []byte `json:"sync"`
 	// Durable local isolation survives sync and is authenticated by the snapshot.
-	QuarantinedOrganizations []string `json:"quarantinedOrganizations,omitempty"`
+	PendingPolicyMutations   []PendingPolicyMutation `json:"pendingPolicyMutations,omitempty"`
+	QuarantinedOrganizations []string                `json:"quarantinedOrganizations,omitempty"`
 }
 
 func (v *VaultData) Documents(scope Scope) ([]CipherDocument, error) {
-	if v == nil || v.Version != 1 || v.Scope != scope || scope.Account == "" || scope.Server == "" {
+	if v == nil || (v.Version != 1 && v.Version != 2) || (v.Version == 2) != (len(v.PendingPolicyMutations) > 0) || v.Scope != scope || scope.Account == "" || scope.Server == "" {
 		return nil, ErrIdentity
 	}
 	if len(v.Sync) == 0 || len(v.Sync) > maxResponse {
@@ -29,6 +30,9 @@ func (v *VaultData) Documents(scope Scope) ([]CipherDocument, error) {
 	}
 	if json.Unmarshal(v.Sync, &data) != nil || data.Profile.ID != scope.Account || data.Ciphers == nil || len(data.Ciphers) > 100000 {
 		return nil, ErrProtocol
+	}
+	if err := v.validatePendingPolicies(); err != nil {
+		return nil, err
 	}
 	quarantined := map[string]bool{}
 	if len(v.QuarantinedOrganizations) > 1024 {

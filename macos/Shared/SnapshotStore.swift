@@ -30,7 +30,7 @@ final class SnapshotStore {
     // A new AES key is used for every replacement.
     func publish(_ credentials: [VaultCredential], scope: SnapshotScope, expected: String,
                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil,
-                 priorUnlockKey: Data? = nil, includeVault: Bool = false, restoringOrganization: String? = nil) throws -> SnapshotLease {
+                 priorUnlockKey: Data? = nil, includeVault: Bool = false, restoringOrganization: String? = nil, clearingPolicy: PendingPolicyMutation? = nil) throws -> SnapshotLease {
         try validateCredentials(credentials)
         try validateSessionData(session)
         try vault?.validate(scope: scope)
@@ -45,6 +45,7 @@ final class SnapshotStore {
             guard prior.revision == expected else { throw SnapshotError.stale }
             if let existing = prior.snapshot, existing.header.scope != scope { throw SnapshotError.wrongScope }
             var vault = vault
+            if clearingPolicy != nil && prior.snapshot?.passwordUnlock == nil { throw SnapshotError.invalidInput }
             if let existing = prior.snapshot {
                 // Authenticated prior isolation cannot be erased by an ordinary sync.
                 // Legacy callers without password material may not replace a protected vault.
@@ -53,6 +54,22 @@ final class SnapshotStore {
                     var oldKey = try unwrapSnapshotKey(existing, unlockKey: priorUnlockKey ?? material.key)
                     defer { oldKey.resetBytes(in: 0..<oldKey.count) }
                     let old = try openSnapshotPayload(existing, key: oldKey, scope: scope)
+                    if let clearingPolicy {
+                        guard (restoringOrganization == nil || restoringOrganization == clearingPolicy.organizationId),
+                              old.vault?.pendingPolicyMutations?.contains(clearingPolicy) == true else { throw SnapshotError.invalidInput }
+                    }
+                    if let pending = old.vault?.pendingPolicyMutations, !pending.isEmpty {
+                        guard vault != nil else { throw SnapshotError.invalidInput }
+                        var next = vault!.pendingPolicyMutations ?? []
+                        for record in pending {
+                            if record == clearingPolicy { continue }
+                            if let existing = next.first(where: { $0.organizationId == record.organizationId }) {
+                                guard existing == record else { throw SnapshotError.invalidInput }
+                            } else { next.append(record) }
+                        }
+                        vault!.pendingPolicyMutations = next.filter { $0 != clearingPolicy }
+                        vault!.version = (vault!.pendingPolicyMutations ?? []).isEmpty ? 1 : 2
+                    }
                     if let id = restoringOrganization, !(old.vault?.quarantinedOrganizations ?? []).contains(id) { throw SnapshotError.invalidInput }
                     if let isolated = old.vault?.quarantinedOrganizations, !isolated.isEmpty {
                         guard vault != nil else { throw SnapshotError.invalidInput }
@@ -71,6 +88,7 @@ final class SnapshotStore {
                     }
                 }
             }
+            try vault?.validate(scope: scope)
             let credentials = scope == .demo ? (try vault?.excludingQuarantined(credentials) ?? credentials) : (vault?.policyCandidates(credentials) ?? [])
             try cleanupLocked(&prior)
             guard prior.retiredKeys.count < 500 else { throw SnapshotError.busy }
@@ -105,7 +123,7 @@ final class SnapshotStore {
 
     // Write-ahead isolation: complete before sending leave/delete. It retains the
     // session and unrelated encrypted data and rotates the candidate identity.
-    func quarantineOrganization(_ id: String, scope: SnapshotScope, expected: String, unlockKey: Data, session: Data) throws -> SnapshotLease {
+    func quarantineOrganization(_ id: String, scope: SnapshotScope, expected: String, unlockKey: Data, session: Data, pendingPolicy: PendingPolicyMutation? = nil) throws -> SnapshotLease {
         try validateSessionData(session)
         defer { changed() }
         return try files.locked {
@@ -122,6 +140,11 @@ final class SnapshotStore {
             let organizations = profile?["organizations"] as? [[String: Any]] ?? []
             guard organizations.contains(where: { ($0["id"] as? String ?? $0["ID"] as? String) == id }),
                   !(vault.quarantinedOrganizations ?? []).contains(id) else { throw SnapshotError.invalidInput }
+            if let pendingPolicy {
+                guard pendingPolicy.organizationId == id, !(vault.pendingPolicyMutations ?? []).contains(where: { $0.organizationId == id }) else { throw SnapshotError.invalidInput }
+                vault.pendingPolicyMutations = (vault.pendingPolicyMutations ?? []) + [pendingPolicy]
+                vault.version = 2
+            }
             vault.quarantinedOrganizations = ((vault.quarantinedOrganizations ?? []) + [id]).sorted()
             try vault.validate(scope: scope)
             let credentials = scope == .demo ? try vault.excludingQuarantined(payload.credentials) : vault.policyCandidates(payload.credentials)

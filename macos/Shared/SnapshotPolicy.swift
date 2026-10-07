@@ -58,7 +58,7 @@ private struct CandidatePolicySync: Decodable {
 
 extension VaultData {
     func policyCandidates(_ credentials: [VaultCredential]) -> [VaultCredential] {
-        guard !sync.isEmpty, sync.count <= 32 * 1024 * 1024,
+        guard (try? self.validate(scope: scope)) != nil, !sync.isEmpty, sync.count <= 32 * 1024 * 1024,
               (try? CandidateJSONShape.check(sync)) != nil,
               let data = try? JSONDecoder().decode(CandidatePolicySync.self, from: sync),
               data.profile.id == scope.account, !data.profile.email.isEmpty, data.profile.email.utf8.count <= 1024,
@@ -117,6 +117,7 @@ extension VaultData {
             restricted[p.organizationId] = kinds
             personal.formUnion(kinds)
         }
+        if (pendingPolicyMutations ?? []).contains(where: { $0.policyType == 15 }) { personal.formUnion(1...8) }
         let isolated = Set(quarantinedOrganizations ?? [])
         var permitted = Set<String>()
         var seen = Set<String>()

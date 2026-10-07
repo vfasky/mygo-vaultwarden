@@ -26,6 +26,18 @@ func (s *Session) recoveryCandidateLocked(result *SyncResult) error {
 func (s *Session) ValidateOrganizationRecoveryCandidate(result SyncResult, id string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.validateSyncCandidateLocked(result); err != nil {
+		return err
+	}
+	for _, org := range result.candidate.organizations {
+		if org == id {
+			return nil
+		}
+	}
+	return ErrPermission
+}
+
+func (s *Session) validateSyncCandidateLocked(result SyncResult) error {
 	c := result.candidate
 	if !s.itemSessionActiveLocked() || c == nil || c.session != s || c.epoch != s.authorizationEpoch {
 		return ErrExpired
@@ -40,10 +52,5 @@ func (s *Session) ValidateOrganizationRecoveryCandidate(result SyncResult, id st
 	if digest != c.digest {
 		return ErrExpired
 	}
-	for _, org := range c.organizations {
-		if org == id {
-			return nil
-		}
-	}
-	return ErrPermission
+	return nil
 }

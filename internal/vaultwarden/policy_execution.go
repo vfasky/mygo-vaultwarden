@@ -316,6 +316,7 @@ func (s *Session) operationPoliciesLocked(ctx context.Context, persist func(Sess
 	if err != nil {
 		return nil, err
 	}
+	applyPendingPolicies(policies, s.pendingPolicyMutations)
 	policies.revision, policies.epoch = s.authorizationRevision, s.authorizationEpoch
 	if err := s.checkOperationPoliciesLocked(ctx, policies); err != nil {
 		return nil, err

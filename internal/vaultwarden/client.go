@@ -288,6 +288,7 @@ type Session struct {
 	authorizationRevision                    string
 	authorizationEpoch                       uint64
 	writePolicies                            *operationPolicies
+	pendingPolicyMutations                   []PendingPolicyMutation
 	offlinePolicies                          *snapshotPolicies
 	checkpointPolicies                       *snapshotPolicies
 }
@@ -361,6 +362,10 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 		return SyncResult{}, err
 	}
 	defer finish()
+	return s.syncLocked(ctx, persist)
+}
+
+func (s *Session) syncLocked(ctx context.Context, persist func(SessionCheckpoint) error) (SyncResult, error) {
 	// Starting a replacement sync revokes the previous offline authority even
 	// when download, identity validation or policy migration subsequently fails.
 	s.offlinePolicies = nil
@@ -390,6 +395,7 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	if err := validateSnapshotOrganizationIdentity(data, syncData.Profile.ID); err != nil {
 		return SyncResult{}, err
 	}
+	applyPendingPolicies(policies, s.pendingPolicyMutations)
 	// Parsing and filtering must precede every credential decryption.
 	result, err := decryptSyncWithPolicies(syncData, s.key, policies)
 	if err != nil {

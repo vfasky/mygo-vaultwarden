@@ -1,6 +1,43 @@
 # 组织策略执行迁移
 
-**INCOMPLETE — 整卡未完成，禁止Review/merge。** type5/15的已实现保存与读取路径不等于完整12类策略消费或原生管理；原完整API范围保持不变。
+**INCOMPLETE — 整卡未完成，禁止Review/merge。** 已新增固定12类策略产品API与原生业务表单，以及跨Go/Swift的持久待核验屏障和显式恢复；策略管理不等于全部策略消费。type16默认URI、兼容zxcvbn、生成器/Send/PIN/账号及组织生命周期的剩余策略消费仍待完成，原完整API范围保持不变。
+
+## 策略管理与恢复（本轮增量）
+
+`policy_management.go`提供`OrganizationPolicies`、`OrganizationPolicy`、`SaveOrganizationPolicy`，使用GET `/api/organizations/{orgId}/policies`、GET/PUT `/api/organizations/{orgId}/policies/{type}`。产品管理入口仅向当前confirmed/enabled所有者和管理员显示；保存前还读取成员目录核对当前角色，服务器继续最终授权。列表路由上游允许成员读取，产品这里用于管理导航，不冒充服务器更窄的权限。PUT真实嵌套`{"policy":{"enabled":...,"data":...}}`；私有原值和显式确认草稿绑定scope/revision，未知data、未编辑值及大整数按RawMessage保留。修改字段按固定clients标量/范围验证，未知原值不静默重写。保存前重读全部策略及目标单项；不同则拒绝，GET→PUT不是CAS。
+
+| 类型 | 原生控件/数据字段 | 实际消费边界 |
+| --- | --- | --- |
+| 0 双因素 | 启停 | 服务器可能先撤销成员；完整客户端MFA管理待接 |
+| 1 主密码 | minComplexity、minLength、requireUpper/Lower/Numbers/Special、enforceOnLogin | 管理表单已接；兼容zxcvbn及主密码操作消费待接，不用字符类别假冒评分 |
+| 2 生成器 | overridePasswordType、minLength、useUpper/Lower/Numbers/Special、minNumbers/Special、minNumberWords、capitalize、includeNumber | 管理表单已接；生成器产品待接 |
+| 3 单一组织 | 启停 | 服务器可能先撤销其他组织成员；本机生命周期前置消费待补 |
+| 5 个人所有权 | 启停 | 已有个人create/update/copy/import限制；不禁止已有个人读取/删除/共享 |
+| 6 禁用Send | 启停 | Send产品待接 |
+| 7 Send选项 | disableHideEmail | Send产品待接 |
+| 8 账号恢复 | autoEnrollEnabled | 邀请自动登记已接；完整管理员恢复待接；服务器可配置要求type3，保存前检查策略变化，依赖拒绝由服务器反馈 |
+| 14 PIN解锁 | 启停 | 本产品尚无PIN入口，无伪造消费 |
+| 15 受限类型 | 启停；固定客户端无数据编辑控件，null默认Card及现有数组保留 | 写入/读取/AutoFill实际执行；待核验期间保守暂停全部个人条目读取及相应保存 |
+| 16 URI默认 | 基础域名/主机/完全匹配/从不匹配；保留未编辑旧值 | 消费待接；官方新表单仅暴露0/1/3/5，既有2/4不静默改写 |
+| 20 用户通知 | 启停、原有扩展数据保留 | 固定服务器只发现类型保存，未发现通知执行器，不宣称已执行 |
+
+控件来自固定clients `5983f56...`的`policy-edit-definitions/*.component.ts`。主密码长度12–128、生成密码长度5–128、数字/符号数0–9、短语词数3–20，分别核对`platform/misc/utils.ts`与`generator/core/src/metadata/password/{random-password,eff-word-list}.ts`。本轮只读取源码中的DTO与约束，没有新增依赖。type16消费的下一来源：同commit `autofill/services/domain-settings.service.ts:225–246`使用`policiesByType$`后`getFirstPolicy`；`default-policy.service.ts:272–306`的角色豁免；`models/domain/domain-service.ts`枚举0域名/1主机/2前缀/3精确/4正则/5从不。不可把此审计当作消费完成。
+
+### 持久屏障与因果顺序
+
+`PendingPolicyMutation{organizationId,policyType,mutationId}`只在受认证加密VaultData中。第一次政策PUT前，`quarantineOrganization`原子保存该记录与组织隔离，旋转revision/candidate ID并撤旧lease。生产Go回调核对新scope/revision/SnapshotID、全部旧pending与此次完整记录，失败不发PUT。`checkpointLocked`撤旧离线授权；Session记录pending用于后续新网络sync预解密与操作内写guard。type15额外限制个人1–8类读取和填充，type5只限制个人保存；其他组织按自身策略与权限，不继承目标组织限制。
+
+本地schema1无pending；带pending升级为schema2。Go/Swift拒绝v1带pending、v2丢pending、未知版本、重复组织/重复mutationID及非法type/ID；旧客户端仅支持v1，因此不能忽略新增字段再回写。普通publish将旧认证pending并入新vault，token checkpoint完整保留；普通组织restore只处理组织marker，不清pending。全部pending清除后专用恢复写回v1。pending完整内容进入Go快照hash。
+
+恢复入口先新sync，`ReviewPendingPolicy`取得仅含策略/成员元数据的私有证明，然后普通publish保留pending及组织隔离。控制器采用新认证回执后，`BindPolicyRecoveryReview`校验完整快照许可、源sync摘要、紧随源候选的epoch、scope/revision/特定pending记录；这不是授予离线权限的通用binder。用户查看当前策略、成员状态并明确确认后，`SyncForPolicyRecovery`在同一Session锁内核对预览epoch/revision/快照/记录，发起独有的新sync；`ValidatePolicyRecovery`核对新候选、策略/成员一致性并单次消费。变更/旧确认/普通或在途旧sync/取消不能清记录。`restorePolicyAccess`只清指定完整pending；confirmed且key有效才可同时恢复组织，否则只恢复个人策略状态并保留组织marker和其他pending。恢复后再同步重建候选。
+
+原HTTP调用在Session锁内结束后才可能进入恢复；关闭进程重启后需重新读取并确认当前状态。两次sync不证明未知PUT绝不迟到执行，界面明确提示并发窗口；type0/3可能撤销部分成员后保存失败，任何未知结果都保留屏障，不重试、不伪报回滚或自动恢复已撤成员。
+
+### 本轮证据
+
+Go协议/权限/确认/陈旧revision/取消/checkpoint失败零PUT/未知结果与0、3非事务模拟通过；恢复验证绑定发布后的revision/epoch与mutation，拒绝无绑定/旧revision/错误ID/普通sync/重复/策略变更，成员撤销后重新预览只能恢复个人。Go与Swift共享`testdata/pending-policy-cases.json`核对12类、跨组织并集、重复及降级范围。Swift MemoryKeys测试覆盖pending写前持久、旧lease撤销、重开store/解锁、普通sync/token保留、只清一条和保留其他组织隔离及session；独立候选函数拒绝旧/坏schema，type5仍可读。
+
+独有1.37.4回环验证12类产品GET/list/PUT及Go-only显式恢复；它使用受信Go回执模拟，不验证真实Swift落盘、Keychain或安装。原生headless验证角色入口、状态标签与专用恢复入口、错误回执拒绝/锁定撤表单；不是实际窗口视觉检查。真实桥编译和独立AutoFill typecheck通过。最终命令结果见最新handoff。仍需补完整原生两阶段交互的自动故障注入、真实签名平台/系统运行、以及全部策略依赖产品流程，不能宣称整卡完成。
 
 ## 当前生产路径与能力来源
 
@@ -34,6 +71,6 @@ Swift57项涵盖MemoryKeys加密快照、lease、隔离/重启/恢复、checkpoi
 
 ## 下一步，范围不缩减
 
-1. 完整12种固定服务器策略的原生业务表单、未知data保留、依赖/权限/确认/取消/错误处理，以及影响当前访问时先持久隔离；不能做raw JSON页。
+1. 12种固定服务器策略管理及待核验屏障已接；继续补真实原生两阶段完整交互、平台故障注入与完整策略消费，不能将管理等同执行。
 2. type16默认URI匹配、生成器/Send/PIN/组织生命周期等已有与后续功能的实际政策消费；minComplexity按固定clients/SDK真实zxcvbn词典、用户输入、Unicode语义核对。
 3. 原完整legacy共享、附件、Send、账号/MFA/SSO/通知、大库桥、组织批量/导出、逐项reprompt、无ID数组冲突等继续总矩阵。其余旧opt-in真实协议夹具仍可能使用BindSnapshotRevision或直接改VaultData，运行对应模块前按真实receipt迁移，不放宽生产读取边界。

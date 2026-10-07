@@ -280,5 +280,68 @@ func TestLivePolicyExecution(t *testing.T) {
 		seedPolicy(15, []int{3})
 		check(true)
 	})
-	t.Log("owned 1.37.4: authoritative policy sync; personal/organization type15 AutoFill projection revokes and recovers; privileged Go snapshot receipt validates; offline personal/organization list and item reads enforce type15 and recover; state/write checks retained; no Swift bridge or policy editor claim")
+	t.Run("policy-management-twelve-types", func(t *testing.T) {
+		for _, definition := range OrganizationPolicyDefinitions() {
+			ov = syncVault(owner)
+			draft, e := owner.OrganizationPolicy(ctx, ov, org.ID, definition.Type, nil)
+			if e != nil {
+				t.Fatal(definition.Type, e)
+			}
+			draft.Enabled = false
+			record := draft.PendingMutation()
+			isolated := *ov
+			isolated.Version = 2
+			isolated.PendingPolicyMutations = []PendingPolicyMutation{record}
+			isolated.QuarantinedOrganizations = []string{org.ID}
+			checkpointed := false
+			e = owner.SaveOrganizationPolicy(ctx, ov, draft, draft.Confirm(), func(SessionCheckpoint) error { checkpointed = true; return nil }, nil)
+			draft.Close()
+			if e != nil || !checkpointed {
+				t.Fatal("product policy PUT", definition.Type, e)
+			}
+			// This is the Go-only equivalent of a verified Swift write-ahead receipt.
+			if e = owner.AcceptAuthenticatedSnapshot(&isolated, fixtureUUID()); e != nil {
+				t.Fatal(e)
+			}
+			synced, e := owner.Sync(ctx)
+			if e != nil {
+				t.Fatal(e)
+			}
+			review, e := owner.ReviewPendingPolicy(synced, record)
+			if e != nil || review.Enabled() {
+				t.Fatal("review current policy", definition.Type, e)
+			}
+			preview := *synced.Vault
+			preview.Version = 2
+			preview.PendingPolicyMutations = []PendingPolicyMutation{record}
+			preview.QuarantinedOrganizations = []string{org.ID}
+			previewRevision := fixtureUUID()
+			if e = owner.AcceptAuthenticatedSnapshot(&preview, previewRevision); e != nil {
+				t.Fatal(e)
+			}
+			if e = owner.BindPolicyRecoveryReview(review, &preview, previewRevision); e != nil {
+				t.Fatal(e)
+			}
+			fresh, e := owner.SyncForPolicyRecovery(ctx, &preview, review, nil)
+			if e != nil {
+				t.Fatal(e)
+			}
+			if e = owner.ValidatePolicyRecovery(fresh, review); e != nil {
+				t.Fatal("recovery", e)
+			}
+			review.Close()
+			if e = owner.AcceptAuthenticatedSnapshot(fresh.Vault, fixtureUUID()); e != nil {
+				t.Fatal(e)
+			}
+			clear(synced.Session)
+			clear(fresh.Session)
+			if synced.PasswordUnlock != nil {
+				clear(synced.PasswordUnlock.Key)
+			}
+			if fresh.PasswordUnlock != nil {
+				clear(fresh.PasswordUnlock.Key)
+			}
+		}
+	})
+	t.Log("owned 1.37.4: authoritative policy sync; personal/organization type15 AutoFill projection revokes and recovers; privileged Go snapshot receipt validates; offline personal/organization list and item reads enforce type15 and recover; twelve product policy GET/PUT types and explicit current-state recovery verified with Go-only receipts; no Swift bridge or installed UI claim")
 }

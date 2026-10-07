@@ -140,6 +140,7 @@ func (a *app) syncVault(login bool) {
 	}
 	existing := a.session
 	initialSnapshot := a.snapshot
+	priorVault := a.vault
 	var isolatedIDs []string
 	if a.vault != nil {
 		isolatedIDs = append(isolatedIDs, a.vault.QuarantinedOrganizations...)
@@ -231,6 +232,9 @@ func (a *app) syncVault(login bool) {
 			reply = callStorage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
 			if reply.OK && reply.Vault != nil {
 				result.Vault = reply.Vault
+			}
+			if !login && !reply.Vault.PreservesPendingPolicies(priorVault) {
+				reply.OK, reply.Code, reply.Message = false, "invalid_reply", "未能确认策略待核验状态，请重新解锁。"
 			}
 			for _, isolatedID := range isolatedIDs {
 				found := false

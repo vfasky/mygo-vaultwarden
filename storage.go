@@ -23,24 +23,26 @@ type snapshotStatus struct {
 }
 
 type storageRequest struct {
-	OrganizationID   string                      `json:"organizationID,omitempty"`
-	Operation        string                      `json:"operation"`
-	ExpectedRevision string                      `json:"expectedRevision,omitempty"`
-	Credentials      []vaultwarden.Credential    `json:"credentials"`
-	Scope            *vaultwarden.Scope          `json:"scope,omitempty"`
-	PasswordUnlock   *vaultwarden.PasswordUnlock `json:"passwordUnlock,omitempty"`
-	UnlockKey        []byte                      `json:"unlockKey,omitempty"`
-	Session          []byte                      `json:"session,omitempty"`
-	Vault            *vaultwarden.VaultData      `json:"vault,omitempty"`
-	Secret           string                      `json:"secret,omitempty"`
-	SecretProtocol   int                         `json:"secretProtocol,omitempty"`
-	SecretNotAfter   int64                       `json:"secretNotAfter,omitempty"`
+	ClearingPolicy   *vaultwarden.PendingPolicyMutation `json:"clearingPolicy,omitempty"`
+	PendingPolicy    *vaultwarden.PendingPolicyMutation `json:"pendingPolicy,omitempty"`
+	OrganizationID   string                             `json:"organizationID,omitempty"`
+	Operation        string                             `json:"operation"`
+	ExpectedRevision string                             `json:"expectedRevision,omitempty"`
+	Credentials      []vaultwarden.Credential           `json:"credentials"`
+	Scope            *vaultwarden.Scope                 `json:"scope,omitempty"`
+	PasswordUnlock   *vaultwarden.PasswordUnlock        `json:"passwordUnlock,omitempty"`
+	UnlockKey        []byte                             `json:"unlockKey,omitempty"`
+	Session          []byte                             `json:"session,omitempty"`
+	Vault            *vaultwarden.VaultData             `json:"vault,omitempty"`
+	Secret           string                             `json:"secret,omitempty"`
+	SecretProtocol   int                                `json:"secretProtocol,omitempty"`
+	SecretNotAfter   int64                              `json:"secretNotAfter,omitempty"`
 }
 
 // A zero-result sync is an explicit replacement, never an absent field.
 func (r storageRequest) MarshalJSON() ([]byte, error) {
 	type wireRequest storageRequest
-	if (r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess") && r.Credentials == nil {
+	if (r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess" || r.Operation == "restorePolicyAccess") && r.Credentials == nil {
 		r.Credentials = []vaultwarden.Credential{}
 	}
 	return json.Marshal(wireRequest(r))

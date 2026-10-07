@@ -11,6 +11,11 @@ import (
 )
 
 type organizationEditor struct {
+	policyRecovery                                                *vaultwarden.PolicyRecoveryReview
+	policies                                                      []vaultwarden.PolicyEntry
+	policyType                                                    int
+	policyDraft                                                   *vaultwarden.PolicyDraft
+	policyConsent                                                 *vaultwarden.PolicyConsent
 	groups                                                        []vaultwarden.GroupEntry
 	groupID                                                       string
 	groupDraft                                                    *vaultwarden.GroupDraft
@@ -32,6 +37,9 @@ type organizationEditor struct {
 
 func (a *app) clearOrganizationEditor() {
 	if a.organizationEditor != nil {
+		a.organizationEditor.policyRecovery.Close()
+		a.organizationEditor.policyDraft.Close()
+		a.organizationEditor.policyConsent.Close()
 		a.organizationEditor.groupDraft.Close()
 		a.organizationEditor.groupConsent.Close()
 		a.organizationEditor.invitationAcceptance.Close()
@@ -50,7 +58,7 @@ func (a *app) adoptOrganizationIsolation(state *snapshotStatus, vault *vaultward
 	return a.adoptOrganizationSnapshot(state, vault, orgID, true)
 }
 
-func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarden.VaultData, orgID string, isolated bool) bool {
+func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarden.VaultData, orgID string, isolated bool, cleared ...vaultwarden.PendingPolicyMutation) bool {
 	if !a.sessionOwnsSnapshot() || state == nil || !state.Available || state.Scope == nil || *state.Scope != *a.liveScope || state.Revision == "" || state.Revision == a.sessionRevision || state.SnapshotID == "" || state.SnapshotID == a.snapshot.SnapshotID || vault == nil || vault.Scope != *a.liveScope {
 		return false
 	}
@@ -58,6 +66,22 @@ func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarde
 	for _, id := range vault.QuarantinedOrganizations {
 		if id == orgID {
 			found = true
+		}
+	}
+	if len(cleared) > 1 || (len(cleared) == 1 && (a.vault == nil || !a.vault.HasPendingPolicy(cleared[0]))) {
+		return false
+	}
+	if a.vault != nil {
+		for _, record := range a.vault.PendingPolicyMutations {
+			if len(cleared) == 1 && record == cleared[0] {
+				if vault.HasPendingPolicy(record) {
+					return false
+				}
+				continue
+			}
+			if !vault.HasPendingPolicy(record) {
+				return false
+			}
 		}
 	}
 	if found != isolated {
@@ -83,11 +107,18 @@ func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarde
 	if !ok || session.AcceptAuthenticatedSnapshot(vault, state.Revision) != nil {
 		return false
 	}
+	previousRevision := a.sessionRevision
 	a.snapshot, a.sessionRevision = state, state.Revision
 	if err := a.adoptVault(vault); err != nil {
 		return false
 	}
 	a.itemsRevision = state.Revision
+	if e := a.organizationEditor; e != nil && e.revision == previousRevision {
+		e.revision = state.Revision
+		if e.id == orgID {
+			e.isolated = isolated
+		}
+	}
 	return true
 }
 
@@ -152,7 +183,8 @@ func (a *app) organizationEditorView(c *ui.Context) {
 			}
 			if e.isolated {
 				ui.Text(c, "此组织的本机访问已隔离。只有重新连接服务器并核验您当前已确认的成员身份和组织密钥后，才可恢复本机访问；不会重新提交退出或删除请求。").MaxLines(5)
-				if action(c, "确认重新核验并恢复访问", "sync", true, disabled).Clicked() {
+				a.pendingPolicyRecoveryView(c, e, disabled)
+				if !a.hasPendingPolicy(e.id) && action(c, "确认重新核验并恢复访问", "sync", true, disabled).Clicked() {
 					a.runOrganizationManagement("restore")
 				}
 			}
@@ -161,6 +193,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 					a.organizationRecoveryKeyView(c, e, disabled)
 				}
 				a.collectionManagementView(c, e, disabled)
+				a.policyManagementView(c, e, disabled)
 				a.groupManagementView(c, e, disabled)
 				a.memberManagementView(c, e, disabled)
 				if e.confirmation == "" {
@@ -210,7 +243,7 @@ func (a *app) runOrganizationManagement(operation string) {
 	if a.pending != 0 || e == nil || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision || a.vault == nil {
 		return
 	}
-	if operation != "recovery-key-load" && operation != "recovery-key-create" && operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) && !groupManagementOperation(operation) {
+	if operation != "recovery-key-load" && operation != "recovery-key-create" && operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) && !groupManagementOperation(operation) && !policyManagementOperation(operation) {
 		return
 	}
 	if (operation == "recovery-key-load" || operation == "recovery-key-create") && (!e.owner || e.id == "" || (operation == "recovery-key-create" && e.confirmation != operation)) {
@@ -225,7 +258,16 @@ func (a *app) runOrganizationManagement(operation string) {
 	if operation == "restore" && !e.isolated {
 		return
 	}
-	if e.isolated && operation != "restore" {
+	if operation == "restore" && a.hasPendingPolicy(e.id) {
+		return
+	}
+	if (operation == "policy-review" || operation == "policy-restore") && (!e.isolated || !a.hasPendingPolicy(e.id)) {
+		return
+	}
+	if operation == "policy-restore" && (e.policyRecovery == nil || e.confirmation != operation) {
+		return
+	}
+	if e.isolated && operation != "restore" && operation != "policy-review" && operation != "policy-restore" {
 		return
 	}
 	if operation == "save" && !e.loaded {
@@ -248,11 +290,22 @@ func (a *app) runOrganizationManagement(operation string) {
 			return
 		}
 	}
+	if policyManagementOperation(operation) && (e.id == "" || (operation == "policy-save" && (e.policyDraft == nil || e.policyConsent == nil || e.confirmation != operation))) {
+		return
+	}
 	collectionID := e.collectionID
 	session, ok := a.session.(*vaultwarden.Session)
 	if !ok {
 		return
 	}
+	policyRecovery := e.policyRecovery.Clone()
+	var pendingRecord vaultwarden.PendingPolicyMutation
+	for _, record := range a.vault.PendingPolicyMutations {
+		if record.OrganizationID == e.id {
+			pendingRecord = record
+		}
+	}
+	policyDraft, policyConsent, policyType := e.policyDraft.Clone(), e.policyConsent.Clone(), e.policyType
 	groupDraft, groupConsent, groupID := e.groupDraft.Clone(), e.groupConsent.Clone(), e.groupID
 	collectionDraft := e.collectionDraft.Clone()
 	members, memberProof := e.members.Clone(), e.memberProof.Clone()
@@ -277,6 +330,12 @@ func (a *app) runOrganizationManagement(operation string) {
 	a.pending++
 	a.status = "正在处理组织请求…"
 	go func() {
+		defer policyRecovery.Close()
+		var loadedPolicyRecovery *vaultwarden.PolicyRecoveryReview
+		defer policyDraft.Close()
+		defer policyConsent.Close()
+		var loadedPolicy *vaultwarden.PolicyDraft
+		var loadedPolicies []vaultwarden.PolicyEntry
 		defer groupDraft.Close()
 		defer groupConsent.Close()
 		var loadedGroup *vaultwarden.GroupDraft
@@ -299,7 +358,12 @@ func (a *app) runOrganizationManagement(operation string) {
 		var isolatedVault *vaultwarden.VaultData
 		var restoredVault *vaultwarden.VaultData
 		isolate := func(cp vaultwarden.SessionCheckpoint) error {
-			reply = callStorage(storageRequest{Operation: "quarantineOrganization", ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: id, UnlockKey: cp.UnlockKey, Session: cp.Session})
+			var pendingPolicy *vaultwarden.PendingPolicyMutation
+			if operation == "policy-save" {
+				record := policyDraft.PendingMutation()
+				pendingPolicy = &record
+			}
+			reply = callStorage(storageRequest{Operation: "quarantineOrganization", PendingPolicy: pendingPolicy, ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: id, UnlockKey: cp.UnlockKey, Session: cp.Session})
 			if !reply.OK || reply.State == nil || reply.Vault == nil {
 				return vaultwarden.ErrCheckpoint
 			}
@@ -313,6 +377,9 @@ func (a *app) runOrganizationManagement(operation string) {
 				}
 			}
 			if !found {
+				return vaultwarden.ErrIdentity
+			}
+			if !reply.Vault.PreservesPendingPolicies(vault) || (pendingPolicy != nil && !reply.Vault.HasPendingPolicy(*pendingPolicy)) {
 				return vaultwarden.ErrIdentity
 			}
 			prior, checkpoint, isolatedVault = reply.State, reply.State, reply.Vault
@@ -334,6 +401,12 @@ func (a *app) runOrganizationManagement(operation string) {
 			err = vaultwarden.ErrConflict
 		} else {
 			switch operation {
+			case "policy-list":
+				loadedPolicies, err = session.OrganizationPolicies(ctx, vault, id, persist)
+			case "policy-load":
+				loadedPolicy, err = session.OrganizationPolicy(ctx, vault, id, policyType, persist)
+			case "policy-save":
+				err = session.SaveOrganizationPolicy(ctx, vault, policyDraft, policyConsent, isolate, persist)
 			case "group-list":
 				loadedGroups, err = session.OrganizationGroups(ctx, vault, id, persist)
 			case "group-load":
@@ -370,23 +443,54 @@ func (a *app) runOrganizationManagement(operation string) {
 				err = session.SaveCollection(ctx, vault, collectionDraft, isolate, persist)
 			case "collection-delete":
 				err = session.DeleteCollection(ctx, vault, collectionDraft, isolate, persist)
-			case "restore":
+			case "restore", "policy-review", "policy-restore":
 				var synced vaultwarden.SyncResult
-				synced, err = session.SyncWithCheckpoint(ctx, persist)
+				if operation == "policy-restore" {
+					synced, err = session.SyncForPolicyRecovery(ctx, vault, policyRecovery, persist)
+				} else {
+					synced, err = session.SyncWithCheckpoint(ctx, persist)
+				}
 				if err == nil {
-					err = session.ValidateOrganizationRecoveryCandidate(synced, id)
+					if operation == "restore" {
+						err = session.ValidateOrganizationRecoveryCandidate(synced, id)
+					}
 					if ctx.Err() != nil {
 						err = vaultwarden.ErrCancelled
 					}
 				}
+				if err == nil && operation == "policy-review" {
+					loadedPolicyRecovery, err = session.ReviewPendingPolicy(synced, pendingRecord)
+				}
+				if err == nil && operation == "policy-restore" {
+					err = session.ValidatePolicyRecovery(synced, policyRecovery)
+				}
 				if err == nil {
-					reply = callStorage(storageRequest{Operation: "restoreOrganizationAccess", OrganizationID: id, ExpectedRevision: prior.Revision, Scope: &synced.Scope, Credentials: synced.Credentials, PasswordUnlock: synced.PasswordUnlock, Session: synced.Session, Vault: synced.Vault})
+					storageOperation := "restoreOrganizationAccess"
+					restoreOrgID := id
+					var clearingPolicy *vaultwarden.PendingPolicyMutation
+					if operation == "policy-review" {
+						storageOperation = "publishVault"
+					}
+					if operation == "policy-restore" {
+						storageOperation = "restorePolicyAccess"
+						if !policyRecovery.CanRestoreOrganization() {
+							restoreOrgID = ""
+						}
+						record := policyRecovery.Record()
+						clearingPolicy = &record
+					}
+					reply = callStorage(storageRequest{Operation: storageOperation, ClearingPolicy: clearingPolicy, OrganizationID: restoreOrgID, ExpectedRevision: prior.Revision, Scope: &synced.Scope, Credentials: synced.Credentials, PasswordUnlock: synced.PasswordUnlock, Session: synced.Session, Vault: synced.Vault})
 					if !reply.OK {
 						err = reply.failure()
 					} else if reply.State == nil || reply.Vault == nil {
 						err = vaultwarden.ErrIdentity
 					} else {
-						checkpoint, restoredVault = reply.State, reply.Vault
+						checkpoint = reply.State
+						if operation == "policy-review" {
+							isolatedVault = reply.Vault
+						} else {
+							restoredVault = reply.Vault
+						}
 					}
 				}
 				clear(synced.Session)
@@ -408,16 +512,58 @@ func (a *app) runOrganizationManagement(operation string) {
 		}
 		a.window.Update(func() {
 			if a.epoch == epoch && isolatedVault != nil {
+				preserveReview := operation == "policy-review" && a.organizationEditor == e
+				if preserveReview {
+					a.organizationEditor = nil
+				}
 				if !a.adoptOrganizationIsolation(checkpoint, isolatedVault, id) {
 					a.stopNetwork()
+				} else if preserveReview {
+					e.revision = a.sessionRevision
+					a.organizationEditor = e
 				}
 			}
 			if a.epoch == epoch && restoredVault != nil {
-				if !a.adoptOrganizationSnapshot(checkpoint, restoredVault, id, false) {
+				var cleared []vaultwarden.PendingPolicyMutation
+				if operation == "policy-restore" {
+					cleared = append(cleared, policyRecovery.Record())
+				}
+				remainIsolated := operation == "policy-restore" && !policyRecovery.CanRestoreOrganization()
+				if !a.adoptOrganizationSnapshot(checkpoint, restoredVault, id, remainIsolated, cleared...) {
 					a.stopNetwork()
 				}
 			}
 			a.completeOrganizationManagement(epoch, e, operation, result, checkpoint, reply, err, cancel)
+			if loadedPolicyRecovery != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil && session.BindPolicyRecoveryReview(loadedPolicyRecovery, a.vault, a.sessionRevision) == nil {
+					e.policyRecovery.Close()
+					e.policyRecovery = loadedPolicyRecovery
+					e.confirmation = "policy-restore"
+				} else {
+					loadedPolicyRecovery.Close()
+					if a.epoch == epoch && err == nil {
+						a.status = "策略预览状态已变化，请重新读取服务器当前状态。"
+					}
+				}
+			}
+			if loadedPolicies != nil && a.epoch == epoch && a.organizationEditor == e && err == nil {
+				e.policies = loadedPolicies
+			}
+			if loadedPolicy != nil {
+				if a.epoch == epoch && a.organizationEditor == e && err == nil && checkpoint == nil {
+					e.policyDraft.Close()
+					e.policyDraft = loadedPolicy
+					e.policyConsent.Close()
+					e.policyConsent = nil
+					e.confirmation = ""
+					a.status = "已加载策略，保存前请核对影响与本机执行范围"
+				} else {
+					loadedPolicy.Close()
+					if a.epoch == epoch && err == nil && checkpoint != nil {
+						a.status = "登录凭据已安全更新，请重新加载策略后编辑。"
+					}
+				}
+			}
 			if loadedGroups != nil && a.epoch == epoch && a.organizationEditor == e && err == nil {
 				e.groups = loadedGroups
 			}
@@ -501,6 +647,9 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {
+		e.policyRecovery.Close()
+		e.policyDraft.Close()
+		e.policyConsent.Close()
 		e.groupDraft.Close()
 		e.groupConsent.Close()
 		e.invitationAcceptance.Close()
@@ -529,6 +678,16 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 			e.memberRoleConsent = nil
 			e.confirmation = ""
 		}
+		if operation == "policy-restore" {
+			e.policyRecovery.Close()
+			e.policyRecovery = nil
+			e.confirmation = ""
+		}
+		if operation == "policy-save" {
+			e.policyConsent.Close()
+			e.policyConsent = nil
+			e.confirmation = ""
+		}
 		var unknown *vaultwarden.MutationUncertainError
 		e.uncertain = errors.As(err, &unknown)
 		a.syncFailed(reply, err)
@@ -542,11 +701,16 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		}
 		return
 	}
-	if operation == "group-list" || operation == "group-load" || operation == "invitation-load" || operation == "recovery-key-load" || operation == "recovery-key-create" || operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
+	if operation == "policy-review" || operation == "policy-list" || operation == "policy-load" || operation == "group-list" || operation == "group-load" || operation == "invitation-load" || operation == "recovery-key-load" || operation == "recovery-key-create" || operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
 		return
 	}
-	if operation == "restore" {
-		a.status = "已重新核验成员身份并恢复该组织的本机访问。"
+	if operation == "restore" || operation == "policy-restore" {
+		if operation == "policy-restore" {
+			a.syncVault(false)
+			a.status = "已核验当前策略并解除对应待核验限制，正在同步访问状态；失效成员的组织隔离仍保留。"
+		} else {
+			a.status = "已重新核验成员身份并恢复该组织的本机访问。"
+		}
 		return
 	}
 	if operation == "load" {

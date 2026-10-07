@@ -30,6 +30,37 @@ final class SnapshotPolicyTests: XCTestCase {
     }
     var credentials: [VaultCredential] { ["personal", "org-item", "other-item"].map(credential) }
 
+    func testPendingPolicySharedScopeVectors() throws {
+        struct Vector: Decodable { let name: String; let version: Int; let pending: [PendingPolicyMutation]; let valid: Bool; let personalRead: Bool }
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let path = root.appendingPathComponent("internal/vaultwarden/testdata/pending-policy-cases.json")
+        let vectors = try JSONDecoder().decode([Vector].self, from: Data(contentsOf: path))
+        for vector in vectors {
+            var v = try vault { _ in }
+            v.version = vector.version; v.pendingPolicyMutations = vector.pending
+            XCTAssertEqual((try? v.validate(scope: scope)) != nil, vector.valid, vector.name)
+            XCTAssertEqual(v.policyCandidates(credentials).contains(where: { $0.id == "personal" }), vector.personalRead, vector.name)
+            if vector.valid { XCTAssertTrue(v.policyCandidates(credentials).contains(where: { $0.id == "other-item" }), vector.name) }
+        }
+    }
+
+    func testPendingPolicyVersionsTypesAndIndependentOrganizationScope() throws {
+        var v = try vault { _ in }
+        let record = PendingPolicyMutation(organizationId: "org-a", policyType: 15, mutationId: "mutation-1")
+        v.pendingPolicyMutations = [record]
+        XCTAssertTrue(v.policyCandidates(credentials).isEmpty) // v1 must not silently carry a v2 barrier
+        v.version = 2
+        XCTAssertEqual(v.policyCandidates(credentials).map(\.id), ["org-item", "other-item"])
+        v.pendingPolicyMutations = [record, record]
+        XCTAssertTrue(v.policyCandidates(credentials).isEmpty)
+        v.pendingPolicyMutations = []
+        XCTAssertTrue(v.policyCandidates(credentials).isEmpty) // stripped v2 marker fails closed
+        v.pendingPolicyMutations = [PendingPolicyMutation(organizationId: "org-a", policyType: 5, mutationId: "mutation-2")]
+        XCTAssertEqual(v.policyCandidates(credentials).count, 3) // ownership is write-only
+        v.pendingPolicyMutations = [PendingPolicyMutation(organizationId: "org-a", policyType: 99, mutationId: "mutation-3")]
+        XCTAssertTrue(v.policyCandidates(credentials).isEmpty)
+    }
+
     func testLegacyCandidatesRequireSuccessfulPolicyMigration() throws {
         let v = try vault { $0.removeValue(forKey: "policies") }
         XCTAssertTrue(v.policyCandidates(credentials).isEmpty)

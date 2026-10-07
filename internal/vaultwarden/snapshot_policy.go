@@ -70,13 +70,14 @@ func (s *Session) AcceptAuthenticatedSnapshot(vault *VaultData, revision string)
 	if vault == nil || s.requireScopeLocked(vault.Scope) != nil {
 		return ErrIdentity
 	}
-	if vault.Version != 1 || len(vault.Sync) == 0 || len(vault.Sync) > maxResponse || len(vault.QuarantinedOrganizations) > 1024 {
+	if (vault.Version != 1 && vault.Version != 2) || len(vault.Sync) == 0 || len(vault.Sync) > maxResponse || len(vault.QuarantinedOrganizations) > 1024 {
 		return ErrProtocol
 	}
 	// Clone BEFORE parsing: no map, raw message or slice in the authority may
 	// point back into the public snapshot passed by the controller.
 	copyVault := &VaultData{Version: vault.Version, Scope: vault.Scope,
 		Sync:                     append([]byte(nil), vault.Sync...),
+		PendingPolicyMutations:   append([]PendingPolicyMutation(nil), vault.PendingPolicyMutations...),
 		QuarantinedOrganizations: append([]string(nil), vault.QuarantinedOrganizations...)}
 	defer clear(copyVault.Sync)
 	digest, err := snapshotDigest(copyVault)
@@ -97,6 +98,8 @@ func (s *Session) AcceptAuthenticatedSnapshot(vault *VaultData, revision string)
 		return err
 	}
 	organizations.close()
+	s.pendingPolicyMutations = append([]PendingPolicyMutation(nil), copyVault.PendingPolicyMutations...)
+	applyPendingPolicies(policies, s.pendingPolicyMutations)
 	s.authorizationRevision = revision
 	s.offlinePolicies = &snapshotPolicies{policies: policies, digest: digest, revision: revision, epoch: s.authorizationEpoch}
 	return nil
