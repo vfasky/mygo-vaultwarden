@@ -96,6 +96,9 @@ func (c *Client) request(ctx context.Context, method, endpoint, contentType, bod
 		return resp.StatusCode, nil, ErrServer
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, maxResponse+1))
+	if ctx.Err() != nil {
+		return 0, nil, ErrCancelled
+	}
 	if err != nil || len(data) > maxResponse {
 		return 0, nil, ErrProtocol
 	}
@@ -266,9 +269,18 @@ type Session struct {
 	expires                                  time.Time
 	closed                                   bool
 	checkpointPending                        bool
+	operationMu                              sync.Mutex
+	cancelOperation                          context.CancelFunc
+	stopping                                 bool
 }
 
 func (s *Session) Close() {
+	s.operationMu.Lock()
+	s.stopping = true
+	if s.cancelOperation != nil {
+		s.cancelOperation()
+	}
+	s.operationMu.Unlock()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	clear(s.key)
@@ -292,7 +304,7 @@ func (s *Session) refreshLocked(ctx context.Context) error {
 		return ErrExpired
 	}
 	if status != 200 {
-		return ErrNetwork
+		return statusError(status)
 	}
 	var token tokenReply
 	if json.Unmarshal(data, &token) != nil || !validToken(token) {
@@ -313,50 +325,17 @@ func (s *Session) Sync(ctx context.Context) (SyncResult, error) {
 func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCheckpoint) error) (SyncResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.closed {
-		return SyncResult{}, ErrExpired
-	}
-	// A failed checkpoint must be retried before any further server request.
-	if s.checkpointPending && persist != nil {
-		if err := s.checkpointLocked(persist); err != nil {
-			return SyncResult{}, err
-		}
-		s.checkpointPending = false
-	}
-	refresh := func() error {
-		if err := s.refreshLocked(ctx); err != nil {
-			return err
-		}
-		s.checkpointPending = true
-		if err := s.checkpointLocked(persist); err != nil {
-			return err
-		}
-		s.checkpointPending = false
-		return nil
-	}
-	if time.Until(s.expires) < 30*time.Second {
-		if err := refresh(); err != nil {
-			return SyncResult{}, err
-		}
-	}
-	status, data, err := s.client.request(ctx, "GET", "/api/sync", "", "", s.access)
+	ctx, finish, err := s.beginOperationLocked(ctx)
 	if err != nil {
 		return SyncResult{}, err
 	}
-	if status == 401 {
-		if err = refresh(); err != nil {
-			return SyncResult{}, err
-		}
-		status, data, err = s.client.request(ctx, "GET", "/api/sync", "", "", s.access)
-		if err != nil {
-			return SyncResult{}, err
-		}
+	defer finish()
+	status, data, err := s.authenticatedLocked(ctx, http.MethodGet, "/api/sync", "", "", persist)
+	if err != nil {
+		return SyncResult{}, err
 	}
-	if status == 401 || status == 403 {
-		return SyncResult{}, ErrExpired
-	}
-	if status != 200 {
-		return SyncResult{}, ErrNetwork
+	if status != http.StatusOK {
+		return SyncResult{}, statusError(status)
 	}
 	var syncData syncReply
 	if json.Unmarshal(data, &syncData) != nil || syncData.Ciphers == nil {
