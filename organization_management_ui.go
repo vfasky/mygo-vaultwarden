@@ -323,8 +323,9 @@ func (a *app) runOrganizationManagement(operation string) {
 	e.password = ""
 	a.secretInputVersion++
 	prior := a.snapshot
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++

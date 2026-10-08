@@ -31,6 +31,7 @@ type RecoveryDispatch struct {
 	EmergencyType      int
 	WaitTimeDays       int
 	RequireTargetLogin bool
+	Verification       RecoveryVerificationExpectation `json:",omitzero"`
 }
 type RecoveryOperationResult struct {
 	RecoveryDispatch
@@ -119,6 +120,9 @@ func (s *Session) CommitRecoveryOperation(ctx context.Context, p *RecoveryPlan, 
 	}
 	if err = guard(); err != nil {
 		return result, err
+	}
+	if p.record.RequireTargetLogin && p.record.Verification.Validate(p.record.Kind) != nil {
+		return result, ErrValidation
 	}
 	if confirmation != p.confirmation || before == nil {
 		return result, ErrValidation

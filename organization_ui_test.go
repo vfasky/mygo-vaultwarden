@@ -53,6 +53,9 @@ func organizationUIFixture(t *testing.T, edit, view bool, reprompt int) *app {
 	return a
 }
 func TestNativeOrganizationNavigationReadWriteAndLock(t *testing.T) {
+	if !organizationUIEnabled {
+		t.Skip("组织产品UI按本版范围延期；加密与权限测试仍运行")
+	}
 	a := organizationUIFixture(t, true, true, 0)
 	defer a.stopNetwork()
 	tt := ui.NewTester(a.view, 1280, 820)
@@ -155,6 +158,9 @@ func TestNativeOrganizationSyncRevokesDraftAndNavigation(t *testing.T) {
 }
 
 func TestNativeOrganizationShareRequiresDestinationConfirmation(t *testing.T) {
+	if !organizationUIEnabled {
+		t.Skip("组织共享UI延期到下一版本")
+	}
 	a := organizationUIFixture(t, true, true, 0)
 	defer a.stopNetwork()
 	a.openCipherEditor("card-1", 3)

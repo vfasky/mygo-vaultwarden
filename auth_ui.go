@@ -15,6 +15,7 @@ type authForm struct {
 	provider                           int
 	token, status                      string
 	remember, confirming, busy, closed bool
+	disableRemember                    bool
 	cancel                             context.CancelFunc
 	submit                             func(authRequest)
 }
@@ -93,7 +94,7 @@ func authFormView(c *ui.Context, f *authForm, providers map[int]string) {
 		}
 	}
 	ui.TextInput(c, &f.token).Label("验证响应 / 恢复码").Password().Disabled(f.busy)
-	if ui.Button(c, "记住此设备").Disabled(f.busy || f.provider == 8).Clicked() {
+	if !f.disableRemember && ui.Button(c, "记住此设备").Disabled(f.busy || f.provider == 8).Clicked() {
 		f.remember = !f.remember
 	}
 	if f.remember {

@@ -252,6 +252,10 @@ func TestLiveVaultFinishing(t *testing.T) {
 	if err != nil || stillTrashed.DeletedDate == nil {
 		t.Fatal("personal backup restored source", err)
 	}
+	if os.Getenv("MYGO_PERSONAL_RELEASE_ONLY") == "1" {
+		t.Log("Vaultwarden 1.37.4 personal complete resource backup, parser, staged copy and binary verification passed; organization product flows deferred")
+		return
+	}
 	// Create an organization and migrate the original legacy cipher. Recovery
 	// bytes survive independently of the live Session's generated item key.
 	organization, err := owner.SaveOrganization(ctx, vault, "", OrganizationSettings{Name: "Finishing organization", BillingEmail: owner.email, CollectionName: "Finishing collection"}, nil)

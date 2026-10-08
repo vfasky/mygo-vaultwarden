@@ -39,6 +39,9 @@ func (p *orgAPIKeyPanel) start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.flow.cancel = cancel
 	p.flow.running = true
+	if p.flow.busy != nil {
+		p.flow.busy(true)
+	}
 	p.flow.confirm = false
 	generation := p.flow.generation
 	go func() {
@@ -54,6 +57,9 @@ func (p *orgAPIKeyPanel) start() {
 		clear(password)
 		cancel()
 		dispatch(func() {
+			if p.flow.busy != nil {
+				p.flow.busy(false)
+			}
 			defer clear(secret)
 			if p.flow.closed || p.flow.generation != generation {
 				return

@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: GPL-3.0-only
+package main
+
+import (
+	"bytes"
+	"github.com/egoist/mygo/ui"
+	"testing"
+)
+
+func TestPersonalReleaseHidesOrganizationUIWithoutDroppingSyncData(t *testing.T) {
+	if organizationUIEnabled {
+		t.Skip("scope assertion applies to personal release")
+	}
+	a := organizationUIFixture(t, true, true, 0)
+	defer a.stopNetwork()
+	original := bytes.Clone(a.vault.Sync)
+	a.snapshot.SnapshotID = "release-scope-fixture"
+	tester := ui.NewTester(a.view, 1280, 820)
+	for _, label := range []string{"创建或加入组织", "团队组织", "  团队集合"} {
+		if tester.HasText(label) {
+			t.Fatalf("deferred UI visible: %s", label)
+		}
+	}
+	for _, item := range a.filteredItems() {
+		if item.OrganizationID != "" {
+			t.Fatal("organization item presented as personal")
+		}
+	}
+	clickUI(t, tester, "账号与设置")
+	if tester.HasText("组织条目、资源与审计") || tester.HasText("组织恢复登记与管理员恢复") {
+		t.Fatal("organization management entry exposed")
+	}
+	a.openEmergencyServices()
+	tester.Frame()
+	if a.orgServices == nil || !a.orgServices.emergencyOnly || tester.HasText("组织恢复登记与管理员恢复") || tester.HasText("Public 目录导入") {
+		t.Fatal("emergency route exposed deferred organization products")
+	}
+	if !bytes.Equal(original, a.vault.Sync) || len(a.organizations) == 0 {
+		t.Fatal("release gating dropped encrypted organization data")
+	}
+}

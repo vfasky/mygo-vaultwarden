@@ -278,6 +278,7 @@ func populateCipherEditor(editor *cipherEditor) {
 	}
 }
 func (a *app) cipherEditorView(c *ui.Context) {
+	callStorage := a.vaultStorage()
 	e := a.editor
 	if e.fields.OrganizationID != nil && !e.fields.Edit && e.repromptID == "" {
 		a.readOnlyOrganizationCipherView(c, e)
@@ -457,10 +458,12 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				}
 			})
 			if e.fields.ID != "" && e.fields.OrganizationID == nil {
-				if vaultwarden.CipherShareRequiresRecovery(e.document) {
+				if organizationUIEnabled && vaultwarden.CipherShareRequiresRecovery(e.document) {
 					ui.Text(c, "旧格式附件共享需要先保存账户绑定的加密恢复文件。共享前后都请保留它，结果未知时从导入导出页打开核对；文件依赖当前账户密钥，账号密钥轮换或删除前必须处理未决迁移。无 key 附件需先完成上方迁移。")
 				}
-				a.organizationShareView(c, e)
+				if organizationUIEnabled {
+					a.organizationShareView(c, e)
+				}
 				a.cipherStateButtons(c, e)
 			}
 		})
@@ -542,8 +545,9 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	}
 	vault := a.vault
 	scope, prior := *a.liveScope, a.snapshot
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++
@@ -568,7 +572,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 		} else {
 			switch {
 			case action == shareOrganizationAction:
-				_, err = shareCipherWithRecovery(ctx, parent, session, vault, editor, scope, editor.revision, persist)
+				_, err = shareCipherWithRecovery(ctx, parent, session, vault, editor, scope, editor.revision, persist, callStorage)
 			case editor.organizationID != "":
 				_, err = session.CreateOrganizationCipher(ctx, vault, editor.organizationID, editor.collectionID, editor.fields, persist)
 			case editor.fields.OrganizationID != nil:
@@ -587,7 +591,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 				_, err = session.UpdatePersonalCipherAuthorized(ctx, scope, editor.document, editor.fields, editor.authorization, persist)
 			}
 		}
-		a.window.Update(func() { a.completeCipherMutation(epoch, editor, checkpointState, reply, err, cancel) })
+		a.dispatchUI(func() { a.completeCipherMutation(epoch, editor, checkpointState, reply, err, cancel) })
 	}()
 }
 

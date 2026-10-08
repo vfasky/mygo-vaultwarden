@@ -22,6 +22,7 @@ func clearCipherRowReveal(e *cipherEditor) {
 	}
 }
 func (a *app) revealCipherRows(path string, storage func(storageRequest) storageReply) {
+	a.prepareRuntimeSecret()
 	e := a.editor
 	if e == nil || e.comparison == nil || a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
@@ -56,7 +57,7 @@ func (a *app) cipherRowPreviewView(c *ui.Context, e *cipherEditor, path string) 
 		if shown {
 			clearCipherRowReveal(e)
 		} else {
-			a.revealCipherRows(path, callStorage)
+			a.revealCipherRows(path, a.vaultStorage())
 		}
 	}
 	if e.rowPreview == nil || e.rowPreview.path != path {

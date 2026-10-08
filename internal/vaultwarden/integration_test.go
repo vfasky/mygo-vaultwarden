@@ -148,7 +148,11 @@ func TestLiveVaultwarden(t *testing.T) {
 				}
 			}
 			if tc.name == "pbkdf2" {
-				testLiveOrganizations(t, ctx, session, result.Scope, password)
+				if os.Getenv("MYGO_PERSONAL_RELEASE_ONLY") != "1" {
+					testLiveOrganizations(t, ctx, session, result.Scope, password)
+				} else if err := session.AcceptAuthenticatedSnapshot(result.Vault, fixtureUUID()); err != nil {
+					t.Fatal(err)
+				}
 				testLiveCipherComparison(t, ctx, session, result.Scope)
 				testLiveProtectedItem(t, ctx, session, result.Scope, password)
 				testLiveBackups(t, ctx, session, result.Scope, email, password)

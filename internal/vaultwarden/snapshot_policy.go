@@ -61,9 +61,19 @@ func RestoreSessionFromAuthenticatedSnapshot(data []byte, scope Scope, config *P
 func (s *Session) AcceptAuthenticatedSnapshot(vault *VaultData, revision string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.acceptSnapshotLocked(vault, revision); err != nil {
+		return err
+	}
+	s.runtimeOnly = false
+	s.runtimeSyncDigest = [32]byte{}
+	return nil
+}
+
+func (s *Session) acceptSnapshotLocked(vault *VaultData, revision string) error {
+	s.clearFreshRecoveryLogin()
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 	if !s.itemSessionActiveLocked() || revision == "" || len(revision) > 1024 {
 		return ErrExpired
 	}

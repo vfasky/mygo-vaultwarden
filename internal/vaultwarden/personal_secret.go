@@ -38,7 +38,7 @@ func (s *Session) withItemSecret(vault *VaultData, revision, id, kind string, gr
 	if err != nil {
 		return err
 	}
-	if revision == "" || revision != s.authorizationRevision || s.passwordUnlock == nil || use == nil {
+	if revision == "" || revision != s.authorizationRevision || (s.passwordUnlock == nil && !s.runtimeOnly) || use == nil {
 		return ErrExpired
 	}
 	var metadata struct{ Reprompt int }
@@ -80,7 +80,11 @@ func (s *Session) withItemSecret(vault *VaultData, revision, id, kind string, gr
 	if len(secret) == 0 || len(secret) > 65536 {
 		return ErrValidation
 	}
-	key := append([]byte(nil), s.passwordUnlock.Key...)
+	key, err := s.secretProtectionKeyLocked()
+	if err != nil {
+		return err
+	}
+	deadline = s.secretDeadlineLocked(deadline)
 	defer clear(key)
 	if !s.itemSessionActiveLocked() {
 		return ErrExpired

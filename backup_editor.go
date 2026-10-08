@@ -81,7 +81,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
 			ui.Text(c, "导入与导出").FontSize(23)
-			if !e.submitted && action(c, "打开加密共享迁移恢复文件…", "", false, busy).Clicked() {
+			if organizationUIEnabled && !e.submitted && action(c, "打开加密共享迁移恢复文件…", "", false, busy).Clicked() {
 				a.chooseCipherShareRecovery()
 			}
 			ui.Text(c, "文件包含未加密的密码、通行密钥及其他秘密，请仅保存在可信本地位置。完整资源格式另含附件，不是 Bitwarden 官方格式；普通 JSON 不含附件。未知扩展仍整体拒绝。本页导入导出个人密码库。").MaxLines(5).FontSize(12)
@@ -174,7 +174,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 					a.cancel()
 					a.cancel = nil
 				}
-				a.epoch++
+				a.advanceEpoch()
 				a.clearBackupEditor()
 				a.status = "已取消；如导入已发出，请同步核对部分结果。"
 			}
@@ -226,8 +226,9 @@ func (a *app) chooseImportFile() {
 	if a.pending != 0 || e == nil || e.plan != nil || !e.importing || !a.backupCurrent(e, a.epoch) {
 		return
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
@@ -301,8 +302,9 @@ func (a *app) chooseExportFile() {
 	e.exportIDs = append([]string(nil), ids...)
 	e.exportGrants = make(map[string]*vaultwarden.ItemAuthorization)
 	grants := e.exportGrants
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
@@ -358,6 +360,7 @@ func (a *app) chooseExportFile() {
 	}()
 }
 func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Context, stage *stagedBackup, err error, cancel context.CancelFunc) {
+	callStorage := a.vaultStorage()
 	a.pending--
 	defer cancel()
 	defer stage.Close()
@@ -410,8 +413,9 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(storageReques
 	e.plan = nil
 	e.submitted = true
 	scope, prior := *a.liveScope, a.snapshot
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	storage = a.routeStorage(storage, epoch)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++

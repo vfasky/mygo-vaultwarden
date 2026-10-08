@@ -41,9 +41,15 @@ type DeviceLogin struct {
 
 func (*DeviceLogin) String() string   { return "[device login]" }
 func (*DeviceLogin) GoString() string { return "[device login]" }
-func (f *DeviceLogin) Close() {
+
+// Cancel revokes the lifetime immediately without waiting for Session I/O.
+// Close may then reclaim keys from a worker; UI callers must not wait for it.
+func (f *DeviceLogin) Cancel() {
 	f.timer.Stop()
 	f.cancel()
+}
+func (f *DeviceLogin) Close() {
+	f.Cancel()
 	f.pending.Close()
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -254,7 +260,7 @@ func (f *DeviceLogin) Run(prompt func(context.Context, MFAChallenge) (MFARespons
 	if err != nil {
 		return DeviceLoginResult{}, err
 	}
-	s := &Session{client: f.client, email: f.email, account: f.scope.Account, key: append([]byte(nil), key...), wrapped: token.wrappedKey(), access: token.AccessToken, refresh: token.RefreshToken, expires: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)}
+	s := &Session{runtimeOnly: true, client: f.client, email: f.email, account: f.scope.Account, key: append([]byte(nil), key...), wrapped: token.wrappedKey(), access: token.AccessToken, refresh: token.RefreshToken, expires: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)}
 	f.mu.Lock()
 	f.session = s
 	f.mu.Unlock()

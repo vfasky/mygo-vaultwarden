@@ -20,7 +20,7 @@ func exportOrgBackupFile(ctx context.Context, session *vaultwarden.Session, vaul
 	return exportOrgBackupFormatFile(ctx, session, vault, orgID, path, grants, confirmed, false, persist)
 }
 
-func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed, official bool, persist func(vaultwarden.SessionCheckpoint) error) error {
+func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed, official bool, persist func(vaultwarden.SessionCheckpoint) error, leases ...func() error) error {
 	if session == nil {
 		return vaultwarden.ErrExpired
 	}
@@ -29,6 +29,11 @@ func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session
 		export = session.WithBitwardenOrganizationJSON
 	}
 	return export(ctx, vault, orgID, grants, confirmed, func(data []byte) error {
+		if len(leases) > 0 && leases[0] != nil {
+			if err := leases[0](); err != nil {
+				return err
+			}
+		}
 		stage, err := stageBackupFile(ctx, path, data)
 		if err != nil {
 			return err
@@ -36,6 +41,11 @@ func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session
 		defer stage.Close()
 		if ctx.Err() != nil {
 			return vaultwarden.ErrCancelled
+		}
+		if len(leases) > 0 && leases[0] != nil {
+			if err := leases[0](); err != nil {
+				return err
+			}
 		}
 		return stage.Commit()
 	}, persist)

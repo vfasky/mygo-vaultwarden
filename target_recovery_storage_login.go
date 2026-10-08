@@ -20,7 +20,7 @@ func newTargetRecoveryLoginStorage(state *snapshotStatus, epoch uint64, currentE
 			return nil, errTargetRecovery
 		}
 	}
-	proof := targetRecoveryResolution{ExpectedRevision: state.Revision, Target: fresh.Scope, VaultHash: targetRecoveryHash(fresh.Vault.Sync), SessionHash: targetRecoveryHash(fresh.Session), UnlockHash: targetRecoveryHash(fresh.PasswordUnlock.Key), AuthorityHash: evidence.AuthorityHash, KeyHash: evidence.KeyHash, MembershipHash: evidence.MembershipHash, MFAHash: evidence.MFAHash, ConfirmationHash: evidence.ConfirmationHash, AuthenticationEpoch: evidence.AuthenticationEpoch}
+	proof := targetRecoveryResolution{Kind: evidence.Kind, ExpectedRevision: state.Revision, Target: fresh.Scope, VaultHash: targetRecoveryHash(fresh.Vault.Sync), SessionHash: targetRecoveryHash(fresh.Session), UnlockHash: targetRecoveryHash(fresh.PasswordUnlock.Key), AuthorityHash: evidence.AuthorityHash, KeyHash: evidence.KeyHash, MembershipHash: evidence.MembershipHash, MFAHash: evidence.MFAHash, ConfirmationHash: evidence.ConfirmationHash, AuthenticationEpoch: evidence.AuthenticationEpoch}
 	v := *fresh.Vault
 	v.Sync = bytes.Clone(v.Sync)
 	u := *fresh.PasswordUnlock

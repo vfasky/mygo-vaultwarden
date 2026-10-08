@@ -50,6 +50,7 @@ type recoveryPanel struct {
 	prepare                                                                               func(context.Context, recoveryFormRequest) (*vaultwarden.RecoveryPlan, error)
 	commit                                                                                func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error)
 	dispatch                                                                              func(func())
+	busy                                                                                  func(bool)
 }
 
 func newEmergencyPanel(contacts []vaultwarden.EmergencyContact, trusted bool, prepare func(context.Context, recoveryFormRequest) (*vaultwarden.RecoveryPlan, error), commit func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error), dispatch func(func())) *recoveryPanel {
@@ -152,6 +153,9 @@ func (p *recoveryPanel) preparePlan() {
 		return
 	}
 	p.running = true
+	if p.busy != nil {
+		p.busy(true)
+	}
 	p.clearSecrets()
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
@@ -162,6 +166,9 @@ func (p *recoveryPanel) preparePlan() {
 		r.Close()
 		cancel()
 		dispatch(func() {
+			if p.busy != nil {
+				p.busy(false)
+			}
 			if p.closed || p.generation != generation {
 				if plan != nil {
 					plan.Close()
@@ -189,6 +196,9 @@ func (p *recoveryPanel) commitPlan() {
 	plan := p.plan
 	p.plan = nil
 	p.running = true
+	if p.busy != nil {
+		p.busy(true)
+	}
 	p.submitting = true
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
@@ -199,6 +209,9 @@ func (p *recoveryPanel) commitPlan() {
 		plan.Close()
 		cancel()
 		dispatch(func() {
+			if p.busy != nil {
+				p.busy(false)
+			}
 			if p.closed || p.generation != generation {
 				return
 			}

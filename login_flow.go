@@ -71,6 +71,11 @@ func (a *app) clearLoginInputs() {
 }
 
 func (a *app) resetLoginForm() {
+	a.deviceLoginSetup = false
+	if a.mfaLogin != nil {
+		a.mfaLogin.Close()
+		a.mfaLogin = nil
+	}
 	if a.loginChallenge != nil {
 		a.loginChallenge.cancel()
 		a.loginChallenge = nil

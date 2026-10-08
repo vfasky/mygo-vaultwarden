@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -18,6 +19,7 @@ type orgResourceCallbacks struct {
 	state    func(context.Context, vaultwarden.ResourceItemState, string, string, string) error
 	refresh  func(context.Context) error
 	dispatch func(func())
+	busy     func(bool)
 }
 type orgResourceStateRow struct {
 	source         vaultwarden.ResourceItemState
@@ -68,12 +70,18 @@ func (p *orgResourceRestorePanel) run(work func(context.Context) (func(), error)
 		return
 	}
 	p.running = true
+	if p.callbacks.busy != nil {
+		p.callbacks.busy(true)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	p.cancel = cancel
 	go func() {
 		apply, err := work(ctx)
 		cancel()
 		p.callbacks.dispatch(func() {
+			if p.callbacks.busy != nil {
+				p.callbacks.busy(false)
+			}
 			p.running = false
 			p.cancel = nil
 			if p.closed {
@@ -86,7 +94,12 @@ func (p *orgResourceRestorePanel) run(work func(context.Context) (func(), error)
 			}
 			p.status = "本步骤结束；每次写入后必须同步并按真实编号核对。"
 			if err != nil {
-				p.status = err.Error() + "；未确认步骤保持待核对，不会自动重发。"
+				var preparation *orgResourcePreparationError
+				if errors.As(err, &preparation) {
+					p.status = err.Error() + "；修正后可再次明确确认。"
+				} else {
+					p.status = err.Error() + "；未确认步骤保持待核对，不会自动重发。"
+				}
 			}
 		})
 	}()
@@ -117,6 +130,10 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 			p.run(func(ctx context.Context) (func(), error) {
 				result, err := execute(ctx, plan, index, target, "", false)
 				return func() {
+					var preparation *orgResourcePreparationError
+					if errors.As(err, &preparation) {
+						return
+					}
 					p.rows[index].attachmentID = result.AttachmentID
 					p.rows[index].state = "待核对"
 					p.needsRefresh = true
@@ -178,10 +195,18 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 							break
 						}
 					}
-					if err == nil {
-						err = execute(ctx, source, target, folder, operation)
+					if err != nil {
+						return nil, &orgResourcePreparationError{err}
 					}
-					return func() { p.states[index].steps[operation] = "待同步核对"; p.needsRefresh = true }, err
+					err = execute(ctx, source, target, folder, operation)
+					return func() {
+						var preparation *orgResourcePreparationError
+						if errors.As(err, &preparation) {
+							return
+						}
+						p.states[index].steps[operation] = "待同步核对"
+						p.needsRefresh = true
+					}, err
 				})
 			}
 			if action(c, "核对"+labels[step], "", false, disabled || row.steps[step] == "已核验").Clicked() {

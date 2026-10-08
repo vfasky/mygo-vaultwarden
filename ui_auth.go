@@ -22,8 +22,11 @@ func (a *app) authentication(c *ui.Context) {
 	if login {
 		page, title, subtitle = "login", "登录服务器", "连接你的 Vaultwarden 密码库"
 		if a.showVerification {
-			page, title, subtitle = "verification", "两步验证", "输入验证器中的 6 位验证码"
+			page, title, subtitle = "verification", "两步验证", "选择此服务器提供的验证方式"
 		}
+	}
+	if a.targetRecovery != nil {
+		page, title, subtitle = "target-recovery", "恢复目标账号", "全新认证、逐项核验与专用发布"
 	}
 	width, _ := c.Size()
 	ui.Column(c).Key("auth-"+page).Fill().TextColor(vaultInk).
@@ -40,12 +43,54 @@ func (a *app) authentication(c *ui.Context) {
 						ui.Text(c, title).FontSize(25).FontWeight(650).TextAlign(ui.Center)
 						ui.Text(c, subtitle).FontSize(13).TextColor(vaultMuted).TextAlign(ui.Center).MaxLines(2)
 					})
-					if login && a.showVerification {
+					if a.snapshot != nil && a.snapshot.AccountSwitchPending {
+						ui.Text(c, "本机账号替换已写入或回执未知。原账号加密副本与密钥在确认前保留，不会盲重试或回滚新状态。").MaxLines(5)
+						if a.switchReceipt == nil {
+							if authPrimary(c, "系统认证检查账号切换", a.pending != 0).Clicked() {
+								a.runStorage("inspectAccountSwitch")
+							}
+						} else {
+							binding := a.switchReceipt.Binding
+							ui.Text(c, "原账号："+binding.Source.Server+" / "+binding.Source.Account+"\n新账号："+binding.Target.Server+" / "+binding.Target.Account).MaxLines(6)
+							if authPrimary(c, "确认采用新账号并退休旧缓存密钥", a.pending != 0).Clicked() {
+								a.runStorage("confirmAccountSwitch")
+							}
+						}
+						a.authStatus(c)
+					} else if a.targetRecovery != nil {
+						if a.mfaLogin != nil {
+							a.mfaLoginView(c)
+						} else {
+							a.targetRecovery.View(c)
+						}
+					} else if a.deviceLoginPanel != nil {
+						a.deviceLoginPanel.View(c)
+						if authLink(c, "结束设备登录", false).Clicked() {
+							a.runStorage("lock")
+						}
+					} else if a.recoveryForm != nil {
+						if a.mfaLogin != nil {
+							a.mfaLoginView(c)
+						} else {
+							a.accountRecoveryView(c)
+						}
+					} else if a.snapshot != nil && a.snapshot.RecoveryPending {
+						ui.Text(c, "此账号有未完成的安全变更恢复记录，旧库与自动填充已暂停。普通登录、同步和退出不能清除此记录。").MaxLines(5)
+						if authPrimary(c, "进入账号恢复", a.pending != 0).Clicked() {
+							a.openAccountRecovery()
+						}
+						a.authStatus(c)
+					} else if login && a.showVerification {
 						a.twoFactorLogin(c)
 					} else if login {
 						a.serverLogin(c)
 					} else {
 						a.vaultUnlock(c)
+					}
+					if a.targetRecovery == nil && (a.snapshot == nil || !a.snapshot.AccountSwitchPending) {
+						if authLink(c, "目标本人登录并核验跨账号恢复", a.pending != 0).Clicked() {
+							a.openTargetRecovery()
+						}
 					}
 				})
 			})
@@ -77,6 +122,9 @@ func authLink(c *ui.Context, label string, disabled bool) *ui.Element {
 }
 
 func (a *app) authStatus(c *ui.Context) {
+	if warning := a.mfaWarnings.warning(a.serverURL, a.email); warning != "" {
+		ui.Text(c, warning).MaxLines(5)
+	}
 	if a.status != "" {
 		ui.Text(c, a.status).FontSize(12).LineHeight(1.5).TextColor(vaultMuted).
 			TextAlign(ui.Center).Role(ui.RoleStatus)
@@ -84,6 +132,17 @@ func (a *app) authStatus(c *ui.Context) {
 }
 
 func (a *app) serverLogin(c *ui.Context) {
+	if a.deviceLoginSetup {
+		a.deviceLoginSetupView(c)
+		return
+	}
+	if a.accountForm != nil && a.accountForm.mode == "register" {
+		accountFormView(c, a.accountForm)
+		if authLink(c, "返回登录", false).Clicked() {
+			a.advanceEpoch()
+		}
+		return
+	}
 	busy := a.pending != 0
 	ready := !busy && a.snapshot != nil && a.deviceID != ""
 	submitted := false
@@ -121,10 +180,21 @@ func (a *app) serverLogin(c *ui.Context) {
 		}
 		clicked := authPrimary(c, label, !ready).Clicked()
 		if ready && (clicked || submitted) {
+			a.loginSSO = false
 			a.syncVault(true)
 		}
 		a.authStatus(c)
 		ui.Row(c).Justify(ui.Center).Children(func() {
+			if authLink(c, "设备", !ready).Tooltip("通过已登记的另一台设备批准登录").Clicked() {
+				a.deviceLoginSetup = true
+			}
+			if authLink(c, "注册 / 密码提示", !ready).Clicked() {
+				a.openRegistration()
+			}
+			if authLink(c, "SSO 登录", !ready).Tooltip("SSO 认证后仍需主密码解锁；新建 SSO 账号和 Key Connector 暂不支持。").Clicked() {
+				a.loginSSO = true
+				a.syncVault(true)
+			}
 			switch {
 			case a.cancel != nil:
 				if authLink(c, "取消登录", false).Clicked() {
@@ -152,6 +222,10 @@ func (a *app) serverLogin(c *ui.Context) {
 }
 
 func (a *app) twoFactorLogin(c *ui.Context) {
+	if a.mfaLogin != nil {
+		a.mfaLoginView(c)
+		return
+	}
 	ready := a.loginChallenge != nil && a.loginChallenge.epoch == a.epoch && a.loginChallenge.ctx.Err() == nil
 	submitted := false
 	ui.Column(c).Key(a.secretInputVersion).Gap(16).Children(func() {
@@ -201,6 +275,10 @@ func (a *app) vaultUnlock(c *ui.Context) {
 			a.runStorage("list")
 		}
 		ui.Text(c, "Touch ID 不可用时，可按系统提示使用 Mac 登录密码。").FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center)
+		if authLink(c, "通过另一台设备登录", busy).Clicked() {
+			a.openUnlockLogin()
+			a.deviceLoginSetup = true
+		}
 		if !passwordReady {
 			ui.Text(c, "此密码库需重新登录一次，以启用主密码解锁。").FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center)
 			ui.Row(c).Justify(ui.Center).Children(func() {
