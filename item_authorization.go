@@ -44,7 +44,7 @@ func (a *app) authorizePersonalItem() {
 		revision = a.sessionRevision
 	}
 	organization := a.organizationItem(id)
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	a.cancel = cancel
