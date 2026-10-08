@@ -45,10 +45,14 @@ type orgServicesController struct {
 	collections                                             []vaultwarden.Collection
 	entries                                                 []vaultwarden.VaultEntry
 	members                                                 []recoveryMemberChoice
+	emergencyContacts                                       []vaultwarden.EmergencyContact
+	emergencyTrusted                                        bool
+	emergencyOnly                                           bool
 	selectedOrg, selectedItem, selectedMember, path, status string
 	official, resources                                     bool
 	prompt                                                  *servicePasswordPrompt
 	owner                                                   *app // used only by UI dispatches and View
+	runtime                                                 *runtimeVault
 }
 type servicePasswordPrompt struct {
 	challenge       *loginChallenge
@@ -255,8 +259,9 @@ func (c *orgServicesController) allGrants(ctx context.Context, env orgServiceSna
 	}
 	return grants, nil
 }
-func (a *app) openOrgServices() { a.openOrgServicesWith(a.dispatchUI, a.storageCall) }
-func (a *app) openOrgServicesWith(dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) openOrgServices()       { a.openOrgServicesWith(a.dispatchUI, a.storageCall) }
+func (a *app) openEmergencyServices() { a.openOrgServicesWith(a.dispatchUI, a.storageCall, true) }
+func (a *app) openOrgServicesWith(dispatch func(func()), storage func(storageRequest) storageReply, emergencyMode ...bool) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
 	}
@@ -271,13 +276,18 @@ func (a *app) openOrgServicesWith(dispatch func(func()), storage func(storageReq
 	if lease == nil {
 		return
 	}
-	entries, err := session.OrganizationEntries(a.vault)
-	if err != nil {
-		a.status = err.Error()
-		return
+	emergencyOnly := len(emergencyMode) > 0 && emergencyMode[0]
+	var entries []vaultwarden.VaultEntry
+	if !emergencyOnly {
+		var err error
+		entries, err = session.OrganizationEntries(a.vault)
+		if err != nil {
+			a.status = err.Error()
+			return
+		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &orgServicesController{snapshot: orgServiceSnapshot{session, a.vault, lease, a.epoch, a.runtimeVault != nil, storage}, ctx: ctx, cancel: cancel, dispatch: dispatch, baseStorage: baseStorage, busy: a.componentBusy, owner: a, organizations: append([]vaultwarden.Organization(nil), a.organizations...), collections: append([]vaultwarden.Collection(nil), a.collections...), entries: entries}
+	c := &orgServicesController{emergencyOnly: emergencyOnly, snapshot: orgServiceSnapshot{session, a.vault, lease, a.epoch, a.runtimeVault != nil, storage}, ctx: ctx, cancel: cancel, dispatch: dispatch, baseStorage: baseStorage, busy: a.componentBusy, owner: a, runtime: a.runtimeVault, organizations: append([]vaultwarden.Organization(nil), a.organizations...), collections: append([]vaultwarden.Collection(nil), a.collections...), entries: entries}
 	if len(c.organizations) > 0 {
 		c.selectedOrg = c.organizations[0].ID
 	}
@@ -291,6 +301,10 @@ func (c *orgServicesController) replacePanel(panel connectedPanel) {
 	}
 	c.panel = panel
 	switch p := panel.(type) {
+	case *recoveryPanel:
+		p.busy = c.busy
+	case *emergencyViewer:
+		p.busy = c.busy
 	case *orgOperationsPanel:
 		p.busy = c.busy
 	case *orgEventsPanel:
@@ -465,6 +479,10 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	if closed {
 		return
 	}
+	if c.emergencyOnly {
+		c.emergencyView(uiContext)
+		return
+	}
 	if prompt := c.prompt; prompt != nil {
 		ui.Column(uiContext).Key(prompt.challenge).Gap(10).Children(func() {
 			ui.Text(uiContext, prompt.label).MaxLines(4)
@@ -482,7 +500,30 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		})
 		return
 	}
-	ui.Text(uiContext, "组织条目、资源与管理服务").FontSize(22)
+	ui.Text(uiContext, "组织与账号恢复服务").FontSize(22)
+	if ui.Button(uiContext, "我授权的紧急联系人").Disabled(c.owner.pending != 0).Clicked() {
+		c.loadEmergency(true)
+	}
+	if ui.Button(uiContext, "授予我的紧急访问").Disabled(c.owner.pending != 0).Clicked() {
+		c.loadEmergency(false)
+	}
+	if ui.Button(uiContext, "组织恢复登记与管理员恢复").Disabled(c.owner.pending != 0 || len(c.organizations) == 0).Clicked() {
+		c.loadRecoveryMembers()
+	}
+	if !c.emergencyTrusted {
+		for _, contact := range c.emergencyContacts {
+			if vaultwarden.EmergencyActionAllowed(contact, false, "view") {
+				if ui.Button(uiContext, "只读查看："+contact.Name+" · "+contact.Email).Disabled(c.owner.pending != 0).Clicked() {
+					c.openEmergencyView(contact)
+				}
+			}
+		}
+	}
+	if env, err := c.environment(); err == nil {
+		if warning := c.owner.targetOutcomeWarnings[env.vault.Scope]; warning != "" {
+			ui.Text(uiContext, warning).MaxLines(5)
+		}
+	}
 	for _, org := range c.organizations {
 		if ui.Button(uiContext, org.Name).Disabled(c.owner.pending != 0).Clicked() {
 			if c.panel != nil {

@@ -35,6 +35,7 @@ type resourceControllerFixture struct {
 	failLease, failDownload, unknownTrash bool
 	trashes                               int
 	device                                *runtimeDeviceFixture
+	additional                            func(http.ResponseWriter, *http.Request) bool
 }
 
 func newResourceControllerFixture(t *testing.T, beforeFirstSync ...bool) *resourceControllerFixture {
@@ -83,6 +84,9 @@ func newResourceControllerFixture(t *testing.T, beforeFirstSync ...bool) *resour
 func (f *resourceControllerFixture) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.additional != nil && f.additional(w, r) {
+		return
+	}
 	if f.device != nil && f.device.serve(w, r) {
 		return
 	}

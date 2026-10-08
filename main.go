@@ -42,6 +42,7 @@ type app struct {
 	sendPanel                                 *SendPanel
 	devicePanel                               *DevicePanel
 	orgServices                               *orgServicesController
+	targetRecovery                            *targetRecoveryController
 	accountForm                               *accountForm
 	recoveryForm                              *accountRecoveryForm
 	authManagement                            *authManagementForm
@@ -58,6 +59,7 @@ type app struct {
 	switchReceipt                             *accountSwitchReceipt
 	mfaLogin                                  *controllerMFA
 	mfaWarnings                               mfaRecoveryWarnings
+	targetOutcomeWarnings                     map[vaultwarden.Scope]string
 	loginSSO                                  bool
 	notificationsEnabled                      bool
 	notifications                             *controllerNotifications

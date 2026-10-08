@@ -458,10 +458,12 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				}
 			})
 			if e.fields.ID != "" && e.fields.OrganizationID == nil {
-				if vaultwarden.CipherShareRequiresRecovery(e.document) {
+				if organizationUIEnabled && vaultwarden.CipherShareRequiresRecovery(e.document) {
 					ui.Text(c, "旧格式附件共享需要先保存账户绑定的加密恢复文件。共享前后都请保留它，结果未知时从导入导出页打开核对；文件依赖当前账户密钥，账号密钥轮换或删除前必须处理未决迁移。无 key 附件需先完成上方迁移。")
 				}
-				a.organizationShareView(c, e)
+				if organizationUIEnabled {
+					a.organizationShareView(c, e)
+				}
 				a.cipherStateButtons(c, e)
 			}
 		})

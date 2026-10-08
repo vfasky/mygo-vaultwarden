@@ -81,7 +81,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
 			ui.Text(c, "导入与导出").FontSize(23)
-			if !e.submitted && action(c, "打开加密共享迁移恢复文件…", "", false, busy).Clicked() {
+			if organizationUIEnabled && !e.submitted && action(c, "打开加密共享迁移恢复文件…", "", false, busy).Clicked() {
 				a.chooseCipherShareRecovery()
 			}
 			ui.Text(c, "文件包含未加密的密码、通行密钥及其他秘密，请仅保存在可信本地位置。完整资源格式另含附件，不是 Bitwarden 官方格式；普通 JSON 不含附件。未知扩展仍整体拒绝。本页导入导出个人密码库。").MaxLines(5).FontSize(12)

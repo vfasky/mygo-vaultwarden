@@ -41,9 +41,10 @@ func checkRuntimeTargetProtection(cap *vaultwarden.RuntimeAuthority, vault *vaul
 	queryID := hex.EncodeToString(id[:])
 	digest := targetRecoveryHash(vault.Sync)
 	var binding runtimeSecretRequest
-	err := cap.WithProtection(vault, func(deadline time.Time) error {
-		var err error
-		binding, err = native.activateBound(cap.Scope(), "recovery", deadline, func(generation uint64, deadlineMS int64) (string, string) {
+	var protectedDeadline time.Time
+	err := cap.WithProtection(vault, func(deadline time.Time) error { protectedDeadline = deadline; return nil })
+	if err == nil {
+		binding, err = native.activateBound(cap.Scope(), "recovery", protectedDeadline, func(generation uint64, deadlineMS int64) (string, string) {
 			description, _ := json.Marshal(struct {
 				Purpose             string            `json:"purpose"`
 				QueryID             string            `json:"queryId"`
@@ -54,8 +55,7 @@ func checkRuntimeTargetProtection(cap *vaultwarden.RuntimeAuthority, vault *vaul
 			}{"mygo-runtime-target-block-query-v1", queryID, cap.Scope(), digest, cap.Revision(), epoch, generation, deadlineMS})
 			return queryID, targetRecoveryHash(description)
 		})
-		return err
-	})
+	}
 	if err != nil {
 		return err
 	}

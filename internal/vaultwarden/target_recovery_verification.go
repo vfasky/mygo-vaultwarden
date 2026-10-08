@@ -63,6 +63,7 @@ func (p *TargetRecoveryInspection) Close() {
 		return
 	}
 	clear(p.Fresh.Session)
+	clear(p.Fresh.Credentials)
 	if p.Fresh.PasswordUnlock != nil {
 		clear(p.Fresh.PasswordUnlock.Key)
 	}

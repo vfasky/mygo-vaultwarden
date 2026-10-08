@@ -1,5 +1,7 @@
 # 最终集成 #14 工作记录
 
+**当前范围变更：用户要求组织产品UI延期。** 下文为按时间追加的历史检查点，不应把旧状态当作当前未完成清单。组织模块/主controller成果保留但本版撤下入口；个人版本当前范围与验证以 [本版验收矩阵](../personal-release-acceptance.md) 为准。加密组织数据、政策/pending/隔离、权限及全资源轮换约束继续保留。
+
 本卡从 `69047c2` 启动，只修改独立 Board 工作树。当前为开发中检查点，**不是最终候选，不表示完整客户端已完成或已合并**。最终需包含后续已审查的 #38/#39/#40 接口并重新验收。
 
 本轮主 controller 已接：统一 UI epoch 推进及原子 worker 时钟；短锁 scope/revision/snapshot lease；Session 锁内只保存/校验 checkpoint，UI dispatch 后才采用；退出撤销网络、组件与通知。主登录改用 LoginMFA，主密码直到认证后 policy 检查完成才清除；普通 MFA/provider8 的账号级警告、生产 Duo/WebAuthn 桥及 SSO→UnlockSSOVault 使用同一认证同步流程。账号注册/资料/敏感变更 Begin/Result、Send、设备审批、MFA 管理和通知有主窗口接线。入口位于原生“账号与设置”的账号服务区，以保留用户现有侧栏布局与截图对应行为。

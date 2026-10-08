@@ -56,7 +56,7 @@ var vaultCategories = []vaultCategory{
 
 func (a *app) currentCategory() vaultCategory {
 	if a.category == "org-services" {
-		return vaultCategory{"org-services", "组织业务", "vault", true}
+		return vaultCategory{"org-services", "紧急访问", "vault", true}
 	}
 	if a.category == "mfa" {
 		return vaultCategory{"mfa", "两步验证设置", "shield", true}
@@ -106,6 +106,16 @@ func (a *app) currentCategory() vaultCategory {
 	return vaultCategories[0]
 }
 
+func (a *app) releaseItemCount() int {
+	count := 0
+	for _, item := range a.items {
+		if organizationUIEnabled || item.OrganizationID == "" {
+			count++
+		}
+	}
+	return count
+}
+
 func (a *app) filteredItems() []displayCredential {
 	if !a.currentCategory().supported || !a.unlocked() {
 		return nil
@@ -113,7 +123,7 @@ func (a *app) filteredItems() []displayCredential {
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	items := make([]displayCredential, 0, len(a.items))
 	for _, item := range a.items {
-		if a.category == "personal" && item.OrganizationID != "" {
+		if (!organizationUIEnabled || a.category == "personal") && item.OrganizationID != "" {
 			continue
 		}
 		if strings.HasPrefix(a.category, "org:") && item.OrganizationID != strings.TrimPrefix(a.category, "org:") {
@@ -229,8 +239,8 @@ func (a *app) body(c *ui.Context) {
 				a.orgServices.View(c)
 			} else {
 				ui.Text(c, a.status)
-				if ui.Button(c, "打开组织业务").Disabled(a.pending != 0).Clicked() {
-					a.openOrgServices()
+				if ui.Button(c, "打开紧急访问").Disabled(a.pending != 0).Clicked() {
+					a.openEmergencyServices()
 				}
 			}
 		})
@@ -503,7 +513,7 @@ func (a *app) sidebarContent(c *ui.Context) {
 				for _, category := range vaultCategories {
 					count := ""
 					if category.supported && a.unlocked() {
-						count = fmt.Sprint(len(a.items))
+						count = fmt.Sprint(a.releaseItemCount())
 					}
 					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
 					if !category.supported && !a.sidebarCollapsed {
@@ -514,26 +524,28 @@ func (a *app) sidebarContent(c *ui.Context) {
 						a.listState.ScrollTo(0, ui.Start)
 					}
 				}
-				sectionLabel(c, "组织")
-				if navItem(c, "创建或加入组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
-					a.openOrganizationEditor("")
-				}
-				if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
-					a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
-				}
-				for _, org := range a.organizations {
-					if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
-						a.category, a.showSettings = "org:"+org.ID, false
+				if organizationUIEnabled {
+					sectionLabel(c, "组织")
+					if navItem(c, "创建或加入组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
+						a.openOrganizationEditor("")
 					}
-					for _, collection := range a.collections {
-						if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
-							a.category, a.showSettings = "collection:"+collection.ID, false
+					if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+						a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
+					}
+					for _, org := range a.organizations {
+						if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
+							a.category, a.showSettings = "org:"+org.ID, false
+						}
+						for _, collection := range a.collections {
+							if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
+								a.category, a.showSettings = "collection:"+collection.ID, false
+							}
 						}
 					}
-				}
-				for _, org := range a.isolatedOrganizations {
-					if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
-						a.openOrganizationEditor(org.ID)
+					for _, org := range a.isolatedOrganizations {
+						if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+							a.openOrganizationEditor(org.ID)
+						}
 					}
 				}
 				sectionLabel(c, "文件夹")
@@ -686,7 +698,7 @@ func (a *app) credentialList(c *ui.Context, items []displayCredential) {
 				a.showSettings = false
 			}
 		}
-		ui.Text(c, fmt.Sprintf("已载入 %d 个项目 · 个人密码库", len(a.items))).FontSize(11).TextColor(vaultMuted).Padding(4, 8)
+		ui.Text(c, fmt.Sprintf("已载入 %d 个项目 · 个人密码库", a.releaseItemCount())).FontSize(11).TextColor(vaultMuted).Padding(4, 8)
 	})
 }
 
@@ -860,8 +872,11 @@ func (a *app) settings(c *ui.Context) {
 					})
 				}
 				ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
-					if action(c, "组织条目、资源与审计", "vault", false, !ready).Clicked() {
-						a.openOrgServices()
+					if action(c, "核验目标账号恢复记录", "vault", false, a.pending != 0).Clicked() {
+						a.openTargetRecovery()
+					}
+					if action(c, "紧急访问", "vault", false, !ready).Clicked() {
+						a.openEmergencyServices()
 					}
 					if action(c, "Send", "send", false, !ready).Clicked() {
 						a.openSend()

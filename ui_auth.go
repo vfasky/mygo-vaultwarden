@@ -25,6 +25,9 @@ func (a *app) authentication(c *ui.Context) {
 			page, title, subtitle = "verification", "两步验证", "选择此服务器提供的验证方式"
 		}
 	}
+	if a.targetRecovery != nil {
+		page, title, subtitle = "target-recovery", "恢复目标账号", "全新认证、逐项核验与专用发布"
+	}
 	width, _ := c.Size()
 	ui.Column(c).Key("auth-"+page).Fill().TextColor(vaultInk).
 		Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
@@ -54,6 +57,12 @@ func (a *app) authentication(c *ui.Context) {
 							}
 						}
 						a.authStatus(c)
+					} else if a.targetRecovery != nil {
+						if a.mfaLogin != nil {
+							a.mfaLoginView(c)
+						} else {
+							a.targetRecovery.View(c)
+						}
 					} else if a.deviceLoginPanel != nil {
 						a.deviceLoginPanel.View(c)
 						if authLink(c, "结束设备登录", false).Clicked() {
@@ -77,6 +86,11 @@ func (a *app) authentication(c *ui.Context) {
 						a.serverLogin(c)
 					} else {
 						a.vaultUnlock(c)
+					}
+					if a.targetRecovery == nil && (a.snapshot == nil || !a.snapshot.AccountSwitchPending) {
+						if authLink(c, "目标本人登录并核验跨账号恢复", a.pending != 0).Clicked() {
+							a.openTargetRecovery()
+						}
 					}
 				})
 			})

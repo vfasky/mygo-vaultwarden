@@ -176,19 +176,23 @@ func TestCollapsedSidebarBaselineNavigationAndRevocation(t *testing.T) {
 	a.sidebarCollapsed = true
 	a.folders = []vaultwarden.Folder{{ID: "folder-1", Name: "测试文件夹"}}
 	tt := ui.NewTester(a.view, 1280, 820)
-	clickUI(t, tt, "团队组织")
-	if a.category != "org:organization-1" || len(a.filteredItems()) != 1 {
-		t.Fatal("collapsed organization navigation lost baseline filter")
+	if organizationUIEnabled {
+		clickUI(t, tt, "团队组织")
+		if a.category != "org:organization-1" || len(a.filteredItems()) != 1 {
+			t.Fatal("collapsed organization navigation lost baseline filter")
+		}
+		clickUI(t, tt, "  团队集合")
+		if a.category != "collection:collection-1" {
+			t.Fatal("collapsed collection navigation lost destination")
+		}
+		clickUI(t, tt, "查看与编辑")
+		if a.editor == nil || a.editor.inputs[1].value != "org secret" {
+			t.Fatal("collapsed navigation lost authorized editor")
+		}
+		a.editor = nil
+	} else if tt.HasText("团队组织") || tt.HasText("创建或加入组织") {
+		t.Fatal("deferred organization UI exposed")
 	}
-	clickUI(t, tt, "  团队集合")
-	if a.category != "collection:collection-1" {
-		t.Fatal("collapsed collection navigation lost destination")
-	}
-	clickUI(t, tt, "查看与编辑")
-	if a.editor == nil || a.editor.inputs[1].value != "org secret" {
-		t.Fatal("collapsed navigation lost authorized editor")
-	}
-	a.editor = nil
 	tt.Frame()
 	clickUI(t, tt, "测试文件夹")
 	if a.category != "folder:folder-1" {
