@@ -100,6 +100,9 @@ func (c *Client) LoginMFA(ctx context.Context, email string, password []byte, re
 				return MFALoginResult{}, ErrCancelled
 			}
 			s := &Session{client: c, email: email, key: key, wrapped: t.wrappedKey(), access: t.AccessToken, refresh: t.RefreshToken, expires: time.Now().Add(time.Duration(t.ExpiresIn) * time.Second), passwordUnlock: &PasswordUnlock{Config: PasswordUnlockConfig{Email: email, KDF: kdf}, Key: unlock}}
+			if remembered == "" && form.Get("twoFactorProvider") != "5" {
+				s.freshRecoveryDeadline = time.Now().Add(5 * time.Minute)
+			}
 			return MFALoginResult{Session: s, RememberToken: t.Remember, RemovedAllMFA: recovery}, nil
 		}
 		if status != 400 && status != 401 {

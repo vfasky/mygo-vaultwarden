@@ -282,6 +282,7 @@ type Session struct {
 	passwordUnlock                           *PasswordUnlock
 	expires                                  time.Time
 	runtimeOnly                              bool
+	freshRecoveryDeadline                    time.Time
 	runtimeSyncDigest                        [32]byte
 	runtimeCurrent                           atomic.Pointer[RuntimeAuthority]
 	closed                                   bool

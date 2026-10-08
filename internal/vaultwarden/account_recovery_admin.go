@@ -123,6 +123,9 @@ func (s *Session) PrepareAdministratorRecovery(ctx context.Context, vault *Vault
 	defer data.close()
 	epoch, revision := s.authorizationEpoch, s.authorizationRevision
 	guard := s.recoveryGuardLocked(epoch, revision)
+	if err = s.client.requireRecoveryCompatibility(ctx); err != nil {
+		return nil, err
+	}
 	target, details, err := s.adminRecoveryDetailsLocked(ctx, org, memberID, persist, guard)
 	if err != nil {
 		return nil, err
@@ -180,7 +183,15 @@ func (s *Session) PrepareAdministratorRecovery(ctx context.Context, vault *Vault
 	p.record.OrganizationID = orgID
 	p.record.MembershipID = memberID
 	p.record.TargetEmail = target.Email
+	p.record.Verification, err = recoveryExpectation(p.record.Kind, key, payload.Key, resetPassword, resetTwoFactor)
+	if err != nil {
+		p.Close()
+		return nil, err
+	}
 	p.revalidate = func(ctx context.Context, persist func(SessionCheckpoint) error, guard func() error) error {
+		if err := s.client.requireRecoveryCompatibility(ctx); err != nil {
+			return err
+		}
 		fresh, freshDetails, e := s.adminRecoveryDetailsLocked(ctx, org, memberID, persist, guard)
 		if e != nil {
 			return e

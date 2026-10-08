@@ -70,6 +70,7 @@ func (s *Session) AcceptAuthenticatedSnapshot(vault *VaultData, revision string)
 }
 
 func (s *Session) acceptSnapshotLocked(vault *VaultData, revision string) error {
+	s.clearFreshRecoveryLogin()
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil
 	s.advanceAuthorizationLocked()

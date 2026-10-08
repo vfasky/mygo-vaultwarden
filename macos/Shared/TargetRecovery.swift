@@ -25,12 +25,34 @@ struct TargetRecoveryBinding: Codable, Equatable {
     let authorizationEpoch: UInt64
     let summaryHash: String
 }
+struct TargetRecoveryOriginalResult: Codable, Equatable {
+    let version: Int
+    let phase: String
+}
+struct TargetRecoveryExpectation: Codable, Equatable {
+    let Version: Int
+    let ResetPassword: Bool
+    let ResetMFA: Bool
+    let RemoveNonOwnerMemberships: Bool
+    let ExpectedUserKeySHA256: String
+    let ExpectedMasterWrapperSHA256: String
+    func validate(kind: String) throws {
+        guard Version == 1, targetHashValid(ExpectedUserKeySHA256),
+              ResetPassword ? targetHashValid(ExpectedMasterWrapperSHA256) : ExpectedMasterWrapperSHA256.isEmpty else { throw SnapshotError.invalidInput }
+        switch kind {
+        case "administrator-recovery": guard (ResetPassword || ResetMFA) && !RemoveNonOwnerMemberships else { throw SnapshotError.invalidInput }
+        case "emergency-takeover": guard ResetPassword && ResetMFA && RemoveNonOwnerMemberships else { throw SnapshotError.invalidInput }
+        default: throw SnapshotError.invalidInput
+        }
+    }
+}
 struct TargetRecoveryRecord: Codable, Equatable {
     let binding: TargetRecoveryBinding
     let summary: Data
     var phase: String
     let requireTargetLogin: Bool
     let noLocalTarget: Bool
+    var originalResult: TargetRecoveryOriginalResult? = nil
     var protection: TargetRecoveryProtection? = nil
     var verification: TargetRecoveryResolution? = nil
     var verifiedVaultHash: String? = nil
@@ -42,6 +64,7 @@ struct TargetRecoveryEnvelope: Codable {
     let sealed: Data
 }
 struct TargetRecoveryResolution: Codable, Equatable {
+    var kind: String? = nil
     let binding: TargetRecoveryBinding
     let expectedRevision: String
     let target: SnapshotScope
@@ -76,6 +99,21 @@ private func targetStrictBinding(_ value: Any) throws {
     try targetStrictScope(actor); try targetStrictScope(target)
 }
 extension TargetRecoveryRecord {
+    func requireCurrentEvidence(_ proof: TargetRecoveryResolution) throws {
+        let raw = try JSONSerialization.jsonObject(with: summary) as? [String: Any]
+        guard raw?["Verification"] != nil else { throw SnapshotError.invalidInput }
+        switch proof.kind {
+        case "target-authenticated-nondispatch-v1":
+            guard originalResult?.version == 1, originalResult?.phase == "not-dispatched" else { throw SnapshotError.invalidInput }
+        case "target-confirmed-email-fallback-v1":
+            guard originalResult?.version == 1, originalResult?.phase == "confirmed",
+                  raw?["Kind"] as? String == "administrator-recovery",
+                  let expected = raw?["Verification"] as? [String: Any], expected["ResetMFA"] as? Bool == true else { throw SnapshotError.invalidInput }
+        case "target-observed-effects-v1":
+            guard originalResult?.phase != "not-dispatched" else { throw SnapshotError.invalidInput }
+        default: throw SnapshotError.invalidInput
+        }
+    }
     func validate() throws {
         let b = binding
         guard b.actor.valid, b.actor.server == b.target.server,
@@ -84,7 +122,7 @@ extension TargetRecoveryRecord {
               !b.storageRevision.isEmpty, b.storageRevision.count <= 128, b.hostEpoch > 0, b.authorizationEpoch > 0,
               summary.count <= 32768, targetDigest(summary) == b.summaryHash,
               ["prepared", "confirmed", "unknown", "not-dispatched", "verified", "resolved"].contains(phase) else { throw SnapshotError.invalidInput }
-        let raw = try targetStrictObject(summary, keys: ["OperationID", "Actor", "Target", "Kind", "ResourceID", "PreviousRevision", "AuthorizationEpoch", "OrganizationID", "MembershipID", "ConfirmedImpact", "TargetEmail", "CounterpartyID", "CounterpartyEmail", "EmergencyType", "WaitTimeDays", "RequireTargetLogin"])
+        let raw = try targetStrictObject(summary, keys: ["OperationID", "Actor", "Target", "Kind", "ResourceID", "PreviousRevision", "AuthorizationEpoch", "OrganizationID", "MembershipID", "ConfirmedImpact", "TargetEmail", "CounterpartyID", "CounterpartyEmail", "EmergencyType", "WaitTimeDays", "RequireTargetLogin", "Verification"])
         guard raw["OperationID"] as? String == b.operationId,
               raw["AuthorizationEpoch"] as? UInt64 == b.authorizationEpoch,
               raw["RequireTargetLogin"] as? Bool == requireTargetLogin,
@@ -95,6 +133,17 @@ extension TargetRecoveryRecord {
               try snapshotDecode(SnapshotScope.self, from: JSONSerialization.data(withJSONObject: target)) == b.target else { throw SnapshotError.invalidInput }
         try targetStrictScope(actor); try targetStrictScope(target)
         for value in raw.values { if let text = value as? String, text.utf8.count > 8192 { throw SnapshotError.invalidInput } }
+        if let value = raw["Verification"] {
+            guard requireTargetLogin, b.target.valid else { throw SnapshotError.invalidInput }
+            let data = try JSONSerialization.data(withJSONObject: value)
+            _ = try targetStrictObject(data, keys: ["Version", "ResetPassword", "ResetMFA", "RemoveNonOwnerMemberships", "ExpectedUserKeySHA256", "ExpectedMasterWrapperSHA256"])
+            try snapshotDecode(TargetRecoveryExpectation.self, from: data).validate(kind: kind)
+        }
+        if let originalResult {
+            guard raw["Verification"] != nil, originalResult.version == 1,
+                  ["confirmed", "unknown", "not-dispatched"].contains(originalResult.phase),
+                  phase == originalResult.phase || phase == "verified" || phase == "resolved" else { throw SnapshotError.invalidInput }
+        }
         if let protection {
             guard protection.scope == b.target, protection.pendingPolicyMutations.count <= 1024,
                   protection.quarantinedOrganizations.count <= 1024,
@@ -102,6 +151,7 @@ extension TargetRecoveryRecord {
                   Set(protection.quarantinedOrganizations).count == protection.quarantinedOrganizations.count else { throw SnapshotError.invalidInput }
         }
         if phase == "verified" || phase == "resolved" {
+            if raw["Verification"] != nil { guard let verification else { throw SnapshotError.invalidInput }; try requireCurrentEvidence(verification) }
             guard let a = verifiedVaultHash, let b = verifiedSessionHash, let c = verifiedUnlockHash,
                   [a,b,c].allSatisfy(targetHashValid), let verification,
                   verification.binding == binding, verification.target == binding.target,
@@ -121,9 +171,12 @@ extension SnapshotFiles {
         let plain = try AES.GCM.open(AES.GCM.SealedBox(combined: envelope.sealed), using: SymmetricKey(data: key), authenticating: targetAAD)
         guard let array = try JSONSerialization.jsonObject(with: plain) as? [[String: Any]], array.count <= 1024 else { throw SnapshotError.corrupt }
         for object in array {
-            _ = try targetStrictObject(JSONSerialization.data(withJSONObject: object), keys: ["binding", "summary", "phase", "requireTargetLogin", "noLocalTarget", "protection", "verification", "verifiedVaultHash", "verifiedSessionHash", "verifiedUnlockHash"])
+            _ = try targetStrictObject(JSONSerialization.data(withJSONObject: object), keys: ["binding", "summary", "phase", "requireTargetLogin", "noLocalTarget", "originalResult", "protection", "verification", "verifiedVaultHash", "verifiedSessionHash", "verifiedUnlockHash"])
             guard let binding = object["binding"] else { throw SnapshotError.corrupt }
             try targetStrictBinding(binding)
+            if let original = object["originalResult"] {
+                _ = try targetStrictObject(JSONSerialization.data(withJSONObject: original), keys: ["version", "phase"])
+            }
             if let projection = object["protection"] {
                 let p = try targetStrictObject(JSONSerialization.data(withJSONObject: projection), keys: ["scope", "pendingPolicyMutations", "quarantinedOrganizations"])
                 guard let scope = p["scope"], let pending = p["pendingPolicyMutations"] as? [[String: Any]] else { throw SnapshotError.corrupt }
@@ -131,7 +184,7 @@ extension SnapshotFiles {
                 for record in pending { _ = try targetStrictObject(JSONSerialization.data(withJSONObject: record), keys: ["organizationId", "policyType", "mutationId"]) }
             }
             if let verification = object["verification"] {
-                let p = try targetStrictObject(JSONSerialization.data(withJSONObject: verification), keys: ["binding", "expectedRevision", "target", "vaultHash", "sessionHash", "unlockHash", "authorityHash", "keyHash", "membershipHash", "mfaHash", "confirmationHash", "authenticationEpoch"])
+                let p = try targetStrictObject(JSONSerialization.data(withJSONObject: verification), keys: ["kind", "binding", "expectedRevision", "target", "vaultHash", "sessionHash", "unlockHash", "authorityHash", "keyHash", "membershipHash", "mfaHash", "confirmationHash", "authenticationEpoch"])
                 guard let binding = p["binding"], let target = p["target"] else { throw SnapshotError.corrupt }
                 try targetStrictBinding(binding); try targetStrictScope(target)
             }
@@ -176,6 +229,8 @@ extension SnapshotFiles {
             let alreadyResolved = records[i].phase == "resolved"
             guard let freshVault = vault else { throw SnapshotError.invalidInput }
             if !alreadyResolved {
+                guard let storedProof = records[i].verification else { throw SnapshotError.busy }
+                try records[i].requireCurrentEvidence(storedProof)
                 guard records[i].phase == "verified", let session, let material,
                       records[i].verifiedVaultHash == targetDigest(freshVault.sync), records[i].verifiedSessionHash == targetDigest(session),
                       records[i].verifiedUnlockHash == targetDigest(material.key) else { throw SnapshotError.busy }
@@ -219,6 +274,7 @@ extension SnapshotFiles {
         try validateSessionData(session)
     }
     func verifyTargetResolution(_ proof: TargetRecoveryResolution, record: TargetRecoveryRecord, state: SnapshotState, vault: VaultData?, session: Data?, material: PasswordUnlockMaterial?) throws {
+        try record.requireCurrentEvidence(proof)
         guard proof.binding == record.binding, proof.expectedRevision == state.revision,
               proof.target == record.binding.target, proof.target.valid, proof.authenticationEpoch > 0,
               record.phase != "resolved", let vault, let session, let material,
@@ -306,6 +362,10 @@ extension SnapshotStore {
                 case "targetRecoveryResult":
                     guard let phase, ["confirmed", "unknown", "not-dispatched"].contains(phase),
                           records[index].phase == "prepared" || records[index].phase == phase else { throw SnapshotError.invalidInput }
+                    if records[index].originalResult == nil, records[index].phase == "prepared",
+                       let raw = try JSONSerialization.jsonObject(with: records[index].summary) as? [String: Any], raw["Verification"] != nil {
+                        records[index].originalResult = TargetRecoveryOriginalResult(version: 1, phase: phase)
+                    }
                     records[index].phase = phase
                 case "targetRecoveryVerify":
                     guard let resolution else { throw SnapshotError.invalidInput }

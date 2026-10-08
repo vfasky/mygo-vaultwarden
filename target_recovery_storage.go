@@ -23,22 +23,25 @@ type targetRecoveryBinding struct {
 	AuthorizationEpoch uint64            `json:"authorizationEpoch"`
 	SummaryHash        string            `json:"summaryHash"`
 }
+type targetRecoveryOriginalResult = vaultwarden.TargetRecoveryOriginalResult
 type targetRecoveryRecord struct {
-	Verification        *targetRecoveryResolution `json:"verification,omitempty"`
-	Protection          *targetRecoveryProtection `json:"protection,omitempty"`
-	Binding             targetRecoveryBinding     `json:"binding"`
-	Summary             []byte                    `json:"summary"`
-	Phase               string                    `json:"phase"`
-	RequireTargetLogin  bool                      `json:"requireTargetLogin"`
-	NoLocalTarget       bool                      `json:"noLocalTarget"`
-	VerifiedVaultHash   string                    `json:"verifiedVaultHash,omitempty"`
-	VerifiedSessionHash string                    `json:"verifiedSessionHash,omitempty"`
-	VerifiedUnlockHash  string                    `json:"verifiedUnlockHash,omitempty"`
+	OriginalResult      targetRecoveryOriginalResult `json:"originalResult,omitzero"`
+	Verification        *targetRecoveryResolution    `json:"verification,omitempty"`
+	Protection          *targetRecoveryProtection    `json:"protection,omitempty"`
+	Binding             targetRecoveryBinding        `json:"binding"`
+	Summary             []byte                       `json:"summary"`
+	Phase               string                       `json:"phase"`
+	RequireTargetLogin  bool                         `json:"requireTargetLogin"`
+	NoLocalTarget       bool                         `json:"noLocalTarget"`
+	VerifiedVaultHash   string                       `json:"verifiedVaultHash,omitempty"`
+	VerifiedSessionHash string                       `json:"verifiedSessionHash,omitempty"`
+	VerifiedUnlockHash  string                       `json:"verifiedUnlockHash,omitempty"`
 }
 
 func (r *targetRecoveryRecord) Close() { clear(r.Summary); *r = targetRecoveryRecord{} }
 
 type targetRecoveryResolution struct {
+	Kind                string                `json:"kind,omitempty"`
 	Binding             targetRecoveryBinding `json:"binding"`
 	ExpectedRevision    string                `json:"expectedRevision"`
 	Target              vaultwarden.Scope     `json:"target"`
@@ -58,6 +61,7 @@ type targetRecoveryResolution struct {
 // verified 'not applicable' result for MFA/membership), not arbitrary UI flags.
 // The storage layer cannot attest remote server truth or validate other users' keys.
 type targetRecoveryVerification struct {
+	Kind                                                              string
 	AuthorityHash, KeyHash, MembershipHash, MFAHash, ConfirmationHash string
 	AuthenticationEpoch                                               uint64
 }
@@ -132,9 +136,20 @@ func (s *targetRecoveryStorage) request(operation string) storageRequest {
 	return req
 }
 func validTargetRecord(r targetRecoveryRecord) bool {
-	var d vaultwarden.RecoveryDispatch
-	if len(r.Summary) > 32768 || json.Unmarshal(r.Summary, &d) != nil {
+	d, err := vaultwarden.DecodeRecoveryDispatch(r.Summary)
+	if err != nil {
 		return false
+	}
+	if d.Verification.Version != 0 && d.Verification.Validate(d.Kind) != nil {
+		return false
+	}
+	if d.Verification.Version == 0 && d.Verification != (vaultwarden.RecoveryVerificationExpectation{}) {
+		return false
+	}
+	if origin := r.OriginalResult; origin.Version != 0 || origin.Phase != "" {
+		if d.Verification.Validate(d.Kind) != nil || origin.Version != 1 || (origin.Phase != "confirmed" && origin.Phase != "unknown" && origin.Phase != "not-dispatched") || (r.Phase != origin.Phase && r.Phase != "verified" && r.Phase != "resolved") {
+			return false
+		}
 	}
 	b := r.Binding
 	return b.OperationID == d.OperationID && b.Actor == d.Actor && b.Target == d.Target && b.AuthorizationEpoch == d.AuthorizationEpoch && b.AuthorizationEpoch > 0 && b.HostEpoch > 0 && b.StorageRevision != "" && b.SummaryHash == targetRecoveryHash(r.Summary) && r.RequireTargetLogin == d.RequireTargetLogin && (r.Phase == "prepared" || r.Phase == "unknown" || r.Phase == "confirmed" || r.Phase == "not-dispatched" || r.Phase == "verified" || r.Phase == "resolved")
@@ -312,7 +327,7 @@ func (s *targetRecoveryStorage) resolveVerified(fresh vaultwarden.SyncResult, ev
 			return storageReply{}, errTargetRecovery
 		}
 	}
-	proof := targetRecoveryResolution{*s.binding, s.revision, s.binding.Target, targetRecoveryHash(fresh.Vault.Sync), targetRecoveryHash(fresh.Session), targetRecoveryHash(fresh.PasswordUnlock.Key), evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash, evidence.AuthenticationEpoch}
+	proof := targetRecoveryResolution{evidence.Kind, *s.binding, s.revision, s.binding.Target, targetRecoveryHash(fresh.Vault.Sync), targetRecoveryHash(fresh.Session), targetRecoveryHash(fresh.PasswordUnlock.Key), evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash, evidence.AuthenticationEpoch}
 	req := s.request("targetRecoveryVerify")
 	if !verifyOnly && (s.localScope == nil || *s.localScope == s.binding.Target) {
 		req.Operation = "targetRecoveryResolve"

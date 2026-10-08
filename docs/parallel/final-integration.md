@@ -42,4 +42,14 @@
 
 新增 `TestOrgControllerRoutesRealComponentsAndCancelsStaleWorker` 与 `TestOrgControllerResourceContinuationAdoptsOnlyNormalPublication`，使用实际Session/HTTP fixture与排队dispatcher，定向race通过：入口连接、worker取消/计数、正常认证续接、发布失败不采用、Sync零mutation重放。仍不是实服务器组织全流程或真实Keychain证明。
 
-仍待完成：紧急/管理员恢复与#38目标验证主流程、完整最终导航/矩阵、最终Go/Swift/Xcode/实际bridge/CLI/许可证/大库评估。typed目标恢复见证与核验正在后续工作中，未借此检查点声明主流程完成。尚无实际签名安装、Keychain、系统剪贴板、AutoFill、SSO/Duo/WebAuthn系统窗口实测声明。
+## 目标恢复核验基础检查点（主流程尚未接完）
+
+获协调者批准的最小#12/#38接缝：`RecoveryDispatch.Verification`以值类型保存Prepare真实目标userKey和最终wrapper摘要、实际请求位与固定效果矩阵；不保存密码/OTP/masterPasswordAuthenticationHash。准备与提交前重新确认固定1.37.4兼容声明，Summary值复制不暴露可变指针。新Swift严格解析与Go严格解码；旧记录可查但无预期不能自动核验或借旧verified自动发布。
+
+`InspectFreshTargetRecovery`仅接受五分钟内无remembered授权的全新LoginMFA Session，自己读取完整Sync、本人accounts/keys和MFA清单，检查当前个人cipher/folder/Send密码学与组织身份/策略/key链。完整fresh材料摘要包含Credentials、password配置、session、vault与unlock；普通采用、过期或改动均失效。二进制文件及服务端隐藏remember-device凭据没有独立读回声明。
+
+原生加密record新增版本化`originalResult`，只在真实Result首次阶段记录，不从verified/resolved倒推、不能unknown升级confirmed。discovery、可见效果、真实nondispatch和confirmed管理员Email回退具有不同证据kind并由native再次核对来源：unknown/旧Email不走回退例外；takeover无例外；nondispatch只解除本机预隔离，不声称远端已执行。当前管理员组织成员授权丢失会追加隔离，专用Resolve仍合并旧保护。
+
+`TestTargetRecovery*`、`TestRecoveryExpectationSchemaAndValueCopies`及管理员恢复定向race通过；Swift `TargetRecoveryTests` 13项通过，包括来源跨verify/resolve/重开保留、未知来源不可升级、证据用途不能互换、旧/缺失/非法预期拒绝。均为隔离fixture，当前增补之后的真实C ABI和1.37.4邮件/策略回环仍待最终恢复主controller验证，不借以前动态库测试充数。
+
+仍待完成：紧急/管理员恢复与#38目标验证主流程、完整最终导航/矩阵、最终Go/Swift/Xcode/实际bridge/CLI/许可证/大库评估。尚无实际签名安装、Keychain、系统剪贴板、AutoFill、SSO/Duo/WebAuthn系统窗口实测声明。

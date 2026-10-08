@@ -100,7 +100,7 @@ func TestNativeRuntimeActorForeignTargetLocalAuthentication(t *testing.T) {
 	if !initial.OK {
 		t.Fatal(initial.Code)
 	}
-	d := vaultwarden.RecoveryDispatch{OperationID: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Actor: actor, Target: target, Kind: "reset-password", AuthorizationEpoch: 11, PreviousRevision: "runtime-session", RequireTargetLogin: true}
+	d := vaultwarden.RecoveryDispatch{OperationID: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Actor: actor, Target: target, Kind: "administrator-recovery", Verification: targetFixtureExpectation(), AuthorizationEpoch: 11, PreviousRevision: "runtime-session", RequireTargetLogin: true}
 	raw, _ := json.Marshal(d)
 	hash := targetRecoveryHash(raw)
 	deadline := time.Now().Add(25 * time.Second).UnixMilli()

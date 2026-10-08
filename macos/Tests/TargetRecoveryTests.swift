@@ -28,7 +28,11 @@ final class TargetRecoveryTests: XCTestCase {
     override func tearDownWithError() throws { try FileManager.default.removeItem(at: directory) }
     func publish(_ scope: SnapshotScope) throws -> SnapshotLease { try store.publish([], scope: scope, expected: store.state().revision, passwordUnlock: material, session: session, vault: vault(scope)) }
     func record(_ target: SnapshotScope, required: Bool = true, id: String = String(repeating: "a", count: 32)) throws -> (TargetRecoveryBinding, Data) {
-        let summary = try JSONSerialization.data(withJSONObject: ["OperationID": id, "Actor": ["server":actor.server,"account":actor.account], "Target":["server":target.server,"account":target.account], "Kind":"recovery", "PreviousRevision":"authorization-revision", "AuthorizationEpoch":7, "RequireTargetLogin":required, "TargetEmail":"never-plaintext@example.invalid", "ConfirmedImpact":"private-impact"])
+        var object: [String: Any] = ["OperationID": id, "Actor": ["server":actor.server,"account":actor.account], "Target":["server":target.server,"account":target.account], "Kind":required ? "administrator-recovery" : "emergency-invite", "PreviousRevision":"authorization-revision", "AuthorizationEpoch":7, "RequireTargetLogin":required, "TargetEmail":"never-plaintext@example.invalid", "ConfirmedImpact":"private-impact"]
+        // Storage tests inject structural evidence; real remote cryptography is
+        // independently exercised by the Go fresh-login verifier tests.
+        if required { object["Verification"] = ["Version":1,"ResetPassword":true,"ResetMFA":true,"RemoveNonOwnerMemberships":false,"ExpectedUserKeySHA256":targetDigest(Data("fixture-user-key".utf8)),"ExpectedMasterWrapperSHA256":targetDigest(Data("fixture-wrapper".utf8))] }
+        let summary = try JSONSerialization.data(withJSONObject: object)
         return (TargetRecoveryBinding(operationId: id, actor: actor, target: target, storageRevision: try store.state().revision, hostEpoch: 3, authorizationEpoch: 7, summaryHash: targetDigest(summary)),summary)
     }
     @discardableResult func begin(_ binding: TargetRecoveryBinding, _ summary: Data) throws -> TargetRecoveryRecord {
@@ -36,7 +40,72 @@ final class TargetRecoveryTests: XCTestCase {
     }
     func proof(_ binding: TargetRecoveryBinding) throws -> TargetRecoveryResolution {
         let hash = targetDigest(Data("verified-authority-evidence".utf8))
-        return TargetRecoveryResolution(binding: binding, expectedRevision: try store.state().revision, target: binding.target, vaultHash: targetDigest(vault(binding.target).sync), sessionHash: targetDigest(session), unlockHash: targetDigest(material.key), authorityHash: hash, keyHash: hash, membershipHash: hash, mfaHash: hash, confirmationHash: hash, authenticationEpoch: 9)
+        return TargetRecoveryResolution(kind:"target-observed-effects-v1",binding: binding, expectedRevision: try store.state().revision, target: binding.target, vaultHash: targetDigest(vault(binding.target).sync), sessionHash: targetDigest(session), unlockHash: targetDigest(material.key), authorityHash: hash, keyHash: hash, membershipHash: hash, mfaHash: hash, confirmationHash: hash, authenticationEpoch: 9)
+    }
+    func testResultProvenanceSurvivesVerificationPublicationAndReopen() throws {
+        _ = try publish(actor)
+        let (binding, summary) = try record(target)
+        _ = try begin(binding, summary)
+        _ = try store.targetRecovery(operation:"targetRecoveryResult",scope:actor,expected:store.state().revision,unlockKey:material.key,binding:binding,summary:nil,phase:"confirmed")
+        XCTAssertThrowsError(try store.targetRecovery(operation:"targetRecoveryResult",scope:actor,expected:store.state().revision,unlockKey:material.key,binding:binding,summary:nil,phase:"unknown"))
+        var p = try proof(binding); p.kind = "target-confirmed-email-fallback-v1"
+        _ = try store.targetRecovery(operation:"targetRecoveryVerify",scope:actor,expected:p.expectedRevision,unlockKey:material.key,binding:binding,summary:nil,phase:nil,resolution:p,vault:vault(target),session:session,material:material)
+        store = try SnapshotStore(directory:directory,keys:keys)
+        var row = try store.files.targetRecords(store.state())[0]
+        XCTAssertEqual(row.phase,"verified"); XCTAssertEqual(row.originalResult,TargetRecoveryOriginalResult(version:1,phase:"confirmed"))
+        try store.logout(expected:store.state().revision)
+        _ = try publish(target)
+        store = try SnapshotStore(directory:directory,keys:keys)
+        row = try store.files.targetRecords(store.state())[0]
+        XCTAssertEqual(row.phase,"resolved"); XCTAssertEqual(row.originalResult,TargetRecoveryOriginalResult(version:1,phase:"confirmed"))
+    }
+    func testDiscoveryNondispatchAndEmailEvidenceAreNotInterchangeable() throws {
+        _ = try publish(actor)
+        for (index, phase) in ["prepared","unknown","not-dispatched","confirmed"].enumerated() {
+            let (binding, summary) = try record(target,id:String(repeating:String(index),count:32))
+            _ = try begin(binding,summary)
+            if phase != "prepared" { _ = try store.targetRecovery(operation:"targetRecoveryResult",scope:actor,expected:store.state().revision,unlockKey:material.key,binding:binding,summary:nil,phase:phase) }
+            if phase == "unknown" { XCTAssertThrowsError(try store.targetRecovery(operation:"targetRecoveryResult",scope:actor,expected:store.state().revision,unlockKey:material.key,binding:binding,summary:nil,phase:"confirmed")) }
+            for kind in ["target-discovery-v1","target-authenticated-nondispatch-v1","target-confirmed-email-fallback-v1"] {
+                var p = try proof(binding); p.kind = kind
+                let allowed = (kind == "target-authenticated-nondispatch-v1" && phase == "not-dispatched") || (kind == "target-confirmed-email-fallback-v1" && phase == "confirmed")
+                let before = try store.state().revision
+                let action = { try self.store.targetRecovery(operation:"targetRecoveryVerify",scope:self.actor,expected:p.expectedRevision,unlockKey:self.material.key,binding:binding,summary:nil,phase:nil,resolution:p,vault:self.vault(self.target),session:self.session,material:self.material) }
+                if allowed { XCTAssertNoThrow(try action()) } else { XCTAssertThrowsError(try action()); XCTAssertEqual(try store.state().revision,before) }
+                let row = try store.files.targetRecords(store.state()).first { $0.binding == binding }
+                XCTAssertEqual(row?.originalResult?.phase,phase == "prepared" ? nil : phase)
+            }
+        }
+    }
+    func testLegacyAndMalformedExpectationsDoNotBecomeVerification() throws {
+        _ = try publish(actor)
+        let (base, original) = try record(target)
+        var object = try JSONSerialization.jsonObject(with:original) as! [String:Any]
+        object["Verification"] = nil
+        let legacy = try JSONSerialization.data(withJSONObject:object)
+        let binding = TargetRecoveryBinding(operationId:base.operationId,actor:base.actor,target:base.target,storageRevision:base.storageRevision,hostEpoch:base.hostEpoch,authorizationEpoch:base.authorizationEpoch,summaryHash:targetDigest(legacy))
+        _ = try begin(binding,legacy)
+        _ = try store.targetRecovery(operation:"targetRecoveryResult",scope:actor,expected:store.state().revision,unlockKey:material.key,binding:binding,summary:nil,phase:"confirmed")
+        XCTAssertNil(try store.files.targetRecords(store.state())[0].originalResult)
+        let p = try proof(binding)
+        XCTAssertThrowsError(try store.targetRecovery(operation:"targetRecoveryVerify",scope:actor,expected:p.expectedRevision,unlockKey:material.key,binding:binding,summary:nil,phase:nil,resolution:p,vault:vault(target),session:session,material:material))
+        for (index, mode) in ["version","missing","flags","hash","unknown"].enumerated() {
+            let (b, source) = try record(target,id:String(repeating:String(index),count:32))
+            var raw = try JSONSerialization.jsonObject(with:source) as! [String:Any]
+            var expected = raw["Verification"] as! [String:Any]
+            switch mode {
+            case "version": expected["Version"] = 2
+            case "missing": expected["ResetMFA"] = nil
+            case "flags": expected["RemoveNonOwnerMemberships"] = true
+            case "hash": expected["ExpectedUserKeySHA256"] = "not-a-witness"
+            default: expected["UnrecognizedIntent"] = true
+            }
+            raw["Verification"] = expected
+            let changed = try JSONSerialization.data(withJSONObject:raw)
+            let bad = TargetRecoveryBinding(operationId:b.operationId,actor:b.actor,target:b.target,storageRevision:b.storageRevision,hostEpoch:b.hostEpoch,authorizationEpoch:b.authorizationEpoch,summaryHash:targetDigest(changed))
+            let revision = try store.state().revision
+            XCTAssertThrowsError(try begin(bad,changed)); XCTAssertEqual(try store.state().revision,revision)
+        }
     }
     func testSelfBarrierSurvivesLockLogoutReopenAndFreshRecovery() throws {
         let old = try publish(actor)
@@ -156,7 +225,7 @@ final class TargetRecoveryTests: XCTestCase {
         XCTAssertNil(projection.2)
         var freshMaterial = material; freshMaterial.key = Data(repeating:88,count:32)
         let base = try proof(binding)
-        let p = TargetRecoveryResolution(binding:binding,expectedRevision:base.expectedRevision,target:target,vaultHash:base.vaultHash,sessionHash:base.sessionHash,unlockHash:targetDigest(freshMaterial.key),authorityHash:base.authorityHash,keyHash:base.keyHash,membershipHash:base.membershipHash,mfaHash:base.mfaHash,confirmationHash:base.confirmationHash,authenticationEpoch:9)
+        let p = TargetRecoveryResolution(kind:base.kind,binding:binding,expectedRevision:base.expectedRevision,target:target,vaultHash:base.vaultHash,sessionHash:base.sessionHash,unlockHash:targetDigest(freshMaterial.key),authorityHash:base.authorityHash,keyHash:base.keyHash,membershipHash:base.membershipHash,mfaHash:base.mfaHash,confirmationHash:base.confirmationHash,authenticationEpoch:9)
         XCTAssertThrowsError(try store.publish([],scope:target,expected:p.expectedRevision,passwordUnlock:freshMaterial,session:session,vault:vault(target),targetResolution:p))
         let complete = try store.resolveLocalTarget(proof:p,credentials:[],material:freshMaterial,session:session,vault:vault(target))
         XCTAssertEqual(complete.vault?.pendingPolicyMutations,protected.pendingPolicyMutations)
