@@ -293,7 +293,7 @@ func (s *Session) PrepareAccountRotation(ctx context.Context, vault *VaultData, 
 		return nil, ErrProtocol
 	}
 	for _, name := range []string{"profile", "ciphers", "folders", "sends"} {
-		if len(a[name]) == 0 || !rawJSONEqual(a[name], b[name]) {
+		if len(a[name]) == 0 || (name == "ciphers" && !AccountRotationCipherInventoryEqual(a[name], b[name])) || (name != "ciphers" && !rawJSONEqual(a[name], b[name])) {
 			return nil, ErrConflict
 		}
 	}
@@ -433,7 +433,7 @@ func (s *Session) PrepareAccountRotation(ctx context.Context, vault *VaultData, 
 			return ErrProtocol
 		}
 		for _, name := range []string{"profile", "ciphers", "folders", "sends"} {
-			if !rawJSONEqual(actual[name], a[name]) {
+			if (name == "ciphers" && !AccountRotationCipherInventoryEqual(actual[name], a[name])) || (name != "ciphers" && !rawJSONEqual(actual[name], a[name])) {
 				return ErrConflict
 			}
 		}
