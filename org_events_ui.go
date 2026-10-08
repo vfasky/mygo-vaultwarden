@@ -23,6 +23,7 @@ type orgEventsPanel struct {
 	cancel                     context.CancelFunc
 	fetch                      func(context.Context, vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error)
 	dispatch                   func(func())
+	busy                       func(bool)
 }
 
 func newOrgEventsPanel(query vaultwarden.OrganizationEventQuery, fetch func(context.Context, vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error), dispatch func(func())) *orgEventsPanel {
@@ -65,6 +66,9 @@ func (p *orgEventsPanel) load(next bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.running = true
+	if p.busy != nil {
+		p.busy(true)
+	}
 	p.status = "正在读取审计事件…"
 	generation := p.generation
 	fetch, dispatch := p.fetch, p.dispatch
@@ -72,6 +76,9 @@ func (p *orgEventsPanel) load(next bool) {
 		page, err := fetch(ctx, query)
 		cancel()
 		dispatch(func() {
+			if p.busy != nil {
+				p.busy(false)
+			}
 			if p.closed || p.generation != generation {
 				return
 			}

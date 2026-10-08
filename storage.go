@@ -11,6 +11,7 @@ import (
 var errSnapshotTooLarge = errors.New("snapshot bridge size limit")
 
 type snapshotStatus struct {
+	AccountSwitchPending  bool                              `json:"accountSwitchPending"`
 	TargetRecoveryPresent bool                              `json:"targetRecoveryPresent"`
 	RecoveryPending       bool                              `json:"recoveryPending"`
 	Revision              string                            `json:"revision"`
@@ -25,6 +26,8 @@ type snapshotStatus struct {
 }
 
 type storageRequest struct {
+	SwitchBinding      *accountSwitchBinding              `json:"switchBinding,omitempty"`
+	SwitchOperationID  string                             `json:"switchOperationID,omitempty"`
 	TargetRuntime      *targetRecoveryRuntimeAuthority    `json:"targetRuntime,omitempty"`
 	TargetLogin        *targetRecoveryResolution          `json:"targetLogin,omitempty"`
 	TargetBinding      *targetRecoveryBinding             `json:"targetBinding,omitempty"`
@@ -54,7 +57,7 @@ type storageRequest struct {
 // A zero-result sync is an explicit replacement, never an absent field.
 func (r storageRequest) MarshalJSON() ([]byte, error) {
 	type wireRequest storageRequest
-	if (r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess" || r.Operation == "restorePolicyAccess" || r.Operation == "accountRecoveryResolve" || r.Operation == "targetRecoveryResolve" || r.Operation == "targetRecoveryResolveLocal") && r.Credentials == nil {
+	if (r.Operation == "publishBoundAccount" || r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess" || r.Operation == "restorePolicyAccess" || r.Operation == "accountRecoveryResolve" || r.Operation == "targetRecoveryResolve" || r.Operation == "targetRecoveryResolveLocal") && r.Credentials == nil {
 		r.Credentials = []vaultwarden.Credential{}
 	}
 	return json.Marshal(wireRequest(r))
@@ -83,6 +86,7 @@ type displayCredential struct {
 }
 
 type storageReply struct {
+	AccountSwitch    *accountSwitchReceipt     `json:"accountSwitch,omitempty"`
 	TargetProtection *targetRecoveryProtection `json:"targetProtection,omitempty"`
 	TargetRecords    []targetRecoveryRecord    `json:"targetRecords,omitempty"`
 	Recovery         *accountRecoveryJournal   `json:"recovery,omitempty"`

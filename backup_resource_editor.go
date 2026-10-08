@@ -54,8 +54,9 @@ func (a *app) chooseResourceImportFile() {
 	if e == nil || a.pending != 0 || !e.importing || e.plan != nil || !a.backupCurrent(e, a.epoch) {
 		return
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++
@@ -124,8 +125,9 @@ func (a *app) chooseResourceExportFile() {
 		a.status = "请提供主密码以授权所选受保护项目。"
 		return
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++
@@ -326,8 +328,9 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 	m.password = ""
 	plan := m.plan
 	m.plan = nil // worker owns the descriptor until callback; Close cannot race it
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	storage = a.routeStorage(storage, epoch)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++

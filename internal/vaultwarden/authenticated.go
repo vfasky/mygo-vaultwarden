@@ -89,7 +89,7 @@ func (s *Session) persistPendingLocked(persist func(SessionCheckpoint) error) er
 	}
 	s.checkpointPending = false
 	// Grants always expire, even when a same-content receipt continues policy.
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil
 	if p := receipt.prior; p != nil && receipt.revision != "" {
@@ -101,6 +101,9 @@ func (s *Session) persistPendingLocked(persist func(SessionCheckpoint) error) er
 }
 
 func (s *Session) refreshAndCheckpointLocked(ctx context.Context, persist func(SessionCheckpoint) error) error {
+	if s.runtimeOnly {
+		return ErrExpired
+	}
 	// A bound, durable session may not rotate a token without its persistence hook.
 	if s.account != "" && s.passwordUnlock != nil && persist == nil {
 		return ErrCheckpoint
@@ -130,7 +133,10 @@ func (s *Session) prepareAuthenticatedDispatchLocked(ctx context.Context, mutati
 	if err := s.persistPendingLocked(persist); err != nil {
 		return err
 	}
-	if time.Until(s.expires) < 30*time.Second {
+	if s.runtimeOnly && !time.Now().Before(s.expires) {
+		return ErrExpired
+	}
+	if !s.runtimeOnly && time.Until(s.expires) < 30*time.Second {
 		if err := s.refreshAndCheckpointLocked(ctx, persist); err != nil {
 			return err
 		}

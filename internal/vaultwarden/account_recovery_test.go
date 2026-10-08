@@ -34,6 +34,10 @@ func TestAdministratorRecoveryRolesCryptoAndChangedDetails(t *testing.T) {
 			targetKey := bytes.Repeat([]byte{93}, 64)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				switch r.URL.Path {
+				case "/api/version":
+					json.NewEncoder(w).Encode("1.37.4")
+				case "/api/config":
+					json.NewEncoder(w).Encode(map[string]any{"gitHash": rotationGit1374, "server": map[string]string{"name": "Vaultwarden", "url": "https://github.com/dani-garcia/vaultwarden"}})
 				case "/api/organizations/org-1/users":
 					writeMembers(w, []OrganizationMember{{ID: "member-1", UserID: "account-a", Email: "owner@example.invalid", Type: actorRole, Status: 2}, {ID: "member-2", UserID: "account-b", Email: "member@example.invalid", Type: targetRole, Status: 2}})
 				case "/api/organizations/org-1/users/member-2/reset-password-details":

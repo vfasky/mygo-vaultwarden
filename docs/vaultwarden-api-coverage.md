@@ -1,4 +1,8 @@
-# Vaultwarden API 覆盖矩阵
+# Vaultwarden API 模块记录
+
+**本版范围已调整：组织产品UI延期到下一版本。** 当前个人版本的可达入口、验收结果和残余限制以 [本版验收矩阵](personal-release-acceptance.md) 为准。下文是保留的前序模块/开发状态记录，其中“INCOMPLETE”“尚未接入”及旧Review限制只描述当时的全量组织目标，不再作为当前个人版本的交付门槛。组织安全约束、原始数据和完整key轮换的要求没有取消。
+
+## 历史基线（不是本版UI清单）
 
 **INCOMPLETE：整卡未完成，未达到验收。** 最新增量已联合接入认证解锁/publish回执安装、统一离线读取策略guard、同内容checkpoint回执续接、quarantine/restore与受限sync恢复候选，以及Swift旧候选/独立AutoFill策略复核。缺完整policy的旧缓存只恢复网络会话，必须成功sync迁移后才可离线读取；同步失败保留原加密存储但不授旧许可。代码接线和headless/Go-only回环已验证，真实Keychain、签名安装与系统AutoFill尚未实测。前序增量为组织create/update/share按目标组织type15检查，以及个人state/bulk/partial底层的认证server条目核验；此前个人create/update/copy/import的type5/15保存约束继续保留，见[组织策略执行](organization-policies.md)。策略管理现已接固定12类产品列表/读取/PUT与原生业务控件、保存确认、v2加密待核验屏障和两阶段显式恢复，见[策略专题](organization-policies.md)。默认URI现已接type16的首条适用策略及角色豁免、原生创建/编辑的继承默认显示、Go个人/组织投影与Swift来源索引复核；待核验16暂停继承规则，旧候选缺来源须同步迁移。其他策略消费仍缺，不能把管理界面当作全部策略执行。新增组织创建type3认证预检与pending屏障已验证；加入/管理员恢复对不可读取的目标role/跨账号状态交由认证服务器最终校验，详见[策略专题](organization-policies.md)。固定官方zxcvbn 4.4.2评分基础已完成独立Node向量验证，尚未接账号改密/登录等产品消费者，见[评分来源与边界](../internal/passwordstrength/README.md)。此前群组原生CRUD、成员/集合配置及显式accessAll确认见[群组管理](organization-groups.md)。此前补齐隔离 SMTP 邮件接受回环及恢复策略 auto-enrollment、组织恢复 RSA 钥对和原生明确授权，见[邀请与恢复登记](organization-invitation-recovery.md)；此前已实现成员目录、单人邀请/重新邀请、公钥可信核验确认、角色、撤销/恢复/移除及邮件链接接受表单；已有集合CRUD、成员/群组集合访问配置继续保留，复用组织创建/资料修改/退出/删除及持久隔离恢复；已有组织密钥/权限、读写共享与安全Login投影继续保留，见 [组织密码库](organization-vault.md)；个人冲突比较与显式重新应用见 [冲突处理](cipher-conflicts.md)；既有 reprompt 短授权、密码/TOTP短时显示和受控复制见 [敏感操作](sensitive-operations.md)。禁止据此启动 Review 或合并。
 

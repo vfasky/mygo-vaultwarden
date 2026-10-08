@@ -139,8 +139,9 @@ func (a *app) mutateBulk() {
 		return
 	}
 	scope, prior, vault := *a.liveScope, a.snapshot, a.vault
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++
@@ -165,7 +166,7 @@ func (a *app) mutateBulk() {
 		} else {
 			err = session.ChangePersonalCiphers(ctx, scope, vault, ids, e.action, e.folderID, persist)
 		}
-		a.window.Update(func() { a.completeBulkMutation(epoch, e, checkpoint, reply, err, cancel) })
+		a.dispatchUI(func() { a.completeBulkMutation(epoch, e, checkpoint, reply, err, cancel) })
 	}()
 }
 

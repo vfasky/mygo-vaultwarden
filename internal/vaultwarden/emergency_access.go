@@ -188,6 +188,9 @@ func (s *Session) PrepareEmergencyTakeover(ctx context.Context, vault *VaultData
 	defer data.close()
 	epoch, revision := s.authorizationEpoch, s.authorizationRevision
 	guard := s.recoveryGuardLocked(epoch, revision)
+	if err = s.client.requireRecoveryCompatibility(ctx); err != nil {
+		return nil, err
+	}
 	target, details, policies, err := s.emergencyTakeoverLocked(ctx, id, persist, guard)
 	if err != nil {
 		return nil, err
@@ -219,9 +222,17 @@ func (s *Session) PrepareEmergencyTakeover(ctx context.Context, vault *VaultData
 	p.record.PreviousRevision = revision
 	p.record.RequireTargetLogin = true
 	p.record.TargetEmail = target.Email
+	p.record.Verification, err = recoveryExpectation(p.record.Kind, key, wrapped, true, true)
+	if err != nil {
+		p.Close()
+		return nil, err
+	}
 	p.record.CounterpartyID, p.record.CounterpartyEmail = target.GrantorID, target.Email
 	p.record.EmergencyType, p.record.WaitTimeDays = target.Type, target.WaitTimeDays
 	p.revalidate = func(ctx context.Context, persist func(SessionCheckpoint) error, guard func() error) error {
+		if err := s.client.requireRecoveryCompatibility(ctx); err != nil {
+			return err
+		}
 		current, currentDetails, currentPolicies, e := s.emergencyTakeoverLocked(ctx, id, persist, guard)
 		if e != nil {
 			return e

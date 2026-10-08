@@ -26,18 +26,19 @@ const (
 // OldVault retains the entire previous encrypted vault, including unknown fields.
 // OldSession/OldUnlock preserve decryption even if the server is partially changed.
 type AccountRecovery struct {
-	Version       int               `json:"version"`
-	OperationID   string            `json:"operationId"`
-	Scope         Scope             `json:"scope"`
-	Kind          AccountChangeKind `json:"kind"`
-	OldRevision   string            `json:"oldRevision"`
-	OldSession    []byte            `json:"oldSession"`
-	OldUnlock     *PasswordUnlock   `json:"oldUnlock"`
-	OldVault      []byte            `json:"oldVault"`
-	NewUnlock     *PasswordUnlock   `json:"newUnlock,omitempty"`
-	NewUserKey    []byte            `json:"newUserKey,omitempty"`
-	NewWrappedKey string            `json:"newWrappedKey,omitempty"`
-	Request       []byte            `json:"request"`
+	RotationEvidence *AccountRotationEvidence `json:"rotationEvidence,omitempty"`
+	Version          int                      `json:"version"`
+	OperationID      string                   `json:"operationId"`
+	Scope            Scope                    `json:"scope"`
+	Kind             AccountChangeKind        `json:"kind"`
+	OldRevision      string                   `json:"oldRevision"`
+	OldSession       []byte                   `json:"oldSession"`
+	OldUnlock        *PasswordUnlock          `json:"oldUnlock"`
+	OldVault         []byte                   `json:"oldVault"`
+	NewUnlock        *PasswordUnlock          `json:"newUnlock,omitempty"`
+	NewUserKey       []byte                   `json:"newUserKey,omitempty"`
+	NewWrappedKey    string                   `json:"newWrappedKey,omitempty"`
+	Request          []byte                   `json:"request"`
 }
 
 func (r *AccountRecovery) Close() {
@@ -375,7 +376,7 @@ func (s *Session) accountInvalidateLocked() {
 	s.access = ""
 	s.refresh = ""
 	s.closed = true
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 	s.authorizationRevision = ""
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil

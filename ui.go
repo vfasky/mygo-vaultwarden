@@ -55,6 +55,21 @@ var vaultCategories = []vaultCategory{
 }
 
 func (a *app) currentCategory() vaultCategory {
+	if a.category == "org-services" {
+		return vaultCategory{"org-services", "紧急访问", "vault", true}
+	}
+	if a.category == "mfa" {
+		return vaultCategory{"mfa", "两步验证设置", "shield", true}
+	}
+	if a.category == "account" {
+		return vaultCategory{"account", "账号与安全", "user", true}
+	}
+	if a.category == "devices" {
+		return vaultCategory{"devices", "设备与登录审批", "shield", true}
+	}
+	if a.category == "send" {
+		return vaultCategory{"send", "Send", "send", true}
+	}
 	if a.category == "personal" {
 		return vaultCategory{"personal", "我的密码库", "user", true}
 	}
@@ -91,6 +106,16 @@ func (a *app) currentCategory() vaultCategory {
 	return vaultCategories[0]
 }
 
+func (a *app) releaseItemCount() int {
+	count := 0
+	for _, item := range a.items {
+		if organizationUIEnabled || item.OrganizationID == "" {
+			count++
+		}
+	}
+	return count
+}
+
 func (a *app) filteredItems() []displayCredential {
 	if !a.currentCategory().supported || !a.unlocked() {
 		return nil
@@ -98,7 +123,7 @@ func (a *app) filteredItems() []displayCredential {
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	items := make([]displayCredential, 0, len(a.items))
 	for _, item := range a.items {
-		if a.category == "personal" && item.OrganizationID != "" {
+		if (!organizationUIEnabled || a.category == "personal") && item.OrganizationID != "" {
 			continue
 		}
 		if strings.HasPrefix(a.category, "org:") && item.OrganizationID != strings.TrimPrefix(a.category, "org:") {
@@ -166,6 +191,29 @@ func (a *app) unlocked() bool {
 }
 
 func (a *app) view(c *ui.Context) {
+	if a.orgServices != nil && (a.category != "org-services" || a.showSettings) {
+		a.advanceEpoch()
+	}
+	if runtime := a.runtimeVault; runtime != nil {
+		if err := runtime.sourceCheck(runtime.source, *a.liveScope); err != nil {
+			a.stopNetwork()
+			a.status = "临时库的本机保护来源已变化，请重新认证。"
+		} else {
+			c.After(time.Second)
+		}
+	}
+	if a.authManagement != nil && (a.category != "mfa" || a.showSettings) {
+		a.advanceEpoch()
+	}
+	if a.accountForm != nil && a.accountForm.mode != "register" && (a.category != "account" || a.showSettings) {
+		a.advanceEpoch()
+	}
+	if a.devicePanel != nil && (a.category != "devices" || a.showSettings) {
+		a.advanceEpoch()
+	}
+	if a.sendPanel != nil && (a.category != "send" || a.showSettings) {
+		a.advanceEpoch()
+	}
 	c.SetTheme(vaultTheme)
 	c.Root().Background(ui.Transparent)
 	if a.showLogin || !a.unlocked() {
@@ -185,6 +233,71 @@ func (a *app) view(c *ui.Context) {
 }
 
 func (a *app) body(c *ui.Context) {
+	if a.category == "org-services" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.orgServices != nil {
+				a.orgServices.View(c)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开紧急访问").Disabled(a.pending != 0).Clicked() {
+					a.openEmergencyServices()
+				}
+			}
+		})
+		return
+	}
+	if a.category == "mfa" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.authManagement != nil {
+				authManagementView(c, a.authManagement)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开两步验证设置").Disabled(a.pending != 0).Clicked() {
+					a.openAuthenticationManagement()
+				}
+			}
+		})
+		return
+	}
+	if a.category == "account" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.accountForm != nil {
+				accountFormView(c, a.accountForm)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开账号与安全").Disabled(a.pending != 0).Clicked() {
+					a.openAccount()
+				}
+			}
+		})
+		return
+	}
+	if a.category == "devices" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.devicePanel != nil {
+				a.devicePanel.View(c)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开设备与登录审批").Disabled(a.pending != 0).Clicked() {
+					a.openDevices()
+				}
+			}
+		})
+		return
+	}
+	if a.category == "send" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.sendPanel != nil {
+				a.sendPanel.View(c)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开 Send").Disabled(a.pending != 0).Clicked() {
+					a.openSend()
+				}
+			}
+		})
+		return
+	}
 	ui.Row(c).Grow(1).MinHeight(0).Gap(16).AlignItems(ui.Stretch).Children(func() {
 		items := a.filteredItems()
 		a.reconcileSelection(items)
@@ -400,7 +513,7 @@ func (a *app) sidebarContent(c *ui.Context) {
 				for _, category := range vaultCategories {
 					count := ""
 					if category.supported && a.unlocked() {
-						count = fmt.Sprint(len(a.items))
+						count = fmt.Sprint(a.releaseItemCount())
 					}
 					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
 					if !category.supported && !a.sidebarCollapsed {
@@ -411,26 +524,28 @@ func (a *app) sidebarContent(c *ui.Context) {
 						a.listState.ScrollTo(0, ui.Start)
 					}
 				}
-				sectionLabel(c, "组织")
-				if navItem(c, "创建或加入组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
-					a.openOrganizationEditor("")
-				}
-				if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
-					a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
-				}
-				for _, org := range a.organizations {
-					if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
-						a.category, a.showSettings = "org:"+org.ID, false
+				if organizationUIEnabled {
+					sectionLabel(c, "组织")
+					if navItem(c, "创建或加入组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
+						a.openOrganizationEditor("")
 					}
-					for _, collection := range a.collections {
-						if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
-							a.category, a.showSettings = "collection:"+collection.ID, false
+					if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+						a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
+					}
+					for _, org := range a.organizations {
+						if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
+							a.category, a.showSettings = "org:"+org.ID, false
+						}
+						for _, collection := range a.collections {
+							if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
+								a.category, a.showSettings = "collection:"+collection.ID, false
+							}
 						}
 					}
-				}
-				for _, org := range a.isolatedOrganizations {
-					if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
-						a.openOrganizationEditor(org.ID)
+					for _, org := range a.isolatedOrganizations {
+						if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+							a.openOrganizationEditor(org.ID)
+						}
 					}
 				}
 				sectionLabel(c, "文件夹")
@@ -583,7 +698,7 @@ func (a *app) credentialList(c *ui.Context, items []displayCredential) {
 				a.showSettings = false
 			}
 		}
-		ui.Text(c, fmt.Sprintf("已载入 %d 个项目 · 个人密码库", len(a.items))).FontSize(11).TextColor(vaultMuted).Padding(4, 8)
+		ui.Text(c, fmt.Sprintf("已载入 %d 个项目 · 个人密码库", a.releaseItemCount())).FontSize(11).TextColor(vaultMuted).Padding(4, 8)
 	})
 }
 
@@ -728,6 +843,55 @@ func (a *app) settings(c *ui.Context) {
 					a.showSettings = false
 				}
 			})
+			detailCard(c, "账号服务", func() {
+				if warning := a.mfaWarnings.warning(a.serverURL, a.email); warning != "" {
+					ui.Text(c, warning).MaxLines(4)
+				}
+				if a.runtimeVault != nil {
+					ui.Column(c).Key(a.secretInputVersion).Padding(16).Gap(8).Children(func() {
+						ui.Text(c, "临时在线库：不会持久保存会话或注册系统自动填充。原磁盘账号保持不变。").MaxLines(4)
+						if a.diskSnapshot != nil && a.diskSnapshot.Scope != nil && a.liveScope != nil && *a.diskSnapshot.Scope != *a.liveScope {
+							oldAccount := a.diskSnapshot.Scope.Account
+							if a.diskSnapshot.PasswordUnlock != nil {
+								oldAccount = a.diskSnapshot.PasswordUnlock.Email
+							}
+							ui.Text(c, "原本机账号："+a.diskSnapshot.Scope.Server+" / "+oldAccount+"\n新账号："+a.liveScope.Server+" / "+a.email).MaxLines(5)
+							ui.Text(c, "需要系统认证原缓存；原账号仍有策略、组织隔离或恢复事项时将先拒绝。写入确认前保留旧密文与密钥，未知结果只检查同一次切换，不自动重试。").MaxLines(6)
+							label := "明确同意替换以上本机账号"
+							if a.runtimeReplaceConfirmed {
+								label = "已同意替换（点击撤回）"
+							}
+							if action(c, label, "user", false, a.pending != 0).Clicked() {
+								a.runtimeReplaceConfirmed = !a.runtimeReplaceConfirmed
+							}
+						}
+						ui.TextInput(c, &a.masterPassword).Label("显式绑定当前账号主密码").Password().Disabled(a.pending != 0)
+						if action(c, "绑定主密码并重新同步", "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
+							a.bindRuntimePasswordWith(a.window.Update, callStorage)
+						}
+					})
+				}
+				ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
+					if action(c, "核验目标账号恢复记录", "vault", false, a.pending != 0).Clicked() {
+						a.openTargetRecovery()
+					}
+					if action(c, "紧急访问", "vault", false, !ready).Clicked() {
+						a.openEmergencyServices()
+					}
+					if action(c, "Send", "send", false, !ready).Clicked() {
+						a.openSend()
+					}
+					if action(c, "设备与登录审批", "shield", false, !ready).Clicked() {
+						a.openDevices()
+					}
+					if action(c, "账号与安全", "user", false, !ready).Clicked() {
+						a.openAccount()
+					}
+					if action(c, "两步验证设置", "shield", false, !ready).Clicked() {
+						a.openAuthenticationManagement()
+					}
+				})
+			})
 			detailCard(c, "连接密码库", func() {
 				ui.Column(c).Padding(16).Gap(13).Children(func() {
 					ui.Text(c, a.connectedServer()).FontSize(14).MaxLines(2)
@@ -778,7 +942,11 @@ func (a *app) settings(c *ui.Context) {
 				})
 			})
 			ui.Row(c).Gap(8).Wrap().Children(func() {
-				if action(c, "退出账号", "user", false, a.snapshot == nil).Clicked() {
+				logoutLabel := "退出账号"
+				if a.runtimeVault != nil {
+					logoutLabel = "结束临时在线会话（保留原缓存）"
+				}
+				if action(c, logoutLabel, "user", false, a.snapshot == nil).Clicked() {
 					a.runStorage("logout")
 				}
 			})

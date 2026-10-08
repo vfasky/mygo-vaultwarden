@@ -44,7 +44,7 @@ func (a *app) authorizePersonalItem() {
 		revision = a.sessionRevision
 	}
 	organization := a.organizationItem(id)
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	a.cancel = cancel
@@ -58,7 +58,7 @@ func (a *app) authorizePersonalItem() {
 		} else {
 			grant, err = session.AuthorizePersonalItem(ctx, vault, revision, id, password)
 		}
-		a.window.Update(func() {
+		a.dispatchUI(func() {
 			defer cancel()
 			a.pending--
 			if a.epoch != epoch {

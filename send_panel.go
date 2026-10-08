@@ -18,6 +18,7 @@ import (
 // account, epoch, unlocked state and storage revision. Checkpoint must durably
 // save and authenticate its receipt before returning. No global app registry.
 type SendHost struct {
+	Busy              func(bool) // UI-thread worker accounting, including late completion
 	Dispatch          func(func())
 	Check             func() error
 	Checkpoint        func(vaultwarden.SessionCheckpoint) error
@@ -116,10 +117,16 @@ func (p *SendPanel) run(work func(context.Context) sendPanelResult) {
 		return
 	}
 	p.busy = true
+	if p.host.Busy != nil {
+		p.host.Busy(true)
+	}
 	generation := p.generation
 	go func() {
 		r := work(p.ctx)
 		p.host.Dispatch(func() {
+			if p.host.Busy != nil {
+				p.host.Busy(false)
+			}
 			if p.closed || generation != p.generation {
 				r.close()
 				return

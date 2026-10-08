@@ -139,11 +139,15 @@ struct SnapshotState: Codable {
     var indexedToken: String?
     var signedOut = true
     var targetRecovery: TargetRecoveryEnvelope? = nil
-    var indexToken: String { format == 2 ? revision : (snapshot?.header.id ?? revision) }
+    var accountSwitch: AccountSwitchEnvelope? = nil
+    var accountSwitchPending: Bool { accountSwitch?.pending ?? false }
+    var indexToken: String { format >= 2 ? revision : (snapshot?.header.id ?? revision) }
     var indexPending: Bool { indexedToken != indexToken }
 
     func validate() throws {
-        guard (format == 1 && targetRecovery == nil) || (format == 2 && targetRecovery?.version == 1) else { throw SnapshotError.corrupt }
+        guard (format == 1 && targetRecovery == nil && accountSwitch == nil) ||
+              (format == 2 && targetRecovery?.version == 1 && accountSwitch == nil) ||
+              (format == 3 && accountSwitch?.version == 1 && (targetRecovery == nil || targetRecovery?.version == 1)) else { throw SnapshotError.corrupt }
         guard !revision.isEmpty, retiredKeys.count < 512,
               Set(retiredKeys).count == retiredKeys.count else { throw SnapshotError.corrupt }
         if snapshot == nil && !signedOut { throw SnapshotError.corrupt }
@@ -175,12 +179,14 @@ struct SnapshotLease {
 }
 
 enum SnapshotError: Error, Equatable {
-    case accountRecoveryRequired
+    case accountRecoveryRequired, protectedAccountSwitch, accountSwitchTooLarge
     case unavailable, corrupt, stale, expired, wrongScope, busy, invalidInput
     case keychain(Int32), authenticationRequired, cancelled, configuration, invalidPassword, passwordUnlockUnavailable
 
     var code: String {
         switch self {
+        case .accountSwitchTooLarge: return "account_switch_too_large"
+        case .protectedAccountSwitch: return "account_switch_protected"
         case .accountRecoveryRequired: return "account_recovery_pending"
         case .unavailable: return "no_snapshot"
         case .corrupt: return "corrupt_snapshot"
@@ -199,6 +205,8 @@ enum SnapshotError: Error, Equatable {
     }
     var message: String {
         switch self {
+        case .accountSwitchTooLarge: return "保留旧新账号恢复副本会超过本机加密存储上限；原账号数据保留，请先备份并明确管理旧缓存。"
+        case .protectedAccountSwitch: return "原本机账号有未决恢复、策略或组织隔离；请先在原账号处理后再切换。"
         case .accountRecoveryRequired: return "此目标仍有账号轮换恢复记录，请先完成专用账号恢复核验。"
         case .unavailable: return "没有可用快照，请先在主应用登录并同步密码库。"
         case .corrupt: return "快照损坏或格式不受支持，已拒绝解密。"

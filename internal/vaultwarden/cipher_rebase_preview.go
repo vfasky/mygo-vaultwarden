@@ -18,7 +18,7 @@ type CipherRowPreview struct {
 func (s *Session) WithCipherComparisonRows(vault *VaultData, revision string, plan *CipherRebase, path string, use func([]CipherRowPreview, []CipherRowPreview, []byte, time.Time) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if plan == nil || plan.session != s || revision != plan.revision || revision != s.authorizationRevision || s.passwordUnlock == nil || use == nil {
+	if plan == nil || plan.session != s || revision != plan.revision || revision != s.authorizationRevision || (s.passwordUnlock == nil && !s.runtimeOnly) || use == nil {
 		return ErrExpired
 	}
 	latest, err := s.personalDocumentLocked(vault, plan.merged.ID)
@@ -91,7 +91,11 @@ func (s *Session) WithCipherComparisonRows(vault *VaultData, revision string, pl
 	if plan.grant != nil && plan.grant.expires.Before(deadline) {
 		deadline = plan.grant.expires
 	}
-	key := append([]byte(nil), s.passwordUnlock.Key...)
+	key, err := s.secretProtectionKeyLocked()
+	if err != nil {
+		return err
+	}
+	deadline = s.secretDeadlineLocked(deadline)
 	defer clear(key)
 	s.operationMu.Lock()
 	defer s.operationMu.Unlock()

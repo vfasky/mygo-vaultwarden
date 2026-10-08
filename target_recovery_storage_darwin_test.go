@@ -14,9 +14,13 @@ import (
 func targetFixture(scope vaultwarden.Scope) vaultwarden.SyncResult {
 	return vaultwarden.SyncResult{Scope: scope, Vault: &vaultwarden.VaultData{Version: 1, Scope: scope, Sync: []byte(`{"profile":{"id":"` + scope.Account + `","organizations":[]},"policies":[],"policiesNew":[],"ciphers":[]}`)}, Session: []byte("isolated-fresh-session"), PasswordUnlock: &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultwarden.KDF{Iterations: 5000}}, Key: bytes.Repeat([]byte{41}, 32)}}
 }
+func targetFixtureExpectation() vaultwarden.RecoveryVerificationExpectation {
+	// Structural native-storage fixture; this is not a remote verification proof.
+	return vaultwarden.RecoveryVerificationExpectation{Version: 1, ResetPassword: true, ResetMFA: true, ExpectedUserKeySHA256: targetRecoveryHash([]byte("fixture-user-key")), ExpectedMasterWrapperSHA256: targetRecoveryHash([]byte("fixture-wrapper"))}
+}
 func targetEvidence() targetRecoveryVerification {
 	h := targetRecoveryHash([]byte("test-only verified evidence"))
-	return targetRecoveryVerification{h, h, h, h, h, 19}
+	return targetRecoveryVerification{Kind: vaultwarden.TargetEvidenceEffects, AuthorityHash: h, KeyHash: h, MembershipHash: h, MFAHash: h, ConfirmationHash: h, AuthenticationEpoch: 19}
 }
 func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 	for _, self := range []bool{true, false} {
@@ -39,7 +43,7 @@ func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer adapter.Close()
-			d := vaultwarden.RecoveryDispatch{OperationID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Actor: actor, Target: target, Kind: "reset-password", PreviousRevision: "session-revision", AuthorizationEpoch: 7, RequireTargetLogin: true, TargetEmail: "private@example.invalid", ConfirmedImpact: "private-impact"}
+			d := vaultwarden.RecoveryDispatch{OperationID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Actor: actor, Target: target, Kind: "administrator-recovery", Verification: targetFixtureExpectation(), PreviousRevision: "session-revision", AuthorizationEpoch: 7, RequireTargetLogin: true, TargetEmail: "private@example.invalid", ConfirmedImpact: "private-impact"}
 			var before vaultwarden.RecoveryBeforeDispatch = adapter.Begin
 			if err := before(d); err != nil {
 				t.Fatal(err)

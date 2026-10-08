@@ -24,6 +24,7 @@ type orgOperationsPanel struct {
 	status                                  string
 	execute                                 func(context.Context, string, []string, vaultwarden.CipherAction) (vaultwarden.OrganizationOperationResult, error)
 	dispatch                                func(func())
+	busy                                    func(bool)
 }
 
 func newOrgOperationsPanel(orgID string, entries []vaultwarden.VaultEntry, execute func(context.Context, string, []string, vaultwarden.CipherAction) (vaultwarden.OrganizationOperationResult, error), dispatch func(func())) *orgOperationsPanel {
@@ -75,6 +76,9 @@ func (p *orgOperationsPanel) start() {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.running = true
+	if p.busy != nil {
+		p.busy(true)
+	}
 	p.confirmation = false
 	p.status = "正在处理组织条目…"
 	generation := p.generation
@@ -83,6 +87,9 @@ func (p *orgOperationsPanel) start() {
 		result, err := execute(ctx, orgID, ids, operation)
 		cancel()
 		dispatch(func() {
+			if p.busy != nil {
+				p.busy(false)
+			}
 			if p.closed || generation != p.generation {
 				return
 			}

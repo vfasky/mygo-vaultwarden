@@ -30,6 +30,8 @@ final class SnapshotFiles {
     let directory: URL
     private let stateURL: URL
     let recoveryKeys: SnapshotKeyStore?
+    // Isolated tests inject the uncertain-commit boundary; production leaves nil.
+    var afterRenameForTesting: (() throws -> Void)? = nil
     init(directory: URL, recoveryKeys: SnapshotKeyStore? = nil) throws {
         self.recoveryKeys = recoveryKeys
         self.directory = directory
@@ -69,17 +71,22 @@ final class SnapshotFiles {
             if let root = try JSONSerialization.jsonObject(with: data) as? [String: Any], let target = root["targetRecovery"] {
                 _ = try targetStrictObject(JSONSerialization.data(withJSONObject: target), keys: ["version", "sealed"])
             }
+            if let root = try JSONSerialization.jsonObject(with: data) as? [String: Any], let accountSwitch = root["accountSwitch"] {
+                _ = try targetStrictObject(JSONSerialization.data(withJSONObject: accountSwitch), keys: ["version", "pending", "sealed"])
+            }
             let state = try snapshotDecode(SnapshotState.self, from: data)
             try state.validate()
             _ = try targetRecords(state)
+            _ = try accountSwitchRecord(state)
             return state
         } catch { throw SnapshotError.corrupt }
     }
     // Only ciphertext and non-secret control metadata reach disk, including temp files.
     func write(_ state: SnapshotState) throws {
         try state.validate()
+        _ = try accountSwitchRecord(state)
         let data = try snapshotJSON(state)
-        guard data.count <= 96 * 1024 * 1024 else { throw SnapshotError.invalidInput }
+        guard data.count <= 96 * 1024 * 1024 else { throw state.accountSwitchPending ? SnapshotError.accountSwitchTooLarge : SnapshotError.invalidInput }
         let temp = directory.appendingPathComponent(".snapshot-\(UUID().uuidString).tmp")
         let fd = Darwin.open(temp.path, O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW | O_CLOEXEC, S_IRUSR | S_IWUSR)
         guard fd >= 0 else { throw SnapshotError.configuration }
@@ -94,6 +101,7 @@ final class SnapshotFiles {
             }
         }
         guard fsync(fd) == 0, rename(temp.path, stateURL.path) == 0 else { throw SnapshotError.configuration }
+        try afterRenameForTesting?()
         let directoryFD = Darwin.open(directory.path, O_RDONLY | O_CLOEXEC)
         guard directoryFD >= 0 else { throw SnapshotError.configuration }
         defer { Darwin.close(directoryFD) }

@@ -257,7 +257,10 @@ func TestLiveRecoveryLifecycle(t *testing.T) {
 		t.Fatal("takeover changed user key")
 	}
 	t.Log("SMTP invite/reinvite, expired token/wrong identity, trusted confirm, waiting rejection, reject/initiate/approve, view, takeover, retained user key verified; manual approval, not natural waiting")
-	testLiveAdministratorRecovery(t, ctx, dir, fresh, grantee, syncVault, commit)
+	if os.Getenv("MYGO_PERSONAL_RELEASE_ONLY") != "1" {
+		testLiveAdministratorRecovery(t, ctx, dir, fresh, grantee, syncVault, commit)
+	}
+	syncVault(fresh)
 	testLiveDisabledEmergencyHistory(t, ctx, dir, containerID, fresh)
 }
 

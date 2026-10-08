@@ -23,6 +23,7 @@ type emergencyViewer struct {
 	cancel                              context.CancelFunc
 	fetch                               func(context.Context, string) ([]vaultwarden.CipherFields, error)
 	dispatch                            func(func())
+	busy                                func(bool)
 }
 
 func newEmergencyViewer(contact vaultwarden.EmergencyContact, fetch func(context.Context, string) ([]vaultwarden.CipherFields, error), dispatch func(func())) *emergencyViewer {
@@ -51,6 +52,9 @@ func (v *emergencyViewer) load() {
 		return
 	}
 	v.running = true
+	if v.busy != nil {
+		v.busy(true)
+	}
 	ctx, cancel := context.WithCancel(context.Background())
 	v.cancel = cancel
 	generation := v.generation
@@ -59,6 +63,9 @@ func (v *emergencyViewer) load() {
 		rows, err := fetch(ctx, id)
 		cancel()
 		dispatch(func() {
+			if v.busy != nil {
+				v.busy(false)
+			}
 			if v.closed || v.generation != generation {
 				clear(rows)
 				return

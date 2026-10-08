@@ -21,6 +21,7 @@ type orgBusinessFlow struct {
 	status                             string
 	rows                               []string
 	dispatch                           func(func())
+	busy                               func(bool)
 }
 
 func (f *orgBusinessFlow) blocked() bool { return f.running || f.terminal || f.closed }
@@ -41,6 +42,9 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 	ctx, cancel := context.WithCancel(context.Background())
 	f.cancel = cancel
 	f.running = true
+	if f.busy != nil {
+		f.busy(true)
+	}
 	f.confirm = false
 	f.status = "正在执行；取消不会回滚已发送的请求。"
 	generation := f.generation
@@ -49,6 +53,9 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 		rows, err := work(ctx)
 		cancel()
 		dispatch(func() {
+			if f.busy != nil {
+				f.busy(false)
+			}
 			if f.closed || generation != f.generation {
 				return
 			}

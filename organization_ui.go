@@ -71,6 +71,7 @@ func (a *app) organizationItemRequiresPassword(id string) bool {
 	return false
 }
 func (a *app) readOnlyOrganizationCipherView(c *ui.Context, e *cipherEditor) {
+	callStorage := a.vaultStorage()
 	if !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision || (!e.authorizationExpires.IsZero() && !time.Now().Before(e.authorizationExpires)) {
 		*e = cipherEditor{}
 		a.editor = nil

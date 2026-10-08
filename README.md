@@ -1,147 +1,83 @@
 # MyGo Vaultwarden
 
-使用 Go + MyGo Native UI 和 Swift/AppKit 构建的 macOS Vaultwarden 客户端。采用 GPL-3.0-only。
+使用 Go + MyGo Native UI 和 Swift/AppKit 构建的 macOS Vaultwarden 客户端，采用 GPL-3.0-only。主窗口不使用 HTML、JavaScript 或 WebView。
 
-已接入 Vaultwarden 登录、同步及个人密码库写入：支持 PBKDF2、Argon2id、TOTP 登录验证、先持久化的令牌刷新、八种项目的标准字段新增/编辑、四类自定义字段、网址匹配策略、密码历史查看、文件夹管理/筛选、收藏、归档和回收站操作。编辑页可将当前表单复制为使用独立密钥的新个人项目，保留标准字段和历史；含附件、通行密钥或未知扩展的项目会明确拒绝复制。批量移动、归档、软删、恢复和清回收站均需确认，并同步逐项核对结果，部分成功不会自动重复执行。完整服务器加密同步数据保存在受 Keychain / 主密码保护的本机加密快照中；系统自动填充使用独立的个人及获授权组织 Login 投影。顶栏「导入导出」提供逐项选择的 Bitwarden 兼容 JSON 与八类 MyGo 明文备份，均需预检和敏感确认；文件夹（含空文件夹）、历史与标准字段可回导，导入创建新副本并逐项核对，未知结果不重试。MyGo 格式与官方格式明确分开，尚不能无损转换的附件/通行密钥/扩展会阻断，已有导出文件不会覆盖。个人再次验证项目已接入30秒主密码授权，登录密码/TOTP短时显示和认证受控复制已实现；同步后可比较本地与远端改动，并明确选择采用远端或把所选修改重新应用到最新草稿，详见 [冲突处理](docs/cipher-conflicts.md)。已有组织已接入 RSA 密钥解包、组织/集合导航、项目新增与受权编辑、个人独立 item key 项目共享、组织再次验证与密码/TOTP认证操作，详见 [组织密码库](docs/organization-vault.md)。组织创建、资料修改、退出和密码确认删除已接原生侧栏，危险请求前只隔离目标组织的本机访问，保留其他密码库；侧栏可明确确认后重新联网核验访问。组织管理页已提供集合新增、加密更名、删除及成员/群组访问分配表单；更名保留原分配，修改既有集合访问或删除前先持久隔离，随后从侧栏重新核验恢复。组织管理页另已接单人邀请、成员公钥核验确认、重新邀请、角色修改、撤销/恢复/移除；侧栏「创建或加入组织」可粘贴邮件邀请链接并查看自己的完整共享公钥。成员确认前须通过独立可信渠道核验完整 DER/SPKI；角色晋升若会清除直接集合分配，必须逐项查看副作用并明确确认。邮件邀请接受已用自有 SMTP 与 1.37.4 实例验证；要求自动加入账号恢复时，原生表单会先读取策略、说明个人密码库恢复权限，并要求独立可信渠道公钥确认后包装用户密钥。新建组织包含恢复 RSA 钥对，旧组织可由所有者确认初始化缺失密钥，详见 [组织邀请与恢复登记](docs/organization-invitation-recovery.md)。这不等于完整管理员账号恢复功能。完整 API 工作仍未完成：含附件/通行密钥等项目的完整复制与备份、组织导入导出、批量/导出的逐项再次验证、双改列表逐行冲突处理、其他组织策略消费与 legacy 共享、附件、Send 和账号安全管理等尚缺；组织管理现已提供群组创建、成员/集合分配、编辑和删除。由于固定服务器不返回群组当前全集合范围，所有保存（包括更名）必须重新明确设置范围并确认，既有群组修改前持久隔离本机目标组织，详见 [群组管理](docs/organization-groups.md)。准确状态见 [API 覆盖矩阵](docs/vaultwarden-api-coverage.md)。
+本版聚焦个人密码库。支持八种个人项目的保存、搜索、编辑、复制、同步、文件夹、收藏、归档及回收站；自定义字段、密码历史、URI 匹配和逐字段冲突核对沿用完整加密模型。敏感读取和再次验证有短期授权，未知写入结果不会自动重放。个人附件与完整资源备份支持有界流式处理、逐文件恢复、正常同步续接和下载核验；MyGo 完整资源格式与官方 JSON 明确区分，不能无损表达的内容会被具体阻止，不会静默丢弃。
 
-个人新增、编辑、复制与文件导入会先联网核验当前组织策略，执行“禁止个人所有权”和“限制项目类型”对个人保存的约束；导入在创建任何文件夹前预检全部项目。组织新增、更新、共享按目标组织执行类型限制，并核对当前服务器成员身份和角色；个人状态与批量操作从认证响应核对真实项目类型及权限，“禁止个人所有权”不会误禁删除或共享。读取失败或授权失效会停止写入。同步现在会在解密自动填充投影前校验完整策略，按个人并集与目标组织自身范围排除 type15 限制的 Login；缺失策略的同步响应会失败。解锁与发布现在只在验证认证回执后建立绑定账号、完整快照、隔离标记和版本的离线策略许可；个人/组织列表、条目、秘密、历史、再次验证、导出与批量读取统一执行 type15，type5保留已有个人读取。刷新令牌先落盘，同内容回执可续接策略许可，但不会恢复旧条目授权；隔离或失败回执撤销旧许可。Swift 主应用和独立 AutoFill 会复核已有候选，缺完整策略的旧快照须先成功同步迁移，不能沿用旧候选。默认 URI（type16）现已按首条适用策略应用于个人与组织的继承规则，显式 match 保持原值；Swift 用原始 URI 位置复核投影，缺来源的旧候选需同步迁移。默认 URI 修改待核验期间暂停继承规则的填充。组织管理现已提供固定版本全部12类策略的列表、单项读取、业务字段编辑和启停确认，其他策略的完整消费仍待完成。策略修改先保存独立待核验状态；受限类型修改暂时关闭个人条目读取和填充，个人所有权修改只限制个人保存。普通同步和令牌更新保留待核验状态，侧栏提供读取当前服务器状态、确认、再次核验的恢复入口；组织成员失效时只解除经核验的个人限制，继续隔离组织。保存失败可能已撤销部分成员，客户端不会自动重试或声称回滚。准确边界及平台验证限制见 [组织策略执行](docs/organization-policies.md)。组织创建现在会在写前读取认证策略并执行「单一组织」限制，owner/admin按固定服务器规则豁免；本机隔离不能解除限制，相关策略变更待核验时暂停创建。邀请目标角色及其他账号状态超出当前接口可见性时，由认证服务器最终校验，客户端不猜测授权事实。已增加固定官方 zxcvbn 4.4.2 的[主密码评分基础](internal/passwordstrength/README.md)，其词典、Unicode和用户输入与独立Node向量比对通过；账号改密/注册/登录等消费者仍待接入，不能据此视为完整主密码策略支持。
+账号服务入口位于“账号与设置”：Send、设备登录与审批、账号安全、MFA 和紧急访问。登录使用实际 MFA 流程；设备批准后的临时在线库不伪造磁盘密码包装、不持久保存运行期密钥或 token，也不注册运行期 AutoFill。显式绑定密码后必须重新同步，才能发布持久快照。替换另一账号的本机缓存需要明确确认和系统认证；旧保护未解决时拒绝替换，未知结果只检查同一次操作。
+
+**组织产品 UI 延期到下一版本。** 本版不开放组织/成员/群组/集合管理、策略编辑、共享/复制/导入导出/审计/API key/Public 目录或管理员恢复动作；没有占位按钮。已审模块与开发成果保留。服务器同步中的组织加密数据和未知字段仍完整保存，已有组织政策、权限、隔离与 pending 约束继续执行；个人列表不会把组织条目当作个人条目。完整用户密钥轮换仍核验必要的组织恢复材料，缺少证据时停止，不以空适配器绕过。已有跨账号恢复屏障可以由目标本人重新认证和核验，但这不重新开放管理员操作。
+
+完整同步保存在受 Keychain / 主密码保护的 AES-GCM 本机快照中。持久快照的系统 AutoFill 仍使用独立、按现有权限和策略过滤的 Login 投影；它不代表本版开放组织业务 UI。令牌刷新先加密落盘；UI/worker 代次、scope、snapshot ID 和存储版本共同阻止迟到结果重新打开密码库。普通同步不能清除未解决的账号变更或跨账号恢复日志。
+
+当前交付范围、执行证据与平台限制以 [本版验收矩阵](docs/personal-release-acceptance.md) 为准；[API 模块矩阵](docs/vaultwarden-api-coverage.md) 保留底层能力记录，不等同于本版 UI 承诺。冲突处理见 [docs/cipher-conflicts.md](docs/cipher-conflicts.md)，安全存储见 [docs/secure-snapshots.md](docs/secure-snapshots.md)。
 
 ## 开发环境
 
-- macOS 14+，Xcode 完整安装。
-- Go 1.27.1+；MyGo 固定为 v0.2.15。
-- 完整 AutoFill 验证需要 Apple Developer Program、Xcode 中已登录的开发者账号、开发证书和 Developer ID Application 证书。
-- Go 主界面不使用 HTML、JavaScript 或 WebView。
-
-`go` 不在 PATH 时可通过 `GO_BIN=/absolute/path/to/go` 指定。脚本也识别 Homebrew 和本项目的用户缓存工具链。
+- macOS 14+、完整 Xcode、Go 1.27.1+。
+- MyGo 固定 v0.2.15，保留 goja 与官方 zxcvbn 的主密码评分实现。
+- `go` 不在 PATH 时使用 `GO_BIN=/absolute/path/to/go`；`scripts/resolve-go.sh` 也识别项目用户缓存工具链。
+- 真实 AutoFill 安装需要 Apple Developer Program、Xcode 登录账号、相应证书及 provisioning profile。未签名构建不能证明系统填充可用。
 
 ## 构建与安装
 
-开发时要体验真实登录、安全存储及系统自动填充，使用一键完整 Debug 入口：
+完整开发入口：
 
 ```sh
 bash scripts/dev-debug.sh
-```
-
-脚本默认持续监听 Go、Swift、资源和构建配置的变化，自动完整构建、验证签名、安装并重启包含安全存储组件和 AutoFill 扩展的应用。需要先配置下文的本机签名信息和 Xcode 开发者账号；日志追加到 `build/debug/dev-debug.log`。
-
-首次启动监听前请退出已安装的完整应用。后续保存代码即可自动重载：编译或签名失败时保留正在运行的版本；构建期间再次保存会继续构建最新源码。构建产物不会触发重复构建。同一台机器只允许一套此脚本管理完整应用；关闭应用或按 `Ctrl+C` 会结束监听，并清理本次监听启动的进程。已有的 `mygo dev` 界面预览不会被关闭。
-
-这里与 [MyGo 的 `mygo dev`](https://mygo.egoist.dev/docs/cli#mygo-dev) 一样采用重新编译并重启进程的方式，不保留内存中的登录状态。已有加密快照可在重启后通过主密码或系统认证解锁，并恢复已保存的登录会话以继续同步。完整签名和扩展导出耗时比仅界面预览更长。修改监听器自身（`scripts/dev-debug/`）后需要重新启动脚本。
-
-只构建、安装并启动一次可用：
-
-```sh
+# 仅构建、安装、启动一次
 bash scripts/dev-debug.sh --once
 ```
 
-启动后点击“登录并同步”体验真实登录。系统自动填充仍需在 macOS“自动填充与密码”中手动启用 MyGo Vaultwarden，并实际验证 Safari 填充。
+该脚本监听 Go、Swift、资源及构建配置，完整构建主应用、安全存储桥与 AutoFill 扩展，验证签名后安装并重启。首次启动前退出已安装应用；构建失败保留正在运行的版本。原有 `mygo dev` 预览不会被关闭。代码重载不保留内存登录状态，已有加密快照可重新认证解锁。
 
-也可分别执行构建与安装：
+也可分别执行：
 
 ```sh
 bash scripts/build-macos.sh debug
 bash scripts/install-macos.sh debug
 ```
 
-输出：`build/debug/MyGo Vaultwarden.app`。
+产物为 `build/debug/MyGo Vaultwarden.app`，安装到 `~/Applications/MyGo Vaultwarden.app`。脚本不会替用户开启系统 AutoFill。仅预览界面可运行 `go tool mygo dev`；该 `.dev` 模式不含安全存储及 AutoFill，不能用于验收这些功能。
 
-安装位置：`~/Applications/MyGo Vaultwarden.app`。更新前请退出已安装的主应用。安装脚本会登记 Launch Services 和 PlugInKit，再启动应用；不会修改系统自动填充开关。
-
-完整 app 使用 Xcode 管理主应用和扩展两个 target；主应用的实际可执行文件由 Xcode build phase 调用 Go 生成，扩展以原生 macOS `.appex` 形式嵌入 `Contents/PlugIns`。`Contents/Frameworks/libSnapshotBridge.dylib` 提供 Go → Swift 进程内接口，主应用和扩展复用 `macos/Shared` 中的同一套加密存储代码。
-
-仅开发主界面时：
-
-```sh
-go tool mygo dev
-```
-
-这个命令不包含 AutoFill 扩展和安全存储组件，MyGo 开发包也使用独立的 `.dev` 标识。此模式用于界面开发，安全存储按钮不可用。测试共享快照和系统填充请使用上面的完整构建安装流程。
-
-## 应用图标
-
-已配置 1024×1024 PNG 和多尺寸 macOS ICNS，MyGo 开发包与 Xcode 完整应用共用同一设计。资源位置、规范适配与重新生成命令见 [docs/app-icon.md](docs/app-icon.md)。
-
-## 签名与发布构建
-
-构建脚本读取本机 `.local/signing.env`，也支持通过环境变量设置 `MYGO_SIGNING_IDENTITY`、`MYGO_TEAM_ID` 和可选的 `MYGO_NOTARY_PROFILE`。`.local/` 已被 Git 忽略，用于保存本地配置和开发记录；证书私钥、公证凭据和 provisioning profile 不应提交到仓库。
-
-首次构建前，请配置自己的开发者证书和团队，并将 Xcode 工程及 `mygo.json` 中的 bundle ID 改为自己团队拥有的标识。主应用和 AutoFill 扩展均需要匹配的 provisioning profile，构建脚本通过 Xcode archive/export 自动配置。
+签名设置写在忽略的 `.local/signing.env`，变量为 `MYGO_SIGNING_IDENTITY`、`MYGO_TEAM_ID` 和可选的 `MYGO_NOTARY_PROFILE`。证书私钥、公证凭据及 provisioning profile 不应提交。主应用与扩展的 bundle ID 必须匹配自己的团队配置。
 
 ```sh
 bash scripts/build-macos.sh release
-# 可选：仅本地打包、公证，不上传发行站点
+# 可选：本地打包、公证，不上传发行站点
 bash scripts/build-macos.sh release --notarize
 ```
 
-开发构建没有执行公证。Xcode Developer ID 导出仍会申请签名时间戳，需要网络。
+Xcode 管理主应用和扩展两个 target；Go build phase 生成主可执行文件，原生扩展嵌入 `Contents/PlugIns`，共享 Swift 桥位于 `Contents/Frameworks/libSnapshotBridge.dylib`。应用图标与资源说明见 [docs/app-icon.md](docs/app-icon.md)。
 
-## 登录、同步与 Safari
+## 使用与安全边界
 
-1. 填入 Vaultwarden 服务地址和邮箱，点击“登录并同步”。使用 HTTPS；仅本机回环地址允许 HTTP。
-2. 在登录页填写主密码；账号启用 TOTP 时，页面切换到“两步验证”，输入验证器代码并继续。错误提示、重试和取消都在页面内完成。
-3. 同步成功后，主窗口显示个人与获授权组织项目，可按类型、文件夹、组织、集合筛选，也可搜索或打开对应网站。
-4. 在 macOS“自动填充与密码”中启用 MyGo Vaultwarden；需要时点击“更新系统候选”并完成系统认证。
-5. 在 Safari 的匹配网站选择本应用的凭据，经系统认证后填充。严格 Host / Exact 规则只在系统提供可核对的来源时匹配，详见协议说明。
-6. 主应用退出后，扩展仍能独立读取加密快照。重启主应用后，可输入主密码并点击“解锁密码库”，或点击“使用 Touch ID 解锁”查看本机列表。
+1. 输入服务器、邮箱和主密码，按服务器实际要求完成 MFA。使用 HTTPS，仅本机回环允许 HTTP。
+2. 个人项目按类型、文件夹、收藏、归档或回收站筛选。使用 `⌘F` 搜索，键盘上下键选择；详情可复制用户名或打开 HTTP(S) 网站。
+3. 锁定立即隐藏列表、详情和敏感输入，并撤销内存权限。重启后可用主密码或系统认证解锁持久快照。
+4. 在 macOS“自动填充与密码”启用 MyGo Vaultwarden，再实际核验 Safari 填充。严格 Host / Exact 规则只在系统给出可核对来源时匹配。
+5. 账号变更、紧急接管或未知切换若留下恢复记录，使用对应专用入口核验；取消、重启、普通登录或 HTTP 200 本身都不能代替完整证明。
 
-未登录时显示独立的“登录服务器”页面，直接填写服务器地址、邮箱和主密码；需要两步验证时在同一窗口切换至验证码表单，不弹出登录对话框。已有本机快照但未解锁时显示独立锁定页，输入主密码并点击“解锁密码库”（支持回车），或选择“使用 Touch ID 解锁”；系统认证也允许按 macOS 提示使用 Mac 登录密码。旧版快照需重新登录并同步一次，才能启用主密码离线解锁及登录凭据持久化，已有 Touch ID 入口继续可用。也可以选择“使用其他账号”进入登录页，提交前会提示替换已有离线快照。各认证页面均沿用应用 Logo、灰紫渐变和现有圆角控件，采用居中布局。
+原始主密码不发送到服务器，不写配置、日志或命令行。持久 payload 保存加密的 refresh token、设备标识和必要密钥材料，不保存原始密码或 access token；临时设备会话不写入这些材料。普通网络失败保留上次成功缓存；身份、密钥、授权或来源失效会停止当前权限。退出临时库只撤销临时能力，保留无关磁盘账号。
 
-解锁后进入三栏主界面：左侧为密码库与分类，中间为可搜索的项目列表，右侧为选中项目详情。使用 `⌘F` 搜索标题、用户名或网站，列表支持上下键选择；详情支持复制用户名和打开 HTTP(S) 网站。右上角或左下角的“账号与设置”提供登录服务器入口、离线解锁、候选更新和退出账号。右上角“锁定”会立即隐藏项目列表和详情、清空搜索及敏感输入，并完整切换至解锁页。主密码和验证码使用遮掩输入；密码库条目的密码仍通过系统认证后自动填充。
-
-界面使用浅灰紫背景、白色圆角面板和本地生成的文字图标，不请求远程网站图标。八类个人项目、收藏、文件夹、归档和回收站均可导航；侧栏可新建/管理文件夹，顶栏可创建项目或进入批量管理。组织与集合可导航，集合内可新增八类项目，授权成员可编辑或查看；个人项目可经确认共享到可写集合。侧栏还可创建组织、管理当前组织资料、确认退出或删除；本机隔离的组织需明确重新联网核验才恢复访问。组织管理页可新增、更名、删除集合，按成员姓名/邮箱或群组名称配置访问、只读、隐藏密码及管理权限；集合级经理与全组织经理的权限分别校验。成员管理提供单人邀请与生命周期表单、完整公钥可信核验、角色及全组织权限副作用确认。服务器关闭群组时无法读取历史关联，因此角色修改会明确阻止并保留草稿；管理员启用群组后须重新加载。邀请接受、恢复自动登记与组织恢复公钥入口已接入；真实隔离 SMTP 回环已验证。群组自身管理已接原生名称、成员/集合权限、显式访问范围及删除确认；未启用群组时明确禁用。组织策略管理已接全部12类型原生字段和启停确认，完整管理员恢复及剩余策略消费边界见覆盖矩阵。
-
-登录会先切换并撤销此前本机账号快照。成功同步后，refresh token、设备标识、用户密钥和快照包装密钥保存在 AES-GCM 加密 payload 内；不保存原始主密码或 access token。锁定只清除内存中的会话与显示内容，主密码或 Touch ID 解锁后可恢复登录会话，点击“同步”会刷新 access token 并下载密码库。退出登录则撤销本机快照、已保存登录凭据和密钥。服务器撤销或拒绝登录凭据时才需要重新登录；旧版缓存没有登录凭据时，点击“同步”会引导登录一次。Safari 自动填充仍使用系统认证。
-
-原始主密码不发送到服务器，不写入配置、日志或命令行；仅在登录或离线解锁时参与本地派生。手动查看扩展列表和实际填充分别认证，过期或被锁定的请求不能继续提交。
-
-成功同步全量替换快照；普通网络/解密失败保留上次成功快照并明确报错。refresh token 更新会先加密落盘，再下载密码库，即使后续断网也可在下次解锁后继续同步。账号身份或认证失效要求重新登录。登出先撤销快照，再清理 Keychain 和系统候选。候选回执与旧密钥清理的状态独立显示。
-
-实现边界见 [安全快照设计](docs/secure-snapshots.md)、[登录与同步说明](docs/vaultwarden-readonly.md) 和 [API 覆盖矩阵](docs/vaultwarden-api-coverage.md)。附件新增有界流式加解密与独立传输基础，但尚未接入 Session 和原生界面，当前仍不可用；协议来源、测试和后续入口见 [附件进度](docs/attachments.md)。
+密钥轮换的固定 Vaultwarden 1.37.4 兼容判断是对所配置服务器的协议声明，不是二进制远程证明。公开接口无法独立读回的恢复包装采用已记录的严格协议顺序见证，并与实际读回证据区分。不可判定时保留屏障和恢复材料。
 
 ## 测试
 
 ```sh
-go test ./...
-go vet ./...
+go test -tags headless ./...
+go vet -tags headless ./...
 swift test --package-path macos
+swift test --package-path macos/Authentication
 ```
 
-界面交互测试覆盖主密码遮掩和复制限制、验证码校验与重试、敏感输入清空后的撤销隔离、认证取消与过期响应、登录/锁定页面切换、回车提交、认证期间的导航禁用、锁定后的内容隐藏，以及搜索、键盘选择、详情切换、复制用户名、打开网站与快照撤销后的详情清除。可使用公开虚构数据导出登录页、两步验证页、锁定页和三栏界面的原生渲染预览（不访问真实密码库或 Keychain）：
-
-```sh
-MYGO_UI_PREVIEW_DIR="$PWD/build/ui-preview" go test -run TestVaultVisualPreviews .
-```
-
-Go 测试包含官方加密固定向量、请求重定向与 TLS 边界、token 刷新、身份/密钥变化、条目筛选与解析；Swift 测试覆盖加密快照、账号隔离、并发撤销、候选回执及域名/URI 匹配。真实服务测试与官方 CLI 核对使用独立本机实例，不接触生产账号。单元测试中的模拟 Keychain 不代表真实系统认证已验证。
-
-诊断：
+Go/Swift 测试覆盖加密、身份/权限、生命周期、持久化、URI 匹配和原生组件。真实服务/CLI 回环只使用独立、带所有权标记的本机固定版本实例；模拟 Keychain 和隔离 C ABI 不等于真实 Touch ID、签名安装、Safari 或 IdP 系统窗口已经验证。具体结果和大库测量见验收矩阵。
 
 ```sh
 codesign --verify --deep --strict 'build/debug/MyGo Vaultwarden.app'
 pluginkit -m -v -i yz.sh.mygo-vaultwarden.autofill
-log show --last 10m --style compact \
-  --predicate 'subsystem == "yz.sh.mygo-vaultwarden.autofill"'
-```
-
-## 目录
-
-```text
-main.go                          MyGo 原生主窗口
-ui.go / ui_auth.go / ui_icons.go  登录、解锁与三栏密码库界面
-network.go                       登录、同步、取消与 UI 代次控制
-internal/vaultwarden/            协议、KDF、个人/组织项目加解密与写入及兼容性测试
-storage*.go                      受限 JSON / C ABI 桥接与错误处理
-resources/                       应用图标及品牌资源
-macos/App/                       主应用 Info.plist 与共享权限
-macos/AutoFill/                   AppKit Credential Provider
-macos/Bridge/                    主应用进程内 Swift 动态库入口
-macos/Shared/                    加密、Keychain、跨进程存储、版本与索引
-macos/Tests/                     Swift 安全存储与匹配测试
-macos/MyGoVaultwarden.xcodeproj/  两个 target 的构建与扩展嵌入
-scripts/                         构建、安装与第三方许可证收集
 ```
 
 ## 许可证与来源
 
-项目从初始 MIT 许可证切换为 GPLv3，见 [LICENSE](LICENSE)。自动填充流程参考 KeePassium；来源与复用范围见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。MyGo 等依赖保留各自许可证，应用包携带第三方声明。
+项目采用 [GPL-3.0-only](LICENSE)。自动填充流程参考 KeePassium，来源及复用范围见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。MyGo、goja、zxcvbn 等保留各自许可证，应用包携带第三方声明。

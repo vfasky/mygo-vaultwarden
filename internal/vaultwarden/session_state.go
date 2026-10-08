@@ -49,7 +49,7 @@ func (s *Session) checkpointLocked(persist func(SessionCheckpoint) error) error 
 	defer func() {
 		s.offlinePolicies = nil
 		s.checkpointPolicies = nil
-		s.authorizationEpoch++
+		s.advanceAuthorizationLocked()
 	}()
 	return s.checkpointWithReceiptLocked(persist, nil)
 }

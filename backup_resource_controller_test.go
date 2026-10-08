@@ -34,6 +34,8 @@ type resourceControllerFixture struct {
 	failPublish, unknownUpload            bool
 	failLease, failDownload, unknownTrash bool
 	trashes                               int
+	device                                *runtimeDeviceFixture
+	additional                            func(http.ResponseWriter, *http.Request) bool
 }
 
 func newResourceControllerFixture(t *testing.T, beforeFirstSync ...bool) *resourceControllerFixture {
@@ -82,6 +84,12 @@ func newResourceControllerFixture(t *testing.T, beforeFirstSync ...bool) *resour
 func (f *resourceControllerFixture) serve(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.additional != nil && f.additional(w, r) {
+		return
+	}
+	if f.device != nil && f.device.serve(w, r) {
+		return
+	}
 	switch {
 	case strings.HasSuffix(r.URL.Path, "/connect/token"):
 		json.NewEncoder(w).Encode(map[string]any{"access_token": "test-access", "refresh_token": "test-refresh", "expires_in": 3600, "token_type": "Bearer"})

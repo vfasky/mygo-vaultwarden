@@ -13,7 +13,11 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *vaultwarden.Session, vault *vaultwarden.VaultData, e *cipherEditor, scope vaultwarden.Scope, revision string, persist func(vaultwarden.SessionCheckpoint) error) (vaultwarden.CipherDocument, error) {
+func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *vaultwarden.Session, vault *vaultwarden.VaultData, e *cipherEditor, scope vaultwarden.Scope, revision string, persist func(vaultwarden.SessionCheckpoint) error, stores ...func(storageRequest) storageReply) (vaultwarden.CipherDocument, error) {
+	storage := callStorage
+	if len(stores) > 0 {
+		storage = stores[0]
+	}
 	if !vaultwarden.CipherShareRequiresRecovery(e.document) {
 		return session.SharePersonalCipher(ctx, vault, e.shareOrganizationID, e.shareCollectionID, e.document, e.fields, e.authorization, persist)
 	}
@@ -30,7 +34,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 		return vaultwarden.CipherDocument{}, vaultwarden.ErrValidation
 	}
 	return session.SharePersonalCipherWithRecovery(ctx, vault, e.shareOrganizationID, e.shareCollectionID, e.document, e.fields, e.authorization, persist, func(data []byte) error {
-		state := callStorage(storageRequest{Operation: "status"})
+		state := storage(storageRequest{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			return vaultwarden.ErrConflict
 		}
@@ -45,7 +49,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 		if err = stage.Commit(); err != nil {
 			return err
 		}
-		state = callStorage(storageRequest{Operation: "status"})
+		state = storage(storageRequest{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			return vaultwarden.ErrConflict
 		}
@@ -65,7 +69,7 @@ func (a *app) chooseCipherShareRecovery() {
 	if e == nil || a.pending != 0 || !a.backupCurrent(e, a.epoch) {
 		return
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
@@ -135,7 +139,7 @@ func (a *app) cipherShareRecoveryView(c *ui.Context, e *backupEditor) {
 					a.cancel()
 					a.cancel = nil
 				}
-				a.epoch++
+				a.advanceEpoch()
 				clear(r.file)
 				r.password = ""
 				e.recovery = nil
@@ -165,8 +169,9 @@ func (a *app) runCipherShareRecovery(repair bool) {
 			protected, organization = item.RequiresPassword, item.OrganizationID != ""
 		}
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	a.cancel = cancel
 	a.pending++
