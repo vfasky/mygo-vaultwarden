@@ -2,6 +2,15 @@
 
 本文件为 Board #14 当前范围的验收入口。组织产品 UI 按用户最新要求延期；下面的“通过”仅指已执行的检查，不代表已独立 Review、合并、签名安装或生产系统验证。历史开发记录见 `docs/parallel/final-integration.md`。
 
+## 本轮重新执行记录（Board #44）
+
+- 本卡是用户明确要求的 #14 打回后重新执行。固定来源为候选 `63756e4a533253258385eb2d908519377f4b7d28`，已在本卡独立分支以 `--no-ff` 合入（不 reset、不拷旧树文件），未修改主工作区或 recovery 分支。
+- 旧 #14 原生 run `cb8b2ed1-c0ad-4c9d-bd49-bf78a9665277` 的 process-terminal 一直 pending，reconcile/CreateReview/Reject 均被框架拒绝；本记录不把它视为已退出或已审查。旧工作树、分支与状态文件按要求原样保留作现场，未清理。
+- 本轮实际执行（本卡树）：Go 1.27.1 `go test`/`go vet`/`go build -tags headless`、gofmt 干净；隔离 Swift C ABI 下 `go test -race -tags headless ./...` 全包通过；Swift 主包 99 项、Authentication 9 项通过；无签名 Debug 主App（`MyGo Vaultwarden`）与 AutoFill.appex 及生产桥 `libSnapshotBridge.dylib` 均为 x86_64+arm64，`nm` 确认三个公开 C 符号；`REGISTER_APP_WITH_LAUNCH_SERVICES=NO`，未执行 lsregister 登记。
+- 本轮实际执行的固定 1.37.4 live 回环（自有容器，结束后按 label 核对无残留）：`TestLivePersonalRelease`、`TestLiveVaultFinishing`（个人范围）、`TestDeviceLoginLive1374`、`TestDeviceNotificationLive1374`、`TestSendLive1374`、`TestLiveRecoveryLifecycle`、附件相关 live 与单元测试，均通过（race）。
+- 未在本轮重跑：大库 10,000 条基准、许可证收集、账号完整轮换 live 与其它组织历史 live（组织产品不在本版门槛），沿用前序检查点证据，已在下文标注为继承。
+- 无代码修复：重新验证中未发现需要修改产品代码的真实问题。
+
 ## 本版范围
 
 | 范围 | 当前实现与证据 |
