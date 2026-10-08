@@ -19,6 +19,12 @@ private struct BridgeRequest: Decodable {
     var recoveryRecord: Data?
     var recoveryPhase: String?
     var recoveryResolution: AccountRecoveryResolution?
+    var targetBinding: TargetRecoveryBinding?
+    var targetSummary: Data?
+    var targetPhase: String?
+    var targetRuntime: RuntimeRecoveryAuthority?
+    var targetLogin: TargetRecoveryResolution?
+    var targetResolution: TargetRecoveryResolution?
     let secretProtocol: Int?
     let secretNotAfter: Double?
 }
@@ -41,6 +47,7 @@ private struct BridgeStatus: Encodable {
     let scope: SnapshotScope?
     let updatedAt: Date?
     let passwordUnlock: PasswordUnlockConfig?
+    let targetRecoveryPresent: Bool
     let recoveryPending: Bool
     init(_ state: SnapshotState) {
         revision = state.revision
@@ -52,6 +59,7 @@ private struct BridgeStatus: Encodable {
         scope = state.snapshot?.header.scope
         updatedAt = state.snapshot?.header.createdAt
         passwordUnlock = state.snapshot?.passwordUnlock?.config
+        targetRecoveryPresent = state.targetRecovery != nil
         recoveryPending = state.snapshot?.header.format == 2
     }
 }
@@ -66,6 +74,8 @@ private struct BridgeReply: Encodable {
     var deviceID: String? = nil
     var session: Data? = nil
     var vault: VaultData? = nil
+    var targetProtection: TargetRecoveryProtection? = nil
+    var targetRecords: [TargetRecoveryRecord]? = nil
     var recovery: AccountRecoveryJournal? = nil
 }
 
@@ -134,6 +144,52 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                     DispatchQueue.main.asyncAfter(deadline: .now() + remaining) { clipboard.clear(ifOwned: receipt) }
                     return BridgeReply(ok: true, code: "ok", message: "", state: nil)
                 }
+            }
+        case "targetRecoveryBegin", "targetRecoveryQuery", "targetRecoveryPending", "targetRecoveryResult", "targetRecoveryVerify":
+            guard let scope = request.scope, request.unlockKey != nil || request.targetRuntime != nil else { throw SnapshotError.invalidInput }
+            let key = request.unlockKey ?? Data()
+            let (state, records) = try vault.targetRecovery(operation: request.operation, scope: scope,
+                expected: expected(), unlockKey: key, binding: request.targetBinding, summary: request.targetSummary,
+                phase: request.targetPhase, resolution: request.targetResolution, vault: request.vault,
+                session: request.session, material: request.passwordUnlock, login: request.targetLogin, runtime: request.targetRuntime)
+            // Clear clipboard only when this operation actually blocks the active target.
+            if records.contains(where: { $0.requireTargetLogin && $0.binding.target == state.snapshot?.header.scope && $0.phase != "resolved" }) {
+                clearSecretClipboard()
+                scheduleBridgeIndex(store: vault, lease: nil)
+            }
+            return try vault.files.locked {
+                guard try vault.files.read().revision == state.revision else { throw SnapshotError.stale }
+                return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), targetRecords: records)
+            }
+        case "targetRecoveryInspectLocal":
+            guard let binding = request.targetBinding, request.scope == binding.target else { throw SnapshotError.invalidInput }
+            let (state, protection, journal) = try vault.inspectLocalTarget(binding: binding, expected: expected())
+            return try vault.files.locked {
+                guard try vault.files.read().revision == state.revision else { throw SnapshotError.stale }
+                return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), targetProtection: protection,
+                    targetRecords: try vault.files.targetRecords(state).filter { $0.binding == binding }, recovery: journal)
+            }
+        case "targetRecoveryResolveLocal":
+            guard let proof = request.targetResolution, proof.binding == request.targetBinding,
+                  proof.expectedRevision == (try expected()), let credentials = request.credentials,
+                  let material = request.passwordUnlock, let session = request.session, let data = request.vault else { throw SnapshotError.invalidInput }
+            let lease = try vault.resolveLocalTarget(proof: proof, credentials: credentials, material: material, session: session, vault: data)
+            scheduleBridgeIndex(store: vault, lease: lease)
+            return try vault.withCurrentLease(lease) {
+                let state = try vault.files.read()
+                return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), vault: lease.vault,
+                    targetRecords: try vault.files.targetRecords(state).filter { $0.binding == proof.binding })
+            }
+        case "targetRecoveryResolve":
+            guard let scope = request.scope, let proof = request.targetResolution, proof.target == scope, request.targetBinding == proof.binding,
+                  let credentials = request.credentials else { throw SnapshotError.invalidInput }
+            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock,
+                session: request.session, vault: request.vault, priorUnlockKey: request.unlockKey, includeVault: true, targetResolution: proof)
+            scheduleBridgeIndex(store: vault, lease: lease)
+            return try vault.withCurrentLease(lease) {
+                let state = try vault.files.read()
+                return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), vault: lease.vault,
+                    targetRecords: try vault.files.targetRecords(state).filter { $0.binding == proof.binding })
             }
         case "accountRecoveryBegin", "accountRecoveryQuery", "accountRecoveryResult", "accountRecoveryCheckpoint", "accountRecoveryResolve":
             guard let scope = request.scope, let key = request.unlockKey else { throw SnapshotError.invalidInput }
@@ -246,13 +302,22 @@ private func executeTransfer(_ frame: SnapshotTransferFrame) throws -> SnapshotT
             if let count = parsed.unlockKey?.count { parsed.unlockKey?.resetBytes(in: 0..<count) }
             if let count = parsed.session?.count { parsed.session?.resetBytes(in: 0..<count) }
         }
-        guard ["accountRecoveryBegin", "accountRecoveryQuery", "accountRecoveryResult", "accountRecoveryCheckpoint", "accountRecoveryResolve", "publishVault", "restoreOrganizationAccess", "restorePolicyAccess", "quarantineOrganization", "saveSession", "listPassword", "list", "reindex"].contains(parsed.operation) else { throw SnapshotError.invalidInput }
+        guard ["targetRecoveryInspectLocal", "targetRecoveryResolveLocal", "targetRecoveryBegin", "targetRecoveryQuery", "targetRecoveryPending", "targetRecoveryResult", "targetRecoveryVerify", "targetRecoveryResolve", "accountRecoveryBegin", "accountRecoveryQuery", "accountRecoveryResult", "accountRecoveryCheckpoint", "accountRecoveryResolve", "publishVault", "restoreOrganizationAccess", "restorePolicyAccess", "quarantineOrganization", "saveSession", "listPassword", "list", "reindex"].contains(parsed.operation) else { throw SnapshotError.invalidInput }
         let expires = ProcessInfo.processInfo.systemUptime + 60
         let reply = execute(parsed)
         let encoded = try snapshotJSON(reply)
         if !reply.ok { return (encoded, { bytes, range in bytes.subdata(in: range) }) }
         guard let receipt = reply.state else { throw SnapshotError.stale }
         let store = try bridgeStore()
+        if reply.targetRecords != nil {
+            return (encoded, { bytes, range in
+                try store.files.locked {
+                    guard ProcessInfo.processInfo.systemUptime < expires,
+                          try store.files.read().revision == receipt.revision else { throw SnapshotError.stale }
+                    return bytes.subdata(in: range)
+                }
+            })
+        }
         if parsed.operation == "accountRecoveryResolve", parsed.recoveryResolution?.mode == "delete" {
             return (encoded, { bytes, range in
                 try store.files.locked {
@@ -266,7 +331,7 @@ private func executeTransfer(_ frame: SnapshotTransferFrame) throws -> SnapshotT
         let current = try store.state()
         guard current.revision == receipt.revision, let snapshot = current.snapshot,
               snapshot.header.id == receipt.snapshotID, snapshot.header.scope == scope else { throw SnapshotError.stale }
-        let lease = SnapshotLease(revision: receipt.revision, header: snapshot.header, expiresAt: expires, credentials: [], recoveryOnly: reply.recovery != nil)
+        let lease = SnapshotLease(revision: receipt.revision, header: snapshot.header, expiresAt: expires, credentials: [], recoveryOnly: reply.recovery != nil || reply.targetRecords != nil || parsed.operation == "accountRecoveryResolve")
         return (encoded, { bytes, range in
             try store.withCurrentLease(lease) { bytes.subdata(in: range) }
         })

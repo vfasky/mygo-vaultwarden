@@ -29,7 +29,9 @@ final class SnapshotFileLock {
 final class SnapshotFiles {
     let directory: URL
     private let stateURL: URL
-    init(directory: URL) throws {
+    let recoveryKeys: SnapshotKeyStore?
+    init(directory: URL, recoveryKeys: SnapshotKeyStore? = nil) throws {
+        self.recoveryKeys = recoveryKeys
         self.directory = directory
         self.stateURL = directory.appendingPathComponent("snapshot-v1.json")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true,
@@ -64,8 +66,12 @@ final class SnapshotFiles {
             }
         }
         do {
+            if let root = try JSONSerialization.jsonObject(with: data) as? [String: Any], let target = root["targetRecovery"] {
+                _ = try targetStrictObject(JSONSerialization.data(withJSONObject: target), keys: ["version", "sealed"])
+            }
             let state = try snapshotDecode(SnapshotState.self, from: data)
             try state.validate()
+            _ = try targetRecords(state)
             return state
         } catch { throw SnapshotError.corrupt }
     }
