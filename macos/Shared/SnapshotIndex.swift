@@ -40,16 +40,19 @@ enum SnapshotIndex {
             let state = try store.state()
             if let lease {
                 guard state.snapshot?.header.id == lease.header.id else { throw SnapshotError.stale }
-                token = lease.header.id
+                try store.withCurrentLease(lease) {}
+                token = state.indexToken
                 identities = lease.credentials.flatMap { credential in
                     // QuickType gives an identity, not proof of the requesting URL.
                     // Host/exact rules must use the list callback's actual services.
                     let domains = credential.uris.map { rules in rules.filter(\.quickEligible).compactMap(\.baseDomain) } ?? credential.hosts
                     return Set(domains).map { SnapshotIdentity(service: $0, username: credential.username,
-                                                            recordID: recordID(snapshotID: token, credentialID: credential.id)) }
+                                                            recordID: recordID(snapshotID: lease.header.id, credentialID: credential.id)) }
                 }
             } else {
-                guard state.snapshot == nil else { throw SnapshotError.stale }
+                if let snapshot = state.snapshot {
+                    guard try store.files.isTargetBlocked(state, scope: snapshot.header.scope) else { throw SnapshotError.stale }
+                }
                 token = state.indexToken
                 identities = []
             }
