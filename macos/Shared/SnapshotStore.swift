@@ -5,18 +5,21 @@ import LocalAuthentication
 
 final class SnapshotStore {
     let files: SnapshotFiles
-    private let keys: SnapshotKeyStore
+    let keys: SnapshotKeyStore
     private let clock: () -> TimeInterval
-    private let changed: () -> Void
+    let runtimeRecoveryAuthorizer: (RuntimeRecoveryAuthority) throws -> Void
+    let changed: () -> Void
     static let changeNotification = Notification.Name("yz.sh.mygo-vaultwarden.snapshotChanged")
 
     init(directory: URL, keys: SnapshotKeyStore,
          clock: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
-         changed: @escaping () -> Void = {}) throws {
-        files = try SnapshotFiles(directory: directory)
+         changed: @escaping () -> Void = {},
+         runtimeRecoveryAuthorizer: @escaping (RuntimeRecoveryAuthority) throws -> Void = authorizeRuntimeRecovery) throws {
+        files = try SnapshotFiles(directory: directory, recoveryKeys: keys)
         self.keys = keys
         self.clock = clock
         self.changed = changed
+        self.runtimeRecoveryAuthorizer = runtimeRecoveryAuthorizer
     }
     static func sharedContainer() throws -> SnapshotStore {
         let config = try SnapshotConfiguration.current()
@@ -30,7 +33,7 @@ final class SnapshotStore {
     // A new AES key is used for every replacement.
     func publish(_ credentials: [VaultCredential], scope: SnapshotScope, expected: String,
                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil,
-                 priorUnlockKey: Data? = nil, includeVault: Bool = false, restoringOrganization: String? = nil, clearingPolicy: PendingPolicyMutation? = nil) throws -> SnapshotLease {
+                 priorUnlockKey: Data? = nil, includeVault: Bool = false, restoringOrganization: String? = nil, clearingPolicy: PendingPolicyMutation? = nil, targetResolution: TargetRecoveryResolution? = nil, priorSnapshotKey: Data? = nil) throws -> SnapshotLease {
         try validateCredentials(credentials)
         try validateSessionData(session)
         try vault?.validate(scope: scope)
@@ -43,16 +46,21 @@ final class SnapshotStore {
         return try files.locked {
             var prior = try files.read()
             guard prior.revision == expected else { throw SnapshotError.stale }
-            guard prior.snapshot?.header.format != 2 else { throw SnapshotError.busy }
-            if let existing = prior.snapshot, existing.header.scope != scope { throw SnapshotError.wrongScope }
+            var targetState = prior
             var vault = vault
+            try files.prepareTargetPublication(&targetState, scope: scope, vault: &vault, session: session, material: passwordUnlock, resolution: targetResolution)
+            if prior.snapshot?.header.format == 2 {
+                if targetResolution != nil { throw SnapshotError.accountRecoveryRequired }
+                throw SnapshotError.busy
+            }
+            if let existing = prior.snapshot, existing.header.scope != scope { throw SnapshotError.wrongScope }
             if clearingPolicy != nil && prior.snapshot?.passwordUnlock == nil { throw SnapshotError.invalidInput }
             if let existing = prior.snapshot {
                 // Authenticated prior isolation cannot be erased by an ordinary sync.
                 // Legacy callers without password material may not replace a protected vault.
                 if existing.passwordUnlock != nil {
                     guard let material = passwordUnlock else { throw SnapshotError.invalidInput }
-                    var oldKey = try unwrapSnapshotKey(existing, unlockKey: priorUnlockKey ?? material.key)
+                    var oldKey = try priorSnapshotKey ?? unwrapSnapshotKey(existing, unlockKey: priorUnlockKey ?? material.key)
                     defer { oldKey.resetBytes(in: 0..<oldKey.count) }
                     let old = try openSnapshotPayload(existing, key: oldKey, scope: scope)
                     if let clearingPolicy {
@@ -102,21 +110,27 @@ final class SnapshotStore {
             journal.revision = UUID().uuidString
             journal.retiredKeys.append(keyID)
             try files.write(journal)
+            var attemptedCommit = false
             do {
                 try keys.create(id: keyID, key: key)
                 let snapshot = try sealSnapshot(credentials: credentials, scope: scope, keyID: keyID, key: key, passwordUnlock: passwordUnlock, session: session, vault: vault)
                 var next = journal
+                next.targetRecovery = targetState.targetRecovery
+                next.format = targetState.format
                 next.snapshot = snapshot
                 next.signedOut = false
                 next.retiredKeys.removeAll { $0 == keyID }
                 if let oldID = prior.snapshot?.header.keyID { next.retiredKeys.append(oldID) }
+                attemptedCommit = true
                 try files.write(next)
                 // Key cleanup failure does not hide a committed replacement.
                 try? cleanupLocked(&next)
                 return SnapshotLease(revision: next.revision, header: snapshot.header,
                                      expiresAt: clock() + 60, credentials: credentials, vault: includeVault ? vault : nil)
             } catch {
-                try? cleanupLocked(&journal)
+                // A post-rename fsync error may already have committed next.
+                // Never retire its live key using the pre-commit journal.
+                if !attemptedCommit { try? cleanupLocked(&journal) }
                 throw error
             }
         }
@@ -132,6 +146,7 @@ final class SnapshotStore {
             guard state.revision == expected else { throw SnapshotError.stale }
             guard let snapshot = state.snapshot, !state.signedOut else { throw SnapshotError.unavailable }
             guard snapshot.header.scope == scope else { throw SnapshotError.wrongScope }
+            try files.requireTargetAccess(state, scope: scope)
             var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
             defer { key.resetBytes(in: 0..<key.count) }
             let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
@@ -163,6 +178,7 @@ final class SnapshotStore {
         let before = try state()
         guard let encrypted = before.snapshot, !before.signedOut else { throw SnapshotError.unavailable }
         guard encrypted.header.scope == scope else { throw SnapshotError.wrongScope }
+        try files.requireTargetAccess(before, scope: scope)
         // Never hold the file lock while an authentication dialog is on screen.
         var key = try keys.read(id: encrypted.header.keyID, context: context, allowUI: allowUI)
         defer { key.resetBytes(in: 0..<key.count) }
@@ -182,6 +198,7 @@ final class SnapshotStore {
         guard before.revision == expected else { throw SnapshotError.stale }
         guard let encrypted = before.snapshot, !before.signedOut else { throw SnapshotError.unavailable }
         guard encrypted.header.scope == scope else { throw SnapshotError.wrongScope }
+        try files.requireTargetAccess(before, scope: scope)
         var key = try unwrapSnapshotKey(encrypted, unlockKey: unlockKey)
         defer { key.resetBytes(in: 0..<key.count) }
         let payload = try openSnapshotPayload(encrypted, key: key, scope: scope)
@@ -202,6 +219,7 @@ final class SnapshotStore {
             guard state.revision == expected else { throw SnapshotError.stale }
             guard let snapshot = state.snapshot, !state.signedOut else { throw SnapshotError.unavailable }
             guard snapshot.header.scope == scope else { throw SnapshotError.wrongScope }
+            try files.requireTargetAccess(state, scope: scope)
             var key = try unwrapSnapshotKey(snapshot, unlockKey: unlockKey)
             defer { key.resetBytes(in: 0..<key.count) }
             let payload = try openSnapshotPayload(snapshot, key: key, scope: scope)
@@ -218,6 +236,7 @@ final class SnapshotStore {
     func withCurrentLease<T>(_ lease: SnapshotLease, _ body: () throws -> T) throws -> T {
         try files.locked {
             let current = try files.read()
+            if !lease.recoveryOnly { try files.requireTargetAccess(current, scope: lease.header.scope) }
             guard current.revision == lease.revision, !current.signedOut,
                   current.snapshot?.header.id == lease.header.id,
                   current.snapshot?.header.scope == lease.header.scope else { throw SnapshotError.stale }
@@ -245,6 +264,9 @@ final class SnapshotStore {
             var state = try files.read()
             guard state.revision == expected else { throw SnapshotError.stale }
             guard state.snapshot?.header.format != 2 else { throw SnapshotError.busy }
+            if let scope = state.snapshot?.header.scope {
+                guard try !files.targetRecords(state).contains(where: { $0.requireTargetLogin && $0.binding.target == scope && $0.phase != "resolved" && $0.protection == nil }) else { throw SnapshotError.busy }
+            }
             if let keyID = state.snapshot?.header.keyID { state.retiredKeys.append(keyID) }
             state.snapshot = nil
             state.signedOut = true
@@ -397,8 +419,10 @@ final class SnapshotStore {
             }
             try files.write(state)
             if journal == nil { try? cleanupLocked(&state) }
+            let targetBlocked = try files.isTargetBlocked(state, scope: scope)
             return (SnapshotLease(revision: state.revision, header: replacement.header, expiresAt: clock() + 60,
-                credentials: nextCredentials, vault: journal == nil ? nextVault : nil, recoveryOnly: journal != nil), journal)
+                credentials: targetBlocked ? [] : nextCredentials, vault: journal == nil ? nextVault : nil,
+                recoveryOnly: journal != nil || targetBlocked), journal)
         }
     }
 

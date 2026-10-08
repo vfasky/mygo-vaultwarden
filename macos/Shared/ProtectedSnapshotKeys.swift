@@ -7,6 +7,7 @@ protocol SnapshotKeyStore {
     func create(id: String, key: Data) throws
     func read(id: String, context: LAContext, allowUI: Bool) throws -> Data
     func delete(id: String) throws
+    func recoveryKey(create: Bool) throws -> Data
 }
 
 final class ProtectedSnapshotKeys: SnapshotKeyStore {
@@ -56,6 +57,31 @@ final class ProtectedSnapshotKeys: SnapshotKeyStore {
         case errSecItemNotFound: throw SnapshotError.unavailable
         default: throw SnapshotError.keychain(status)
         }
+    }
+    // Separate metadata service, with no vault wrapping capability. Survives
+    // logout to retain unresolved target barriers; never used by snapshot reads.
+    func recoveryKey(create: Bool) throws -> Data {
+        var request = query(targetRecoveryKeyID)
+        request[kSecAttrService as String] = "yz.sh.mygo-vaultwarden.target-recovery-v1"
+        if create {
+            var attributes = request
+            attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            var key = Data(count: 32)
+            guard key.withUnsafeMutableBytes({ SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }) == errSecSuccess else { throw SnapshotError.configuration }
+            defer { key.resetBytes(in: 0..<key.count) }
+            attributes[kSecValueData as String] = key
+            let result = SecItemAdd(attributes as CFDictionary, nil)
+            guard result == errSecSuccess || result == errSecDuplicateItem else { throw SnapshotError.keychain(result) }
+        }
+        request[kSecReturnData as String] = true
+        request[kSecMatchLimit as String] = kSecMatchLimitOne
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        request[kSecUseAuthenticationContext as String] = context
+        var value: CFTypeRef?
+        let result = SecItemCopyMatching(request as CFDictionary, &value)
+        guard result == errSecSuccess, let data = value as? Data, data.count == 32 else { throw SnapshotError.keychain(result) }
+        return data
     }
     func delete(id: String) throws {
         let context = LAContext()

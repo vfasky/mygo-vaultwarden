@@ -12,6 +12,13 @@ private final class BridgeMemoryKeys: SnapshotKeyStore {
         guard allowUI, let key = values[id] else { throw SnapshotError.authenticationRequired }
         return key
     }
+    func recoveryKey(create: Bool) throws -> Data {
+        if let key = values[targetRecoveryKeyID] { return key }
+        guard create else { throw SnapshotError.unavailable }
+        let key = Data(repeating: 93, count: 32) // isolated deterministic metadata-only fixture
+        values[targetRecoveryKeyID] = key
+        return key
+    }
     func delete(id: String) throws { values[id] = nil }
 }
 private let bridgeKeys = BridgeMemoryKeys()

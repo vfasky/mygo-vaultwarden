@@ -138,11 +138,13 @@ struct SnapshotState: Codable {
     var retiredKeys: [String] = []
     var indexedToken: String?
     var signedOut = true
-    var indexToken: String { snapshot?.header.id ?? revision }
+    var targetRecovery: TargetRecoveryEnvelope? = nil
+    var indexToken: String { format == 2 ? revision : (snapshot?.header.id ?? revision) }
     var indexPending: Bool { indexedToken != indexToken }
 
     func validate() throws {
-        guard format == 1, !revision.isEmpty, retiredKeys.count < 512,
+        guard (format == 1 && targetRecovery == nil) || (format == 2 && targetRecovery?.version == 1) else { throw SnapshotError.corrupt }
+        guard !revision.isEmpty, retiredKeys.count < 512,
               Set(retiredKeys).count == retiredKeys.count else { throw SnapshotError.corrupt }
         if snapshot == nil && !signedOut { throw SnapshotError.corrupt }
         if let snapshot {
@@ -173,11 +175,13 @@ struct SnapshotLease {
 }
 
 enum SnapshotError: Error, Equatable {
+    case accountRecoveryRequired
     case unavailable, corrupt, stale, expired, wrongScope, busy, invalidInput
     case keychain(Int32), authenticationRequired, cancelled, configuration, invalidPassword, passwordUnlockUnavailable
 
     var code: String {
         switch self {
+        case .accountRecoveryRequired: return "account_recovery_pending"
         case .unavailable: return "no_snapshot"
         case .corrupt: return "corrupt_snapshot"
         case .stale: return "stale_revision"
@@ -195,6 +199,7 @@ enum SnapshotError: Error, Equatable {
     }
     var message: String {
         switch self {
+        case .accountRecoveryRequired: return "此目标仍有账号轮换恢复记录，请先完成专用账号恢复核验。"
         case .unavailable: return "没有可用快照，请先在主应用登录并同步密码库。"
         case .corrupt: return "快照损坏或格式不受支持，已拒绝解密。"
         case .stale: return "数据已被锁定、更新或撤销，请刷新后重试。"
