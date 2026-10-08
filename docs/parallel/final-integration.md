@@ -36,5 +36,10 @@
 - `MYGO_VERIFIED_ROTATION_TEST=1 ... -run '^TestLiveVerifiedRotationEvidence$' -race` 自有固定1.37.4回环通过：非空个人cipher/folder、文本和文件Send、EA、普通成员组织恢复。正常与丢最终响应两例完整见证通过；EA/recovery/cipher阶段真实故障均无最终见证、不可解除。每例恰好一个rotation POST。fixture另以自有grantee/admin独立核对隐藏wrapper；生产没有要求其它用户发起紧急访问。容器 `88b4c900...72f48` 精确label清理，后续ps/docker核对无残留。
 - 经协调者批准，认证journal的 `not-dispatched` 独立分支使用精确未进入敏感transport证据+全新认证原key+完整当前资源核验，允许其它客户端合法增改删，明确标为外部当前变化；不恢复OldSession，不把hidden wrapper称为读回核验。prepared/缺Result/HTTP失败/unknown/空phase不可借此放行。新增自有1.37.4 `... -run '^TestLiveVerifiedRotationEvidence$/not-dispatched' -race` 通过，rotation POST=0，原Session关闭后新登录增改删仍可核验，prepared/unknown/空phase拒绝。容器 `59fd8af3...3c70` 已由fixture精确清理。
 
-仍待完成：组织业务及组织完整资源表单的主controller续接、紧急/管理员恢复与#38目标验证主流程、完整最终导航/矩阵、最终Go/Swift/Xcode/实际bridge/CLI/许可证/大库评估。尚无实际签名安装、Keychain、系统剪贴板、AutoFill、SSO/Duo/WebAuthn系统窗口实测声明。
+## 组织业务主controller检查点
 
+设置页已接组织业务：批量状态、复制/完整资源、集合分配、MyGo/官方JSON/资源导入导出、组织/成员/条目事件、API key和Public目录导入。组件worker计数与锁定/导航取消接主生命周期；组织隔离回执在UI dispatcher采用，不在Session回调中重入。完整资源显式正常Sync后只由认证发布回执推进原continuation，提供重新打开文件仅继续附件恢复；host前置拒绝不伪装为已提交，未知提交不自动重放。
+
+新增 `TestOrgControllerRoutesRealComponentsAndCancelsStaleWorker` 与 `TestOrgControllerResourceContinuationAdoptsOnlyNormalPublication`，使用实际Session/HTTP fixture与排队dispatcher，定向race通过：入口连接、worker取消/计数、正常认证续接、发布失败不采用、Sync零mutation重放。仍不是实服务器组织全流程或真实Keychain证明。
+
+仍待完成：紧急/管理员恢复与#38目标验证主流程、完整最终导航/矩阵、最终Go/Swift/Xcode/实际bridge/CLI/许可证/大库评估。typed目标恢复见证与核验正在后续工作中，未借此检查点声明主流程完成。尚无实际签名安装、Keychain、系统剪贴板、AutoFill、SSO/Duo/WebAuthn系统窗口实测声明。

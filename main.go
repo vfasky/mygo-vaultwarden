@@ -41,6 +41,7 @@ type app struct {
 	componentLease                            *controllerLease
 	sendPanel                                 *SendPanel
 	devicePanel                               *DevicePanel
+	orgServices                               *orgServicesController
 	accountForm                               *accountForm
 	recoveryForm                              *accountRecoveryForm
 	authManagement                            *authManagementForm

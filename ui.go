@@ -55,6 +55,9 @@ var vaultCategories = []vaultCategory{
 }
 
 func (a *app) currentCategory() vaultCategory {
+	if a.category == "org-services" {
+		return vaultCategory{"org-services", "组织业务", "vault", true}
+	}
 	if a.category == "mfa" {
 		return vaultCategory{"mfa", "两步验证设置", "shield", true}
 	}
@@ -178,6 +181,9 @@ func (a *app) unlocked() bool {
 }
 
 func (a *app) view(c *ui.Context) {
+	if a.orgServices != nil && (a.category != "org-services" || a.showSettings) {
+		a.advanceEpoch()
+	}
 	if runtime := a.runtimeVault; runtime != nil {
 		if err := runtime.sourceCheck(runtime.source, *a.liveScope); err != nil {
 			a.stopNetwork()
@@ -217,6 +223,19 @@ func (a *app) view(c *ui.Context) {
 }
 
 func (a *app) body(c *ui.Context) {
+	if a.category == "org-services" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.orgServices != nil {
+				a.orgServices.View(c)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开组织业务").Disabled(a.pending != 0).Clicked() {
+					a.openOrgServices()
+				}
+			}
+		})
+		return
+	}
 	if a.category == "mfa" && !a.showSettings {
 		ui.Scroll(c).Grow(1).Children(func() {
 			if a.authManagement != nil {
@@ -841,6 +860,9 @@ func (a *app) settings(c *ui.Context) {
 					})
 				}
 				ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
+					if action(c, "组织条目、资源与审计", "vault", false, !ready).Clicked() {
+						a.openOrgServices()
+					}
 					if action(c, "Send", "send", false, !ready).Clicked() {
 						a.openSend()
 					}

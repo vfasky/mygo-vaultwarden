@@ -7,6 +7,10 @@ import (
 )
 
 func (a *app) closeConnectedPanels() {
+	if a.orgServices != nil {
+		a.orgServices.Close()
+		a.orgServices = nil
+	}
 	if a.recoveryForm != nil {
 		a.recoveryForm.Close()
 		a.recoveryForm = nil
