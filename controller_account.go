@@ -10,8 +10,8 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-func (a *app) openAccount()      { a.openAccountWith(a.window.Update, callStorage, false) }
-func (a *app) openRegistration() { a.openAccountWith(a.window.Update, callStorage, true) }
+func (a *app) openAccount()      { a.openAccountWith(a.dispatchUI, a.storageCall, false) }
+func (a *app) openRegistration() { a.openAccountWith(a.dispatchUI, a.storageCall, true) }
 func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest) storageReply, registration bool) {
 	if a.pending != 0 {
 		return
@@ -75,6 +75,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 			r.Close()
 			return
 		}
+		a.pending++
 		go func() {
 			defer r.Close()
 			opctx, done := context.WithTimeout(ctx, 5*time.Minute)
@@ -163,6 +164,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 				state = reply.State
 			}
 			dispatch(func() {
+				a.componentBusy(false)
 				if a.epoch != epoch || a.accountForm != f {
 					plan.Close()
 					return

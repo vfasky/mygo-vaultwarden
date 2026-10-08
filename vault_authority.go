@@ -9,10 +9,49 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
+func (a *app) storageCall(request storageRequest) storageReply {
+	if a.storageBackend != nil {
+		return a.storageBackend(request)
+	}
+	return callStorage(request)
+}
+
+func mergeRuntimeProtection(vault, protection *vaultwarden.VaultData) error {
+	if vault == nil {
+		return vaultwarden.ErrIdentity
+	}
+	if protection == nil {
+		return nil
+	}
+	if vault.Scope != protection.Scope {
+		return vaultwarden.ErrIdentity
+	}
+	for _, record := range protection.PendingPolicyMutations {
+		if !vault.HasPendingPolicy(record) {
+			vault.PendingPolicyMutations = append(vault.PendingPolicyMutations, record)
+		}
+	}
+	for _, id := range protection.QuarantinedOrganizations {
+		found := false
+		for _, old := range vault.QuarantinedOrganizations {
+			if old == id {
+				found = true
+			}
+		}
+		if !found {
+			vault.QuarantinedOrganizations = append(vault.QuarantinedOrganizations, id)
+		}
+	}
+	if len(vault.PendingPolicyMutations) > 0 {
+		vault.Version = 2
+	}
+	return nil
+}
+
 // vaultStorage captures a backend and operation generation on the UI thread.
 // Persistent and runtime revisions never travel to the other backend.
 func (a *app) vaultStorage() func(storageRequest) storageReply {
-	return a.routeStorage(callStorage, a.epoch)
+	return a.routeStorage(a.storageCall, a.epoch)
 }
 func (a *app) routeStorage(fallback func(storageRequest) storageReply, epoch uint64) func(storageRequest) storageReply {
 	if a.runtimeVault == nil {

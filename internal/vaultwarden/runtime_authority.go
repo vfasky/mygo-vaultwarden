@@ -61,6 +61,9 @@ func (s *Session) AcceptRuntimeSnapshot(vault *VaultData) (*RuntimeAuthority, er
 func (s *Session) AcceptRuntimeSnapshotWithProtection(vault, local *VaultData) (*RuntimeAuthority, *VaultData, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.acceptRuntimeSnapshotWithProtectionLocked(vault, local)
+}
+func (s *Session) acceptRuntimeSnapshotWithProtectionLocked(vault, local *VaultData) (*RuntimeAuthority, *VaultData, error) {
 	if !s.runtimeOnly || !s.itemSessionActiveLocked() || !time.Now().Before(s.expires) {
 		return nil, nil, ErrExpired
 	}
@@ -115,6 +118,22 @@ func (s *Session) AcceptRuntimeSnapshotWithProtection(vault, local *VaultData) (
 	r := &RuntimeAuthority{session: s, scope: vault.Scope, revision: revision, digest: digest, epoch: s.authorizationEpoch, expires: s.expires}
 	s.runtimeCurrent.Store(r)
 	return r, &accepted, nil
+}
+
+// Restrict adds authenticated local restrictions to an existing provisional
+// runtime capability. It cannot remove policy/quarantine or accept other data.
+func (r *RuntimeAuthority) Restrict(vault, local *VaultData) (*RuntimeAuthority, *VaultData, error) {
+	if r == nil {
+		return nil, nil, ErrExpired
+	}
+	s := r.session
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := r.checkLocked(vault); err != nil {
+		return nil, nil, err
+	}
+	s.runtimeSyncDigest = r.digest
+	return s.acceptRuntimeSnapshotWithProtectionLocked(vault, local)
 }
 
 func (s *Session) advanceAuthorizationLocked() {

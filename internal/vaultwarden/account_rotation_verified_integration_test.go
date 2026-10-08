@@ -25,7 +25,7 @@ func TestLiveVerifiedRotationEvidence(t *testing.T) {
 	defer cancel()
 	base, dir, _ := recoveryLiveFixture(t, ctx)
 	password := []byte("Public-member-fixture-password!")
-	for _, mode := range []string{"success", "lost-response", "ea-failure", "recovery-failure", "cipher-failure"} {
+	for _, mode := range []string{"success", "lost-response", "ea-failure", "recovery-failure", "cipher-failure", "not-dispatched"} {
 		t.Run(mode, func(t *testing.T) {
 			syncVault := func(s *Session) *VaultData {
 				r, e := s.Sync(ctx)
@@ -210,15 +210,32 @@ func TestLiveVerifiedRotationEvidence(t *testing.T) {
 				}
 				return response, e
 			})
-			result, e := actor.CommitAccountChange(ctx, plan, plan.ConfirmationText(), nil, func(record AccountRecovery) error { saved, _ = json.Marshal(record); return nil })
+			commitCtx, stopCommit := context.WithCancel(ctx)
+			result, e := actor.CommitAccountChange(commitCtx, plan, plan.ConfirmationText(), nil, func(record AccountRecovery) error {
+				saved, _ = json.Marshal(record)
+				if mode == "not-dispatched" {
+					stopCommit()
+				}
+				return nil
+			})
+			stopCommit()
 			api.http.Transport = underlying
-			if posts.Load() != 1 || len(saved) == 0 {
+			wantPosts := int32(1)
+			if mode == "not-dispatched" {
+				wantPosts = 0
+			}
+			if posts.Load() != wantPosts || len(saved) == 0 {
 				t.Fatal("dispatch/recovery binding")
 			}
 			if mode == "success" {
 				if e != nil || !result.Confirmed {
 					t.Fatal("success", e)
 				}
+			} else if mode == "not-dispatched" {
+				if e == nil || result.Dispatched || result.Unknown || result.OperationID == "" {
+					t.Fatal("non-dispatch not proven", e)
+				}
+				actor.Close()
 			} else if e == nil || !result.Unknown {
 				t.Fatal("unknown lost", e)
 			}
@@ -236,12 +253,70 @@ func TestLiveVerifiedRotationEvidence(t *testing.T) {
 			if result.Confirmed {
 				phase = "confirmed"
 			}
+			if mode == "not-dispatched" {
+				phase = "not-dispatched"
+				current := syncVault(logged.Session)
+				entries, err := logged.Session.PersonalEntries(current)
+				if err != nil || len(entries) != 1 {
+					t.Fatal("original inventory", err)
+				}
+				doc, fields, err := logged.Session.ReadPersonalCipher(current, entries[0].ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				fields.Name = "another client edited this"
+				if _, err = logged.Session.UpdatePersonalCipher(ctx, current.Scope, doc, fields, nil); err != nil {
+					t.Fatal(err)
+				}
+				current = syncVault(logged.Session)
+				if _, err = logged.Session.CreatePersonalCipher(ctx, current.Scope, CipherFields{Type: 2, Name: "another client added this", SecureNote: map[string]any{"type": 0}}, nil); err != nil {
+					t.Fatal(err)
+				}
+				current = syncVault(logged.Session)
+				doc, _, err = logged.Session.ReadPersonalCipher(current, entries[0].ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = logged.Session.ChangePersonalCipherStateAuthorized(ctx, current.Scope, doc, CipherTrash, nil, nil); err != nil {
+					t.Fatal(err)
+				}
+				current = syncVault(logged.Session)
+				doc, _, err = logged.Session.ReadPersonalCipher(current, entries[0].ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = logged.Session.ChangePersonalCipherStateAuthorized(ctx, current.Scope, doc, CipherDeletePermanently, nil, nil); err != nil {
+					t.Fatal(err)
+				}
+				current = syncVault(logged.Session)
+				folders, err := logged.Session.PersonalFolders(current)
+				if err != nil || len(folders) != 1 {
+					t.Fatal("folder inventory", err)
+				}
+				if _, err = logged.Session.SaveFolder(ctx, current.Scope, folders[0].ID, "another client folder name", nil); err != nil {
+					t.Fatal(err)
+				}
+			}
 			fresh, proof, e := logged.Session.SyncVerifiedAccountRecovery(ctx, record, phase, nil)
 			defer clear(fresh.Session)
 			if fresh.PasswordUnlock != nil {
 				defer clear(fresh.PasswordUnlock.Key)
 			}
-			if mode == "success" || mode == "lost-response" {
+			if mode == "not-dispatched" {
+				if e != nil || !proof.Ready || proof.Kind != RecoveryEvidenceNoDispatch || len(proof.ExternalCurrentChanges) < 2 {
+					t.Fatal("current external changes trapped no-dispatch recovery", e, proof.Issues)
+				}
+				for _, unproven := range []string{"prepared", "unknown", ""} {
+					r, p, err := logged.Session.SyncVerifiedAccountRecovery(ctx, record, unproven, nil)
+					clear(r.Session)
+					if r.PasswordUnlock != nil {
+						clear(r.PasswordUnlock.Key)
+					}
+					if err == nil || p.Ready {
+						t.Fatal("unproven phase borrowed nondispatch", unproven)
+					}
+				}
+			} else if mode == "success" || mode == "lost-response" {
 				if e != nil || !proof.Ready || len(proof.ResourceEvidence) != 2 || proof.SendResources.BinaryContentVerified {
 					t.Fatal("missing/overstated proof", e, proof.Issues)
 				}
@@ -286,7 +361,7 @@ func TestLiveVerifiedRotationEvidence(t *testing.T) {
 					t.Fatal("partial stage had final witness", status, e)
 				}
 			}
-			t.Log("single POST; authenticated journal retained; proof outcome", mode, proof.Ready)
+			t.Log("rotation POST count; journal retained; proof outcome", posts.Load(), mode, proof.Ready)
 		})
 	}
 }

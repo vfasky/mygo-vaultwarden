@@ -64,8 +64,11 @@ func (a *app) syncFailed(reply storageReply, err error) {
 }
 
 func (a *app) stopNetwork() {
+	a.runtimeReplaceConfirmed = false
+	a.switchReceipt = nil
 	// Invalidate worker leases before native cleanup or any Session close.
 	a.advanceEpoch()
+	a.closeDeviceLogin()
 	if a.notifications != nil {
 		a.notifications.close()
 		a.notifications = nil
@@ -108,7 +111,7 @@ func (a *app) stopNetwork() {
 }
 
 func (a *app) syncVault(login bool) {
-	a.syncVaultWith(login, a.window.Update, callStorage)
+	a.syncVaultWith(login, a.dispatchUI, a.storageCall)
 }
 
 func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(storageRequest) storageReply) {

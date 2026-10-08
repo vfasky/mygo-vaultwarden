@@ -57,7 +57,7 @@ func authenticationSummary(raw json.RawMessage) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 func (a *app) openAuthenticationManagement() {
-	a.openAuthenticationManagementWith(a.window.Update, callStorage)
+	a.openAuthenticationManagementWith(a.dispatchUI, a.storageCall)
 }
 func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage func(storageRequest) storageReply) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
@@ -80,6 +80,7 @@ func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage fu
 	f := newAuthManagementForm(scope, epoch, nil)
 	complete := a.componentDispatch(session, lease, epoch, dispatch)
 	f.submit = func(r authManagementRequest) {
+		a.pending++
 		go func() {
 			defer r.Close()
 			opctx, done := context.WithTimeout(ctx, 5*time.Minute)
@@ -140,6 +141,7 @@ func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage fu
 			}
 			clear(raw)
 			complete(func() {
+				a.componentBusy(false)
 				if a.epoch == epoch && a.authManagement == f {
 					f.complete(scope, epoch, r.Sequence, summary, err)
 				}

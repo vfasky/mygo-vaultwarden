@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"sync/atomic"
+	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -18,6 +19,8 @@ type app struct {
 	listState                                 ui.ListState
 	selectedRow                               int
 	window                                    *mygo.Window
+	uiDispatcher                              func(func())                      // immutable after controller construction
+	storageBackend                            func(storageRequest) storageReply // immutable after construction
 	serverURL, email, query, status, deviceID string
 	snapshot                                  *snapshotStatus
 	items                                     []displayCredential
@@ -44,6 +47,14 @@ type app struct {
 	componentCancel                           context.CancelFunc
 	runtimeVault                              *runtimeVault
 	diskSnapshot                              *snapshotStatus
+	deviceLoginPanel                          *DeviceLoginPanel
+	deviceLifecycle                           *deviceLoginLifecycle
+	deviceFlow                                *vaultwarden.DeviceLogin
+	runtimeExpiry                             *time.Timer
+	deviceAccountID                           string
+	deviceLoginSetup                          bool
+	runtimeReplaceConfirmed                   bool
+	switchReceipt                             *accountSwitchReceipt
 	mfaLogin                                  *controllerMFA
 	mfaWarnings                               mfaRecoveryWarnings
 	loginSSO                                  bool
@@ -69,6 +80,9 @@ func (a *app) lockInterface() {
 
 func (a *app) runStorage(operation string) {
 	if runtime := a.runtimeVault; runtime != nil {
+		if operation == "logout" {
+			operation = "lock"
+		}
 		if operation == "status" {
 			epoch := a.epoch + 1
 			request := storageRequest{Operation: "status"}
@@ -90,19 +104,27 @@ func (a *app) runStorage(operation string) {
 		a.clearLoginInputs()
 	}
 	request := storageRequest{Operation: operation}
+	if operation == "confirmAccountSwitch" {
+		if a.switchReceipt == nil {
+			a.status = "请先系统认证检查这次账号切换。"
+			return
+		}
+		request.SwitchOperationID = a.switchReceipt.Binding.OperationID
+	}
 	if a.snapshot != nil {
 		request.ExpectedRevision = a.snapshot.Revision
 		request.Scope = a.snapshot.Scope
 	}
+	storage := a.storageCall
 	a.startStorage(request, func() storageReply {
 		if operation == "logout" {
 			// An unconditional lock is the cancellation barrier for pending logins.
-			locked := callStorage(storageRequest{Operation: "lock"})
+			locked := storage(storageRequest{Operation: "lock"})
 			if locked.State != nil {
 				request.ExpectedRevision = locked.State.Revision
 			}
 		}
-		return callStorage(request)
+		return storage(request)
 	})
 }
 
@@ -115,7 +137,7 @@ func (a *app) startStorage(request storageRequest, work func() storageReply) {
 	}
 	go func() {
 		reply := work()
-		a.window.Update(func() { a.completeStorage(request, epoch, reply) })
+		a.dispatchUI(func() { a.completeStorage(request, epoch, reply) })
 	}()
 }
 
@@ -157,6 +179,33 @@ func (a *app) completeStorage(request storageRequest, epoch uint64, reply storag
 		return
 	}
 	switch request.Operation {
+	case "inspectAccountSwitch":
+		if reply.AccountSwitch == nil || reply.State == nil || reply.State.Scope == nil || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID || reply.AccountSwitch.Binding.Target != *reply.State.Scope {
+			a.status = vaultwarden.ErrIdentity.Error()
+			return
+		}
+		a.switchReceipt = reply.AccountSwitch
+		a.status = "已认证这次本机账号切换；请核对原账号与新账号后确认。"
+	case "confirmAccountSwitch":
+		if reply.AccountSwitch == nil || reply.AccountSwitch.Phase != "confirmed" || reply.AccountSwitch.Binding.OperationID != request.SwitchOperationID || reply.State == nil || reply.State.AccountSwitchPending || reply.State.Scope == nil || reply.AccountSwitch.Binding.Target != *reply.State.Scope || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID {
+			a.status = vaultwarden.ErrIdentity.Error()
+			return
+		}
+		a.switchReceipt = nil
+		if reply.Vault == nil || len(reply.Session) == 0 {
+			a.status = reply.Message
+			return
+		}
+		if a.restoreUnlockedSession(reply) {
+			if err := a.adoptVault(reply.Vault); err != nil {
+				a.stopNetwork()
+				a.status = err.Error()
+				return
+			}
+			a.itemsRevision = reply.State.Revision
+			a.showLogin, a.showSettings = false, false
+			a.startNotifications(a.dispatchUI, a.storageCall)
+		}
 	case "lock":
 		a.status = "已锁定，请输入主密码或使用 Touch ID 解锁。"
 	case "logout":

@@ -21,7 +21,7 @@ func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerL
 		})
 	}
 }
-func (a *app) openDevices() { a.openDevicesWith(a.window.Update, callStorage) }
+func (a *app) openDevices() { a.openDevicesWith(a.dispatchUI, a.storageCall) }
 func (a *app) openDevicesWith(dispatch func(func()), storage func(storageRequest) storageReply) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
@@ -36,7 +36,7 @@ func (a *app) openDevicesWith(dispatch func(func()), storage func(storageRequest
 	if lease == nil {
 		return
 	}
-	host := DeviceHost{Dispatch: a.componentDispatch(session, lease, a.epoch, dispatch),
+	host := DeviceHost{Busy: a.componentBusy, Dispatch: a.componentDispatch(session, lease, a.epoch, dispatch),
 		Check: func() error { return lease.check(storage) }, Checkpoint: func(cp vaultwarden.SessionCheckpoint) error { return lease.persist(cp, storage) },
 		Changed: func() { a.syncVaultWith(false, dispatch, storage) }}
 	a.devicePanel = NewDevicePanel(session, a.vault, host)

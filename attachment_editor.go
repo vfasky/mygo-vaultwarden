@@ -202,7 +202,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				err = session.DeleteAttachment(ctx, vault, id, attachment.ID, grant, persist)
 			}
 		}
-		a.window.Update(func() {
+		a.dispatchUI(func() {
 			a.pending--
 			defer cancel()
 			defer stage.Close()

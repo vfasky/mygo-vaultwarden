@@ -17,6 +17,7 @@ import (
 // Close must run on UI thread before revoking that lease. Changed schedules a
 // safe full sync; it must not publish a stale worker result.
 type DeviceHost struct {
+	Busy       func(bool) // UI-thread worker accounting, including late completion
 	Dispatch   func(func())
 	Check      func() error
 	Checkpoint func(vaultwarden.SessionCheckpoint) error
@@ -65,6 +66,9 @@ func (p *DevicePanel) run(work func(context.Context) error, done func()) {
 		return
 	}
 	p.busy = true
+	if p.host.Busy != nil {
+		p.host.Busy(true)
+	}
 	generation := p.generation
 	go func() {
 		err := p.host.Check()
@@ -72,6 +76,9 @@ func (p *DevicePanel) run(work func(context.Context) error, done func()) {
 			err = work(p.ctx)
 		}
 		p.host.Dispatch(func() {
+			if p.host.Busy != nil {
+				p.host.Busy(false)
+			}
 			if p.closed || p.generation != generation {
 				return
 			}

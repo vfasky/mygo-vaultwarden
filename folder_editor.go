@@ -136,7 +136,7 @@ func (a *app) mutateFolder(remove bool) {
 		} else {
 			_, err = session.SaveFolder(ctx, scope, e.id, e.name, persist)
 		}
-		a.window.Update(func() { a.completeFolderMutation(epoch, e, checkpoint, reply, err, cancel) })
+		a.dispatchUI(func() { a.completeFolderMutation(epoch, e, checkpoint, reply, err, cancel) })
 	}()
 }
 

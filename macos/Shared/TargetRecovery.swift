@@ -149,12 +149,13 @@ extension SnapshotFiles {
         var key = try recoveryKeys.recoveryKey(create: state.targetRecovery == nil)
         defer { key.resetBytes(in: 0..<key.count) }
         state.targetRecovery = TargetRecoveryEnvelope(version: 1, sealed: try AES.GCM.seal(data, using: SymmetricKey(data: key), authenticating: targetAAD).combined!)
-        state.format = 2
+        state.format = state.accountSwitch == nil ? 2 : 3
     }
     func isTargetBlocked(_ state: SnapshotState, scope: SnapshotScope) throws -> Bool {
         try targetRecords(state).contains(where: { $0.requireTargetLogin && $0.binding.target == scope && $0.phase != "resolved" })
     }
     func requireTargetAccess(_ state: SnapshotState, scope: SnapshotScope) throws {
+        guard try accountSwitchRecord(state)?.phase != "pending" else { throw SnapshotError.busy }
         guard try !isTargetBlocked(state, scope: scope) else { throw SnapshotError.busy }
     }
     func prepareTargetPublication(_ state: inout SnapshotState, scope: SnapshotScope, vault: inout VaultData?, session: Data?, material: PasswordUnlockMaterial?, resolution: TargetRecoveryResolution?) throws {
@@ -170,10 +171,15 @@ extension SnapshotFiles {
             records[index].verifiedUnlockHash = resolution.unlockHash
         }
         var updated = resolution != nil
-        for i in records.indices where records[i].requireTargetLogin && records[i].binding.target == scope && records[i].phase != "resolved" {
-            guard records[i].phase == "verified", let freshVault = vault, let session, let material,
-                  records[i].verifiedVaultHash == targetDigest(freshVault.sync), records[i].verifiedSessionHash == targetDigest(session),
-                  records[i].verifiedUnlockHash == targetDigest(material.key) else { throw SnapshotError.busy }
+        for i in records.indices where records[i].requireTargetLogin && records[i].binding.target == scope &&
+            (records[i].phase != "resolved" || state.snapshot?.header.scope != scope) {
+            let alreadyResolved = records[i].phase == "resolved"
+            guard let freshVault = vault else { throw SnapshotError.invalidInput }
+            if !alreadyResolved {
+                guard records[i].phase == "verified", let session, let material,
+                      records[i].verifiedVaultHash == targetDigest(freshVault.sync), records[i].verifiedSessionHash == targetDigest(session),
+                      records[i].verifiedUnlockHash == targetDigest(material.key) else { throw SnapshotError.busy }
+            }
             if let protection = records[i].protection {
                 var merged = freshVault
                 merged.quarantinedOrganizations = Array(Set((merged.quarantinedOrganizations ?? []) + protection.quarantinedOrganizations)).sorted()
@@ -186,10 +192,22 @@ extension SnapshotFiles {
                 merged.pendingPolicyMutations = pending; merged.version = pending.isEmpty ? 1 : 2
                 try merged.validate(scope: scope); vault = merged
             }
-            records[i].phase = "resolved"
-            updated = true
+            if !alreadyResolved { records[i].phase = "resolved"; updated = true }
         }
         if updated { try sealTargetRecords(records, into: &state) }
+    }
+    // A successful authenticated publication is the current protection source.
+    // Explicit policy/org recovery can remove restrictions; retain that result
+    // for subsequent logout/passwordless bootstrap instead of reviving history.
+    func updateResolvedTargetProtection(_ state: inout SnapshotState, scope: SnapshotScope, vault: VaultData?) throws {
+        guard let vault else { return }
+        var records = try targetRecords(state)
+        let projection = TargetRecoveryProtection(scope:scope,pendingPolicyMutations:vault.pendingPolicyMutations ?? [],quarantinedOrganizations:vault.quarantinedOrganizations ?? [])
+        var changed = false
+        for i in records.indices where records[i].binding.target == scope && records[i].phase == "resolved" {
+            if records[i].protection != projection { records[i].protection = projection; changed = true }
+        }
+        if changed { try sealTargetRecords(records,into:&state) }
     }
     func verifyTargetLogin(_ proof: TargetRecoveryResolution, scope: SnapshotScope, state: SnapshotState, vault: VaultData?, session: Data?, material: PasswordUnlockMaterial?) throws {
         guard proof.expectedRevision == state.revision, proof.target == scope, scope.valid, proof.authenticationEpoch > 0,
@@ -229,7 +247,7 @@ extension SnapshotStore {
                 if let binding {
                     guard runtime.operationID == binding.operationId, runtime.summaryHash == binding.summaryHash,
                           binding.actor == scope else { throw SnapshotError.wrongScope }
-                } else if operation != "targetRecoveryPending" { throw SnapshotError.invalidInput }
+                } else if operation != "targetRecoveryPending" && operation != "targetRecoveryRuntimePending" { throw SnapshotError.invalidInput }
                 try runtimeRecoveryAuthorizer(runtime)
             } else if let login {
                 guard ["targetRecoveryPending", "targetRecoveryQuery", "targetRecoveryVerify"].contains(operation) else { throw SnapshotError.invalidInput }
@@ -241,6 +259,14 @@ extension SnapshotStore {
                 _ = try openSnapshotPayload(snapshot, key: key, scope: scope)
             }
             var records = try files.targetRecords(state)
+            if operation == "targetRecoveryRuntimePending" {
+                // Bootstrap query is deliberately separate from the exact-operation
+                // mutation capability. It cannot carry a dispatch or resolution.
+                guard runtime != nil, binding == nil, summary == nil, phase == nil,
+                      resolution == nil, login == nil, vault == nil, session == nil,
+                      material == nil else { throw SnapshotError.invalidInput }
+                return (state, records.filter { $0.binding.actor == scope || $0.binding.target == scope })
+            }
             if operation == "targetRecoveryPending" {
                 return (state, records.filter { ($0.binding.actor == scope || $0.binding.target == scope) &&
                     (runtime == nil || ($0.binding.operationId == runtime!.operationID && $0.binding.summaryHash == runtime!.summaryHash)) })

@@ -33,7 +33,7 @@ func (a *app) closeConnectedPanels() {
 	}
 }
 
-func (a *app) openSend() { a.openSendWith(a.window.Update, callStorage, true) }
+func (a *app) openSend() { a.openSendWith(a.dispatchUI, a.storageCall, true) }
 func (a *app) openSendWith(dispatch func(func()), storage func(storageRequest) storageReply, dialogs bool) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
@@ -55,6 +55,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(storageRequest) s
 	}
 	epoch, vault, scope := a.epoch, a.vault, *a.liveScope
 	host := SendHost{
+		Busy:       a.componentBusy,
 		Check:      func() error { return lease.check(storage) },
 		Checkpoint: func(cp vaultwarden.SessionCheckpoint) error { return lease.persist(cp, storage) },
 		Changed:    func() { a.syncVaultWith(false, dispatch, storage) },

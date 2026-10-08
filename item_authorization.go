@@ -58,7 +58,7 @@ func (a *app) authorizePersonalItem() {
 		} else {
 			grant, err = session.AuthorizePersonalItem(ctx, vault, revision, id, password)
 		}
-		a.window.Update(func() {
+		a.dispatchUI(func() {
 			defer cancel()
 			a.pending--
 			if a.epoch != epoch {

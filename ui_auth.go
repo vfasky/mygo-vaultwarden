@@ -40,7 +40,26 @@ func (a *app) authentication(c *ui.Context) {
 						ui.Text(c, title).FontSize(25).FontWeight(650).TextAlign(ui.Center)
 						ui.Text(c, subtitle).FontSize(13).TextColor(vaultMuted).TextAlign(ui.Center).MaxLines(2)
 					})
-					if a.recoveryForm != nil {
+					if a.snapshot != nil && a.snapshot.AccountSwitchPending {
+						ui.Text(c, "本机账号替换已写入或回执未知。原账号加密副本与密钥在确认前保留，不会盲重试或回滚新状态。").MaxLines(5)
+						if a.switchReceipt == nil {
+							if authPrimary(c, "系统认证检查账号切换", a.pending != 0).Clicked() {
+								a.runStorage("inspectAccountSwitch")
+							}
+						} else {
+							binding := a.switchReceipt.Binding
+							ui.Text(c, "原账号："+binding.Source.Server+" / "+binding.Source.Account+"\n新账号："+binding.Target.Server+" / "+binding.Target.Account).MaxLines(6)
+							if authPrimary(c, "确认采用新账号并退休旧缓存密钥", a.pending != 0).Clicked() {
+								a.runStorage("confirmAccountSwitch")
+							}
+						}
+						a.authStatus(c)
+					} else if a.deviceLoginPanel != nil {
+						a.deviceLoginPanel.View(c)
+						if authLink(c, "结束设备登录", false).Clicked() {
+							a.runStorage("lock")
+						}
+					} else if a.recoveryForm != nil {
 						if a.mfaLogin != nil {
 							a.mfaLoginView(c)
 						} else {
@@ -99,6 +118,10 @@ func (a *app) authStatus(c *ui.Context) {
 }
 
 func (a *app) serverLogin(c *ui.Context) {
+	if a.deviceLoginSetup {
+		a.deviceLoginSetupView(c)
+		return
+	}
 	if a.accountForm != nil && a.accountForm.mode == "register" {
 		accountFormView(c, a.accountForm)
 		if authLink(c, "返回登录", false).Clicked() {
@@ -148,6 +171,9 @@ func (a *app) serverLogin(c *ui.Context) {
 		}
 		a.authStatus(c)
 		ui.Row(c).Justify(ui.Center).Children(func() {
+			if authLink(c, "设备", !ready).Tooltip("通过已登记的另一台设备批准登录").Clicked() {
+				a.deviceLoginSetup = true
+			}
 			if authLink(c, "注册 / 密码提示", !ready).Clicked() {
 				a.openRegistration()
 			}
@@ -235,6 +261,10 @@ func (a *app) vaultUnlock(c *ui.Context) {
 			a.runStorage("list")
 		}
 		ui.Text(c, "Touch ID 不可用时，可按系统提示使用 Mac 登录密码。").FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center)
+		if authLink(c, "通过另一台设备登录", busy).Clicked() {
+			a.openUnlockLogin()
+			a.deviceLoginSetup = true
+		}
 		if !passwordReady {
 			ui.Text(c, "此密码库需重新登录一次，以启用主密码解锁。").FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center)
 			ui.Row(c).Justify(ui.Center).Children(func() {

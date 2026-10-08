@@ -17,10 +17,11 @@ import (
 // Publish no saved session before explicit BindPassword + fresh Sync. Platform
 // uses the existing Duo/WebAuthn native bridge and verifies its scoped response.
 type DeviceLoginHost struct {
-	Dispatch func(func())
-	Check    func(vaultwarden.Scope, uint64) error
-	Accept   func(*vaultwarden.DeviceLogin, vaultwarden.DeviceLoginResult) error
-	Platform func(context.Context, vaultwarden.MFAChallenge, int) (vaultwarden.MFAResponse, error)
+	AcceptingMessage string
+	Dispatch         func(func())
+	Check            func(vaultwarden.Scope, uint64) error
+	Accept           func(*vaultwarden.DeviceLogin, vaultwarden.DeviceLoginResult) error
+	Platform         func(context.Context, vaultwarden.MFAChallenge, int) (vaultwarden.MFAResponse, error)
 }
 type DeviceLoginPanel struct {
 	client                 *vaultwarden.Client
@@ -78,9 +79,14 @@ func (p *DeviceLoginPanel) cancelAttempt() {
 		p.cancel = nil
 	}
 	if p.flow != nil {
-		p.flow.Close()
-		p.retainRecovery(p.flow.Recovery())
+		flow := p.flow
 		p.flow = nil
+		flow.Cancel()
+		go func() {
+			flow.Close()
+			recovery := flow.Recovery()
+			p.host.Dispatch(func() { p.retainRecovery(recovery) })
+		}()
 	}
 	if p.auth != nil {
 		p.auth.Close()
@@ -129,7 +135,8 @@ func (p *DeviceLoginPanel) Start() {
 		}
 		p.host.Dispatch(func() {
 			if !p.current(seq) {
-				flow.Close()
+				flow.Cancel()
+				go flow.Close()
 				return
 			}
 			p.flow = flow
@@ -148,7 +155,8 @@ func (p *DeviceLoginPanel) finish(seq uint64, flow *vaultwarden.DeviceLogin, res
 	p.retainRecovery(result.Recovery)
 	if !p.current(seq) {
 		if flow != nil {
-			flow.Close()
+			flow.Cancel()
+			go flow.Close()
 		}
 		return
 	}
@@ -173,13 +181,15 @@ func (p *DeviceLoginPanel) finish(seq uint64, flow *vaultwarden.DeviceLogin, res
 			p.status = "服务器操作结果未知；本次交换不会重放。请核验设备会话后手动发起新请求。"
 		}
 		if flow != nil {
-			flow.Close()
+			flow.Cancel()
+			go flow.Close()
 		}
 		p.flow = nil
 		return
 	}
 	if err = p.host.Accept(flow, result); err != nil {
-		flow.Close()
+		flow.Cancel()
+		go flow.Close()
 		p.flow = nil
 		p.status = "账号或存储状态已变化，登录结果未采用。"
 		return
@@ -190,6 +200,9 @@ func (p *DeviceLoginPanel) finish(seq uint64, flow *vaultwarden.DeviceLogin, res
 	p.flow = nil
 	p.cancel = nil
 	p.status = "登录成功（当前运行期）。锁定或访问令牌到期后需重新审批或主密码登录。"
+	if p.host.AcceptingMessage != "" {
+		p.status = p.host.AcceptingMessage
+	}
 }
 func (p *DeviceLoginPanel) prompt(ctx context.Context, seq uint64, ch vaultwarden.MFAChallenge) (vaultwarden.MFAResponse, error) {
 	replies := make(chan vaultwarden.MFAResponse)

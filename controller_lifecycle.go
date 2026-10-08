@@ -8,6 +8,31 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
+func (a *app) componentBusy(started bool) {
+	if started {
+		a.pending++
+	} else {
+		a.pending--
+		if a.notificationSyncPending {
+			session := a.session
+			a.dispatchUI(func() {
+				if a.pending == 0 && a.session == session && a.session != nil && a.notificationSyncPending {
+					a.notificationSyncPending = false
+					a.syncVault(false)
+				}
+			})
+		}
+	}
+}
+
+func (a *app) dispatchUI(f func()) {
+	if a.uiDispatcher != nil {
+		a.uiDispatcher(f)
+		return
+	}
+	a.window.Update(f)
+}
+
 // controllerLease is the only mutable controller state visible to workers.
 // Its mutex never spans storage, Session methods, dispatch, or native UI calls.
 // UI state (including app.epoch) remains confined to the UI thread.

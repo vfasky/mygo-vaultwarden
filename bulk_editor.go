@@ -166,7 +166,7 @@ func (a *app) mutateBulk() {
 		} else {
 			err = session.ChangePersonalCiphers(ctx, scope, vault, ids, e.action, e.folderID, persist)
 		}
-		a.window.Update(func() { a.completeBulkMutation(epoch, e, checkpoint, reply, err, cancel) })
+		a.dispatchUI(func() { a.completeBulkMutation(epoch, e, checkpoint, reply, err, cancel) })
 	}()
 }
 

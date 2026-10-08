@@ -18,17 +18,30 @@ import (
 
 var ErrRecoveryUnverified = errors.New("恢复核验尚未完成；保留原记录与旧新材料，不重放请求")
 
+type AccountRecoveryEvidenceKind string
+
+const (
+	RecoveryEvidenceNoDispatch      AccountRecoveryEvidenceKind = "verified-client-nondispatch-current-authentication"
+	RecoveryEvidenceCredentials     AccountRecoveryEvidenceKind = "verified-credential-change"
+	RecoveryEvidenceOrderedRotation AccountRecoveryEvidenceKind = "verified-ordered-rotation"
+)
+
 type AccountRecoveryVerification struct {
-	Ready             bool
-	AuthorityEvidence []string
-	ResourceEvidence  []string
-	Issues            []string
-	CipherResources   RotationCipherVerification
-	SendResources     SendRotationVerification
+	Kind                   AccountRecoveryEvidenceKind
+	ExternalCurrentChanges []string
+	Ready                  bool
+	AuthorityEvidence      []string
+	ResourceEvidence       []string
+	Issues                 []string
+	CipherResources        RotationCipherVerification
+	SendResources          SendRotationVerification
 }
 
 // SyncVerifiedAccountRecovery owns the real fresh Sync and key relationship
 // checks. It does not accept a caller-created SyncResult or a UI success flag.
+// phase must come from the authenticated journal Query with the same operation
+// binding. A UI flag, missing Result, HTTP failure or zero result cannot supply
+// not-dispatched. The storage phase transition separately enforces this origin.
 // Returned secret-bearing SyncResult must be cleared even on verification error.
 func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record AccountRecovery, phase string, persist func(SessionCheckpoint) error) (SyncResult, AccountRecoveryVerification, error) {
 	s.mu.Lock()
@@ -51,7 +64,7 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		return reject("身份或持久密码材料不匹配")
 	}
 	var old savedSession
-	if strictJSON(record.OldSession) != nil || json.Unmarshal(record.OldSession, &old) != nil || len(old.UserKey) != 64 || old.Scope != record.Scope {
+	if strictJSON(record.OldSession) != nil || json.Unmarshal(record.OldSession, &old) != nil || old.Version != 1 || len(old.UserKey) != 64 || old.Scope != record.Scope || old.PasswordUnlock == nil || len(old.PasswordUnlock.Key) != 32 || old.PasswordUnlock.Config != record.OldUnlock.Config || subtle.ConstantTimeCompare(old.PasswordUnlock.Key, record.OldUnlock.Key) != 1 || old.Email != record.OldUnlock.Config.Email {
 		return reject("原认证材料不可核验")
 	}
 	defer clear(old.UserKey)
@@ -59,7 +72,7 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		defer clear(old.PasswordUnlock.Key)
 	}
 	var prior VaultData
-	if strictJSON(record.OldVault) != nil || json.Unmarshal(record.OldVault, &prior) != nil || prior.Scope != record.Scope {
+	if strictJSON(record.OldVault) != nil || json.Unmarshal(record.OldVault, &prior) != nil || prior.Scope != record.Scope || (prior.Version != 1 && prior.Version != 2) {
 		return reject("原完整密码库不可核验")
 	}
 	var previous, current map[string]json.RawMessage
@@ -67,46 +80,67 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		return reject("完整资源数据不可核验")
 	}
 	var oldProfile, newProfile struct{ ID, Key, PrivateKey, Email string }
-	if json.Unmarshal(previous["profile"], &oldProfile) != nil || json.Unmarshal(current["profile"], &newProfile) != nil || oldProfile.Key != old.WrappedKey || newProfile.Key != s.wrapped || newProfile.ID != record.Scope.Account {
+	if json.Unmarshal(previous["profile"], &oldProfile) != nil || json.Unmarshal(current["profile"], &newProfile) != nil || oldProfile.ID != record.Scope.Account || oldProfile.Key != old.WrappedKey || newProfile.Key != s.wrapped || newProfile.ID != record.Scope.Account {
 		return reject("权威账号包装不匹配")
 	}
-	if record.Kind != AccountRotateKey {
+	unchangedAttempt := phase == "not-dispatched"
+	if record.Kind != AccountRotateKey || unchangedAttempt {
 		if subtle.ConstantTimeCompare(old.UserKey, s.key) != 1 {
 			return reject("非用户密钥轮换操作改变了实际user key")
 		}
 		expectedWrapper := record.NewWrappedKey
-		if expectedWrapper == "" {
+		if expectedWrapper == "" || unchangedAttempt {
 			expectedWrapper = old.WrappedKey
 		}
 		if s.wrapped != expectedWrapper {
 			return reject("尚未观察到本次凭据请求的权威包装")
 		}
-		if record.NewUnlock != nil && (record.NewUnlock.Config != s.passwordUnlock.Config || subtle.ConstantTimeCompare(record.NewUnlock.Key, s.passwordUnlock.Key) != 1) {
+		if unchangedAttempt && (old.PasswordUnlock.Config != s.passwordUnlock.Config || subtle.ConstantTimeCompare(old.PasswordUnlock.Key, s.passwordUnlock.Key) != 1) {
+			return reject("原主密码/KDF授权关系不匹配")
+		}
+		if !unchangedAttempt && record.NewUnlock != nil && (record.NewUnlock.Config != s.passwordUnlock.Config || subtle.ConstantTimeCompare(record.NewUnlock.Key, s.passwordUnlock.Key) != 1) {
 			return reject("新邮箱/KDF/密码包装未匹配")
 		}
-		if record.Kind == AccountDelete {
+		if record.Kind == AccountDelete && !unchangedAttempt {
 			return reject("删除账号须使用已确认删除的专用本机清理流程")
 		}
-		if record.Kind == AccountSecurityStamp && phase != "confirmed" {
+		if record.Kind == AccountSecurityStamp && phase != "confirmed" && !unchangedAttempt {
 			return reject("注销会话结果未知，不能从一次新登录推断旧会话已全部撤销")
 		}
-		if record.Kind == AccountPurge {
+		if record.Kind == AccountPurge && !unchangedAttempt {
 			if !emptyPersonalRecoveryInventory(current["ciphers"]) || !jsonEmptyArray(current["folders"]) {
 				return reject("个人条目或文件夹尚未清空")
 			}
 			if !sameOrganizationRecoveryInventory(previous["ciphers"], current["ciphers"]) {
 				return reject("组织资源发生外部变化")
 			}
-		} else {
+		} else if !unchangedAttempt {
 			if !AccountRotationCipherInventoryEqual(previous["ciphers"], current["ciphers"]) || !rawJSONEqual(previous["folders"], current["folders"]) {
 				return reject("条目或文件夹发生变化，须保留恢复记录核对")
 			}
 		}
-		if !rawJSONEqual(previous["sends"], current["sends"]) {
+		if !unchangedAttempt && !rawJSONEqual(previous["sends"], current["sends"]) {
 			return reject("Send资源发生变化")
 		}
-		if oldProfile.PrivateKey != newProfile.PrivateKey {
+		if !unchangedAttempt && oldProfile.PrivateKey != newProfile.PrivateKey {
 			return reject("账户私钥包装发生外部变化")
+		}
+		if unchangedAttempt {
+			private, privateErr := accountPrivateKey(current["profile"], s.key)
+			if privateErr != nil {
+				return reject("当前账户RSA私钥不可核验")
+			}
+			publicDER, marshalErr := x509.MarshalPKIXPublicKey(&private.PublicKey)
+			clearAccountPrivateKey(private)
+			status, body, readErr := s.authenticatedLocked(ctx, "GET", "/api/accounts/keys", "", "", persist)
+			var keys struct{ Key, PrivateKey, PublicKey string }
+			if readErr != nil || status != 200 || strictJSON(body) != nil || json.Unmarshal(body, &keys) != nil || keys.Key != s.wrapped || keys.PrivateKey != newProfile.PrivateKey {
+				return reject("当前权威账户密钥不匹配")
+			}
+			expectedDER, decodeErr := base64.StdEncoding.Strict().DecodeString(keys.PublicKey)
+			if marshalErr != nil || decodeErr != nil || !bytes.Equal(publicDER, expectedDER) {
+				return reject("当前账户RSA公私钥不一致")
+			}
 		}
 		if _, err = AnalyzeAccountRotationCipherResources(ctx, AccountRotationInput{Scope: fresh.Scope, Sync: fresh.Vault.Sync, OldUserKey: s.key}); err != nil {
 			return reject("完整cipher/folder加密字段未通过核验")
@@ -128,6 +162,25 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		}
 		report.AuthorityEvidence = []string{"fresh-login-and-sync: expected account/wrapper/unlock configuration; unchanged authenticated user key"}
 		report.ResourceEvidence = []string{"cipher/folder/Send inventories and encrypted fields verified; unchanged owner key and ciphertext (binary files were not downloaded)"}
+		if unchangedAttempt {
+			report.Kind = RecoveryEvidenceNoDispatch
+			for _, name := range []string{"ciphers", "folders", "sends"} {
+				same := rawJSONEqual(previous[name], current[name])
+				if name == "ciphers" {
+					same = AccountRotationCipherInventoryEqual(previous[name], current[name])
+				}
+				if !same {
+					report.ExternalCurrentChanges = append(report.ExternalCurrentChanges, name)
+				}
+			}
+			report.AuthorityEvidence = append(report.AuthorityEvidence, "authenticated journal records no transport dispatch; fresh login proves the original key/wrapper; no old Session restored")
+			report.ResourceEvidence = []string{"complete current personal cipher/folder/Send cryptography checked under the original user key; authoritative current organization policy/identity chain; external current changes allowed; hidden recovery wrappers not claimed read-back verified; binary files not downloaded"}
+		} else {
+			report.Kind = RecoveryEvidenceCredentials
+		}
+		if err = s.completeRecoveryVerificationLocked(ctx, &fresh); err != nil {
+			return fresh, report, err
+		}
 		report.Ready = true
 		return fresh, report, nil
 	}
@@ -214,9 +267,33 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 	if ctx.Err() != nil {
 		return fresh, report, ErrCancelled
 	}
+	if err = s.completeRecoveryVerificationLocked(ctx, &fresh); err != nil {
+		return fresh, report, err
+	}
+	report.Kind = RecoveryEvidenceOrderedRotation
 	report.Ready = true
 	return fresh, report, nil
 }
+func (s *Session) completeRecoveryVerificationLocked(ctx context.Context, fresh *SyncResult) error {
+	if ctx.Err() != nil {
+		return ErrCancelled
+	}
+	if !s.itemSessionActiveLocked() {
+		return ErrExpired
+	}
+	data, err := s.savedLocked()
+	if err != nil {
+		return err
+	}
+	clear(fresh.Session)
+	fresh.Session = data
+	if fresh.PasswordUnlock != nil {
+		clear(fresh.PasswordUnlock.Key)
+	}
+	fresh.PasswordUnlock = &PasswordUnlock{Config: s.passwordUnlock.Config, Key: append([]byte(nil), s.passwordUnlock.Key...)}
+	return nil
+}
+
 func jsonEmptyArray(raw json.RawMessage) bool {
 	var rows []json.RawMessage
 	return json.Unmarshal(raw, &rows) == nil && rows != nil && len(rows) == 0

@@ -178,6 +178,14 @@ func (a *app) unlocked() bool {
 }
 
 func (a *app) view(c *ui.Context) {
+	if runtime := a.runtimeVault; runtime != nil {
+		if err := runtime.sourceCheck(runtime.source, *a.liveScope); err != nil {
+			a.stopNetwork()
+			a.status = "临时库的本机保护来源已变化，请重新认证。"
+		} else {
+			c.After(time.Second)
+		}
+	}
 	if a.authManagement != nil && (a.category != "mfa" || a.showSettings) {
 		a.advanceEpoch()
 	}
@@ -805,6 +813,33 @@ func (a *app) settings(c *ui.Context) {
 				}
 			})
 			detailCard(c, "账号服务", func() {
+				if warning := a.mfaWarnings.warning(a.serverURL, a.email); warning != "" {
+					ui.Text(c, warning).MaxLines(4)
+				}
+				if a.runtimeVault != nil {
+					ui.Column(c).Key(a.secretInputVersion).Padding(16).Gap(8).Children(func() {
+						ui.Text(c, "临时在线库：不会持久保存会话或注册系统自动填充。原磁盘账号保持不变。").MaxLines(4)
+						if a.diskSnapshot != nil && a.diskSnapshot.Scope != nil && a.liveScope != nil && *a.diskSnapshot.Scope != *a.liveScope {
+							oldAccount := a.diskSnapshot.Scope.Account
+							if a.diskSnapshot.PasswordUnlock != nil {
+								oldAccount = a.diskSnapshot.PasswordUnlock.Email
+							}
+							ui.Text(c, "原本机账号："+a.diskSnapshot.Scope.Server+" / "+oldAccount+"\n新账号："+a.liveScope.Server+" / "+a.email).MaxLines(5)
+							ui.Text(c, "需要系统认证原缓存；原账号仍有策略、组织隔离或恢复事项时将先拒绝。写入确认前保留旧密文与密钥，未知结果只检查同一次切换，不自动重试。").MaxLines(6)
+							label := "明确同意替换以上本机账号"
+							if a.runtimeReplaceConfirmed {
+								label = "已同意替换（点击撤回）"
+							}
+							if action(c, label, "user", false, a.pending != 0).Clicked() {
+								a.runtimeReplaceConfirmed = !a.runtimeReplaceConfirmed
+							}
+						}
+						ui.TextInput(c, &a.masterPassword).Label("显式绑定当前账号主密码").Password().Disabled(a.pending != 0)
+						if action(c, "绑定主密码并重新同步", "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
+							a.bindRuntimePasswordWith(a.window.Update, callStorage)
+						}
+					})
+				}
 				ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
 					if action(c, "Send", "send", false, !ready).Clicked() {
 						a.openSend()
@@ -870,7 +905,11 @@ func (a *app) settings(c *ui.Context) {
 				})
 			})
 			ui.Row(c).Gap(8).Wrap().Children(func() {
-				if action(c, "退出账号", "user", false, a.snapshot == nil).Clicked() {
+				logoutLabel := "退出账号"
+				if a.runtimeVault != nil {
+					logoutLabel = "结束临时在线会话（保留原缓存）"
+				}
+				if action(c, logoutLabel, "user", false, a.snapshot == nil).Clicked() {
 					a.runStorage("logout")
 				}
 			})

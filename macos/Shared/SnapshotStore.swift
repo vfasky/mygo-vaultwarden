@@ -6,7 +6,7 @@ import LocalAuthentication
 final class SnapshotStore {
     let files: SnapshotFiles
     let keys: SnapshotKeyStore
-    private let clock: () -> TimeInterval
+    let clock: () -> TimeInterval
     let runtimeRecoveryAuthorizer: (RuntimeRecoveryAuthority) throws -> Void
     let changed: () -> Void
     static let changeNotification = Notification.Name("yz.sh.mygo-vaultwarden.snapshotChanged")
@@ -33,7 +33,7 @@ final class SnapshotStore {
     // A new AES key is used for every replacement.
     func publish(_ credentials: [VaultCredential], scope: SnapshotScope, expected: String,
                  passwordUnlock: PasswordUnlockMaterial? = nil, session: Data? = nil, vault: VaultData? = nil,
-                 priorUnlockKey: Data? = nil, includeVault: Bool = false, restoringOrganization: String? = nil, clearingPolicy: PendingPolicyMutation? = nil, targetResolution: TargetRecoveryResolution? = nil, priorSnapshotKey: Data? = nil) throws -> SnapshotLease {
+                 priorUnlockKey: Data? = nil, includeVault: Bool = false, restoringOrganization: String? = nil, clearingPolicy: PendingPolicyMutation? = nil, targetResolution: TargetRecoveryResolution? = nil, priorSnapshotKey: Data? = nil, switching: AccountSwitchBinding? = nil) throws -> SnapshotLease {
         try validateCredentials(credentials)
         try validateSessionData(session)
         try vault?.validate(scope: scope)
@@ -46,6 +46,7 @@ final class SnapshotStore {
         return try files.locked {
             var prior = try files.read()
             guard prior.revision == expected else { throw SnapshotError.stale }
+            guard try files.accountSwitchRecord(prior)?.phase != "pending" else { throw SnapshotError.busy }
             var targetState = prior
             var vault = vault
             try files.prepareTargetPublication(&targetState, scope: scope, vault: &vault, session: session, material: passwordUnlock, resolution: targetResolution)
@@ -53,9 +54,19 @@ final class SnapshotStore {
                 if targetResolution != nil { throw SnapshotError.accountRecoveryRequired }
                 throw SnapshotError.busy
             }
-            if let existing = prior.snapshot, existing.header.scope != scope { throw SnapshotError.wrongScope }
+            if let switching {
+                guard let existing = prior.snapshot, let oldKey = priorSnapshotKey,
+                      existing.header.scope == switching.source, existing.header.id == switching.sourceSnapshotID,
+                      switching.target == scope, switching.source != scope,
+                      restoringOrganization == nil, clearingPolicy == nil, targetResolution == nil,
+                      passwordUnlock != nil, session != nil, vault != nil else { throw SnapshotError.invalidInput }
+                try files.requireTargetAccess(prior, scope: switching.source)
+                let old = try openSnapshotPayload(existing, key: oldKey, scope: switching.source)
+                guard old.accountRecovery == nil, (old.vault?.pendingPolicyMutations ?? []).isEmpty,
+                      (old.vault?.quarantinedOrganizations ?? []).isEmpty else { throw SnapshotError.protectedAccountSwitch }
+            } else if let existing = prior.snapshot, existing.header.scope != scope { throw SnapshotError.wrongScope }
             if clearingPolicy != nil && prior.snapshot?.passwordUnlock == nil { throw SnapshotError.invalidInput }
-            if let existing = prior.snapshot {
+            if let existing = prior.snapshot, existing.header.scope == scope {
                 // Authenticated prior isolation cannot be erased by an ordinary sync.
                 // Legacy callers without password material may not replace a protected vault.
                 if existing.passwordUnlock != nil {
@@ -98,6 +109,7 @@ final class SnapshotStore {
                 }
             }
             try vault?.validate(scope: scope)
+            try files.updateResolvedTargetProtection(&targetState,scope:scope,vault:vault)
             let credentials = scope == .demo ? (try vault?.excludingQuarantined(credentials) ?? credentials) : (vault?.policyCandidates(credentials) ?? [])
             try cleanupLocked(&prior)
             guard prior.retiredKeys.count < 500 else { throw SnapshotError.busy }
@@ -120,13 +132,18 @@ final class SnapshotStore {
                 next.snapshot = snapshot
                 next.signedOut = false
                 next.retiredKeys.removeAll { $0 == keyID }
-                if let oldID = prior.snapshot?.header.keyID { next.retiredKeys.append(oldID) }
+                if let switching, let old = prior.snapshot {
+                    let recovery = AccountSwitchRecord(binding: switching, newSnapshotID: snapshot.header.id,
+                        vaultHash: targetDigest(try snapshotJSON(vault)), sessionHash: targetDigest(session ?? Data()),
+                        wrapperHash: targetDigest(try snapshotJSON(snapshot.passwordUnlock)), phase: "pending", oldSnapshot: old)
+                    try files.storeAccountSwitch(recovery, in: &next)
+                } else if let oldID = prior.snapshot?.header.keyID { next.retiredKeys.append(oldID) }
                 attemptedCommit = true
                 try files.write(next)
                 // Key cleanup failure does not hide a committed replacement.
                 try? cleanupLocked(&next)
                 return SnapshotLease(revision: next.revision, header: snapshot.header,
-                                     expiresAt: clock() + 60, credentials: credentials, vault: includeVault ? vault : nil)
+                                     expiresAt: clock() + 60, credentials: credentials, vault: includeVault ? vault : nil, recoveryOnly: switching != nil)
             } catch {
                 // A post-rename fsync error may already have committed next.
                 // Never retire its live key using the pre-commit journal.
@@ -264,6 +281,7 @@ final class SnapshotStore {
             var state = try files.read()
             guard state.revision == expected else { throw SnapshotError.stale }
             guard state.snapshot?.header.format != 2 else { throw SnapshotError.busy }
+            guard try files.accountSwitchRecord(state)?.phase != "pending" else { throw SnapshotError.busy }
             if let scope = state.snapshot?.header.scope {
                 guard try !files.targetRecords(state).contains(where: { $0.requireTargetLogin && $0.binding.target == scope && $0.phase != "resolved" && $0.protection == nil }) else { throw SnapshotError.busy }
             }

@@ -589,7 +589,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 				_, err = session.UpdatePersonalCipherAuthorized(ctx, scope, editor.document, editor.fields, editor.authorization, persist)
 			}
 		}
-		a.window.Update(func() { a.completeCipherMutation(epoch, editor, checkpointState, reply, err, cancel) })
+		a.dispatchUI(func() { a.completeCipherMutation(epoch, editor, checkpointState, reply, err, cancel) })
 	}()
 }
 

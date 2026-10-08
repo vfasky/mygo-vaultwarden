@@ -193,6 +193,56 @@ final class TargetRecoveryTests: XCTestCase {
         XCTAssertEqual(complete.vault?.quarantinedOrganizations,isolated.quarantinedOrganizations)
         XCTAssertNoThrow(try store.withCurrentLease(complete) {})
     }
+    func testResolvedProjectionTracksAuthorizedPolicyClearAndSurvivesLogout() throws {
+        let mutation = PendingPolicyMutation(organizationId:"org-1",policyType:15,mutationId:"mutation-1")
+        var protected = vault(actor); protected.version = 2
+        protected.pendingPolicyMutations = [mutation]; protected.quarantinedOrganizations = ["org-2"]
+        _ = try store.publish([],scope:actor,expected:store.state().revision,passwordUnlock:material,session:session,vault:protected)
+        let (binding,summary) = try record(actor)
+        _ = try begin(binding,summary)
+        let resolution = try proof(binding)
+        let recovered = try store.publish([],scope:actor,expected:resolution.expectedRevision,passwordUnlock:material,session:session,vault:vault(actor),includeVault:true,targetResolution:resolution)
+        XCTAssertEqual(recovered.vault?.pendingPolicyMutations,[mutation])
+        let cleared = try store.publish([],scope:actor,expected:recovered.revision,passwordUnlock:material,session:session,vault:vault(actor),includeVault:true,clearingPolicy:mutation)
+        XCTAssertTrue(cleared.vault?.pendingPolicyMutations?.isEmpty ?? false)
+        let history = try store.files.targetRecords(store.state())[0]
+        XCTAssertEqual(history.phase,"resolved")
+        XCTAssertTrue(history.protection?.pendingPolicyMutations.isEmpty ?? false)
+        XCTAssertEqual(history.protection?.quarantinedOrganizations,["org-2"])
+        try store.logout(expected:cleared.revision)
+        let reopened = try store.publish([],scope:actor,expected:store.state().revision,passwordUnlock:material,session:session,vault:vault(actor),includeVault:true)
+        XCTAssertTrue(reopened.vault?.pendingPolicyMutations?.isEmpty ?? false)
+        XCTAssertEqual(reopened.vault?.quarantinedOrganizations,["org-2"])
+    }
+    func testRuntimeBootstrapQueryIncludesForeignActorTargetWithoutWrites() throws {
+        _ = try publish(actor)
+        let (blocked, blockedSummary) = try record(target)
+        _ = try begin(blocked, blockedSummary)
+        let unrelated = SnapshotScope(server: actor.server, account: "unrelated")
+        let (other, otherSummary) = try record(unrelated, id: String(repeating: "b", count: 32))
+        _ = try begin(other, otherSummary)
+        let queryID = String(repeating: "d", count: 32)
+        let query = try JSONSerialization.data(withJSONObject: ["purpose":"mygo-runtime-target-block-query-v1", "queryId":queryID])
+        let authority = RuntimeRecoveryAuthority(scope: target, generation: 10, deadlineUnixMS: 20000, leaseID: "fixture-query-lease", operationID: queryID, summaryHash: targetDigest(query))
+        store = try SnapshotStore(directory: directory, keys: keys, runtimeRecoveryAuthorizer: { input in
+            guard input.scope == self.target, input.generation == authority.generation,
+                  input.operationID == queryID, input.summaryHash == authority.summaryHash else { throw SnapshotError.stale }
+        })
+        let before = try store.state()
+        // The mutation-scoped API intentionally filters this foreign operation.
+        XCTAssertTrue(try store.targetRecovery(operation:"targetRecoveryPending",scope:target,expected:before.revision,unlockKey:Data(),binding:nil,summary:nil,phase:nil,runtime:authority).1.isEmpty)
+        let found = try store.targetRecovery(operation:"targetRecoveryRuntimePending",scope:target,expected:before.revision,unlockKey:Data(),binding:nil,summary:nil,phase:nil,runtime:authority)
+        XCTAssertEqual(found.1.map(\.binding.operationId), [blocked.operationId])
+        XCTAssertEqual(found.0.revision, before.revision)
+        XCTAssertEqual(try store.state().snapshot?.header.id, before.snapshot?.header.id)
+        let attempted = TargetRecoveryBinding(operationId:queryID,actor:target,target:target,storageRevision:before.revision,hostEpoch:8,authorizationEpoch:9,summaryHash:targetDigest(query))
+        XCTAssertThrowsError(try store.targetRecovery(operation:"targetRecoveryBegin",scope:target,expected:before.revision,unlockKey:Data(),binding:attempted,summary:query,phase:nil,runtime:authority))
+        XCTAssertThrowsError(try store.targetRecovery(operation:"targetRecoveryRuntimePending",scope:target,expected:before.revision,unlockKey:Data(),binding:attempted,summary:query,phase:nil,runtime:authority))
+        XCTAssertThrowsError(try store.targetRecovery(operation:"targetRecoveryRuntimePending",scope:target,expected:"stale",unlockKey:Data(),binding:nil,summary:nil,phase:nil,runtime:authority))
+        XCTAssertThrowsError(try store.targetRecovery(operation:"targetRecoveryRuntimePending",scope:actor,expected:before.revision,unlockKey:material.key,binding:nil,summary:nil,phase:nil))
+        XCTAssertEqual(try store.state().revision, before.revision)
+        XCTAssertEqual(try store.files.targetRecords(store.state()).count, 2)
+    }
     func testFailedWriteAndMissingEvidenceKeepOriginalBarrier() throws {
         _ = try publish(actor)
         let (binding, summary) = try record(actor)

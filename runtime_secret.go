@@ -16,6 +16,19 @@ import (
 var errRuntimeSecretUnavailable = errors.New("原生临时秘密许可不可用或已撤销")
 var runtimeSecretGeneration atomic.Uint64
 
+func nextRuntimeSecretGeneration() uint64 {
+	for {
+		previous := runtimeSecretGeneration.Load()
+		next := uint64(time.Now().UnixNano())
+		if next <= previous {
+			next = previous + 1
+		}
+		if runtimeSecretGeneration.CompareAndSwap(previous, next) {
+			return next
+		}
+	}
+}
+
 type runtimeSecretRequest struct {
 	Operation      string            `json:"operation"`
 	Purpose        string            `json:"purpose"`
@@ -80,6 +93,9 @@ func (n *nativeRuntimeSecrets) Revoke() {
 	}
 }
 func (n *nativeRuntimeSecrets) activate(scope vaultwarden.Scope, purpose, operationID, summaryHash string, deadline time.Time) (runtimeSecretRequest, error) {
+	return n.activateBound(scope, purpose, deadline, func(uint64, int64) (string, string) { return operationID, summaryHash })
+}
+func (n *nativeRuntimeSecrets) activateBound(scope vaultwarden.Scope, purpose string, deadline time.Time, binding func(uint64, int64) (string, string)) (runtimeSecretRequest, error) {
 	n.Revoke()
 	n.mu.Lock()
 	n.serial++
@@ -88,7 +104,9 @@ func (n *nativeRuntimeSecrets) activate(scope vaultwarden.Scope, purpose, operat
 	if !time.Now().Before(deadline) || deadline.After(time.Now().Add(30*time.Second)) {
 		return runtimeSecretRequest{}, vaultwarden.ErrExpired
 	}
-	request := runtimeSecretRequest{Operation: "activate", Purpose: purpose, Scope: scope, Generation: runtimeSecretGeneration.Add(1), DeadlineUnixMS: deadline.UnixMilli(), OperationID: operationID, SummaryHash: summaryHash}
+	generation := nextRuntimeSecretGeneration()
+	operationID, summaryHash := binding(generation, deadline.UnixMilli())
+	request := runtimeSecretRequest{Operation: "activate", Purpose: purpose, Scope: scope, Generation: generation, DeadlineUnixMS: deadline.UnixMilli(), OperationID: operationID, SummaryHash: summaryHash}
 	reply, err := runtimeSecretExchange(n.call, request)
 	if err != nil {
 		return request, err
