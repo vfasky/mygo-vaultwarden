@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -55,11 +56,19 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 	vault := a.vault
 	f := newAccountForm(scope, epoch, nil)
 	f.email = a.email
+	f.openRotationPreparation = func(id string, deleted bool) {
+		a.advanceEpoch()
+		a.category = "personal"
+		if deleted {
+			a.category = "trash"
+		}
+		a.openCipherEditor(id, 0)
+	}
 	if registration {
 		f.mode = "register"
 		f.modes = []string{"register"}
 	} else {
-		f.modes = []string{"profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete"}
+		f.modes = []string{"profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
 	}
 	f.submit = func(r accountFormRequest) {
 		if a.epoch != epoch || a.accountForm != f {
@@ -72,6 +81,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 			defer done()
 			var err error
 			var plan *vaultwarden.AccountChangePlan
+			var recipients vaultwarden.RotationTrustRequirements
 			var result vaultwarden.AccountChangeResult
 			var key vaultwarden.AccountAPIKey
 			var registered vaultwarden.AccountRegistrationVerification
@@ -111,6 +121,10 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 						err = session.AccountRequestEmailChange(opctx, r.Password, r.Email, persist)
 					case "api-key", "rotate-api-key":
 						key, err = session.AccountAPIKey(opctx, vaultwarden.AccountSensitiveInput{Password: r.Password, OTP: r.OTP}, r.Operation == "rotate-api-key", r.Confirmation == r.Operation, persist)
+					case "rotation-recipients":
+						recipients, err = session.AccountRotationTrustRequirements(opctx, vault, persist)
+					case "prepare-rotate-user-key":
+						plan, err = session.PrepareVerifiedAccountRotation(opctx, vault, r.Password, r.RotationTrust, persist)
 					case "prepare-password", "prepare-email", "prepare-kdf":
 						plan, err = session.PrepareAccountCredentials(opctx, vault, vaultwarden.AccountChangeKind(strings.TrimPrefix(r.Operation, "prepare-")), r.Password, r.NewPassword, r.Email, r.KDF, r.Hint, r.Token, persist)
 					case "prepare-security-stamp", "prepare-purge", "prepare-delete":
@@ -182,6 +196,19 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 					f.registration(scope, epoch, r.Sequence, registered, err)
 				case strings.HasPrefix(r.Operation, "prepare-"):
 					f.prepared(scope, epoch, r.Sequence, plan, err)
+					var preparations *vaultwarden.RotationCipherPreparationError
+					if errors.As(err, &preparations) {
+						f.rotationPreparations = append([]vaultwarden.RotationCipherPreparation(nil), preparations.Readiness.Preparations...)
+						f.status = "先升级旧附件、核验新旧文件并明确删除原件，再同步后重新准备轮换。"
+					}
+					if errors.Is(err, vaultwarden.ErrRotationCompatibility) {
+						f.status = err.Error()
+					}
+				case r.Operation == "rotation-recipients":
+					if f.completed(scope, epoch, r.Sequence, result, err) && err == nil {
+						f.rotationRequirements = recipients
+						f.status = "请从可信独立渠道取得并核对以上公钥，再准备轮换。"
+					}
 				case r.Operation == "api-key" || r.Operation == "rotate-api-key":
 					f.apiKeyCompleted(scope, epoch, r.Sequence, key, err)
 				default:

@@ -39,6 +39,7 @@ type app struct {
 	sendPanel                                 *SendPanel
 	devicePanel                               *DevicePanel
 	accountForm                               *accountForm
+	recoveryForm                              *accountRecoveryForm
 	authManagement                            *authManagementForm
 	componentCancel                           context.CancelFunc
 	runtimeVault                              *runtimeVault

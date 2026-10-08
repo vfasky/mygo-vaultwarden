@@ -10,6 +10,7 @@ import (
 // Called only from a synchronous UI event: lock/account-switch UI events cannot
 // interleave with the native write. No worker or late network callback copies.
 func (a *app) copyPersonalSecret(kind string, storage func(storageRequest) storageReply) {
+	a.prepareRuntimeSecret()
 	e := a.editor
 	if a.pending != 0 || e == nil || e.fields.ID == "" || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
 		return
@@ -42,6 +43,7 @@ func (a *app) copyPersonalSecret(kind string, storage func(storageRequest) stora
 }
 
 func (a *app) showPersonalSecret(kind string, storage func(storageRequest) storageReply) {
+	a.prepareRuntimeSecret()
 	e := a.editor
 	if a.pending != 0 || e == nil || e.fields.ID == "" || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
 		return

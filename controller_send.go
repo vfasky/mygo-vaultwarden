@@ -7,6 +7,10 @@ import (
 )
 
 func (a *app) closeConnectedPanels() {
+	if a.recoveryForm != nil {
+		a.recoveryForm.Close()
+		a.recoveryForm = nil
+	}
 	if a.authManagement != nil {
 		a.authManagement.Close()
 		a.authManagement = nil
@@ -74,6 +78,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(storageRequest) s
 		})
 	}
 	host.Copy = func(secret string) error {
+		a.prepareRuntimeSecret()
 		if a.epoch != epoch || a.session != session {
 			return vaultwarden.ErrCancelled
 		}

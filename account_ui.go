@@ -19,6 +19,11 @@ type accountForm struct {
 	epoch, sequence                                                              uint64
 	mode                                                                         string
 	modes                                                                        []string
+	rotationRequirements                                                         vaultwarden.RotationTrustRequirements
+	rotationTrust                                                                vaultwarden.RecoveryRotationTrust
+	legacyRecoveryReviewed                                                       bool
+	rotationPreparations                                                         []vaultwarden.RotationCipherPreparation
+	openRotationPreparation                                                      func(string, bool)
 	email, name, hint, avatar, password, newPassword, repeatPassword, token, otp string
 	kdfType, iterations, memory, parallelism                                     string
 	policy                                                                       vaultwarden.AccountPasswordPolicy
@@ -40,6 +45,7 @@ type accountFormRequest struct {
 	KDF                                   vaultwarden.KDF
 	Plan                                  *vaultwarden.AccountChangePlan
 	Confirmation                          string
+	RotationTrust                         vaultwarden.RecoveryRotationTrust
 }
 
 func (r *accountFormRequest) Close() {
@@ -51,7 +57,7 @@ func (r *accountFormRequest) Close() {
 	r.OTP = ""
 }
 func newAccountForm(scope vaultwarden.Scope, epoch uint64, submit func(accountFormRequest)) *accountForm {
-	return &accountForm{scope: scope, epoch: epoch, mode: "profile", score: -1, kdfType: "0", iterations: "600000", memory: "64", parallelism: "4", submit: submit}
+	return &accountForm{scope: scope, epoch: epoch, mode: "profile", score: -1, kdfType: "0", iterations: "600000", memory: "64", parallelism: "4", submit: submit, rotationTrust: vaultwarden.RecoveryRotationTrust{Users: map[string]string{}, Organizations: map[string]string{}}}
 }
 func (f *accountForm) clearSecrets() {
 	f.password = ""
@@ -162,6 +168,10 @@ func (f *accountForm) dispatch(operation string) {
 	if f.closed || f.busy || f.uncertain || f.submit == nil {
 		return
 	}
+	if (operation == "prepare-delete" || operation == "prepare-rotate-user-key") && !f.legacyRecoveryReviewed {
+		f.status = "请先处理未决旧附件共享恢复文件，并确认其依赖当前user key的限制。"
+		return
+	}
 	if operation == "commit" && (!f.confirming || f.plan == nil) {
 		return
 	}
@@ -207,6 +217,13 @@ func (f *accountForm) dispatch(operation string) {
 	}
 	f.sequence++
 	r := accountFormRequest{Scope: f.scope, Epoch: f.epoch, Sequence: f.sequence, Operation: operation, Email: f.email, Name: f.name, Hint: f.hint, Avatar: f.avatar, Token: f.token, OTP: f.otp, Password: []byte(f.password), NewPassword: []byte(f.newPassword), KDF: kdf, Plan: f.plan}
+	r.RotationTrust = vaultwarden.RecoveryRotationTrust{Users: map[string]string{}, Organizations: map[string]string{}}
+	for id, key := range f.rotationTrust.Users {
+		r.RotationTrust.Users[id] = key
+	}
+	for id, key := range f.rotationTrust.Organizations {
+		r.RotationTrust.Organizations[id] = key
+	}
 	if operation == "api-key" || operation == "rotate-api-key" {
 		if !f.confirming || f.confirmAction != operation {
 			return
@@ -314,8 +331,33 @@ func accountFormView(c *ui.Context, f *accountForm) {
 				ui.TextInput(c, &f.token).Label("邮箱验证码").Password().Disabled(disabled)
 			case "kdf":
 				accountKDFView(c, f, disabled)
+			case "rotate-user-key":
+				if ui.Button(c, "读取轮换收件人与组织恢复登记").Disabled(disabled).Clicked() {
+					f.dispatch("rotation-recipients")
+				}
+				ui.Text(c, "从可信独立渠道取得下列完整SPKI公钥；不把本次服务器返回值直接当成信任依据。").MaxLines(4)
+				for _, recipient := range f.rotationRequirements.Users {
+					value := f.rotationTrust.Users[recipient.ID]
+					ui.TextInput(c, &value).Label("受托人 " + recipient.Email + " · " + recipient.ID + " 的可信公钥").Disabled(disabled)
+					f.rotationTrust.Users[recipient.ID] = value
+				}
+				for _, recipient := range f.rotationRequirements.Organizations {
+					value := f.rotationTrust.Organizations[recipient.ID]
+					ui.TextInput(c, &value).Label("组织 " + recipient.Name + " · " + recipient.ID + " 的可信公钥").Disabled(disabled)
+					f.rotationTrust.Organizations[recipient.ID] = value
+				}
 			case "api-key", "security-stamp", "purge", "delete":
 				ui.TextInput(c, &f.otp).Label("或受保护操作邮件 OTP（与主密码二选一）").Password().Disabled(disabled)
+			}
+			if f.mode == "rotate-user-key" || f.mode == "delete" {
+				ui.Text(c, ".mygoshare-recovery 文件只依赖当时user key，不能仅用旧主密码独立解锁。请先通过导入导出的共享恢复入口处理所有未决迁移；轮换或删除后旧文件可能无法恢复。").MaxLines(6)
+				label := "确认已处理未决共享恢复文件"
+				if f.legacyRecoveryReviewed {
+					label = "已确认旧恢复文件限制（点击撤回）"
+				}
+				if ui.Button(c, label).Disabled(disabled).Clicked() {
+					f.legacyRecoveryReviewed = !f.legacyRecoveryReviewed
+				}
 			}
 			ui.Text(c, accountImpact(vaultwarden.AccountChangeKind(f.mode))).MaxLines(5)
 			if f.mode == "api-key" {
@@ -346,6 +388,15 @@ func accountFormView(c *ui.Context, f *accountForm) {
 		}
 		if ui.Button(c, label).Clicked() {
 			f.apiKeyVisible = !f.apiKeyVisible
+		}
+	}
+	for _, preparation := range f.rotationPreparations {
+		ui.Text(c, "需迁移条目 "+preparation.CipherID+" / 附件 "+preparation.AttachmentID).MaxLines(3)
+		if preparation.Deleted {
+			ui.Text(c, "此项在回收站：只有明确恢复并重新同步后才能升级旧附件；不会自动恢复或删除。").MaxLines(4)
+		}
+		if f.openRotationPreparation != nil && ui.Button(c, "打开对应条目进行明确迁移").Key(preparation.CipherID+"/"+preparation.AttachmentID).Disabled(f.busy).Clicked() {
+			f.openRotationPreparation(preparation.CipherID, preparation.Deleted)
 		}
 	}
 	ui.Text(c, f.status).MaxLines(5)

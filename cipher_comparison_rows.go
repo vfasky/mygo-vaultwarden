@@ -22,6 +22,7 @@ func clearCipherRowReveal(e *cipherEditor) {
 	}
 }
 func (a *app) revealCipherRows(path string, storage func(storageRequest) storageReply) {
+	a.prepareRuntimeSecret()
 	e := a.editor
 	if e == nil || e.comparison == nil || a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return

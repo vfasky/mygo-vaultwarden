@@ -25,7 +25,7 @@ func (a *app) advanceEpoch() uint64 {
 	a.epoch++
 	a.workerEpoch.Store(a.epoch)
 	if a.runtimeVault != nil {
-		a.runtimeVault.revokeSecrets()
+		a.prepareRuntimeSecret()
 	}
 	if a.componentLease != nil {
 		a.componentLease.revoke()

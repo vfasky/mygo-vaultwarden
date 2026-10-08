@@ -7,6 +7,7 @@ import (
 )
 
 func (a *app) showCipherHistory(storage func(storageRequest) storageReply) {
+	a.prepareRuntimeSecret()
 	e := a.editor
 	if e == nil || a.pending != 0 || e.fields.ID == "" || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
 		return

@@ -40,7 +40,19 @@ func (a *app) authentication(c *ui.Context) {
 						ui.Text(c, title).FontSize(25).FontWeight(650).TextAlign(ui.Center)
 						ui.Text(c, subtitle).FontSize(13).TextColor(vaultMuted).TextAlign(ui.Center).MaxLines(2)
 					})
-					if login && a.showVerification {
+					if a.recoveryForm != nil {
+						if a.mfaLogin != nil {
+							a.mfaLoginView(c)
+						} else {
+							a.accountRecoveryView(c)
+						}
+					} else if a.snapshot != nil && a.snapshot.RecoveryPending {
+						ui.Text(c, "此账号有未完成的安全变更恢复记录，旧库与自动填充已暂停。普通登录、同步和退出不能清除此记录。").MaxLines(5)
+						if authPrimary(c, "进入账号恢复", a.pending != 0).Clicked() {
+							a.openAccountRecovery()
+						}
+						a.authStatus(c)
+					} else if login && a.showVerification {
 						a.twoFactorLogin(c)
 					} else if login {
 						a.serverLogin(c)
