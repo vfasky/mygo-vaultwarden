@@ -14,7 +14,7 @@ type PasswordHistoryValue struct{ Password, LastUsedDate string }
 func (s *Session) WithCipherPasswordHistory(vault *VaultData, revision, id string, grant *ItemAuthorization, use func([]PasswordHistoryValue, []byte, time.Time) error) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if vault == nil || revision == "" || revision != s.authorizationRevision || s.passwordUnlock == nil || use == nil {
+	if vault == nil || revision == "" || revision != s.authorizationRevision || (s.passwordUnlock == nil && !s.runtimeOnly) || use == nil {
 		return ErrExpired
 	}
 	documents, err := vault.Documents(vault.Scope)
@@ -93,7 +93,11 @@ func (s *Session) WithCipherPasswordHistory(vault *VaultData, revision, id strin
 	if meta.Reprompt != 0 && grant.expires.Before(deadline) {
 		deadline = grant.expires
 	}
-	key := append([]byte(nil), s.passwordUnlock.Key...)
+	key, err := s.secretProtectionKeyLocked()
+	if err != nil {
+		return err
+	}
+	deadline = s.secretDeadlineLocked(deadline)
 	defer clear(key)
 	s.operationMu.Lock()
 	defer s.operationMu.Unlock()

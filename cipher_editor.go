@@ -278,6 +278,7 @@ func populateCipherEditor(editor *cipherEditor) {
 	}
 }
 func (a *app) cipherEditorView(c *ui.Context) {
+	callStorage := a.vaultStorage()
 	e := a.editor
 	if e.fields.OrganizationID != nil && !e.fields.Edit && e.repromptID == "" {
 		a.readOnlyOrganizationCipherView(c, e)
@@ -542,8 +543,9 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	}
 	vault := a.vault
 	scope, prior := *a.liveScope, a.snapshot
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++
@@ -568,7 +570,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 		} else {
 			switch {
 			case action == shareOrganizationAction:
-				_, err = shareCipherWithRecovery(ctx, parent, session, vault, editor, scope, editor.revision, persist)
+				_, err = shareCipherWithRecovery(ctx, parent, session, vault, editor, scope, editor.revision, persist, callStorage)
 			case editor.organizationID != "":
 				_, err = session.CreateOrganizationCipher(ctx, vault, editor.organizationID, editor.collectionID, editor.fields, persist)
 			case editor.fields.OrganizationID != nil:

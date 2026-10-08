@@ -174,7 +174,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 					a.cancel()
 					a.cancel = nil
 				}
-				a.epoch++
+				a.advanceEpoch()
 				a.clearBackupEditor()
 				a.status = "已取消；如导入已发出，请同步核对部分结果。"
 			}
@@ -226,8 +226,9 @@ func (a *app) chooseImportFile() {
 	if a.pending != 0 || e == nil || e.plan != nil || !e.importing || !a.backupCurrent(e, a.epoch) {
 		return
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
@@ -301,8 +302,9 @@ func (a *app) chooseExportFile() {
 	e.exportIDs = append([]string(nil), ids...)
 	e.exportGrants = make(map[string]*vaultwarden.ItemAuthorization)
 	grants := e.exportGrants
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
@@ -358,6 +360,7 @@ func (a *app) chooseExportFile() {
 	}()
 }
 func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Context, stage *stagedBackup, err error, cancel context.CancelFunc) {
+	callStorage := a.vaultStorage()
 	a.pending--
 	defer cancel()
 	defer stage.Close()
@@ -410,8 +413,9 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(storageReques
 	e.plan = nil
 	e.submitted = true
 	scope, prior := *a.liveScope, a.snapshot
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	storage = a.routeStorage(storage, epoch)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++

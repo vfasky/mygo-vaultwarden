@@ -18,6 +18,7 @@ type accountForm struct {
 	scope                                                                        vaultwarden.Scope
 	epoch, sequence                                                              uint64
 	mode                                                                         string
+	modes                                                                        []string
 	email, name, hint, avatar, password, newPassword, repeatPassword, token, otp string
 	kdfType, iterations, memory, parallelism                                     string
 	policy                                                                       vaultwarden.AccountPasswordPolicy
@@ -220,6 +221,9 @@ func (f *accountForm) dispatch(operation string) {
 	}
 	f.busy = true
 	f.clearSecrets()
+	if operation == "commit" {
+		f.plan = nil
+	} // worker exclusively owns the submitted plan
 	f.submit(r) // ownership of sensitive byte slices transfers to scheduler
 }
 func (f *accountForm) evaluate() {
@@ -255,7 +259,11 @@ func accountFormView(c *ui.Context, f *accountForm) {
 			f.cancel()
 		}
 	} else {
-		for _, mode := range []string{"register", "profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"} {
+		modes := f.modes
+		if modes == nil {
+			modes = []string{"register", "profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
+		}
+		for _, mode := range modes {
 			if ui.Button(c, accountModeLabel(mode)).Disabled(disabled).Clicked() {
 				f.cancel()
 				f.mode = mode

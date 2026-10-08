@@ -56,7 +56,7 @@ func (a *app) cipherRowPreviewView(c *ui.Context, e *cipherEditor, path string) 
 		if shown {
 			clearCipherRowReveal(e)
 		} else {
-			a.revealCipherRows(path, callStorage)
+			a.revealCipherRows(path, a.vaultStorage())
 		}
 	}
 	if e.rowPreview == nil || e.rowPreview.path != path {

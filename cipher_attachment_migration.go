@@ -95,8 +95,9 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 	if oldID == "" || (remove && newID == "") {
 		return
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++

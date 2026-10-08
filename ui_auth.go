@@ -22,7 +22,7 @@ func (a *app) authentication(c *ui.Context) {
 	if login {
 		page, title, subtitle = "login", "登录服务器", "连接你的 Vaultwarden 密码库"
 		if a.showVerification {
-			page, title, subtitle = "verification", "两步验证", "输入验证器中的 6 位验证码"
+			page, title, subtitle = "verification", "两步验证", "选择此服务器提供的验证方式"
 		}
 	}
 	width, _ := c.Size()
@@ -77,6 +77,9 @@ func authLink(c *ui.Context, label string, disabled bool) *ui.Element {
 }
 
 func (a *app) authStatus(c *ui.Context) {
+	if warning := a.mfaWarnings.warning(a.serverURL, a.email); warning != "" {
+		ui.Text(c, warning).MaxLines(5)
+	}
 	if a.status != "" {
 		ui.Text(c, a.status).FontSize(12).LineHeight(1.5).TextColor(vaultMuted).
 			TextAlign(ui.Center).Role(ui.RoleStatus)
@@ -84,6 +87,13 @@ func (a *app) authStatus(c *ui.Context) {
 }
 
 func (a *app) serverLogin(c *ui.Context) {
+	if a.accountForm != nil && a.accountForm.mode == "register" {
+		accountFormView(c, a.accountForm)
+		if authLink(c, "返回登录", false).Clicked() {
+			a.advanceEpoch()
+		}
+		return
+	}
 	busy := a.pending != 0
 	ready := !busy && a.snapshot != nil && a.deviceID != ""
 	submitted := false
@@ -121,10 +131,18 @@ func (a *app) serverLogin(c *ui.Context) {
 		}
 		clicked := authPrimary(c, label, !ready).Clicked()
 		if ready && (clicked || submitted) {
+			a.loginSSO = false
 			a.syncVault(true)
 		}
 		a.authStatus(c)
 		ui.Row(c).Justify(ui.Center).Children(func() {
+			if authLink(c, "注册 / 密码提示", !ready).Clicked() {
+				a.openRegistration()
+			}
+			if authLink(c, "SSO 登录", !ready).Tooltip("SSO 认证后仍需主密码解锁；新建 SSO 账号和 Key Connector 暂不支持。").Clicked() {
+				a.loginSSO = true
+				a.syncVault(true)
+			}
 			switch {
 			case a.cancel != nil:
 				if authLink(c, "取消登录", false).Clicked() {
@@ -152,6 +170,10 @@ func (a *app) serverLogin(c *ui.Context) {
 }
 
 func (a *app) twoFactorLogin(c *ui.Context) {
+	if a.mfaLogin != nil {
+		a.mfaLoginView(c)
+		return
+	}
 	ready := a.loginChallenge != nil && a.loginChallenge.epoch == a.epoch && a.loginChallenge.ctx.Err() == nil
 	submitted := false
 	ui.Column(c).Key(a.secretInputVersion).Gap(16).Children(func() {

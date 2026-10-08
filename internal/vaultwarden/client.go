@@ -11,6 +11,7 @@ import (
 	"path"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -280,6 +281,9 @@ type Session struct {
 	key                                      []byte
 	passwordUnlock                           *PasswordUnlock
 	expires                                  time.Time
+	runtimeOnly                              bool
+	runtimeSyncDigest                        [32]byte
+	runtimeCurrent                           atomic.Pointer[RuntimeAuthority]
 	closed                                   bool
 	checkpointPending                        bool
 	operationMu                              sync.Mutex
@@ -294,6 +298,9 @@ type Session struct {
 }
 
 func (s *Session) Close() {
+	if current := s.runtimeCurrent.Swap(nil); current != nil {
+		current.Close()
+	}
 	s.operationMu.Lock()
 	s.stopping = true
 	if s.cancelOperation != nil {
@@ -311,7 +318,7 @@ func (s *Session) Close() {
 	s.access = ""
 	s.refresh = ""
 	s.closed = true
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 	s.authorizationRevision = ""
 	s.writePolicies = nil
 	s.offlinePolicies = nil
@@ -347,7 +354,7 @@ func (s *Session) refreshLocked(ctx context.Context) error {
 		s.checkpointPolicies = p
 	}
 	s.offlinePolicies = nil
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 	return nil
 }
 func (s *Session) Sync(ctx context.Context) (SyncResult, error) {
@@ -370,7 +377,7 @@ func (s *Session) syncLocked(ctx context.Context, persist func(SessionCheckpoint
 	// when download, identity validation or policy migration subsequently fails.
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 	status, data, err := s.authenticatedLocked(ctx, http.MethodGet, "/api/sync", "", "", persist)
 	if err != nil {
 		return SyncResult{}, err
@@ -424,6 +431,12 @@ func (s *Session) syncLocked(ctx context.Context, persist func(SessionCheckpoint
 		result.Session, err = s.savedLocked()
 		if err != nil {
 			clear(result.PasswordUnlock.Key)
+			return SyncResult{}, err
+		}
+	}
+	if s.runtimeOnly {
+		s.runtimeSyncDigest, err = snapshotDigest(result.Vault)
+		if err != nil {
 			return SyncResult{}, err
 		}
 	}

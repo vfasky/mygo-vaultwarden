@@ -64,7 +64,19 @@ func (a *app) syncFailed(reply storageReply, err error) {
 }
 
 func (a *app) stopNetwork() {
+	// Invalidate worker leases before native cleanup or any Session close.
+	a.advanceEpoch()
+	if a.notifications != nil {
+		a.notifications.close()
+		a.notifications = nil
+	}
+	a.notificationSyncPending = false
 	a.clearSecretClipboard()
+	if a.runtimeVault != nil {
+		a.runtimeVault.close()
+		a.runtimeVault = nil
+		a.snapshot, a.diskSnapshot = a.diskSnapshot, nil
+	}
 	if a.editor != nil {
 		a.editor.shownSecret = ""
 		a.editor.repromptPassword = ""
@@ -72,9 +84,6 @@ func (a *app) stopNetwork() {
 			*a.editor = cipherEditor{}
 		}
 	}
-	// Invalidate every pending callback, including writes whose server response
-	// arrives after an observed external lock or account switch.
-	a.epoch++
 	if a.cancel != nil {
 		a.cancel()
 		a.cancel = nil
@@ -106,6 +115,8 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 	if a.pending != 0 || a.snapshot == nil {
 		return
 	}
+	useSSO := a.loginSSO
+	a.loginSSO = false
 	server, email := a.serverURL, vaultwarden.NormalizeEmail(a.email)
 	var password []byte
 	if login {
@@ -154,8 +165,10 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 	if !login {
 		expected = a.sessionRevision
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	storage = a.routeStorage(storage, epoch)
+	runtime := a.runtimeVault
 	var ctx context.Context
 	var cancel context.CancelFunc
 	if login {
@@ -172,6 +185,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 	// Capture on the UI thread; only the successful authenticated publication
 	// below may consume this continuation. Status observations cannot mint one.
 	backupContinuation := a.captureBackupContinuation(epoch)
+	platform := NewAuthenticationPlatform(a.window)
 	go func() {
 		defer clear(password)
 		var session vaultSession = existing
@@ -196,17 +210,30 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 				if err != nil {
 					workErr = err
 				} else {
-					attempt := 0
-					var loggedIn *vaultwarden.Session
-					loggedIn, workErr = client.Login(ctx, email, password, func() ([]byte, error) {
-						// Login has already derived the keys and authorization hash.
-						// The raw master password is unnecessary while waiting for MFA.
-						clear(password)
-						attempt++
-						return a.requestLoginCode(ctx, epoch, attempt, dispatch)
-					})
-					if workErr == nil {
-						session = loggedIn
+					prompt := func(promptCtx context.Context, challenge vaultwarden.MFAChallenge) (vaultwarden.MFAResponse, error) {
+						return a.requestMFA(promptCtx, server, email, epoch, challenge, dispatch, platform.MFA(server, epoch))
+					}
+					if useSSO {
+						raw, err := platform.SSO(ctx, client, epoch, prompt)
+						workErr = err
+						if err == nil {
+							var unlocked *vaultwarden.Session
+							unlocked, workErr = client.UnlockSSOVault(ctx, raw, email, password)
+							if workErr == nil {
+								session = unlocked
+							}
+						}
+						clear(raw)
+					} else {
+						loggedIn, loginErr := client.LoginMFA(ctx, email, password, "", prompt)
+						workErr = loginErr
+						loggedIn.RememberToken = ""
+						if loggedIn.RemovedAllMFA {
+							a.mfaWarnings.record(server, email, true)
+						}
+						if workErr == nil {
+							session = loggedIn.Session
+						}
 					}
 				}
 				clear(password)
@@ -314,7 +341,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 			if !backupContinuation.current(a) {
 				backupContinuation = nil
 			}
-			if concrete, ok := session.(*vaultwarden.Session); ok {
+			if concrete, ok := session.(*vaultwarden.Session); ok && runtime == nil {
 				if err := concrete.AcceptAuthenticatedSnapshot(reply.Vault, reply.State.Revision); err != nil {
 					if login {
 						go session.Close()
@@ -345,6 +372,11 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 			a.status = fmt.Sprintf("已同步 %d 个项目；可填充登录 %d。填充排除：未授权组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
 			a.reconcileBulk()
 			a.reconcileImport(backupContinuation)
+			a.startNotifications(dispatch, storage)
+			if a.notificationSyncPending {
+				a.notificationSyncPending = false
+				a.syncVaultWith(false, dispatch, storage)
+			}
 		})
 	}()
 }

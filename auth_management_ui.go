@@ -116,7 +116,7 @@ var authManagementOperations = []struct {
 	{"get-email", "读取邮件验证设置", nil}, {"send-email", "发送邮件设置验证码", []string{"email"}}, {"email", "启用邮件验证", []string{"email", "token"}},
 	{"get-duo", "读取 Duo 设置", nil}, {"duo", "保存 Duo 设置", []string{"host", "clientId", "clientSecret"}},
 	{"get-yubikey", "读取 YubiKey 设置", nil}, {"yubikey", "保存 YubiKey OTP", []string{"key1", "key2", "key3", "key4", "key5"}},
-	{"get-webauthn", "读取安全密钥列表", nil}, {"get-webauthn-challenge", "注册平台安全密钥", nil}, {"delete-webauthn", "删除安全密钥", []string{"id"}},
+	{"get-webauthn", "读取安全密钥列表", nil}, {"get-webauthn-challenge", "注册平台安全密钥", []string{"id", "name"}}, {"delete-webauthn", "删除安全密钥", []string{"id"}},
 	{"get-recover", "查看恢复码", nil}, {"disable", "关闭一种双重验证", []string{"type"}}, {"request-otp", "发送敏感操作邮件 OTP", nil}, {"verify-otp", "一次性核验敏感 OTP", []string{"otp"}},
 }
 
@@ -133,7 +133,7 @@ func authManagementView(c *ui.Context, f *authManagementForm) {
 	}
 	ui.TextInput(c, &f.password).Label("主密码（仅在本机生成验证证明）").Password().Disabled(f.busy)
 	ui.TextInput(c, &f.otp).Label("或敏感操作邮件 OTP；与主密码二选一").Password().Disabled(f.busy)
-	labels := map[string]string{"key": "验证器密钥", "token": "验证码", "email": "接收邮箱", "host": "Duo 主机", "clientId": "Duo 客户端 ID", "clientSecret": "Duo 客户端秘密", "id": "安全密钥编号（1–5）", "type": "验证方式编号（0/1/2/3/7）"}
+	labels := map[string]string{"name": "安全密钥名称", "key": "验证器密钥", "token": "验证码", "email": "接收邮箱", "host": "Duo 主机", "clientId": "Duo 客户端 ID", "clientSecret": "Duo 客户端秘密", "id": "安全密钥编号（1–5）", "type": "验证方式编号（0/1/2/3/7）"}
 	for _, entry := range authManagementOperations {
 		if entry.op != f.operation {
 			continue

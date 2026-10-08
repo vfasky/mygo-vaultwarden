@@ -108,8 +108,9 @@ func (a *app) mutateFolder(remove bool) {
 		return
 	}
 	scope, prior := *a.liveScope, a.snapshot
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	callStorage := a.vaultStorage()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++

@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"log"
+	"sync/atomic"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -33,6 +34,21 @@ type app struct {
 	itemsRevision                             string
 	pending                                   int
 	epoch                                     uint64
+	workerEpoch                               atomic.Uint64
+	componentLease                            *controllerLease
+	sendPanel                                 *SendPanel
+	devicePanel                               *DevicePanel
+	accountForm                               *accountForm
+	authManagement                            *authManagementForm
+	componentCancel                           context.CancelFunc
+	runtimeVault                              *runtimeVault
+	diskSnapshot                              *snapshotStatus
+	mfaLogin                                  *controllerMFA
+	mfaWarnings                               mfaRecoveryWarnings
+	loginSSO                                  bool
+	notificationsEnabled                      bool
+	notifications                             *controllerNotifications
+	notificationSyncPending                   bool
 	session                                   vaultSession
 	sessionRevision                           string
 	liveScope                                 *vaultwarden.Scope
@@ -51,6 +67,18 @@ func (a *app) lockInterface() {
 }
 
 func (a *app) runStorage(operation string) {
+	if runtime := a.runtimeVault; runtime != nil {
+		if operation == "status" {
+			epoch := a.epoch + 1
+			request := storageRequest{Operation: "status"}
+			a.startStorage(request, func() storageReply { return runtime.call(epoch, request) })
+			return
+		}
+		if operation == "reindex" || operation == "list" {
+			a.status = "临时在线库不注册系统自动填充，也不保存离线登录；请先绑定主密码并同步。"
+			return
+		}
+	}
 	if operation == "lock" || operation == "logout" {
 		a.lockInterface()
 	}
@@ -78,7 +106,7 @@ func (a *app) runStorage(operation string) {
 }
 
 func (a *app) startStorage(request storageRequest, work func() storageReply) {
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
 	a.pending++
 	if request.Operation != "status" && request.Operation != "settings" {
@@ -124,6 +152,7 @@ func (a *app) completeStorage(request storageRequest, epoch uint64, reply storag
 		}
 		a.itemsRevision = reply.State.Revision
 		a.showSettings, a.showLogin = false, false
+		a.startNotifications(a.window.Update, callStorage)
 		return
 	}
 	switch request.Operation {
@@ -139,14 +168,14 @@ func (a *app) completeStorage(request storageRequest, epoch uint64, reply storag
 }
 
 func main() {
-	a := &app{status: "正在读取本机存储状态…"}
+	a := &app{status: "正在读取本机存储状态…", notificationsEnabled: true}
 	mygo.App.WhenReady(func() {
 		a.window = mygo.NewWindow(mygo.WindowOptions{Title: "MyGo Vaultwarden", Width: 1280, Height: 820, MinWidth: 1060, MinHeight: 700, StateKey: "main", TitleBarStyle: mygo.TitleBarHiddenInset, Content: ui.View(a.view)})
 		a.runStorage("settings")
 		mygo.Power.OnLockScreen(func() { a.window.Update(func() { a.runStorage("lock") }) })
 		mygo.Power.OnSuspend(func() { a.window.Update(func() { a.runStorage("lock") }) })
 	})
-	mygo.App.OnWillQuit(func(_ *mygo.QuitEvent) { a.clearSecretClipboard() })
+	mygo.App.OnWillQuit(func(_ *mygo.QuitEvent) { a.stopNetwork() })
 	if err := mygo.App.Run(); err != nil {
 		log.Fatal(err)
 	}

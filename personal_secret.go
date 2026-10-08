@@ -80,5 +80,9 @@ func (a *app) clearSecretClipboard() {
 		return
 	}
 	a.secretClipboardOwned = false
+	if a.runtimeVault != nil {
+		a.runtimeVault.revokeSecrets()
+		return
+	}
 	_ = callStorage(storageRequest{Operation: "clearSecretClipboard"})
 }

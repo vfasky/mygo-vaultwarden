@@ -142,7 +142,7 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 			clear(e.shownHistory)
 			e.shownHistory = nil
 		} else {
-			a.showCipherHistory(callStorage)
+			a.showCipherHistory(a.vaultStorage())
 		}
 	}
 	if e.showHistory {

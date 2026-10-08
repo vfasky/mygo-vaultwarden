@@ -254,7 +254,7 @@ func (f *DeviceLogin) Run(prompt func(context.Context, MFAChallenge) (MFARespons
 	if err != nil {
 		return DeviceLoginResult{}, err
 	}
-	s := &Session{client: f.client, email: f.email, account: f.scope.Account, key: append([]byte(nil), key...), wrapped: token.wrappedKey(), access: token.AccessToken, refresh: token.RefreshToken, expires: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)}
+	s := &Session{runtimeOnly: true, client: f.client, email: f.email, account: f.scope.Account, key: append([]byte(nil), key...), wrapped: token.wrappedKey(), access: token.AccessToken, refresh: token.RefreshToken, expires: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)}
 	f.mu.Lock()
 	f.session = s
 	f.mu.Unlock()

@@ -24,8 +24,9 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 		a.status = "复制含附件项目之前，请先保存草稿；完整复制使用已保存版本。"
 		return
 	}
-	a.epoch++
+	a.advanceEpoch()
 	epoch := a.epoch
+	storage = a.routeStorage(storage, epoch)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++

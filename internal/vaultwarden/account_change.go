@@ -375,7 +375,7 @@ func (s *Session) accountInvalidateLocked() {
 	s.access = ""
 	s.refresh = ""
 	s.closed = true
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 	s.authorizationRevision = ""
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil

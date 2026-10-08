@@ -55,6 +55,18 @@ var vaultCategories = []vaultCategory{
 }
 
 func (a *app) currentCategory() vaultCategory {
+	if a.category == "mfa" {
+		return vaultCategory{"mfa", "两步验证设置", "shield", true}
+	}
+	if a.category == "account" {
+		return vaultCategory{"account", "账号与安全", "user", true}
+	}
+	if a.category == "devices" {
+		return vaultCategory{"devices", "设备与登录审批", "shield", true}
+	}
+	if a.category == "send" {
+		return vaultCategory{"send", "Send", "send", true}
+	}
 	if a.category == "personal" {
 		return vaultCategory{"personal", "我的密码库", "user", true}
 	}
@@ -166,6 +178,18 @@ func (a *app) unlocked() bool {
 }
 
 func (a *app) view(c *ui.Context) {
+	if a.authManagement != nil && (a.category != "mfa" || a.showSettings) {
+		a.advanceEpoch()
+	}
+	if a.accountForm != nil && a.accountForm.mode != "register" && (a.category != "account" || a.showSettings) {
+		a.advanceEpoch()
+	}
+	if a.devicePanel != nil && (a.category != "devices" || a.showSettings) {
+		a.advanceEpoch()
+	}
+	if a.sendPanel != nil && (a.category != "send" || a.showSettings) {
+		a.advanceEpoch()
+	}
 	c.SetTheme(vaultTheme)
 	c.Root().Background(ui.Transparent)
 	if a.showLogin || !a.unlocked() {
@@ -185,6 +209,58 @@ func (a *app) view(c *ui.Context) {
 }
 
 func (a *app) body(c *ui.Context) {
+	if a.category == "mfa" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.authManagement != nil {
+				authManagementView(c, a.authManagement)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开两步验证设置").Disabled(a.pending != 0).Clicked() {
+					a.openAuthenticationManagement()
+				}
+			}
+		})
+		return
+	}
+	if a.category == "account" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.accountForm != nil {
+				accountFormView(c, a.accountForm)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开账号与安全").Disabled(a.pending != 0).Clicked() {
+					a.openAccount()
+				}
+			}
+		})
+		return
+	}
+	if a.category == "devices" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.devicePanel != nil {
+				a.devicePanel.View(c)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开设备与登录审批").Disabled(a.pending != 0).Clicked() {
+					a.openDevices()
+				}
+			}
+		})
+		return
+	}
+	if a.category == "send" && !a.showSettings {
+		ui.Scroll(c).Grow(1).Children(func() {
+			if a.sendPanel != nil {
+				a.sendPanel.View(c)
+			} else {
+				ui.Text(c, a.status)
+				if ui.Button(c, "打开 Send").Disabled(a.pending != 0).Clicked() {
+					a.openSend()
+				}
+			}
+		})
+		return
+	}
 	ui.Row(c).Grow(1).MinHeight(0).Gap(16).AlignItems(ui.Stretch).Children(func() {
 		items := a.filteredItems()
 		a.reconcileSelection(items)
@@ -727,6 +803,22 @@ func (a *app) settings(c *ui.Context) {
 				if iconButton(c, "关闭设置", "close").Clicked() {
 					a.showSettings = false
 				}
+			})
+			detailCard(c, "账号服务", func() {
+				ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
+					if action(c, "Send", "send", false, !ready).Clicked() {
+						a.openSend()
+					}
+					if action(c, "设备与登录审批", "shield", false, !ready).Clicked() {
+						a.openDevices()
+					}
+					if action(c, "账号与安全", "user", false, !ready).Clicked() {
+						a.openAccount()
+					}
+					if action(c, "两步验证设置", "shield", false, !ready).Clicked() {
+						a.openAuthenticationManagement()
+					}
+				})
 			})
 			detailCard(c, "连接密码库", func() {
 				ui.Column(c).Padding(16).Gap(13).Children(func() {

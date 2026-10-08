@@ -47,7 +47,7 @@ func (s *Session) BindSnapshotRevision(scope Scope, revision string) error {
 	if s.authorizationRevision != revision {
 		s.offlinePolicies = nil
 		s.checkpointPolicies = nil
-		s.authorizationEpoch++
+		s.advanceAuthorizationLocked()
 		s.authorizationRevision = revision
 	}
 	return nil
@@ -58,7 +58,7 @@ func (s *Session) RevokeItemAuthorizations() {
 	defer s.mu.Unlock()
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil
-	s.authorizationEpoch++
+	s.advanceAuthorizationLocked()
 }
 
 func (s *Session) validItemAuthorizationLocked(grant *ItemAuthorization, document CipherDocument) bool {
@@ -75,7 +75,7 @@ func (s *Session) validItemAuthorizationLocked(grant *ItemAuthorization, documen
 func (s *Session) itemSessionActiveLocked() bool {
 	s.operationMu.Lock()
 	defer s.operationMu.Unlock()
-	return !s.closed && !s.stopping
+	return !s.closed && !s.stopping && (!s.runtimeOnly || time.Now().Before(s.expires))
 }
 
 func (s *Session) personalDocumentLocked(vault *VaultData, id string) (CipherDocument, error) {
@@ -146,19 +146,32 @@ func (s *Session) authorizeItem(ctx context.Context, vault *VaultData, revision,
 		s.mu.Unlock()
 		return nil, err
 	}
-	if revision == "" || revision != s.authorizationRevision || s.passwordUnlock == nil {
+	if revision == "" || revision != s.authorizationRevision || (s.passwordUnlock == nil && !s.runtimeOnly) {
 		s.mu.Unlock()
 		return nil, ErrExpired
 	}
-	config := s.passwordUnlock.Config
+	var config PasswordUnlockConfig
+	runtime := s.passwordUnlock == nil
 	epoch := s.authorizationEpoch
-	expected := append([]byte(nil), s.passwordUnlock.Key...)
+	email, wrapped, client := s.email, s.wrapped, s.client
+	var expected []byte
+	if runtime {
+		expected = append([]byte(nil), s.key...)
+	} else {
+		config = s.passwordUnlock.Config
+		expected = append([]byte(nil), s.passwordUnlock.Key...)
+	}
 	s.mu.Unlock()
 	defer clear(expected)
 	if ctx.Err() != nil {
 		return nil, ErrCancelled
 	}
-	derived, err := DeriveSnapshotUnlockKey(password, config)
+	var derived []byte
+	if runtime {
+		derived, err = runtimePasswordKey(ctx, client, email, wrapped, password)
+	} else {
+		derived, err = DeriveSnapshotUnlockKey(password, config)
+	}
 	if err != nil {
 		return nil, err
 	}
