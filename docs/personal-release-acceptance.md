@@ -33,7 +33,10 @@
 - 当前账号轮换与nondispatch固定1.37.4证据已在前序检查点执行，详见开发记录；全量单元/race覆盖其当前代码。它不是隐藏恢复wrapper的独立生产读回证明。
 - 许可证收集脚本成功，保留GPL、MyGo v0.2.15、goja、zxcvbn及实际链接模块的声明；未升级这些依赖。
 
-服务与紧急访问最终回环仍在本轮运行，结果确认后补入，不预先记为通过。
+- 固定1.37.4的 `TestDeviceLoginLive1374`、`TestDeviceNotificationLive1374`、`TestSendLive1374` 全部通过（race）：设备批准/绑定、认证和匿名MessagePack通知、文本/文件Send与受控发布。
+- `TestLiveRecoveryLifecycle` 使用个人版本范围开关通过（race）：自有SMTP邀请/重发、过期token与错误身份拒绝、可信公钥确认、等待期拒绝、请求/批准/拒绝、只读查看、接管和userKey保留；关闭功能时历史授权仍在且轮换探针阻止误判空清单，恢复开关后历史再次可见。使用人工批准，不声称自然等待天数已实测；管理员流程未作为本版门槛执行。
+- 新主入口的隔离真实C ABI回归验证目标fresh登录、同账号发布、foreign明确同意后原子切换、多操作屏障、nondispatch、部分结果拒绝与晚回执不重开UI；紧急邀请验证敏感HTTP之前确有同op持久记录，取消后的未知结果仍记回原actor，无重放。
+- 各owned fixture按容器ID与所有权label清理；最后 `docker ps -a --filter label=mygo.fixture` 无残留。没有清理其它用户容器。
 
 ## 大库测量与边界
 

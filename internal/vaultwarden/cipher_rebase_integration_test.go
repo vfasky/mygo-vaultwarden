@@ -45,7 +45,7 @@ func testLiveCipherComparison(t *testing.T, ctx context.Context, s *Session, sco
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.BindSnapshotRevision(scope, "live-comparison-revision"); err != nil {
+	if err := s.AcceptAuthenticatedSnapshot(result.Vault, "live-comparison-revision"); err != nil {
 		t.Fatal(err)
 	}
 	plan, changes, err := s.ComparePersonalCipher(result.Vault, "live-comparison-revision", base, local, nil)
