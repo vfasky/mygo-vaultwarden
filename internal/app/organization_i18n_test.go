@@ -24,8 +24,8 @@ func TestOrganizationInvitationEnglish(t *testing.T) {
 	if tt.HasText("接受组织邀请") {
 		t.Error("English invitation view retained its Chinese heading")
 	}
-	// Role names also form UI keys and must stay stable across languages.
-	if got := memberRoleName(0); got != "所有者" {
+	// Role keys must stay stable across languages.
+	if got := memberRoleName(0); got != "org.member.role_owner" {
 		t.Fatalf("owner role key changed with language: %q", got)
 	}
 	if got := i18n.T(memberRoleName(0)); got != "Owner" {
@@ -33,5 +33,9 @@ func TestOrganizationInvitationEnglish(t *testing.T) {
 	}
 	if got := orgBoolLabel("Official JSON", false); got != "Official JSON: Off" {
 		t.Fatalf("toggle used a close-action label instead of an off state: %q", got)
+	}
+	i18n.Set(i18n.Chinese)
+	if got := i18n.T(memberRoleName(0)); got != "所有者" {
+		t.Fatalf("owner Chinese display label changed: %q", got)
 	}
 }
