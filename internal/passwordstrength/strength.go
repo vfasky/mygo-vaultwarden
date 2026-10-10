@@ -5,7 +5,6 @@ package passwordstrength
 
 import (
 	"context"
-	_ "embed"
 	"errors"
 	"sync"
 	"time"
@@ -13,12 +12,8 @@ import (
 
 	"github.com/dop251/goja"
 	"github.com/dop251/goja/parser"
+	"github.com/vfasky/mygo-vaultwarden/third_party/zxcvbn"
 )
-
-// The original distribution and its dictionaries are embedded verbatim.
-//
-//go:embed third_party/zxcvbn/zxcvbn.js
-var estimator string
 
 // This wrapper mirrors PasswordStrengthService at the pinned clients commit.
 // Keeping normalization in JS preserves UTF-16, trim and toLowerCase semantics.
@@ -101,7 +96,7 @@ func evaluate(ctx context.Context, password, email string, userInputs []string, 
 	compileOnce.Do(func() {
 		// The original distribution retains its sourceMappingURL comment.
 		// Disable source maps explicitly so compilation performs no file lookup.
-		parsed, err := goja.Parse("zxcvbn-4.4.2", "var module = {exports: {}}; var exports = module.exports;\n"+estimator+"\n"+wrapper, parser.WithDisableSourceMaps)
+		parsed, err := goja.Parse("zxcvbn-4.4.2", "var module = {exports: {}}; var exports = module.exports;\n"+zxcvbn.Script+"\n"+wrapper, parser.WithDisableSourceMaps)
 		if err != nil {
 			compileError = err
 			return

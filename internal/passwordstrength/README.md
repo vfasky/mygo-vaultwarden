@@ -6,7 +6,7 @@
 
 - Bitwarden clients commit `5983f56ce0cf924eea56c7d8f066f7885825a7ce`：[`password-strength.service.ts`](https://github.com/bitwarden/clients/blob/5983f56ce0cf924eea56c7d8f066f7885825a7ce/libs/common/src/tools/password-strength/password-strength.service.ts) 与 [`package-lock.json`](https://github.com/bitwarden/clients/blob/5983f56ce0cf924eea56c7d8f066f7885825a7ce/package-lock.json)。lock 的 `node_modules/zxcvbn` 是 **4.4.2**，没有改用 zxcvbn-ts 或不相容的 Go 重写。
 - npm 原包：<https://registry.npmjs.org/zxcvbn/-/zxcvbn-4.4.2.tgz>。下载后核对固定 lock SHA512：`Bq0B+ixT/DMyG8kgX2xWcI5jUvCwqrMxSFam7m0lAf78nf04hv6lNCsyLYdyYTrCVMqNDY/206K7eExYCeSyUQ==`。
-- `third_party/zxcvbn/zxcvbn.js` 是原包 `dist/zxcvbn.js`，**821792 bytes**，SHA256 `f42c651f40506acb6b662490f338dd47a5951d3312039c4ab8fe5090484f351a`；完整词典/匹配/评分保持原文件，自动测试固定摘要。保留原 MIT 许可证 `third_party/zxcvbn/LICENSE.txt`（Dropbox 2012–2016）。末尾 source-map 注释也未改写；无需 map 即可运行。
+- `../../third_party/zxcvbn/zxcvbn.js` 是原包 `dist/zxcvbn.js`，**821792 bytes**，SHA256 `f42c651f40506acb6b662490f338dd47a5951d3312039c4ab8fe5090484f351a`；完整词典/匹配/评分保持原文件，自动测试固定摘要。保留原 MIT 许可证 `../../third_party/zxcvbn/LICENSE.txt`（Dropbox 2012–2016）。末尾 source-map 注释也未改写；无需 map 即可运行。
 - JS 执行引擎 `github.com/dop251/goja` 固定 `v0.0.0-20261007120015-921e62952efd`，MIT，依赖校验记录在根 go.mod/go.sum。不依赖安装 Node 的终端用户环境；Node 只用于独立开发期 oracle。
 
 ## 输入、Unicode、阈值与资源边界
