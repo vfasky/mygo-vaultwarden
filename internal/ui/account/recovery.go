@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -76,7 +77,7 @@ func (p *RecoveryPanel) cancelOperation() {
 	}
 	p.clearSecrets()
 	if p.submitting {
-		p.Status = "正在取消；已发送操作不会自动回滚。"
+		p.Status = i18n.T("正在取消；已发送操作不会自动回滚。")
 		return
 	}
 	p.generation++
@@ -86,7 +87,7 @@ func (p *RecoveryPanel) cancelOperation() {
 		p.Plan.Close()
 		p.Plan = nil
 	}
-	p.Status = "已取消；未提交。"
+	p.Status = i18n.T("已取消；未提交。")
 }
 func (p *RecoveryPanel) Close() {
 	if p.cancel != nil {
@@ -150,7 +151,7 @@ func (p *RecoveryPanel) PreparePlan() {
 	}
 	r, err := p.request()
 	if err != nil {
-		p.Status = "请核对对象、必填项及两次新密码。"
+		p.Status = i18n.T("请核对对象、必填项及两次新密码。")
 		return
 	}
 	p.running = true
@@ -182,11 +183,11 @@ func (p *RecoveryPanel) PreparePlan() {
 				if plan != nil {
 					plan.Close()
 				}
-				p.Status = "核验失败，未创建确认计划。请重新读取状态并检查公钥、权限及策略。"
+				p.Status = i18n.T("核验失败，未创建确认计划。请重新读取状态并检查公钥、权限及策略。")
 				return
 			}
 			p.Plan = plan
-			p.Status = "已核验；请阅读影响后确认。"
+			p.Status = i18n.T("已核验；请阅读影响后确认。")
 		})
 	}()
 }
@@ -223,15 +224,15 @@ func (p *RecoveryPanel) CommitPlan() {
 			p.clearSecrets()
 			switch {
 			case result.Unknown:
-				p.Status = "结果未知或可能部分完成。请核对持久记录及服务器状态，禁止重复提交。"
+				p.Status = i18n.Key("结果未知或可能部分完成。请核对持久记录及服务器状态，禁止重复提交。")
 			case err != nil:
-				p.Status = "操作未获得确认。请核对记录；重新读取后再开始新的流程。"
+				p.Status = i18n.T("操作未获得确认。请核对记录；重新读取后再开始新的流程。")
 			case result.Confirmed && result.RequireTargetLogin:
-				p.Status = "服务器确认恢复。目标旧会话与 AutoFill 不得继续使用；需要重新登录、完整同步与核验。"
+				p.Status = i18n.T("服务器确认恢复。目标旧会话与 AutoFill 不得继续使用；需要重新登录、完整同步与核验。")
 			case result.Confirmed:
-				p.Status = "服务器已确认，请重新读取最新授权状态。"
+				p.Status = i18n.T("服务器已确认，请重新读取最新授权状态。")
 			default:
-				p.Status = "未取得可靠结果，请核对状态。"
+				p.Status = i18n.T("未取得可靠结果，请核对状态。")
 			}
 		})
 	}()
@@ -240,35 +241,35 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 	if p.closed {
 		return
 	}
-	title := "组织账号恢复"
+	title := i18n.T("组织账号恢复")
 	if p.emergency {
-		title = "紧急访问"
+		title = i18n.T("紧急访问")
 	}
 	ui.Text(c, title).FontSize(22)
 	disabled := p.blocked() || p.Plan != nil
 	if p.emergency {
 		if p.trusted {
-			ui.Text(c, "我信任的联系人（我授予访问权限）")
+			ui.Text(c, i18n.T("我信任的联系人（我授予访问权限）"))
 		} else {
-			ui.Text(c, "授予我访问权限的人")
+			ui.Text(c, i18n.T("授予我访问权限的人"))
 		}
-		ui.Text(c, "等待期仅作展示，必须由服务器批准后才能查看或接管。")
+		ui.Text(c, i18n.T("等待期仅作展示，必须由服务器批准后才能查看或接管。"))
 		for i, row := range p.contacts {
-			states := []string{"已邀请", "已接受，待确认", "已确认", "等待批准", "已批准"}
-			state := "未知状态"
+			states := []string{i18n.T("已邀请"), i18n.T("已接受，待确认"), i18n.T("已确认"), i18n.T("等待批准"), i18n.T("已批准")}
+			state := i18n.T("未知状态")
 			if row.Status >= 0 && row.Status < len(states) {
 				state = states[row.Status]
 			}
-			kind := "只读查看"
+			kind := i18n.T("只读查看")
 			if row.Type == 1 {
-				kind = "接管账号"
+				kind = i18n.T("接管账号")
 			}
-			label := fmt.Sprintf("%s · %s · %s · %s · 等待 %d 天", row.Name, row.Email, state, kind, row.WaitTimeDays)
+			label := i18n.Tf("%s · %s · %s · %s · 等待 %d 天", row.Name, row.Email, state, kind, row.WaitTimeDays)
 			if kit.Action(c, label, "", p.selected == i, disabled).Key("emergency-contact-" + row.ID).Clicked() {
 				p.selected = i
 			}
 		}
-		options := []struct{ action, label string }{{"invite", "邀请联系人"}, {"accept", "接受邮件邀请"}, {"reinvite", "重新发送邀请"}, {"confirm", "确认并分发密钥"}, {"initiate", "请求访问"}, {"approve", "批准请求"}, {"reject", "拒绝或撤回批准"}, {"update", "更改类型与等待期"}, {"delete", "移除授权"}, {"takeover", "接管并重置密码"}}
+		options := []struct{ action, label string }{{"invite", i18n.T("邀请联系人")}, {"accept", i18n.T("接受邮件邀请")}, {"reinvite", i18n.T("重新发送邀请")}, {"confirm", i18n.T("确认并分发密钥")}, {"initiate", i18n.T("请求访问")}, {"approve", i18n.T("批准请求")}, {"reject", i18n.T("拒绝或撤回批准")}, {"update", i18n.T("更改类型与等待期")}, {"delete", i18n.T("移除授权")}, {"takeover", i18n.T("接管并重置密码")}}
 		for _, o := range options {
 			allowed := o.action == "invite" || o.action == "accept"
 			if p.selected >= 0 && p.selected < len(p.contacts) {
@@ -284,19 +285,19 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 			}
 		}
 		if p.operation == "invite" {
-			ui.TextInput(c, &p.Email).Label("联系人邮箱").Disabled(disabled)
+			ui.TextInput(c, &p.Email).Label(i18n.T("联系人邮箱")).Disabled(disabled)
 		}
 		if p.operation == "accept" {
-			ui.TextInput(c, &p.Email).Label("邮件中的紧急访问 ID").Disabled(disabled)
-			ui.TextInput(c, &p.token).Label("邮件令牌").Password().Disabled(disabled)
+			ui.TextInput(c, &p.Email).Label(i18n.T("邮件中的紧急访问 ID")).Disabled(disabled)
+			ui.TextInput(c, &p.token).Label(i18n.T("邮件令牌")).Password().Disabled(disabled)
 		}
 		if p.operation == "invite" || p.operation == "update" {
-			for i, label := range []string{"只读查看", "接管账号（重置密码和 MFA）"} {
+			for i, label := range []string{i18n.T("只读查看"), i18n.T("接管账号（重置密码和 MFA）")} {
 				if kit.Action(c, label, "", p.accessType == i, disabled).Key(fmt.Sprintf("emergency-type-%d", i)).Clicked() {
 					p.accessType = i
 				}
 			}
-			ui.TextInput(c, &p.waitDays).Label("等待天数（0–365）").Disabled(disabled)
+			ui.TextInput(c, &p.waitDays).Label(i18n.T("等待天数（0–365）")).Disabled(disabled)
 		}
 	} else {
 		for i, m := range p.members {
@@ -304,61 +305,61 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 				p.selected = i
 			}
 		}
-		for _, o := range []struct{ action, label string }{{"enroll", "登记自身账号恢复"}, {"withdraw", "退出自身账号恢复"}, {"administrator", "管理员恢复成员"}} {
+		for _, o := range []struct{ action, label string }{{"enroll", i18n.T("登记自身账号恢复")}, {"withdraw", i18n.T("退出自身账号恢复")}, {"administrator", i18n.T("管理员恢复成员")}} {
 			if kit.Action(c, o.label, "", p.operation == o.action, disabled).Key("recovery-action-" + o.action).Clicked() {
 				p.operation = o.action
 				p.clearSecrets()
 			}
 		}
 		if p.operation == "enroll" {
-			ui.TextInput(c, &p.password).Label("当前主密码").Password().Disabled(disabled)
-			ui.TextInput(c, &p.otp).Label("或受保护操作邮件 OTP（二选一）").Password().Disabled(disabled)
+			ui.TextInput(c, &p.password).Label(i18n.T("当前主密码")).Password().Disabled(disabled)
+			ui.TextInput(c, &p.otp).Label(i18n.T("或受保护操作邮件 OTP（二选一）")).Password().Disabled(disabled)
 		}
 		if p.operation == "administrator" {
-			if kit.Action(c, "重置主密码", "", p.resetPassword, disabled).Key("recovery-reset-password").Clicked() {
+			if kit.Action(c, i18n.T("重置主密码"), "", p.resetPassword, disabled).Key("recovery-reset-password").Clicked() {
 				p.resetPassword = !p.resetPassword
 			}
-			if kit.Action(c, "重置 MFA", "", p.resetMFA, disabled).Key("recovery-reset-mfa").Clicked() {
+			if kit.Action(c, i18n.T("重置 MFA"), "", p.resetMFA, disabled).Key("recovery-reset-mfa").Clicked() {
 				p.resetMFA = !p.resetMFA
 			}
 		}
 	}
 	if p.operation == "confirm" || p.operation == "enroll" || p.operation == "administrator" {
-		ui.TextInput(c, &p.public).Label("独立可信渠道核验的完整 SPKI 公钥").Disabled(disabled)
+		ui.TextInput(c, &p.public).Label(i18n.T("独立可信渠道核验的完整 SPKI 公钥")).Disabled(disabled)
 	}
 	if p.operation == "takeover" || (p.operation == "administrator" && p.resetPassword) {
-		ui.TextInput(c, &p.newPassword).Label("目标账号新主密码（至少12字符）").Password().Disabled(disabled)
-		ui.TextInput(c, &p.repeatPassword).Label("再次输入新主密码").Password().Disabled(disabled)
+		ui.TextInput(c, &p.newPassword).Label(i18n.T("目标账号新主密码（至少12字符）")).Password().Disabled(disabled)
+		ui.TextInput(c, &p.repeatPassword).Label(i18n.T("再次输入新主密码")).Password().Disabled(disabled)
 	}
 	if p.Plan != nil {
 		summary := p.Plan.Summary()
-		ui.Text(c, "已核验目标："+summary.TargetEmail+" · "+summary.Target.Account)
+		ui.Text(c, i18n.Tf("已核验目标：%s · %s", summary.TargetEmail, summary.Target.Account))
 		if summary.OrganizationID != "" {
-			ui.Text(c, "组织："+summary.OrganizationID+" · 成员："+summary.MembershipID)
+			ui.Text(c, i18n.Tf("组织：%s · 成员：%s", summary.OrganizationID, summary.MembershipID))
 		}
 		if summary.CounterpartyEmail != "" {
-			kind := "只读查看"
+			kind := i18n.T("只读查看")
 			if summary.EmergencyType == 1 {
-				kind = "接管账号"
+				kind = i18n.T("接管账号")
 			}
-			ui.Text(c, fmt.Sprintf("联系人：%s · %s · 等待 %d 天", summary.CounterpartyEmail, kind, summary.WaitTimeDays))
+			ui.Text(c, i18n.Tf("联系人：%s · %s · 等待 %d 天", summary.CounterpartyEmail, kind, summary.WaitTimeDays))
 		}
 		ui.Text(c, p.Plan.Impact())
-		if kit.Action(c, "我已核对对象并授权执行", "", true, p.blocked()).Key("recovery-confirm").Clicked() {
+		if kit.Action(c, i18n.T("我已核对对象并授权执行"), "", true, p.blocked()).Key("recovery-confirm").Clicked() {
 			p.CommitPlan()
 		}
-		if kit.Action(c, "取消此计划", "", false, p.blocked()).Key("recovery-discard").Clicked() {
+		if kit.Action(c, i18n.T("取消此计划"), "", false, p.blocked()).Key("recovery-discard").Clicked() {
 			p.Plan.Close()
 			p.Plan = nil
-			p.Status = "已取消；未提交。"
+			p.Status = i18n.T("已取消；未提交。")
 		}
-	} else if kit.Action(c, "读取核验并准备确认", "", true, p.blocked()).Key("recovery-prepare").Clicked() {
+	} else if kit.Action(c, i18n.T("读取核验并准备确认"), "", true, p.blocked()).Key("recovery-prepare").Clicked() {
 		p.PreparePlan()
 	}
-	if p.running && kit.Action(c, "取消并核对结果", "", false, false).Key("recovery-cancel").Clicked() {
+	if p.running && kit.Action(c, i18n.T("取消并核对结果"), "", false, false).Key("recovery-cancel").Clicked() {
 		p.cancelOperation()
 	}
 	if p.Status != "" {
-		ui.Text(c, p.Status)
+		ui.Text(c, i18n.T(p.Status))
 	}
 }
