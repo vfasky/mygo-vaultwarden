@@ -20,6 +20,9 @@ func TestDomainErrorPresentationRetainsGuidanceAndIdentity(t *testing.T) {
 		{ErrRecoveryUnverified, "server.recovery.err_unverified"},
 		{ErrDeviceUnknown, "account.device_login.err_unknown_device"},
 		{ErrDeviceRejected, "account.device_login.err_approval_rejected"},
+		// Allocate once, before language changes: the merged helper must retain
+		// identity while translating through the trusted display boundary.
+		{i18n.Error("common.save"), "common.save"},
 	}
 	for _, lang := range []i18n.Lang{i18n.Chinese, i18n.English} {
 		i18n.Set(lang)

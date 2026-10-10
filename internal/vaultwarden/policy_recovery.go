@@ -64,7 +64,7 @@ func (p *PolicyRecoveryReview) Summary() []string {
 	def, _ := policyDefinition(p.record.PolicyType)
 	role := i18n.T("policy.recovery.no_membership")
 	if p.member.ID != "" {
-		role = map[int]string{0: i18n.T("policy.role.owner"), 1: i18n.T("policy.role.admin"), 2: i18n.T("policy.role.member"), 4: i18n.T("policy.role.manager")}[p.member.Type]
+		role = map[int]string{0: i18n.T("role.owner"), 1: i18n.T("role.admin"), 2: i18n.T("role.member"), 4: i18n.T("role.manager")}[p.member.Type]
 	}
 	rows := []string{def.Name, i18n.Tf("policy.recovery.current_role", role)}
 	if !p.restoreOrganization {
@@ -73,14 +73,14 @@ func (p *PolicyRecoveryReview) Summary() []string {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(p.row.Data, &fields) == nil {
 		for _, f := range def.Fields {
-			value := i18n.T("policy.value.default")
+			value := i18n.T("common.default")
 			if v := fields[f.Key]; len(v) > 0 && string(v) != "null" {
 				value = i18n.T("policy.value.server_extension")
 				if f.Kind == "bool" {
 					if string(v) == "true" {
-						value = i18n.T("policy.value.yes")
+						value = i18n.T("common.yes")
 					} else if string(v) == "false" {
-						value = i18n.T("policy.value.no")
+						value = i18n.T("common.no")
 					}
 				} else if f.Kind == "generator" {
 					var text string
@@ -94,7 +94,7 @@ func (p *PolicyRecoveryReview) Summary() []string {
 				} else if n, err := strconv.Atoi(string(v)); err == nil {
 					value = strconv.Itoa(n)
 					if f.Kind == "uri" && n >= 0 && n <= 5 {
-						value = []string{i18n.T("policy.uri_match.base_domain"), i18n.T("policy.uri_match.host"), i18n.T("policy.uri_match.starts_with"), i18n.T("policy.uri_match.exact"), i18n.T("policy.uri_match.regex"), i18n.T("policy.uri_match.never")}[n]
+						value = []string{i18n.T("urimatch.base_domain"), i18n.T("urimatch.host"), i18n.T("urimatch.starts_with"), i18n.T("urimatch.exact"), i18n.T("urimatch.regular_expression"), i18n.T("urimatch.never")}[n]
 					}
 				}
 			}

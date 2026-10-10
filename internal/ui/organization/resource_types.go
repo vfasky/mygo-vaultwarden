@@ -17,13 +17,13 @@ const (
 func ResourceStateText(state string) string {
 	switch state {
 	case ResourceNotStarted:
-		return i18n.T("state.resource.not_started")
+		return i18n.T("state.resource.status_not_started")
 	case ResourcePendingVerify:
-		return i18n.T("state.resource.pending_verify")
+		return i18n.T("state.resource.status_pending_verify")
 	case ResourceVerified:
-		return i18n.T("state.resource.verified")
+		return i18n.T("state.resource.status_verified")
 	case ResourcePendingSync:
-		return i18n.T("state.resource.pending_sync")
+		return i18n.T("state.resource.status_pending_sync")
 	default:
 		return state
 	}

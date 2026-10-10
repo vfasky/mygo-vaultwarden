@@ -22,19 +22,23 @@ type vaultCategory struct {
 	supported         bool
 }
 
-var vaultCategories = []vaultCategory{
-	{"all", i18n.T("app.sidebar.all_items"), "grid", true},
-	{"favorites", i18n.T("app.sidebar.favorites"), "star", true},
-	{"login", i18n.T("itemtype.login"), "globe", true},
-	{"card", i18n.T("itemtype.card"), "card", true},
-	{"identity", i18n.T("itemtype.identity"), "identity", true},
-	{"note", i18n.T("itemtype.note"), "note", true},
-	{"ssh", i18n.T("itemtype.ssh_key"), "key", true},
-	{"bank", i18n.T("itemtype.bank"), "bank", true},
-	{"license", i18n.T("itemtype.license"), "car", true},
-	{"passport", i18n.T("itemtype.passport"), "passport", true},
-	{"archive", i18n.T("common.archive"), "archive", true},
-	{"trash", i18n.T("app.sidebar.trash"), "trash", true},
+// vaultCategories builds the categories on each call so their titles follow
+// a language change.
+func vaultCategories() []vaultCategory {
+	return []vaultCategory{
+		{"all", i18n.T("app.sidebar.all_items"), "grid", true},
+		{"favorites", i18n.T("app.sidebar.favorites"), "star", true},
+		{"login", i18n.T("itemtype.login"), "globe", true},
+		{"card", i18n.T("itemtype.card"), "card", true},
+		{"identity", i18n.T("itemtype.identity"), "identity", true},
+		{"note", i18n.T("itemtype.note"), "note", true},
+		{"ssh", i18n.T("itemtype.ssh_key"), "key", true},
+		{"bank", i18n.T("itemtype.bank"), "bank", true},
+		{"license", i18n.T("itemtype.license"), "car", true},
+		{"passport", i18n.T("itemtype.passport"), "passport", true},
+		{"archive", i18n.T("common.archive"), "archive", true},
+		{"trash", i18n.T("app.sidebar.trash"), "trash", true},
+	}
 }
 
 // categoryKinds maps type categories to Bitwarden cipher types.
@@ -42,16 +46,16 @@ var categoryKinds = map[string]int{"login": 1, "note": 2, "card": 3, "identity":
 
 func (a *app) currentCategory() vaultCategory {
 	if a.category == "org-services" {
-		return vaultCategory{"org-services", i18n.T("app.settings.emergency_access"), "vault", true}
+		return vaultCategory{"org-services", i18n.T("account.emergency.title"), "vault", true}
 	}
 	if a.category == "mfa" {
 		return vaultCategory{"mfa", i18n.T("app.settings.mfa"), "shield", true}
 	}
 	if a.category == "account" {
-		return vaultCategory{"account", i18n.T("app.settings.account_security"), "user", true}
+		return vaultCategory{"account", i18n.T("account.form.title"), "user", true}
 	}
 	if a.category == "devices" {
-		return vaultCategory{"devices", i18n.T("app.settings.devices"), "shield", true}
+		return vaultCategory{"devices", i18n.T("account.device.title"), "shield", true}
 	}
 	if a.category == "send" {
 		return vaultCategory{"send", "Send", "send", true}
@@ -84,12 +88,12 @@ func (a *app) currentCategory() vaultCategory {
 		}
 		return vaultCategory{a.category, i18n.T("app.sidebar.folder_missing"), "vault", false}
 	}
-	for _, category := range vaultCategories {
+	for _, category := range vaultCategories() {
 		if category.id == a.category {
 			return category
 		}
 	}
-	return vaultCategories[0]
+	return vaultCategories()[0]
 }
 
 func (a *app) releaseItemCount() int {
@@ -136,7 +140,7 @@ func (a *app) sidebarCounts() map[string]int {
 		return counts
 	}
 	for _, item := range a.items {
-		for _, category := range vaultCategories {
+		for _, category := range vaultCategories() {
 			if itemInCategory(item, category.id) {
 				counts[category.id]++
 			}
@@ -207,7 +211,7 @@ func (a *app) view(c *ui.Context) {
 	if a.authManagement != nil && (a.category != "mfa" || a.showSettings) {
 		a.advanceEpoch()
 	}
-	if a.accountForm != nil && a.accountForm.Mode != "register" && (a.category != "account" || a.showSettings) {
+	if a.accountForm != nil && !a.accountForm.SignedOut() && (a.category != "account" || a.showSettings) {
 		a.advanceEpoch()
 	}
 	if a.devicePanel != nil && (a.category != "devices" || a.showSettings) {
@@ -328,7 +332,7 @@ func (a *app) body(c *ui.Context) {
 		kit.Icon(c, "shield", 15).TextColor(kit.Purple)
 		ui.Text(c, a.status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(a.status).Role(ui.RoleStatus)
 		if a.pending != 0 {
-			ui.Text(c, i18n.T("common.processing")).FontSize(12).TextColor(kit.Purple)
+			ui.Text(c, i18n.T("common.status_processing")).FontSize(12).TextColor(kit.Purple)
 		}
 	})
 }
@@ -378,7 +382,7 @@ func (a *app) header(c *ui.Context) {
 			}
 			a.openCipherEditor("", kind)
 		}
-		if kit.ToolbarButton(c, i18n.T("app.toolbar.bulk_actions"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+		if kit.ToolbarButton(c, i18n.T("vault.bulk.title"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBulkEditor(false)
 		}
 		if a.category == "trash" && kit.ToolbarButton(c, i18n.T("app.toolbar.empty_trash"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
@@ -505,7 +509,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 			}
 			categoryGroup := func(title string, types bool) {
 				section(title, nil)
-				for _, category := range vaultCategories {
+				for _, category := range vaultCategories() {
 					if (categoryKinds[category.id] != 0) != types {
 						continue
 					}
@@ -546,7 +550,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 				}
 			}
 			section(i18n.T("app.sidebar.folders"), func() {
-				if kit.SidebarAction(c, i18n.T("app.sidebar.new_folder"), "plus", folderBusy).Clicked() {
+				if kit.SidebarAction(c, i18n.T("vault.folder.add_title"), "plus", folderBusy).Clicked() {
 					a.openFolderEditor("")
 				}
 			})
@@ -559,11 +563,11 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 				}
 			}
 			// The rail has no section titles to carry the add action.
-			if collapsed && navItem(c, i18n.T("app.sidebar.new_folder"), "folder-plus", "", false, folderBusy).Clicked() {
+			if collapsed && navItem(c, i18n.T("vault.folder.add_title"), "folder-plus", "", false, folderBusy).Clicked() {
 				a.openFolderEditor("")
 			}
 			if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
-				if navItem(c, i18n.T("app.sidebar.manage_folder"), "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
+				if navItem(c, i18n.T("vault.folder.manage_title"), "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
 					a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
 				}
 			}
@@ -755,7 +759,7 @@ func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential)
 					kit.Icon(c, "lock", 19).TextColor(kit.Purple)
 				})
 			})
-			kit.DetailCard(c, i18n.T("app.detail.website"), func() { kit.DetailField(c, i18n.T("app.detail.login_url"), item.URL, i18n.T("app.detail.no_website")) })
+			kit.DetailCard(c, i18n.T("vault.field.website"), func() { kit.DetailField(c, i18n.T("app.detail.login_url"), item.URL, i18n.T("app.detail.no_website")) })
 			ui.Column(c).Gap(8).Padding(14, 18).Background(kit.Lavender).Radius(22).Children(func() {
 				ui.Row(c).Gap(9).Children(func() {
 					kit.Icon(c, "shield", 20).TextColor(kit.Purple)
@@ -827,16 +831,16 @@ func (a *app) settings(c *ui.Context) {
 					if kit.Action(c, i18n.T("app.settings.verify_target_recovery"), "vault", false, a.pending != 0).Clicked() {
 						a.openTargetRecovery()
 					}
-					if kit.Action(c, i18n.T("app.settings.emergency_access"), "vault", false, !ready).Clicked() {
+					if kit.Action(c, i18n.T("account.emergency.title"), "vault", false, !ready).Clicked() {
 						a.openEmergencyServices()
 					}
 					if kit.Action(c, "Send", "send", false, !ready).Clicked() {
 						a.openSend()
 					}
-					if kit.Action(c, i18n.T("app.settings.devices"), "shield", false, !ready).Clicked() {
+					if kit.Action(c, i18n.T("account.device.title"), "shield", false, !ready).Clicked() {
 						a.openDevices()
 					}
-					if kit.Action(c, i18n.T("app.settings.account_security"), "user", false, !ready).Clicked() {
+					if kit.Action(c, i18n.T("account.form.title"), "user", false, !ready).Clicked() {
 						a.openAccount()
 					}
 					if kit.Action(c, i18n.T("app.settings.mfa"), "shield", false, !ready).Clicked() {
@@ -891,6 +895,12 @@ func (a *app) settings(c *ui.Context) {
 							a.runStorage(localstore.OperationRetryCleanup)
 						}
 					}
+				})
+			})
+			kit.DetailCard(c, i18n.T("app.language.title"), func() {
+				ui.Column(c).Padding(16).Gap(10).AlignItems(ui.Start).Children(func() {
+					languageMenu(c).Background(kit.Panel)
+					ui.Text(c, i18n.T("app.language.hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
 				})
 			})
 			ui.Row(c).Gap(8).Wrap().Children(func() {

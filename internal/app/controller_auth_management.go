@@ -41,7 +41,7 @@ func authenticationSummary(raw json.RawMessage) (string, error) {
 	}
 	var lines []string
 	if data.Enabled != nil {
-		lines = append(lines, i18n.Tf("account.mfa.enabled_status", *data.Enabled))
+		lines = append(lines, i18n.Tf("account.mfa.status_enabled", *data.Enabled))
 	}
 	for _, field := range []struct{ label, value string }{
 		{i18n.T("account.mfa.authenticator_key"), data.Key},

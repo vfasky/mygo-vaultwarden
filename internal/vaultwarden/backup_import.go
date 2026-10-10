@@ -38,15 +38,15 @@ func ImportKindText(kind string) string {
 func ImportStateText(state string) string {
 	switch state {
 	case ImportStateCreated:
-		return i18n.T("state.import.created")
+		return i18n.T("state.import.status_created")
 	case ImportStateCreatedPendingSync:
-		return i18n.T("state.import.created_pending_sync")
+		return i18n.T("state.import.status_created_pending_sync")
 	case ImportStateStopped:
-		return i18n.T("state.import.stopped")
+		return i18n.T("state.import.status_stopped")
 	case ImportStateUnknown:
-		return i18n.T("state.import.unknown")
+		return i18n.T("state.import.status_unknown")
 	case ImportStateMetadataCopied:
-		return i18n.T("state.import.metadata_copied")
+		return i18n.T("state.import.status_metadata_copied")
 	default:
 		return state
 	}

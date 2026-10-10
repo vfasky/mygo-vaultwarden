@@ -64,9 +64,9 @@ func (a *app) groupManagementView(c *ui.Context, e *organizationEditor, disabled
 	ui.Text(c, i18n.T("org.group.permissions_hint")).MaxLines(3)
 	for i := range d.Access {
 		entry := &d.Access[i]
-		label := i18n.Tf("org.member.label_member", entry.Label)
+		label := i18n.Tf("org.member.member_label", entry.Label)
 		if entry.Collection {
-			label = i18n.Tf("org.collection.label_collection", entry.Label)
+			label = i18n.Tf("org.collection.collection_label", entry.Label)
 		}
 		ui.Text(c, label).MaxLines(2)
 		if kit.Action(c, collectionPermissionLabel(i18n.T("org.group.assign"), entry.Assigned), "", false, disabled || confirming).Key("group-assign-" + entry.ID).Clicked() {

@@ -74,16 +74,70 @@ func parse(tag string) (Lang, bool) {
 	return "", false
 }
 
+// Languages lists the supported languages in the order a picker shows them.
+var Languages = []Lang{Chinese, English}
+
+// Name returns the language's name in that language, as language pickers
+// show it whatever the interface language is.
+func (l Lang) Name() string {
+	if l == Chinese {
+		return "简体中文"
+	}
+	return "English"
+}
+
 // Current returns the active language.
 func Current() Lang { return current.Load().(Lang) }
 
-// Set changes the active language. Text built before the change, including
-// package-level values, keeps its language; use it in tests and at startup.
+// Set changes the active language without saving it. Views translate as
+// they build, so the next frame shows the new language; text stored
+// earlier, such as a status message, keeps its language.
 func Set(l Lang) {
 	if l != Chinese && l != English {
 		panic("i18n: unsupported language " + string(l))
 	}
 	current.Store(l)
+}
+
+// testPreference stands in for the saved preference in tests, which must
+// not write the test binary's defaults.
+var testPreference []string
+
+// Preference returns the language chosen for this app, or "" when it
+// follows the system.
+func Preference() Lang {
+	saved := testPreference
+	if !testing.Testing() {
+		saved = savedLanguages()
+	}
+	if len(saved) == 0 {
+		return ""
+	}
+	return Match(saved)
+}
+
+// SetPreference saves l as this app's language, or follows the system again
+// for "", and switches to it. On macOS it is the app's AppleLanguages, the
+// same setting as System Settings > General > Language & Region >
+// Applications, so system dialogs such as Touch ID follow it from the next
+// launch. The AutoFill extension keeps its own setting.
+func SetPreference(l Lang) {
+	var languages []string
+	if l != "" {
+		Set(l)
+		languages = []string{string(l)}
+	}
+	if testing.Testing() {
+		testPreference = languages
+		if l == "" {
+			Set(Chinese)
+		}
+		return
+	}
+	effective := saveLanguages(languages)
+	if l == "" {
+		Set(Match(effective))
+	}
 }
 
 // T returns the text of key in the active language. An unknown key is

@@ -2,12 +2,14 @@
 
 package i18n
 
+// Backend errors, policies, server results, storage, and authentication.
+
 func init() {
 	register("error", backendError)
+	register("file", backendFile)
 	register("policy", backendPolicy)
 	register("server", backendServer)
 	register("store", backendStore)
-	register("file", backendFile)
 	register("sysauth", backendSysauth)
 }
 
@@ -32,6 +34,11 @@ var backendError = map[string]text{
 	"error.unsupported_edit": {"此项目包含当前编辑流程无法安全重写的数据，未提交修改", "This item contains data that the current editor cannot safely rewrite. No changes were submitted"},
 	"error.unsupported_mfa":  {"此账号的验证方式暂不支持；当前仅支持 TOTP 双重验证", "This account's authentication method is not supported. Only TOTP two-step login is currently supported"},
 	"error.validation":       {"提交的内容未通过服务器验证", "The submitted content failed server validation"},
+}
+
+var backendFile = map[string]text{
+	"file.backup.err_extension":     {"此格式请使用 %s 文件扩展名，未写入文件。", "Use the %s file extension for this format. No file was written."},
+	"file.backup.err_unsafe_access": {"无法安全访问文件。请选择本地普通文件和非符号链接目录；导出请使用尚不存在的新文件名。", "Cannot access the file safely. Choose a regular local file and a directory that is not a symbolic link. For exports, use a new file name that does not already exist."},
 }
 
 var backendPolicy = map[string]text{
@@ -73,10 +80,6 @@ var backendPolicy = map[string]text{
 	"policy.restricted_item_types.card":        {"银行卡", "Card"},
 	"policy.restricted_item_types.description": {"已约束写入、读取与 AutoFill。固定客户端默认限制卡片，保留服务器扩展数据。", "Restrictions apply to writes, reads, and AutoFill. The pinned client restricts cards by default and preserves server extension data."},
 	"policy.restricted_item_types.name":        {"受限条目类型", "Restricted item types"},
-	"policy.role.admin":                        {"管理员", "Admin"},
-	"policy.role.manager":                      {"经理", "Manager"},
-	"policy.role.member":                       {"成员", "Member"},
-	"policy.role.owner":                        {"所有者", "Owner"},
 	"policy.send_options.description":          {"服务器执行隐藏邮箱限制；本应用 Send 产品流程待接。", "The server enforces the restriction on hiding email. Send workflows are not yet integrated in this app."},
 	"policy.send_options.disable_hide_email":   {"禁止隐藏发送者邮箱", "Prevent hiding sender email"},
 	"policy.send_options.name":                 {"Send 选项", "Send options"},
@@ -84,22 +87,13 @@ var backendPolicy = map[string]text{
 	"policy.single_organization.name":          {"单一组织", "Single organization"},
 	"policy.two_step_login.description":        {"服务器执行成员撤销；本应用完整 MFA 登录与管理待接。", "The server enforces member revocation. Full two-step login sign-in and management are not yet implemented in this app."},
 	"policy.two_step_login.name":               {"要求双因素认证", "Require two-step login"},
-	"policy.uri_match.base_domain":             {"基础域名", "Base domain"},
 	"policy.uri_match.default_match":           {"默认匹配方式", "Default match detection"},
 	"policy.uri_match.description":             {"默认规则已用于个人与组织 URI 投影；显式规则保持原值。前缀与正则当前不参与系统自动填充，待完整实现。", "The default rule applies to personal and organization URI projections. Explicit rules are preserved. Prefix and regular expression matching are not yet implemented for system AutoFill."},
-	"policy.uri_match.exact":                   {"完全匹配", "Exact"},
-	"policy.uri_match.host":                    {"主机", "Host"},
 	"policy.uri_match.name":                    {"默认 URI 匹配", "Default URI match detection"},
-	"policy.uri_match.never":                   {"从不匹配", "Never"},
-	"policy.uri_match.regex":                   {"正则表达式", "Regular expression"},
-	"policy.uri_match.starts_with":             {"以此开头", "Starts with"},
 	"policy.user_notifications.description":    {"固定服务器支持保存此类型，未发现其通知执行逻辑；保留原始扩展数据。", "The pinned server supports saving this type, but no notification execution logic was found. Original extension data is preserved."},
 	"policy.user_notifications.name":           {"组织用户通知", "Organization user notifications"},
-	"policy.value.default":                     {"默认", "Default"},
-	"policy.value.no":                          {"否", "No"},
 	"policy.value.passphrase":                  {"密码短语", "Passphrase"},
 	"policy.value.server_extension":            {"服务器扩展值（保持不变）", "Server extension value (unchanged)"},
-	"policy.value.yes":                         {"是", "Yes"},
 }
 
 var backendServer = map[string]text{
@@ -147,7 +141,6 @@ var backendServer = map[string]text{
 	"server.rebase.field_metadata":                         {"类型 %v；关联 %v", "Type %v; linked %v"},
 	"server.rebase.match_rule":                             {"匹配规则 %v", "Match rule %v"},
 	"server.rebase.row_label":                              {"第 %d 行 · %s", "Row %d · %s"},
-	"server.rebase.uri":                                    {"网址", "URI"},
 	"server.rebase.uris_and_match_rules":                   {"网址与匹配规则", "URIs and match rules"},
 	"server.recovery.admin_impact":                         {"管理员恢复会通知目标用户，并使旧授权失效；重置密码后必须重新登录、完整同步和核验。重置 MFA 可能启用邮件回退或触发组织策略，最终由服务器校验。HTTP 失败也可能部分成功，不能重试。", "Admin recovery notifies the target user and invalidates existing authorization. After resetting the password, log in again, perform a full sync, and verify. Resetting two-step login may enable email fallback or trigger organization policies; the server makes the final validation. Even an HTTP failure may leave partial changes. Do not retry."},
 	"server.recovery.enroll_impact":                        {"授权组织恢复私钥持有者恢复此账号并访问个人密码库。请通过独立渠道核对组织恢复公钥。", "Authorize holders of the organization's recovery private key to recover this account and access My vault. Verify the organization's recovery public key through an independent channel."},
@@ -215,11 +208,6 @@ var backendStore = map[string]text{
 	"store.session.err_checkpoint_unconfirmed": {"未能确认登录凭据的保存结果，请重新解锁。", "Could not confirm that login credentials were saved. Unlock again."},
 	"store.snapshot.err_encode_request":        {"无法编码快照请求。", "Could not encode the snapshot request."},
 	"store.snapshot.err_transfer_limit":        {"密码库超过本版有界传输上限，无法保存。", "The vault exceeds this version's transfer size limit and cannot be saved."},
-}
-
-var backendFile = map[string]text{
-	"file.backup.err_extension":     {"此格式请使用 %s 文件扩展名，未写入文件。", "Use the %s file extension for this format. No file was written."},
-	"file.backup.err_unsafe_access": {"无法安全访问文件。请选择本地普通文件和非符号链接目录；导出请使用尚不存在的新文件名。", "Cannot access the file safely. Choose a regular local file and a directory that is not a symbolic link. For exports, use a new file name that does not already exist."},
 }
 
 var backendSysauth = map[string]text{

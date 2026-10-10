@@ -2,45 +2,33 @@
 
 package i18n
 
+// Organization services, directory import, audit, and resource operations.
+
 func init() {
-	register("org.services", orgServices)
+	register("org.apikey", orgApikey)
 	register("org.directory", orgDirectory)
 	register("org.events", orgEvents)
 	register("org.ops", orgOps)
 	register("org.resource", orgResource)
+	register("org.services", orgServices)
 	register("org.transfer", orgTransfer)
-	register("org.apikey", orgApikey)
 }
 
-var orgServices = map[string]text{
-	"org.services.account_recovery":           {"组织恢复登记与管理员恢复", "Organization recovery enrollment and admin recovery"},
-	"org.services.authorization_password":     {"主密码（仅用于本次项目授权）", "Master password (only for this item authorization)"},
-	"org.services.back_edit":                  {"返回修改", "Back to Edit"},
-	"org.services.cancel_operation":           {"取消此操作", "Cancel this operation"},
-	"org.services.cancel_review":              {"取消请求并核对", "Cancel and Review"},
-	"org.services.confirm_execute":            {"确认执行", "Confirm and run"},
-	"org.services.emergency_contacts":         {"我授权的紧急联系人", "My trusted emergency contacts"},
-	"org.services.emergency_grants":           {"授予我的紧急访问", "Emergency access granted to me"},
-	"org.services.option_disabled":            {"%s：关闭", "%s: Off"},
-	"org.services.option_enabled":             {"%s：开启", "%s: On"},
-	"org.services.reprompt_item":              {"再次验证组织项目 %s", "Master password re-prompt for organization item %s"},
-	"org.services.review_continue":            {"核对并继续", "Review and Continue"},
-	"org.services.status_cancelling":          {"正在取消；服务器可能已部分执行。", "Cancelling. The server may have completed part of the request."},
-	"org.services.status_credentials_updated": {"认证凭据已更新，请重新打开组织业务页面。", "Authentication credentials updated. Reopen the organization services page."},
-	"org.services.status_finished":            {"本次请求已结束，请核对下列结果。", "The request has ended. Review the results below."},
-	"org.services.status_incomplete":          {"请求未完整完成，请检查逐项结果并重新读取；不要自动重发。", "The request did not fully complete. Check each result and reload; do not resend automatically."},
-	"org.services.status_quarantined":         {"组织操作已进入持久隔离；请在侧栏重新核验，未知结果不会自动重放。", "The organization operation has triggered persistent quarantine. Verify again from the sidebar; operations with unknown outcomes will not be replayed automatically."},
-	"org.services.status_reread_verified":     {"新读取已确认", "Confirmed by a fresh read"},
-	"org.services.status_running":             {"正在执行；取消不会回滚已发送的请求。", "Running. Cancelling will not undo requests already sent."},
-	"org.services.sync_reload":                {"同步并重新读取（不会自动重放操作）", "Sync and reload (no automatic replay)"},
-	"org.services.title":                      {"组织与账号恢复服务", "Organization and account recovery services"},
-	"org.services.verify_continue":            {"验证并继续", "Verify and Continue"},
-	"org.services.view_contact":               {"只读查看：%s · %s", "View only: %s · %s"},
+var orgApikey = map[string]text{
+	"org.apikey.clear":               {"清除密钥", "Clear key"},
+	"org.apikey.confirm_read_rotate": {"确认读取或轮换组织密钥？轮换会使使用旧 key 的目录同步失效。", "Retrieve or rotate the organization key? Rotation will stop directory sync that uses the old key."},
+	"org.apikey.owner_only_hint":     {"仅组织所有者可读取或轮换 API key。", "Only organization owners can retrieve or rotate the API key."},
+	"org.apikey.read":                {"读取现有 key（首次可能创建）", "Retrieve key (may create on first use)"},
+	"org.apikey.rotate":              {"轮换 key（旧 key 立即失效）", "Rotate key (invalidates old key immediately)"},
+	"org.apikey.status_incomplete":   {"API key 请求未完整完成；轮换可能已生效，请重新读取核对。", "The API key request did not fully complete. Rotation may have taken effect; reload to verify."},
+	"org.apikey.status_temporary":    {"仅本窗口临时显示；关闭或锁定即清除。", "Shown temporarily in this window only. Cleared when closed or locked."},
+	"org.apikey.title":               {"组织 API key", "Organization API key"},
+	"org.apikey.toggle_visibility":   {"显示 / 隐藏密钥", "Show / hide key"},
 }
 
 var orgDirectory = map[string]text{
 	"org.directory.add_group_preview":     {"加入群组预览", "Add group to preview"},
-	"org.directory.add_member_preview":    {"加入预览", "Add to Preview"},
+	"org.directory.add_member_preview":    {"加入预览", "Add to preview"},
 	"org.directory.confirm_import":        {"确认目录预览及缺席成员撤权选项？组织将先持久隔离；服务器可能仅完成部分成员/群组。", "Confirm the directory preview and the option to revoke absent members? The organization will first be persistently quarantined. The server may process only some members or groups."},
 	"org.directory.description":           {"以组织 API key 同步外部目录成员和群组。提交后不能自动重发。", "Sync external directory members and groups using the organization API key. Do not automatically resend after submission."},
 	"org.directory.err_group_duplicate":   {"群组外部 ID 重复。", "The group external ID is already in use."},
@@ -51,27 +39,27 @@ var orgDirectory = map[string]text{
 	"org.directory.mark_member_deleted":   {"标记此成员已删除 / 撤权", "Mark member as deleted / revoked"},
 	"org.directory.member_email":          {"成员邮箱", "Member email"},
 	"org.directory.member_external_id":    {"目录成员外部 ID", "Directory member external ID"},
-	"org.directory.remove_group":          {"移除此群组", "Remove Group"},
-	"org.directory.remove_member_row":     {"移除此行", "Remove Row"},
+	"org.directory.remove_group":          {"移除此群组", "Remove group"},
+	"org.directory.remove_member_row":     {"移除此行", "Remove row"},
 	"org.directory.revoke_absent_members": {"撤权未出现在本次目录中的现有外部成员", "Revoke external members missing from this directory"},
 	"org.directory.revoked_member":        {"%s · 撤权", "%s · Revoke access"},
 	"org.directory.status_no_results":     {"未获得逐项结果，不能推断全部失败或全部成功。", "No per-item results were received. Neither complete failure nor complete success can be assumed."},
 	"org.directory.status_quarantined":    {"组织仍处于持久隔离状态，需重新验证权限。", "The organization remains in persistent quarantine. Permissions must be verified again."},
-	"org.directory.status_unknown":        {"未知 / 待核对", "Unknown / Needs review"},
+	"org.directory.status_unknown":        {"未知 / 待核对", "Unknown / needs review"},
 	"org.directory.temporary_api_key":     {"组织 API key（临时使用）", "Organization API key (temporary use)"},
 	"org.directory.title":                 {"Public 目录导入", "Public API directory import"},
 }
 
 var orgEvents = map[string]text{
 	"org.events.acting_account":      {"操作账号：%s", "Acting account: %s"},
-	"org.events.cancel_load":         {"取消读取", "Cancel Loading"},
+	"org.events.cancel_load":         {"取消读取", "Cancel loading"},
 	"org.events.end_date":            {"结束时间（含时区）", "End time (with time zone)"},
 	"org.events.err_end_date":        {"结束时间必须不早于开始时间", "The end time must be on or after the start time"},
 	"org.events.err_load":            {"读取失败：%s", "Failed to load: %s"},
 	"org.events.err_start_date":      {"请输入包含时区的开始日期，例如 2026-06-01T00:00:00Z", "Enter a start date with a time zone, such as 2026-06-01T00:00:00Z"},
 	"org.events.event_summary":       {"%d. %s · 事件 %d", "%d. %s · Event %d"},
 	"org.events.item":                {"条目：%s", "Item: %s"},
-	"org.events.load":                {"读取事件", "Load Events"},
+	"org.events.load":                {"读取事件", "Load events"},
 	"org.events.load_members":        {"读取成员以查看成员事件", "Load members for member events"},
 	"org.events.load_next":           {"加载下一页", "Load next page"},
 	"org.events.organization_member": {"组织成员：%s", "Organization member: %s"},
@@ -84,13 +72,13 @@ var orgEvents = map[string]text{
 }
 
 var orgOps = map[string]text{
-	"org.ops.back_select":            {"返回选择", "Back to Selection"},
+	"org.ops.back_to_selection":      {"返回选择", "Back to selection"},
 	"org.ops.cancel_review_results":  {"取消请求并核对结果", "Cancel and review results"},
 	"org.ops.confirm_selected":       {"确认对 %d 个组织条目执行所选操作？永久删除无法撤销。", "Apply the selected action to %d organization item(s)? Permanent deletion cannot be undone."},
 	"org.ops.description":            {"批量操作可能部分完成；发生错误或取消后必须同步核对。需要主密码的条目请从单项授权入口处理。", "Bulk actions may partially complete. After an error or cancellation, you must sync to verify the results. Handle items requiring a master password through individual authorization."},
 	"org.ops.err_request_incomplete": {"请求未完成：%s。请重新同步核对。", "The request did not complete: %s. Sync again to verify."},
 	"org.ops.move_to_trash":          {"移到回收站", "Move to Trash"},
-	"org.ops.open":                   {"批量状态", "Bulk Status"},
+	"org.ops.open":                   {"批量状态", "Bulk status"},
 	"org.ops.review_selected":        {"核对所选操作", "Review selected action"},
 	"org.ops.status_cancelling":      {"正在取消；已发送请求可能已部分执行。", "Cancelling. Requests already sent may have partially completed."},
 	"org.ops.status_confirmed":       {"服务器已确认 %d 项操作，请同步更新列表。", "Operations confirmed by the server: %d. Sync to update the list."},
@@ -101,9 +89,9 @@ var orgOps = map[string]text{
 }
 
 var orgResource = map[string]text{
-	"org.resource.archive_state":             {"归档状态", "Archive State"},
+	"org.resource.archive_state":             {"归档状态", "Archive state"},
 	"org.resource.cancel_step_verify":        {"取消本步骤并核对", "Cancel step and review"},
-	"org.resource.confirm_restore_state":     {"确认恢复%s", "Confirm Restore: %s"},
+	"org.resource.confirm_restore_state":     {"确认恢复%s", "Confirm restore: %s"},
 	"org.resource.confirm_upload_once":       {"确认向目标上传一次（保留源文件）", "Upload once to destination (keep source)"},
 	"org.resource.continue_from_file":        {"仅读取完整资源以继续附件恢复（不创建条目）", "Resume attachment recovery (no new items)"},
 	"org.resource.description":               {"元数据导入与复制不是完整附件恢复。按来源编号明确映射目标；每个上传只发一次，再同步并下载核验名称、长度和完整内容。结果未知时填写新同步确认的附件编号后核验，不能按重复文件名猜测。归档、回收站及文件夹在文件全部核验后按明确映射恢复。", "Importing or copying metadata does not fully restore attachments. Explicitly map destinations by source ID. Send each upload only once, then sync and download to verify the name, size, and complete contents. If the outcome is unknown, enter the attachment ID confirmed by a fresh sync before verifying; do not guess from duplicate filenames. After all files are verified, restore archive, trash, and folder states using explicit mappings."},
@@ -112,7 +100,7 @@ var orgResource = map[string]text{
 	"org.resource.err_preparation":           {"%s；修正后可再次明确确认。", "%s; after correcting this, you can explicitly confirm again."},
 	"org.resource.err_unconfirmed":           {"%s；未确认步骤保持待核对，不会自动重发。", "%s; unconfirmed steps still need review and will not be resent automatically."},
 	"org.resource.file_source_status":        {"%s · 来源 %s/%s · %s", "%s · Source %s/%s · %s"},
-	"org.resource.folder_mapping":            {"文件夹映射", "Folder Mapping"},
+	"org.resource.folder_mapping":            {"文件夹映射", "Folder mapping"},
 	"org.resource.mapped_target_item":        {"对应目标项目编号", "Matching destination item ID"},
 	"org.resource.restore_source_state":      {"原状态恢复 · 来源 %s", "Restore original state · Source %s"},
 	"org.resource.source_folder_hint":        {"原文件夹引用：%s；请明确映射到当前账户的已有文件夹编号。", "Original folder reference: %s; explicitly map it to an existing folder ID in the current account."},
@@ -125,33 +113,54 @@ var orgResource = map[string]text{
 	"org.resource.target_item":               {"已创建或明确选择的目标项目编号", "Created or explicitly selected destination item ID"},
 	"org.resource.target_sync_hint":          {"目标组织：%s。先正常同步并采用认证回执，再逐文件操作；不会自动创建、上传或重放。", "Destination organization: %s. First sync normally and adopt the authenticated receipt, then act on each file explicitly. Nothing is created, uploaded, or replayed automatically."},
 	"org.resource.title":                     {"组织完整资源恢复与核验", "Restore and verify organization resources"},
-	"org.resource.trash_state":               {"回收站状态", "Trash State"},
+	"org.resource.trash_state":               {"回收站状态", "Trash state"},
 	"org.resource.verify_state":              {"核对%s", "Verify: %s"},
 }
 
+var orgServices = map[string]text{
+	"org.services.account_recovery":           {"组织恢复登记与管理员恢复", "Organization recovery enrollment and admin recovery"},
+	"org.services.authorization_password":     {"主密码（仅用于本次项目授权）", "Master password (only for this item authorization)"},
+	"org.services.back_to_edit":               {"返回修改", "Back to edit"},
+	"org.services.cancel_operation":           {"取消此操作", "Cancel this operation"},
+	"org.services.cancel_review":              {"取消请求并核对", "Cancel and review"},
+	"org.services.confirm_submit_request":     {"确认执行", "Confirm and run"},
+	"org.services.option_disabled":            {"%s：关闭", "%s: Off"},
+	"org.services.option_enabled":             {"%s：开启", "%s: On"},
+	"org.services.reprompt_item":              {"再次验证组织项目 %s", "Master password re-prompt for organization item %s"},
+	"org.services.review_and_continue":        {"核对并继续", "Review and continue"},
+	"org.services.status_cancelling":          {"正在取消；服务器可能已部分执行。", "Cancelling. The server may have completed part of the request."},
+	"org.services.status_credentials_updated": {"认证凭据已更新，请重新打开组织业务页面。", "Authentication credentials updated. Reopen the organization services page."},
+	"org.services.status_finished":            {"本次请求已结束，请核对下列结果。", "The request has ended. Review the results below."},
+	"org.services.status_incomplete":          {"请求未完整完成，请检查逐项结果并重新读取；不要自动重发。", "The request did not fully complete. Check each result and reload; do not resend automatically."},
+	"org.services.status_quarantined":         {"组织操作已进入持久隔离；请在侧栏重新核验，未知结果不会自动重放。", "The organization operation has triggered persistent quarantine. Verify again from the sidebar; operations with unknown outcomes will not be replayed automatically."},
+	"org.services.status_reread_verified":     {"新读取已确认", "Confirmed by a fresh read"},
+	"org.services.status_running":             {"正在执行；取消不会回滚已发送的请求。", "Running. Cancelling will not undo requests already sent."},
+	"org.services.sync_reload":                {"同步并重新读取（不会自动重放操作）", "Sync and reload (no automatic replay)"},
+	"org.services.title":                      {"组织与账号恢复服务", "Organization and account recovery services"},
+	"org.services.verify_and_continue":        {"验证并继续", "Verify and continue"},
+}
+
 var orgTransfer = map[string]text{
-	"org.transfer.assign_collections":             {"分配集合", "Assign Collections"},
+	"org.transfer.assign_collections":             {"分配集合", "Assign collections"},
 	"org.transfer.attachment_summary":             {"附件：%s · %s/%s · %d 字节", "Attachment: %s · %s/%s · %d bytes"},
 	"org.transfer.collections_title":              {"调整组织集合", "Change organization collections"},
 	"org.transfer.confirm_collections":            {"确认调整所选集合？提交前将持久隔离组织；失去访问后不会自动恢复。", "Change the selected collections? The organization will be persistently quarantined before submission. Access will not be restored automatically if lost."},
 	"org.transfer.confirm_copy":                   {"确认在所选组织集合新建独立副本？完整资源复制会先验证源文件，再创建元数据并进入逐文件恢复核验；中途失败不自动重试或删除原件。普通复制不支持附件。", "Create an independent copy in the selected organization collection? A full resource copy verifies source files first, then creates metadata and proceeds to restore and verify each file. Failures will not trigger automatic retries or delete originals. Standard copies do not support attachments."},
 	"org.transfer.confirm_export":                 {"此文件包含明文密码和所选格式支持的文件。完整资源格式最多 1 GiB 文件及 32 MiB 元数据，不是官方 JSON。确认组织、路径和格式，并允许安全保存？无法完整保留的字段将阻止导出。", "This file contains plaintext passwords and files supported by the selected format. The full resource format supports up to 1 GiB of files and 32 MiB of metadata; it is not official JSON. Confirm the organization, path, and format, and allow saving? Export is blocked if any fields cannot be fully preserved."},
 	"org.transfer.confirm_import":                 {"确认导入预览条目及集合映射？此操作非事务，部分成功不能自动重发。", "Import the previewed items with these collection mappings? This operation is not transactional. Do not automatically resend after partial success."},
-	"org.transfer.copy_open":                      {"复制项目与完整资源", "Copy item and all resources"},
 	"org.transfer.copy_reprompt_hint":             {"执行时需通过主密码再次验证；取消验证不会提交。", "A master password re-prompt is required to proceed. Cancelling verification submits nothing."},
 	"org.transfer.copy_resources":                 {"完整资源复制（含附件，先验证所有源文件）", "Copy resources with attachments (verify sources first)"},
 	"org.transfer.copy_title":                     {"复制组织条目", "Copy organization item"},
 	"org.transfer.create_matching_collection":     {"创建同名新集合", "Create collection with same name"},
-	"org.transfer.err_import_state_unsupported":   {"此条目有归档或回收站状态，官方组织导入端点不能保留，已阻止提交。", "This item is archived or in the trash. The official organization import endpoint cannot preserve this state, so submission is blocked."},
-	"org.transfer.export_open":                    {"组织导出", "Export Organization"},
+	"org.transfer.err_import_state_unsupported":   {"此条目有归档或回收站状态，官方组织导入端点不能保留，已阻止提交。", "This item is archived or in the Trash. The official organization import endpoint cannot preserve this state, so submission is blocked."},
 	"org.transfer.export_path":                    {"保存到新文件（禁止覆盖已有文件）", "Save to a new file (existing files cannot be overwritten)"},
 	"org.transfer.export_reprompt":                {"再次验证此组织导出中的受保护项目（每项授权最多30秒）", "Re-verify protected items in this organization export (each authorization lasts up to 30 seconds)"},
 	"org.transfer.export_title":                   {"导出组织：%s", "Export organization: %s"},
 	"org.transfer.format_mygo":                    {"MyGo 组织备份", "MyGo organization backup"},
 	"org.transfer.format_mygo_v1":                 {"MyGo 组织备份 v1", "MyGo organization backup v1"},
-	"org.transfer.format_official":                {"Bitwarden 官方明文 JSON", "Official Bitwarden Plaintext JSON"},
+	"org.transfer.format_official":                {"Bitwarden 官方明文 JSON", "Official Bitwarden plaintext JSON"},
 	"org.transfer.format_official_organization":   {"官方明文组织 JSON", "Official plaintext organization JSON"},
-	"org.transfer.format_resources_export":        {"MyGo 完整组织资源备份（附件与通行密钥，非官方格式）", "MyGo Full Organization Resource Backup (Attachments and Passkeys, Unofficial Format)"},
+	"org.transfer.format_resources_export":        {"MyGo 完整组织资源备份（附件与通行密钥，非官方格式）", "MyGo full organization resource backup (attachments and passkeys, unofficial format)"},
 	"org.transfer.format_resources_import":        {"MyGo 完整组织资源备份（非官方格式）", "MyGo full organization resource backup (unofficial format)"},
 	"org.transfer.full_resources":                 {"完整资源", "Full resources"},
 	"org.transfer.import_counts":                  {"读取前 %d 项，读取后 %d 项，新增 %d 项", "Items before: %d; after: %d; added: %d"},
@@ -159,6 +168,8 @@ var orgTransfer = map[string]text{
 	"org.transfer.import_path":                    {"导入文件路径（MyGo / 官方 JSON / 完整资源）", "Import file path (MyGo / official JSON / full resources)"},
 	"org.transfer.import_title":                   {"组织导入预览与集合映射", "Organization import preview and collection mapping"},
 	"org.transfer.official_json":                  {"官方 JSON", "Official JSON"},
+	"org.transfer.open_copy":                      {"复制项目与完整资源", "Copy item and all resources"},
+	"org.transfer.open_export":                    {"组织导出", "Export organization"},
 	"org.transfer.preview_import":                 {"读取并预览组织导入", "Read and preview organization import"},
 	"org.transfer.preview_item":                   {"%d. %s（类型 %d）", "%d. %s (type %d)"},
 	"org.transfer.restore_state_hint":             {"%s：文件核验后需恢复归档=%t、回收站=%t，并明确映射原文件夹引用。", "%s: After file verification, restore archived=%t and trashed=%t, and explicitly map the original folder reference."},
@@ -171,17 +182,4 @@ var orgTransfer = map[string]text{
 	"org.transfer.status_import_needs_review":     {"导入结果需核对；未核实的目标编号保持空白，不会重发元数据。", "The import result needs verification. Unverified destination IDs remain blank; metadata will not be resent."},
 	"org.transfer.status_import_unverified":       {"尚无逐项核对结果；请求可能部分完成，请勿重发。", "No per-item verification results yet. The request may have partially completed; do not resend."},
 	"org.transfer.status_manual_review":           {"待人工核对", "Needs manual review"},
-}
-
-var orgApikey = map[string]text{
-	"org.apikey.clear":               {"清除密钥", "Clear Key"},
-	"org.apikey.confirm_read_rotate": {"确认读取或轮换组织密钥？轮换会使使用旧 key 的目录同步失效。", "Retrieve or rotate the organization key? Rotation will stop directory sync that uses the old key."},
-	"org.apikey.current_password":    {"当前主密码", "Current master password"},
-	"org.apikey.owner_only_hint":     {"仅组织所有者可读取或轮换 API key。", "Only organization owners can retrieve or rotate the API key."},
-	"org.apikey.read":                {"读取现有 key（首次可能创建）", "Retrieve key (may create on first use)"},
-	"org.apikey.rotate":              {"轮换 key（旧 key 立即失效）", "Rotate key (invalidates old key immediately)"},
-	"org.apikey.status_incomplete":   {"API key 请求未完整完成；轮换可能已生效，请重新读取核对。", "The API key request did not fully complete. Rotation may have taken effect; reload to verify."},
-	"org.apikey.status_temporary":    {"仅本窗口临时显示；关闭或锁定即清除。", "Shown temporarily in this window only. Cleared when closed or locked."},
-	"org.apikey.title":               {"组织 API key", "Organization API key"},
-	"org.apikey.toggle_visibility":   {"显示 / 隐藏密钥", "Show / hide key"},
 }

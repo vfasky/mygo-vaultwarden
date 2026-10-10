@@ -33,6 +33,18 @@
 - C1：按确认的三个接缝落实组织 host、拥有完整异步导入生命周期的备份控制器、个人备份导出窄接口服务；新增无需完整app/Session的fake回归。仍有其他编辑、组织与恢复编排留在app/Session，不宣称全部解耦；具体边界及薄适配器见架构文档。
 - 实际重跑受影响检查：Swift主包 **105项通过**；重新构建MemoryKeys harness后，app/vaultwarden/localstore普通测试、race和vet均通过；fixture生产依赖与diff检查通过。Authentication、未受影响的Go包、live、签名GUI、Linux及hosted CI未在本轮重跑。独立复审仍待父任务安排。
 
+## 与钉住主线的最终同步验证
+
+本阶段将候选 `1c5b3b2d28e9ec3f5c43ba6580f7bbbcb525b282` 与主线 `97716146784950eba85a6c079499e968c09872d2` 合并，仅在隔离 integration worktree 操作。保留主线即时语言切换、解锁页底部布局、分步注册与主密码提示流程、密码验证及语义 key 整理；原审计修复、Swift 16–1024 MiB 边界与三个领域接缝继续保留。第二轮审查的两个 OK 仅针对合并前候选；合并后独立 Review 由父任务安排。
+
+- **全仓 Go**：重新构建 MemoryKeys harness 后，`SNAPSHOT_TEST_HARNESS=… go test -tags headless ./...`、`go test -race -tags headless ./...`、`go vet -tags headless ./...` 全部通过。未指定 `-skip`；opt-in live 条件未开启，不能将其跳过算为通过。
+- **Swift**：`swift test --package-path macos` **105项**、`swift test --package-path macos/Authentication` **9项**通过。保留跨语言 Argon2id 15/16/256/257/1024/1025 边界回归，未执行真实 1 GiB 派生。
+- **真实 ABI**：通过仓库脚本重建本机 arm64、无签名生产桥，并同时设置 `SNAPSHOT_TEST_BRIDGE` 与 `SNAPSHOT_TEST_HARNESS`，重新运行 `go test -tags headless ./internal/localstore -count=1 -v`。生产桥未知 operation 失败关闭、storage transfer ABI，以及 MemoryKeys 的大快照、恢复与 runtime secret ABI 均出现 PASS；live storage 测试明确 SKIP。未构建或安装完整签名 App。
+- **协议与源码**：生成漂移检查、33项 Swift operation 协议可执行检查、fixture 生产依赖检查、gofmt 与 diff 检查通过。UI/app 存储调用仍使用类型化 operation；生产业务 Go 无超过300字符行，翻译目录与夹具数据不重排。
+- **错误展示**：只保留一份通用动态 `MessageError` 实现及其 `UserMessage`；核心 vaulterr 哨兵继续使用固定安全标识，通过展示边界动态翻译。原固定身份/文案标识与未知包装不泄漏回归保留，新增跨语言使用同一个可信错误对象的包装展示用例。
+- **已修正的验证差异**：主线新增注册测试原先检查旧的16–256标签，初轮失败；更新为16–1024后，全仓普通/race通过。未通过放宽 KDF 或错误身份契约消除失败。
+- **仍缺证据**：PATH 无 staticcheck，未自动安装；未执行 Linux runtime、hosted CI、live、Touch ID/Safari、签名沙盒文件面板/跨重启 bookmark 或实机15分钟空闲/睡眠锁屏。匿名 spool 与内存清理保证边界不变。
+
 ## 本轮重新执行记录（Board #44）
 
 - 本卡是用户明确要求的 #14 打回后重新执行。固定来源为候选 `63756e4a533253258385eb2d908519377f4b7d28`，已在本卡独立分支以 `--no-ff` 合入（不 reset、不拷旧树文件），未修改主工作区或 recovery 分支。

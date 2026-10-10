@@ -25,7 +25,7 @@ func TestOrganizationInvitationEnglish(t *testing.T) {
 		t.Error("English invitation view retained its Chinese heading")
 	}
 	// Role keys must stay stable across languages.
-	if got := memberRoleName(0); got != "org.member.role_owner" {
+	if got := memberRoleName(0); got != "role.owner" {
 		t.Fatalf("owner role key changed with language: %q", got)
 	}
 	if got := i18n.T(memberRoleName(0)); got != "Owner" {

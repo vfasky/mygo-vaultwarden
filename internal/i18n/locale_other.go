@@ -20,3 +20,16 @@ func preferredLanguages() []string {
 	}
 	return tags
 }
+
+// Elsewhere the choice lasts until the app quits.
+var chosenLanguages []string
+
+func savedLanguages() []string { return chosenLanguages }
+
+func saveLanguages(languages []string) []string {
+	chosenLanguages = languages
+	if len(languages) > 0 {
+		return languages
+	}
+	return preferredLanguages()
+}

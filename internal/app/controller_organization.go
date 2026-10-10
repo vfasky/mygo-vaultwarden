@@ -523,7 +523,7 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		ui.Column(uiContext.Key(prompt.challenge)).Gap(10).Children(func() {
 			ui.Text(uiContext, prompt.label).MaxLines(4)
 			ui.TextInput(uiContext, &prompt.password).Label(i18n.T("org.services.authorization_password")).Password()
-			if ui.Button(uiContext, i18n.T("org.services.verify_continue")).Clicked() {
+			if ui.Button(uiContext, i18n.T("org.services.verify_and_continue")).Clicked() {
 				prompt.challenge.submit([]byte(prompt.password))
 				prompt.password = ""
 				c.prompt = nil
@@ -537,10 +537,10 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		return
 	}
 	ui.Text(uiContext, i18n.T("org.services.title")).FontSize(22)
-	if ui.Button(uiContext, i18n.T("org.services.emergency_contacts")).Disabled(c.host.Busy()).Clicked() {
+	if ui.Button(uiContext, i18n.T("account.emergency.show_trusted_contacts")).Disabled(c.host.Busy()).Clicked() {
 		c.loadEmergency(true)
 	}
-	if ui.Button(uiContext, i18n.T("org.services.emergency_grants")).Disabled(c.host.Busy()).Clicked() {
+	if ui.Button(uiContext, i18n.T("account.emergency.show_granted_access")).Disabled(c.host.Busy()).Clicked() {
 		c.loadEmergency(false)
 	}
 	if ui.Button(uiContext, i18n.T("org.services.account_recovery")).Disabled(c.host.Busy() || len(c.organizations) == 0).Clicked() {
@@ -549,7 +549,7 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	if !c.emergencyTrusted {
 		for _, contact := range c.emergencyContacts {
 			if vaultwarden.EmergencyActionAllowed(contact, false, "view") {
-				if ui.Button(uiContext, i18n.Tf("org.services.view_contact", contact.Name, contact.Email)).Disabled(c.host.Busy()).Clicked() {
+				if ui.Button(uiContext, i18n.Tf("account.emergency.view_contact", contact.Name, contact.Email)).Disabled(c.host.Busy()).Clicked() {
 					c.openEmergencyView(contact)
 				}
 			}
@@ -581,9 +581,9 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	ui.Row(uiContext).Wrap().Gap(6).Children(func() {
 		for _, action := range []struct{ id, label string }{
 			{"state", i18n.T("org.ops.open")},
-			{"copy", i18n.T("org.transfer.copy_open")},
+			{"copy", i18n.T("org.transfer.open_copy")},
 			{"collections", i18n.T("org.transfer.assign_collections")},
-			{"export", i18n.T("org.transfer.export_open")},
+			{"export", i18n.T("org.transfer.open_export")},
 			{"events", i18n.T("org.events.title")},
 			{"cipher-events", i18n.T("org.events.selected_item")},
 			{"api-key", i18n.T("org.apikey.title")},
