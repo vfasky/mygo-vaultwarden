@@ -91,7 +91,9 @@ func settingsVersion(version string) string {
 
 func (a *app) settingsAbout(c *ui.Context) {
 	ui.Column(c).AlignItems(ui.Center).Gap(12).Padding(20).Children(func() {
-		ui.Image(c, kit.AppLogo).Size(80, 80)
+		if kit.AppLogo != nil {
+			ui.Image(c, kit.AppLogo).Size(80, 80)
+		}
 		ui.Text(c, i18n.T("settings.app_name")).FontSize(24).FontWeight(650)
 		ui.Text(c, i18n.Tf("settings.version", settingsVersion(currentUpdateState().Version))).FontSize(12).TextColor(kit.Muted)
 	})
