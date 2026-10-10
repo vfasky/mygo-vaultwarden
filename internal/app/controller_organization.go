@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"sync"
 	"time"
 
@@ -121,7 +122,7 @@ func (c *orgServicesController) deliver(f func()) {
 					a.status = vaultwarden.ErrIdentity.Error()
 				} else {
 					a.advanceEpoch()
-					a.status = "组织操作已进入持久隔离；请在侧栏重新核验，未知结果不会自动重放。"
+					a.status = i18n.T("组织操作已进入持久隔离；请在侧栏重新核验，未知结果不会自动重放。")
 				}
 			} else if cp := env.lease.takeCheckpoint(); cp != nil {
 				if !a.adoptSessionCheckpoint(cp) {
@@ -129,7 +130,7 @@ func (c *orgServicesController) deliver(f func()) {
 					a.status = vaultwarden.ErrIdentity.Error()
 				} else {
 					a.advanceEpoch()
-					a.status = "认证凭据已更新，请重新打开组织业务页面。"
+					a.status = i18n.T("认证凭据已更新，请重新打开组织业务页面。")
 				}
 			}
 		}
@@ -217,7 +218,7 @@ func (c *orgServicesController) grantFor(ctx context.Context, env orgServiceSnap
 		return grant, nil
 	}
 	c.mu.Unlock()
-	password, err := c.password(ctx, "再次验证组织项目 "+id, env)
+	password, err := c.password(ctx, i18n.Tf("再次验证组织项目 %s", id), env)
 	if err != nil {
 		return nil, err
 	}
@@ -249,7 +250,7 @@ func (c *orgServicesController) allGrants(ctx context.Context, env orgServiceSna
 	if len(ids) == 0 {
 		return grants, nil
 	}
-	password, err := c.password(ctx, "再次验证此组织导出中的受保护项目（每项授权最多30秒）", env)
+	password, err := c.password(ctx, i18n.T("再次验证此组织导出中的受保护项目（每项授权最多30秒）"), env)
 	if err != nil {
 		return nil, err
 	}
@@ -490,13 +491,13 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	if prompt := c.prompt; prompt != nil {
 		ui.Column(uiContext.Key(prompt.challenge)).Gap(10).Children(func() {
 			ui.Text(uiContext, prompt.label).MaxLines(4)
-			ui.TextInput(uiContext, &prompt.password).Label("主密码（仅用于本次项目授权）").Password()
-			if ui.Button(uiContext, "验证并继续").Clicked() {
+			ui.TextInput(uiContext, &prompt.password).Label(i18n.T("主密码（仅用于本次项目授权）")).Password()
+			if ui.Button(uiContext, i18n.T("验证并继续")).Clicked() {
 				prompt.challenge.submit([]byte(prompt.password))
 				prompt.password = ""
 				c.prompt = nil
 			}
-			if ui.Button(uiContext, "取消此操作").Clicked() {
+			if ui.Button(uiContext, i18n.T("取消此操作")).Clicked() {
 				prompt.challenge.cancel()
 				prompt.password = ""
 				c.prompt = nil
@@ -504,20 +505,20 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		})
 		return
 	}
-	ui.Text(uiContext, "组织与账号恢复服务").FontSize(22)
-	if ui.Button(uiContext, "我授权的紧急联系人").Disabled(c.owner.pending != 0).Clicked() {
+	ui.Text(uiContext, i18n.T("组织与账号恢复服务")).FontSize(22)
+	if ui.Button(uiContext, i18n.T("我授权的紧急联系人")).Disabled(c.owner.pending != 0).Clicked() {
 		c.loadEmergency(true)
 	}
-	if ui.Button(uiContext, "授予我的紧急访问").Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("授予我的紧急访问")).Disabled(c.owner.pending != 0).Clicked() {
 		c.loadEmergency(false)
 	}
-	if ui.Button(uiContext, "组织恢复登记与管理员恢复").Disabled(c.owner.pending != 0 || len(c.organizations) == 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("组织恢复登记与管理员恢复")).Disabled(c.owner.pending != 0 || len(c.organizations) == 0).Clicked() {
 		c.loadRecoveryMembers()
 	}
 	if !c.emergencyTrusted {
 		for _, contact := range c.emergencyContacts {
 			if vaultwarden.EmergencyActionAllowed(contact, false, "view") {
-				if ui.Button(uiContext, "只读查看："+contact.Name+" · "+contact.Email).Disabled(c.owner.pending != 0).Clicked() {
+				if ui.Button(uiContext, i18n.Tf("只读查看：%s · %s", contact.Name, contact.Email)).Disabled(c.owner.pending != 0).Clicked() {
 					c.openEmergencyView(contact)
 				}
 			}
@@ -547,35 +548,35 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		}
 	}
 	ui.Row(uiContext).Wrap().Gap(6).Children(func() {
-		for _, action := range []struct{ id, label string }{{"state", "批量状态"}, {"copy", "复制项目与完整资源"}, {"collections", "分配集合"}, {"export", "组织导出"}, {"events", "组织审计事件"}, {"cipher-events", "所选条目事件"}, {"api-key", "组织 API key"}, {"directory", "Public 目录导入"}} {
+		for _, action := range []struct{ id, label string }{{"state", i18n.T("批量状态")}, {"copy", i18n.T("复制项目与完整资源")}, {"collections", i18n.T("分配集合")}, {"export", i18n.T("组织导出")}, {"events", i18n.T("组织审计事件")}, {"cipher-events", i18n.T("所选条目事件")}, {"api-key", i18n.T("组织 API key")}, {"directory", i18n.T("Public 目录导入")}} {
 			disabled := c.owner.pending != 0 || c.selectedOrg == "" || ((action.id == "copy" || action.id == "collections" || action.id == "cipher-events") && c.selectedItem == "")
 			if ui.Button(uiContext, action.label).Disabled(disabled).Clicked() {
 				c.selectAction(action.id)
 			}
 		}
 	})
-	if ui.Button(uiContext, "读取成员以查看成员事件").Disabled(c.owner.pending != 0 || c.selectedOrg == "").Clicked() {
+	if ui.Button(uiContext, i18n.T("读取成员以查看成员事件")).Disabled(c.owner.pending != 0 || c.selectedOrg == "").Clicked() {
 		c.loadMembers()
 	}
 	for _, member := range c.members {
-		if ui.Button(uiContext, member.Label+" · 成员事件").Disabled(c.owner.pending != 0).Clicked() {
+		if ui.Button(uiContext, i18n.Tf("%s · 成员事件", member.Label)).Disabled(c.owner.pending != 0).Clicked() {
 			c.selectedMember = member.MemberID
 			c.selectAction("member-events")
 		}
 	}
-	ui.TextInput(uiContext, &c.path).Label("导入文件路径（MyGo / 官方 JSON / 完整资源）").Disabled(c.owner.pending != 0)
-	if ui.Button(uiContext, "官方 JSON："+orgBoolLabel(c.official)).Disabled(c.owner.pending != 0).Clicked() {
+	ui.TextInput(uiContext, &c.path).Label(i18n.T("导入文件路径（MyGo / 官方 JSON / 完整资源）")).Disabled(c.owner.pending != 0)
+	if ui.Button(uiContext, orgBoolLabel(i18n.T("官方 JSON"), c.official)).Disabled(c.owner.pending != 0).Clicked() {
 		c.official = !c.official
 		c.resources = false
 	}
-	if ui.Button(uiContext, "完整资源："+orgBoolLabel(c.resources)).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, orgBoolLabel(i18n.T("完整资源"), c.resources)).Disabled(c.owner.pending != 0).Clicked() {
 		c.resources = !c.resources
 		c.official = false
 	}
-	if ui.Button(uiContext, "读取并预览组织导入").Disabled(c.owner.pending != 0 || c.path == "" || c.selectedOrg == "").Clicked() {
+	if ui.Button(uiContext, i18n.T("读取并预览组织导入")).Disabled(c.owner.pending != 0 || c.path == "" || c.selectedOrg == "").Clicked() {
 		c.openImport()
 	}
-	if ui.Button(uiContext, "仅读取完整资源以继续附件恢复（不创建条目）").Disabled(c.owner.pending != 0 || c.path == "" || c.selectedOrg == "").Clicked() {
+	if ui.Button(uiContext, i18n.T("仅读取完整资源以继续附件恢复（不创建条目）")).Disabled(c.owner.pending != 0 || c.path == "" || c.selectedOrg == "").Clicked() {
 		c.resources = true
 		c.official = false
 		c.openImportMode(true)
@@ -583,16 +584,16 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	if c.panel != nil {
 		c.panel.View(uiContext)
 	}
-	if ui.Button(uiContext, "同步并重新读取（不会自动重放操作）").Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("同步并重新读取（不会自动重放操作）")).Disabled(c.owner.pending != 0).Clicked() {
 		c.owner.syncVault(false)
 	}
 	ui.Text(uiContext, c.status).MaxLines(8)
 }
-func orgBoolLabel(value bool) string {
+func orgBoolLabel(name string, value bool) string {
 	if value {
-		return "开启"
+		return i18n.Tf("%s：开启", name)
 	}
-	return "关闭"
+	return i18n.Tf("%s：关闭", name)
 }
 
 // Metadata IDs are used only for display/reconciliation. Every subsequent file
