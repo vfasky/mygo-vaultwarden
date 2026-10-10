@@ -128,12 +128,22 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 			return result, ErrCancelled
 		}
 		item := file.Items[i]
-		name := item["name"].(string)
-		object, _ := documentObject(document)
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			return result, err
+		}
+		name := identity.Name
+		object, err := documentObject(document)
+		if err != nil {
+			return result, err
+		}
 		if folder, ok := item["folderId"].(string); ok {
 			object["folderId"] = mapping[folder]
 		}
-		encoded, _ := json.Marshal(object)
+		encoded, err := json.Marshal(object)
+		if err != nil {
+			return result, ErrProtocol
+		}
 		created, err := s.createCipherDocumentLocked(ctx, CipherDocument{JSON: encoded}, persist)
 		if err != nil {
 			return fail(ImportKindItem, name, "", err)
@@ -153,7 +163,7 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 				return fail(ImportKindItemTrashUnverified, name, fields.ID, err)
 			}
 		}
-		result.Entries = append(result.Entries, ImportEntry{Kind: ImportKindItem, Name: name, ID: fields.ID, State: ImportStateCreatedPendingSync, SourceID: item["id"].(string)})
+		result.Entries = append(result.Entries, ImportEntry{Kind: ImportKindItem, Name: name, ID: fields.ID, State: ImportStateCreatedPendingSync, SourceID: identity.ID})
 	}
 	if ctx.Err() != nil {
 		return result, &MutationUncertainError{Cause: ErrCancelled}

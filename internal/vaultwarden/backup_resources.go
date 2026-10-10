@@ -129,10 +129,13 @@ func (s *Session) backupResourceDescriptions(vault *VaultData, ids []string, gra
 			clear(key)
 			return nil, err
 		}
-		list, _ := rows.([]any)
+		list, err := backupObjectRows(rows)
+		if err != nil {
+			clear(key)
+			return nil, err
+		}
 		seen := map[string]bool{}
-		for _, raw := range list {
-			row := raw.(map[string]any)
+		for _, row := range list {
 			id, ok := row["id"].(string)
 			if !ok || !validObjectID(id) || seen[id] {
 				clear(key)
@@ -184,7 +187,13 @@ func (s *Session) WriteResourceBackup(ctx context.Context, vault *VaultData, ids
 			}
 			ids = nil
 			for _, item := range plan.file.Items {
-				ids = append(ids, item["id"].(string))
+				identity, e := backupItemIdentity(item)
+				if e != nil {
+					plan.Clear()
+					clear(metadata)
+					return nil, e
+				}
+				ids = append(ids, identity.ID)
 			}
 			plan.Clear()
 		}
@@ -204,12 +213,12 @@ func (s *Session) WriteResourceBackup(ctx context.Context, vault *VaultData, ids
 	return s.writeResourceArchive(ctx, vault, grants, manifest, publication, writer, persist)
 }
 
-func (s *Session) writeResourceArchive(ctx context.Context, vault *VaultData, grants map[string]*ItemAuthorization, manifest resourceManifest, publication *ResourceBackupPublication, writer io.Writer, persist func(SessionCheckpoint) error) (*ResourceBackupPublication, error) {
+func (s resourceBackupService) writeResourceArchive(ctx context.Context, vault *VaultData, grants map[string]*ItemAuthorization, manifest resourceManifest, publication *ResourceBackupPublication, writer io.Writer, persist func(SessionCheckpoint) error) (*ResourceBackupPublication, error) {
 	archive := zip.NewWriter(writer)
 	var total int64
 	for i := range manifest.Resources {
 		resource := &manifest.Resources[i]
-		proof, err := s.DownloadAttachmentForBackup(ctx, vault, resource.CipherID, resource.AttachmentID, grants[resource.CipherID], persist, func(file *os.File, size int64) error {
+		proof, err := s.access.DownloadAttachmentForBackup(ctx, vault, resource.CipherID, resource.AttachmentID, grants[resource.CipherID], persist, func(file *os.File, size int64) error {
 			if size < 0 || size > 512<<20 || total+size > 1<<30 {
 				return ErrValidation
 			}
@@ -233,7 +242,7 @@ func (s *Session) writeResourceArchive(ctx context.Context, vault *VaultData, gr
 		// Consume each file's short-lived proof immediately. The archive remains
 		// private; one fresh aggregate permission/read check below authorizes its
 		// eventual publication without retaining N complete cipher documents.
-		if err = s.PublishAttachment(ctx, proof, grants[resource.CipherID], func() error { return nil }); err != nil {
+		if err = s.access.PublishAttachment(ctx, proof, grants[resource.CipherID], func() error { return nil }); err != nil {
 			return nil, err
 		}
 	}
@@ -258,7 +267,7 @@ func (s *Session) writeResourceArchive(ctx context.Context, vault *VaultData, gr
 	if ctx.Err() != nil {
 		return nil, ErrCancelled
 	}
-	if err = s.prepareResourcePublication(ctx, publication, grants, persist, len(manifest.Resources) > 0); err != nil {
+	if err = s.access.prepareResourcePublication(ctx, publication, grants, persist, len(manifest.Resources) > 0); err != nil {
 		return nil, err
 	}
 	return publication, nil
@@ -381,7 +390,11 @@ func (p *ResourceImportPlan) PersonalRestoreMetadata() (*ImportPlan, error) {
 		withFiles[resource.CipherID] = true
 	}
 	for _, item := range file.Items {
-		if withFiles[item["id"].(string)] {
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			return nil, err
+		}
+		if withFiles[identity.ID] {
 			delete(item, "deletedDate")
 		}
 	}
@@ -407,7 +420,11 @@ func (p *ResourceImportPlan) DeferredTrashIDs() []string {
 	}
 	ids := []string{}
 	for _, item := range file.Items {
-		id := item["id"].(string)
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			return nil
+		}
+		id := identity.ID
 		if withFiles[id] && item["deletedDate"] != nil {
 			ids = append(ids, id)
 		}
@@ -462,7 +479,11 @@ func (p *ResourceImportPlan) ItemStates() []ResourceItemState {
 	}
 	result := make([]ResourceItemState, 0, len(items))
 	for _, item := range items {
-		state := ResourceItemState{SourceID: item["id"].(string), Archived: item["archivedDate"] != nil, Deleted: item["deletedDate"] != nil}
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			return nil
+		}
+		state := ResourceItemState{SourceID: identity.ID, Archived: item["archivedDate"] != nil, Deleted: item["deletedDate"] != nil}
 		if folder, ok := item["folderId"].(string); ok {
 			state.FolderID = &folder
 		}
@@ -561,7 +582,11 @@ func ParseResourceImport(ctx context.Context, input *os.File) (_ *ResourceImport
 			return nil, e
 		}
 		for _, item := range file.Items {
-			ids[item["id"].(string)] = true
+			identity, e := backupItemIdentity(item)
+			if e != nil {
+				return nil, e
+			}
+			ids[identity.ID] = true
 		}
 	} else {
 		metadata, e := ParseOrganizationImport(plan.manifest.Metadata)
@@ -573,7 +598,12 @@ func ParseResourceImport(ctx context.Context, input *os.File) (_ *ResourceImport
 			return nil, ErrIdentity
 		}
 		for _, item := range metadata.file.Items {
-			ids[item["id"].(string)] = true
+			identity, e := backupItemIdentity(item)
+			if e != nil {
+				metadata.Clear()
+				return nil, e
+			}
+			ids[identity.ID] = true
 		}
 		metadata.Clear()
 	}
@@ -635,12 +665,15 @@ func ParseResourceImport(ctx context.Context, input *os.File) (_ *ResourceImport
 // authenticated target. It never repeats a request and returns the server's
 // attachment ID even when later confirmation fails. Caller must sync and verify
 // every acknowledged file before considering a multi-item restore complete.
-func (s *Session) UploadResource(ctx context.Context, vault *VaultData, targetID string, plan *ResourceImportPlan, index int, confirmed bool, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (AttachmentUploadResult, error) {
+func (s resourceBackupService) UploadResource(ctx context.Context, vault *VaultData, targetID string, plan *ResourceImportPlan, index int, confirmed bool, grant *ItemAuthorization, persist func(SessionCheckpoint) error) (AttachmentUploadResult, error) {
 	if !confirmed || plan == nil || plan.file == nil || index < 0 || index >= len(plan.manifest.Resources) {
 		return AttachmentUploadResult{}, ErrValidation
 	}
 	resource := plan.manifest.Resources[index]
 	entry := plan.entries[resource.Path]
+	if entry == nil {
+		return AttachmentUploadResult{}, ErrProtocol
+	}
 	reader, err := entry.Open()
 	if err != nil {
 		return AttachmentUploadResult{}, err
@@ -661,15 +694,15 @@ func (s *Session) UploadResource(ctx context.Context, vault *VaultData, targetID
 	if _, err = file.Seek(0, io.SeekStart); err != nil {
 		return AttachmentUploadResult{}, err
 	}
-	return s.UploadAttachment(ctx, vault, targetID, resource.FileName, file, grant, persist)
+	return s.access.UploadAttachment(ctx, vault, targetID, resource.FileName, file, grant, persist)
 }
 
-func (s *Session) VerifyRestoredResource(ctx context.Context, vault *VaultData, targetID, attachmentID string, plan *ResourceImportPlan, index int, grant *ItemAuthorization, persist func(SessionCheckpoint) error) error {
+func (s resourceBackupService) VerifyRestoredResource(ctx context.Context, vault *VaultData, targetID, attachmentID string, plan *ResourceImportPlan, index int, grant *ItemAuthorization, persist func(SessionCheckpoint) error) error {
 	if plan == nil || plan.file == nil || index < 0 || index >= len(plan.manifest.Resources) {
 		return ErrValidation
 	}
 	resource := plan.manifest.Resources[index]
-	rows, err := s.backupResourceDescriptions(vault, []string{targetID}, map[string]*ItemAuthorization{targetID: grant})
+	rows, err := s.access.backupResourceDescriptions(vault, []string{targetID}, map[string]*ItemAuthorization{targetID: grant})
 	if err != nil {
 		return err
 	}
@@ -682,7 +715,7 @@ func (s *Session) VerifyRestoredResource(ctx context.Context, vault *VaultData, 
 	if !matched {
 		return ErrConflict
 	}
-	proof, err := s.DownloadAttachmentForBackup(ctx, vault, targetID, attachmentID, grant, persist, func(file *os.File, size int64) error {
+	proof, err := s.access.DownloadAttachmentForBackup(ctx, vault, targetID, attachmentID, grant, persist, func(file *os.File, size int64) error {
 		if size != resource.Size {
 			return ErrConflict
 		}
@@ -698,5 +731,5 @@ func (s *Session) VerifyRestoredResource(ctx context.Context, vault *VaultData, 
 	if err != nil {
 		return err
 	}
-	return s.PublishAttachment(ctx, proof, grant, func() error { return nil })
+	return s.access.PublishAttachment(ctx, proof, grant, func() error { return nil })
 }

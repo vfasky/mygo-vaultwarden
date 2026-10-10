@@ -43,9 +43,11 @@ func (p *OrganizationImportPlan) PreviewItems() []ImportPreview {
 	}
 	out := make([]ImportPreview, 0, len(p.file.Items))
 	for _, item := range p.file.Items {
-		kind, _ := item["type"].(json.Number).Int64()
-		name, _ := item["name"].(string)
-		out = append(out, ImportPreview{Name: name, Type: int(kind), Archived: item["archivedDate"] != nil, Deleted: item["deletedDate"] != nil})
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			return nil
+		}
+		out = append(out, ImportPreview{Name: identity.Name, Type: identity.Type, Archived: item["archivedDate"] != nil, Deleted: item["deletedDate"] != nil})
 	}
 	return out
 }
@@ -397,8 +399,14 @@ func (s *Session) ImportOrganizationBackup(ctx context.Context, vault *VaultData
 		if item["deletedDate"] != nil || item["archivedDate"] != nil || item["folderId"] != nil {
 			return result, ErrUnsupportedEdit
 		}
-		kind, _ := item["type"].(json.Number).Int64()
-		kinds[int(kind)] = true
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			return result, err
+		}
+		if err := validateOrganizationBackupItem(item); err != nil {
+			return result, err
+		}
+		kinds[identity.Type] = true
 		encrypted, err := encryptImportedItem(item, data.keys[orgID], s.account)
 		if err != nil {
 			return result, err
@@ -414,10 +422,24 @@ func (s *Session) ImportOrganizationBackup(ctx context.Context, vault *VaultData
 			return result, ErrProtocol
 		}
 		ciphers = append(ciphers, raw)
-		for _, rawID := range item["collectionIds"].([]any) {
-			relationships = append(relationships, relation{Key: i, Value: indices[rawID.(string)]})
+		relations, ok := item["collectionIds"].([]any)
+		if !ok {
+			return result, ErrProtocol
 		}
-		result.IDs = append(result.IDs, item["id"].(string))
+		seen := map[string]bool{}
+		for _, rawID := range relations {
+			id, ok := rawID.(string)
+			if !ok || seen[id] {
+				return result, ErrProtocol
+			}
+			index, exists := indices[id]
+			if !exists {
+				return result, ErrProtocol
+			}
+			seen[id] = true
+			relationships = append(relationships, relation{Key: i, Value: index})
+		}
+		result.IDs = append(result.IDs, identity.ID)
 	}
 	guard := s.orgOperationGuardLocked()
 	for kind := range kinds {
