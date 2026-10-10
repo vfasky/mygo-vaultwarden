@@ -195,6 +195,6 @@ func (r *runtimeVault) call(epoch uint64, request localstore.Request) localstore
 		}
 		return localstore.Reply{OK: true, State: runtimeSnapshot(cap)}
 	default:
-		return localstore.Reply{Code: "runtime_requires_password", Message: i18n.T("此操作需要持久恢复材料；请先显式绑定主密码并同步。已有磁盘快照保持不变。")}
+		return localstore.Reply{Code: "runtime_requires_password", Message: i18n.T("app.sync.err_persistent_recovery_required")}
 	}
 }
