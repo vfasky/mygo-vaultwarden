@@ -42,13 +42,13 @@ func (a *app) adoptSessionCheckpoint(state *localstore.SnapshotStatus) bool {
 
 func (a *app) restoreUnlockedSession(reply localstore.Reply) bool {
 	a.stopNetwork()
-	a.status = i18n.T("密码库已解锁。")
+	a.status = i18n.T("login.unlock.status_unlocked")
 	if len(reply.Session) == 0 {
-		a.status = i18n.T("密码库已解锁。本机尚未保存登录凭据，点击同步重新登录一次即可启用。")
+		a.status = i18n.T("login.unlock.status_credentials_not_saved")
 		return false
 	}
 	if reply.State == nil || reply.State.Scope == nil || reply.State.PasswordUnlock == nil {
-		a.status = i18n.T("本机认证快照不完整，请重新登录。")
+		a.status = i18n.T("login.unlock.err_incomplete_snapshot")
 		return false
 	}
 	session, err := vaultwarden.RestoreSessionFromAuthenticatedSnapshot(reply.Session, *reply.State.Scope, reply.State.PasswordUnlock, reply.Vault, reply.State.Revision)
@@ -59,16 +59,16 @@ func (a *app) restoreUnlockedSession(reply localstore.Reply) bool {
 		session, err = vaultwarden.RestoreSession(reply.Session, *reply.State.Scope, reply.State.PasswordUnlock)
 	}
 	if err != nil {
-		a.status = i18n.T("密码库已解锁，但本机登录凭据不可用，请点击同步重新登录。")
+		a.status = i18n.T("login.unlock.status_credentials_unavailable")
 		return false
 	}
 	a.session = session
 	scope := *reply.State.Scope
 	a.liveScope, a.sessionRevision = &scope, reply.State.Revision
 	a.serverURL, a.email = scope.Server, reply.State.PasswordUnlock.Email
-	a.status = i18n.T("密码库已解锁，可以同步。")
+	a.status = i18n.T("login.unlock.status_sync_ready")
 	if migration {
-		a.status = i18n.T("本机快照需要更新策略，请先同步后使用密码库。")
+		a.status = i18n.T("app.sync.policy_update_hint")
 	}
 	return !migration
 }

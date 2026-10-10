@@ -14,14 +14,14 @@ import (
 func (a *app) itemAuthorizationView(c *ui.Context) {
 	e := a.editor
 	ui.Column(c).Gap(12).Padding(18).Children(func() {
-		ui.Text(c, i18n.T("再次验证主密码")).FontSize(23).FontWeight(600)
-		ui.Text(c, i18n.T("仅授权此项目 30 秒，到期会关闭表单并清除未保存的内容。不会取消项目的主密码验证要求。")).FontSize(13)
-		ui.TextInput(c, &e.repromptPassword).Label(i18n.T("主密码")).Password().Disabled(a.pending != 0)
+		ui.Text(c, i18n.T("app.reprompt.title")).FontSize(23).FontWeight(600)
+		ui.Text(c, i18n.T("app.reprompt.hint")).FontSize(13)
+		ui.TextInput(c, &e.repromptPassword).Label(i18n.T("login.master_password")).Password().Disabled(a.pending != 0)
 		ui.Row(c).Gap(8).Children(func() {
-			if kit.Action(c, i18n.T("验证并打开"), "", true, a.pending != 0 || e.repromptPassword == "").Clicked() {
+			if kit.Action(c, i18n.T("app.reprompt.verify_open"), "", true, a.pending != 0 || e.repromptPassword == "").Clicked() {
 				a.authorizePersonalItem()
 			}
-			if kit.Action(c, i18n.T("取消"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("common.cancel"), "", false, a.pending != 0).Clicked() {
 				*e = cipherEditor{}
 				a.editor = nil
 				a.secretInputVersion++

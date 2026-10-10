@@ -18,7 +18,7 @@ func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerL
 						a.status = vaultwarden.ErrIdentity.Error()
 					} else {
 						a.advanceEpoch()
-						a.status = i18n.T("登录凭据已更新，请重新打开此页面。")
+						a.status = i18n.T("app.settings.err_credentials_changed")
 					}
 				}
 			}

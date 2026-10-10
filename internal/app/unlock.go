@@ -12,16 +12,16 @@ func (a *app) unlockWithPassword() {
 		return
 	}
 	if a.snapshot.PasswordUnlock == nil {
-		a.status = i18n.T("请重新登录一次，以启用主密码解锁；也可以使用 Touch ID 解锁。")
+		a.status = i18n.T("login.unlock.login_or_touch_id_hint")
 		return
 	}
 	if a.masterPassword == "" {
-		a.status = i18n.T("请输入主密码。")
+		a.status = i18n.T("login.err_password_required")
 		return
 	}
 	if len(a.masterPassword) > 8192 {
 		a.clearLoginInputs()
-		a.status = i18n.T("主密码过长，请检查输入。")
+		a.status = i18n.T("login.err_password_too_long")
 		return
 	}
 	password := []byte(a.masterPassword)

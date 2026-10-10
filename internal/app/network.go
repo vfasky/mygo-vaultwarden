@@ -62,7 +62,7 @@ func (a *app) syncFailed(reply localstore.Reply, err error) {
 	}
 	a.status = err.Error()
 	if storageErr != nil {
-		a.status = i18n.Tf("%s 请重新解锁后再同步。", a.status)
+		a.status = i18n.Tf("app.sync.unlock_again_hint", a.status)
 	}
 }
 
@@ -132,16 +132,16 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			return
 		}
 		if !strings.Contains(email, "@") || len(email) > 1024 {
-			a.status = i18n.T("请输入登录邮箱。")
+			a.status = i18n.T("login.err_email_required")
 			return
 		}
 		if len(a.masterPassword) == 0 {
-			a.status = i18n.T("请输入主密码。")
+			a.status = i18n.T("login.err_password_required")
 			return
 		}
 		if len(a.masterPassword) > 8192 {
 			a.clearLoginInputs()
-			a.status = i18n.T("主密码过长，请检查输入。")
+			a.status = i18n.T("login.err_password_too_long")
 			return
 		}
 		password = []byte(a.masterPassword)
@@ -152,7 +152,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 		if a.unlocked() {
 			a.openUnlockLogin()
 		}
-		a.status = i18n.T("请重新登录一次以安全保存登录凭据，之后解锁即可同步。")
+		a.status = i18n.T("app.sync.login_required_hint")
 		return
 	} else if !a.sessionOwnsSnapshot() {
 		a.stopNetwork()
@@ -184,9 +184,9 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 	}
 	a.cancel = cancel
 	a.pending++
-	a.status = i18n.T("正在登录并同步…")
+	a.status = i18n.T("login.status_syncing")
 	if !login {
-		a.status = i18n.T("正在同步密码库…")
+		a.status = i18n.T("app.sync.status_syncing")
 	}
 	// Capture on the UI thread; only the successful authenticated publication
 	// below may consume this continuation. Status observations cannot mint one.
@@ -206,7 +206,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			if !reply.OK || reply.State == nil {
 				workErr = reply.Failure()
 				if reply.OK {
-					workErr = (localstore.Reply{Code: "invalid_reply", Message: i18n.T("未能确认本机账号撤销结果。")}).Failure()
+					workErr = (localstore.Reply{Code: "invalid_reply", Message: i18n.T("app.sync.err_revocation_unconfirmed")}).Failure()
 				}
 			} else {
 				expected = reply.State.Revision
@@ -274,7 +274,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 				result.Vault = reply.Vault
 			}
 			if !login && !reply.Vault.PreservesPendingPolicies(priorVault) {
-				reply.OK, reply.Code, reply.Message = false, "invalid_reply", i18n.T("未能确认策略待核验状态，请重新解锁。")
+				reply.OK, reply.Code, reply.Message = false, "invalid_reply", i18n.T("app.sync.err_policy_unconfirmed")
 			}
 			for _, isolatedID := range isolatedIDs {
 				found := false
@@ -286,13 +286,13 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 					}
 				}
 				if !found {
-					reply.OK, reply.Code, reply.Message = false, "invalid_reply", i18n.T("未能确认组织隔离状态，请重新解锁核对。")
+					reply.OK, reply.Code, reply.Message = false, "invalid_reply", i18n.T("app.sync.err_quarantine_unconfirmed")
 				}
 			}
 			if !reply.OK {
 				workErr = reply.Failure()
 			} else if reply.Vault == nil || reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.SnapshotID == "" || reply.State.Revision == "" || reply.State.Revision == expected {
-				workErr = (localstore.Reply{Code: "invalid_reply", Message: i18n.T("未能确认本次快照的发布版本。")}).Failure()
+				workErr = (localstore.Reply{Code: "invalid_reply", Message: i18n.T("app.sync.err_revision_unconfirmed")}).Failure()
 			}
 		}
 		// No password-bearing results live in the UI model.
@@ -340,7 +340,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 				}
 				a.syncFailed(reply, workErr)
 				if timedOut {
-					a.status = i18n.T("登录已超时，请重新输入主密码。")
+					a.status = i18n.T("login.err_timeout")
 				}
 				return
 			}
@@ -375,7 +375,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			a.itemsRevision = a.snapshot.Revision
 			a.showSettings, a.showLogin = false, false
 			s := result.Summary
-			a.status = i18n.Tf("已同步 %d 个项目；可填充登录 %d。填充排除：未授权组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
+			a.status = i18n.Tf("app.sync.summary", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
 			a.reconcileBulk()
 			a.reconcileImport(backupContinuation)
 			a.startNotifications(dispatch, storage)

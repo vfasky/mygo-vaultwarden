@@ -97,7 +97,7 @@ func (a *app) runStorage(operation string) {
 			return
 		}
 		if operation == "reindex" || operation == "list" {
-			a.status = i18n.T("临时在线库不注册系统自动填充，也不保存离线登录；请先绑定主密码并同步。")
+			a.status = i18n.T("app.sync.runtime_bind_password_hint")
 			return
 		}
 	}
@@ -113,7 +113,7 @@ func (a *app) runStorage(operation string) {
 	request := localstore.Request{Operation: operation}
 	if operation == "confirmAccountSwitch" {
 		if a.switchReceipt == nil {
-			a.status = i18n.T("请先系统认证检查这次账号切换。")
+			a.status = i18n.T("login.account_switch.authentication_required_hint")
 			return
 		}
 		request.SwitchOperationID = a.switchReceipt.Binding.OperationID
@@ -140,7 +140,7 @@ func (a *app) startStorage(request localstore.Request, work func() localstore.Re
 	epoch := a.epoch
 	a.pending++
 	if request.Operation != "status" && request.Operation != "settings" {
-		a.status = i18n.T("正在处理；如系统要求认证，请完成认证。")
+		a.status = i18n.T("app.sync.status_authenticating")
 	}
 	go func() {
 		reply := work()
@@ -158,7 +158,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 	if isUnlock && reply.OK && (reply.State == nil || !reply.State.Available ||
 		reply.State.Revision == "" || reply.State.Revision != request.ExpectedRevision ||
 		reply.State.Scope == nil || request.Scope == nil || *reply.State.Scope != *request.Scope) {
-		reply.OK, reply.Message = false, i18n.T("密码库状态已变化，请重新解锁。")
+		reply.OK, reply.Message = false, i18n.T("app.sync.err_vault_changed")
 	}
 	if reply.State != nil {
 		a.observeSnapshot(reply.State)
@@ -192,7 +192,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 			return
 		}
 		a.switchReceipt = reply.AccountSwitch
-		a.status = i18n.T("已认证这次本机账号切换；请核对原账号与新账号后确认。")
+		a.status = i18n.T("login.account_switch.status_authenticated")
 	case "confirmAccountSwitch":
 		if reply.AccountSwitch == nil || reply.AccountSwitch.Phase != "confirmed" || reply.AccountSwitch.Binding.OperationID != request.SwitchOperationID || reply.State == nil || reply.State.AccountSwitchPending || reply.State.Scope == nil || reply.AccountSwitch.Binding.Target != *reply.State.Scope || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID {
 			a.status = vaultwarden.ErrIdentity.Error()
@@ -214,11 +214,11 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 			a.startNotifications(a.dispatchUI, a.storageCall)
 		}
 	case "lock":
-		a.status = i18n.T("已锁定，请输入主密码或使用 Touch ID 解锁。")
+		a.status = i18n.T("login.unlock.status_locked")
 	case "logout":
-		a.status = i18n.T("本机账号和快照已撤销；不会修改服务器上的密码库。")
+		a.status = i18n.T("app.settings.status_account_revoked")
 	case "reindex":
-		a.status = i18n.T("候选更新已提交，请刷新状态查看系统回执。")
+		a.status = i18n.T("app.settings.status_autofill_submitted")
 	default:
 		a.status = reply.Message
 	}
@@ -226,7 +226,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 
 // Run starts the MyGo Vaultwarden application and blocks until it quits.
 func Run() {
-	a := &app{status: i18n.T("正在读取本机存储状态…"), notificationsEnabled: true}
+	a := &app{status: i18n.T("app.sync.status_reading_storage"), notificationsEnabled: true}
 	mygo.App.WhenReady(func() {
 		// Pinning the traffic lights where hiddenInset puts them makes the
 		// title bar exactly as tall as their row, centered on them, so the

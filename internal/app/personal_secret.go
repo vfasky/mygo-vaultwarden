@@ -41,7 +41,7 @@ func (a *app) copyPersonalSecret(kind string, storage func(localstore.Request) l
 		a.status = err.Error()
 		return
 	}
-	a.status = i18n.T("已复制已保存的内容；最多 30 秒后尽力清除。")
+	a.status = i18n.T("app.detail.status_secret_copied")
 }
 
 func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) localstore.Reply) {
