@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 )
 
@@ -204,7 +205,7 @@ func (a *app) view(c *ui.Context) {
 	if a.authManagement != nil && (a.category != "mfa" || a.showSettings) {
 		a.advanceEpoch()
 	}
-	if a.accountForm != nil && a.accountForm.mode != "register" && (a.category != "account" || a.showSettings) {
+	if a.accountForm != nil && a.accountForm.Mode != "register" && (a.category != "account" || a.showSettings) {
 		a.advanceEpoch()
 	}
 	if a.devicePanel != nil && (a.category != "devices" || a.showSettings) {
@@ -248,7 +249,7 @@ func (a *app) body(c *ui.Context) {
 	if a.category == "mfa" && !a.showSettings {
 		ui.Scroll(c).Grow(1).Children(func() {
 			if a.authManagement != nil {
-				authManagementView(c, a.authManagement)
+				account.AuthManagementView(c, a.authManagement)
 			} else {
 				ui.Text(c, a.status)
 				if ui.Button(c, "打开两步验证设置").Disabled(a.pending != 0).Clicked() {
@@ -261,7 +262,7 @@ func (a *app) body(c *ui.Context) {
 	if a.category == "account" && !a.showSettings {
 		ui.Scroll(c).Grow(1).Children(func() {
 			if a.accountForm != nil {
-				accountFormView(c, a.accountForm)
+				account.FormView(c, a.accountForm)
 			} else {
 				ui.Text(c, a.status)
 				if ui.Button(c, "打开账号与安全").Disabled(a.pending != 0).Clicked() {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -23,7 +23,7 @@ func recoveryUIReceive(t *testing.T, q chan func()) {
 func TestRecoveryPanelPrepareConfirmUnknownNoRetry(t *testing.T) {
 	q := make(chan func(), 2)
 	prepared, committed := 0, 0
-	p := newRecoveryPanel([]recoveryMemberChoice{{OrganizationID: "org-a", MemberID: "member-a", Label: "Fixture", Administrator: true}}, func(ctx context.Context, r recoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
+	p := NewRecoveryPanel([]RecoveryMemberChoice{{OrganizationID: "org-a", MemberID: "member-a", Label: "Fixture", Administrator: true}}, func(ctx context.Context, r RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
 		prepared++
 		if r.OrganizationID != "org-a" || r.MemberID != "member-a" || string(r.NewPassword) != "new fixture password" {
 			t.Error("request binding")
@@ -37,30 +37,30 @@ func TestRecoveryPanelPrepareConfirmUnknownNoRetry(t *testing.T) {
 	p.operation = "administrator"
 	p.newPassword = "new fixture password"
 	p.repeatPassword = "different"
-	p.preparePlan()
+	p.PreparePlan()
 	if p.running {
 		t.Fatal("mismatch accepted")
 	}
 	p.repeatPassword = p.newPassword
-	p.commitPlan()
+	p.CommitPlan()
 	if committed != 0 {
 		t.Fatal("skipped prepare")
 	}
-	p.preparePlan()
+	p.PreparePlan()
 	if p.newPassword != "" || p.repeatPassword != "" {
 		t.Fatal("secret retained")
 	}
 	recoveryUIReceive(t, q)
-	if prepared != 1 || p.plan == nil || committed != 0 {
+	if prepared != 1 || p.Plan == nil || committed != 0 {
 		t.Fatal("prepare auto committed")
 	}
-	p.commitPlan()
+	p.CommitPlan()
 	recoveryUIReceive(t, q)
-	if !p.terminal || !strings.Contains(p.status, "未知") || strings.Contains(p.status, "secret") {
+	if !p.terminal || !strings.Contains(p.Status, "未知") || strings.Contains(p.Status, "secret") {
 		t.Fatal("uncertain result UI")
 	}
-	p.preparePlan()
-	p.commitPlan()
+	p.PreparePlan()
+	p.CommitPlan()
 	if prepared != 1 || committed != 1 {
 		t.Fatal("retry")
 	}
@@ -68,24 +68,24 @@ func TestRecoveryPanelPrepareConfirmUnknownNoRetry(t *testing.T) {
 func TestRecoveryPanelCloseCancelsLatePreparation(t *testing.T) {
 	q := make(chan func(), 1)
 	started := make(chan struct{})
-	p := newEmergencyPanel(nil, true, func(ctx context.Context, r recoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
+	p := NewEmergencyPanel(nil, true, func(ctx context.Context, r RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
 		close(started)
 		<-ctx.Done()
 		return &vaultwarden.RecoveryPlan{}, nil
 	}, nil, func(f func()) { q <- f })
-	p.email = "fixture@example.invalid"
-	p.preparePlan()
+	p.Email = "fixture@example.invalid"
+	p.PreparePlan()
 	<-started
 	p.Close()
 	recoveryUIReceive(t, q)
-	if p.plan != nil || p.status != "" || !p.closed {
+	if p.Plan != nil || p.Status != "" || !p.closed {
 		t.Fatal("late preparation restored state")
 	}
 }
 func TestEmergencyViewerWaitGateAndClose(t *testing.T) {
 	q := make(chan func(), 1)
 	called := false
-	v := newEmergencyViewer(vaultwarden.EmergencyContact{ID: "emergency", Status: 3, Type: 0}, func(ctx context.Context, id string) ([]vaultwarden.CipherFields, error) {
+	v := NewEmergencyViewer(vaultwarden.EmergencyContact{ID: "emergency", Status: 3, Type: 0}, func(ctx context.Context, id string) ([]vaultwarden.CipherFields, error) {
 		called = true
 		return []vaultwarden.CipherFields{{ID: "item", Name: "Secret"}}, nil
 	}, func(f func()) { q <- f })

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 // recoveryFormRequest is owned by the worker until prepare returns. The host
 // binds callbacks to the current scope/epoch and durable checkpoint/target
 // invalidation adapter. No form is authority to recover an account.
-type recoveryFormRequest struct {
+type RecoveryFormRequest struct {
 	Action, OrganizationID, MemberID, TrustedPublicKey string
 	Emergency                                          vaultwarden.EmergencyRequest
 	Password, NewPassword                              []byte
@@ -22,7 +22,7 @@ type recoveryFormRequest struct {
 	ResetPassword, ResetTwoFactor                      bool
 }
 
-func (r *recoveryFormRequest) Close() {
+func (r *RecoveryFormRequest) Close() {
 	clear(r.Password)
 	clear(r.NewPassword)
 	r.Password = nil
@@ -31,36 +31,36 @@ func (r *recoveryFormRequest) Close() {
 	r.Emergency.Token = ""
 }
 
-type recoveryMemberChoice struct {
+type RecoveryMemberChoice struct {
 	OrganizationID, MemberID, Label string
 	Administrator                   bool
 }
-type recoveryPanel struct {
+type RecoveryPanel struct {
 	contacts                                                                              []vaultwarden.EmergencyContact
 	trusted, emergency                                                                    bool
-	members                                                                               []recoveryMemberChoice
+	members                                                                               []RecoveryMemberChoice
 	selected                                                                              int
-	operation, email, token, public, password, otp, newPassword, repeatPassword, waitDays string
+	operation, Email, token, public, password, otp, newPassword, repeatPassword, waitDays string
 	accessType                                                                            int
 	resetPassword, resetMFA                                                               bool
 	running, submitting, terminal, closed                                                 bool
 	generation                                                                            uint64
 	cancel                                                                                context.CancelFunc
-	plan                                                                                  *vaultwarden.RecoveryPlan
-	status                                                                                string
-	prepare                                                                               func(context.Context, recoveryFormRequest) (*vaultwarden.RecoveryPlan, error)
+	Plan                                                                                  *vaultwarden.RecoveryPlan
+	Status                                                                                string
+	prepare                                                                               func(context.Context, RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error)
 	commit                                                                                func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error)
 	dispatch                                                                              func(func())
-	busy                                                                                  func(bool)
+	Busy                                                                                  func(bool)
 }
 
-func newEmergencyPanel(contacts []vaultwarden.EmergencyContact, trusted bool, prepare func(context.Context, recoveryFormRequest) (*vaultwarden.RecoveryPlan, error), commit func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error), dispatch func(func())) *recoveryPanel {
-	return &recoveryPanel{contacts: append([]vaultwarden.EmergencyContact(nil), contacts...), trusted: trusted, emergency: true, selected: -1, operation: "invite", waitDays: "7", prepare: prepare, commit: commit, dispatch: dispatch}
+func NewEmergencyPanel(contacts []vaultwarden.EmergencyContact, trusted bool, prepare func(context.Context, RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error), commit func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error), dispatch func(func())) *RecoveryPanel {
+	return &RecoveryPanel{contacts: append([]vaultwarden.EmergencyContact(nil), contacts...), trusted: trusted, emergency: true, selected: -1, operation: "invite", waitDays: "7", prepare: prepare, commit: commit, dispatch: dispatch}
 }
-func newRecoveryPanel(members []recoveryMemberChoice, prepare func(context.Context, recoveryFormRequest) (*vaultwarden.RecoveryPlan, error), commit func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error), dispatch func(func())) *recoveryPanel {
-	return &recoveryPanel{members: append([]recoveryMemberChoice(nil), members...), selected: -1, operation: "enroll", resetPassword: true, prepare: prepare, commit: commit, dispatch: dispatch}
+func NewRecoveryPanel(members []RecoveryMemberChoice, prepare func(context.Context, RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error), commit func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error), dispatch func(func())) *RecoveryPanel {
+	return &RecoveryPanel{members: append([]RecoveryMemberChoice(nil), members...), selected: -1, operation: "enroll", resetPassword: true, prepare: prepare, commit: commit, dispatch: dispatch}
 }
-func (p *recoveryPanel) clearSecrets() {
+func (p *RecoveryPanel) clearSecrets() {
 	p.password = ""
 	p.newPassword = ""
 	p.repeatPassword = ""
@@ -70,25 +70,25 @@ func (p *recoveryPanel) clearSecrets() {
 
 // cancelOperation invalidates preparation only. A dispatched commit remains
 // owned by its worker and host callback until its result has been recorded.
-func (p *recoveryPanel) cancelOperation() {
+func (p *RecoveryPanel) cancelOperation() {
 	if p.cancel != nil {
 		p.cancel()
 	}
 	p.clearSecrets()
 	if p.submitting {
-		p.status = "正在取消；已发送操作不会自动回滚。"
+		p.Status = "正在取消；已发送操作不会自动回滚。"
 		return
 	}
 	p.generation++
 	p.running = false
 	p.cancel = nil
-	if p.plan != nil {
-		p.plan.Close()
-		p.plan = nil
+	if p.Plan != nil {
+		p.Plan.Close()
+		p.Plan = nil
 	}
-	p.status = "已取消；未提交。"
+	p.Status = "已取消；未提交。"
 }
-func (p *recoveryPanel) Close() {
+func (p *RecoveryPanel) Close() {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -100,23 +100,23 @@ func (p *recoveryPanel) Close() {
 	p.contacts = nil
 	p.members = nil
 	p.public = ""
-	if p.plan != nil {
-		p.plan.Close()
+	if p.Plan != nil {
+		p.Plan.Close()
 	}
-	p.plan = nil
-	p.status = ""
+	p.Plan = nil
+	p.Status = ""
 }
-func (p *recoveryPanel) blocked() bool { return p.closed || p.running || p.terminal }
-func (p *recoveryPanel) request() (recoveryFormRequest, error) {
-	r := recoveryFormRequest{Action: p.operation, TrustedPublicKey: p.public, ResetPassword: p.resetPassword, ResetTwoFactor: p.resetMFA}
+func (p *RecoveryPanel) blocked() bool { return p.closed || p.running || p.terminal }
+func (p *RecoveryPanel) request() (RecoveryFormRequest, error) {
+	r := RecoveryFormRequest{Action: p.operation, TrustedPublicKey: p.public, ResetPassword: p.resetPassword, ResetTwoFactor: p.resetMFA}
 	if p.emergency {
 		days, err := strconv.Atoi(p.waitDays)
 		if err != nil {
 			return r, vaultwarden.ErrValidation
 		}
-		r.Emergency = vaultwarden.EmergencyRequest{Action: p.operation, Trusted: p.trusted, Email: p.email, Token: p.token, TrustedPublicKey: p.public, Type: p.accessType, WaitTimeDays: days}
+		r.Emergency = vaultwarden.EmergencyRequest{Action: p.operation, Trusted: p.trusted, Email: p.Email, Token: p.token, TrustedPublicKey: p.public, Type: p.accessType, WaitTimeDays: days}
 		if p.operation == "accept" {
-			r.Emergency.ID = p.email
+			r.Emergency.ID = p.Email
 		} else if p.operation != "invite" {
 			if p.selected < 0 || p.selected >= len(p.contacts) {
 				return r, vaultwarden.ErrValidation
@@ -144,18 +144,18 @@ func (p *recoveryPanel) request() (recoveryFormRequest, error) {
 	r.OTP = p.otp
 	return r, nil
 }
-func (p *recoveryPanel) preparePlan() {
-	if p.blocked() || p.plan != nil || p.prepare == nil || p.dispatch == nil {
+func (p *RecoveryPanel) PreparePlan() {
+	if p.blocked() || p.Plan != nil || p.prepare == nil || p.dispatch == nil {
 		return
 	}
 	r, err := p.request()
 	if err != nil {
-		p.status = "请核对对象、必填项及两次新密码。"
+		p.Status = "请核对对象、必填项及两次新密码。"
 		return
 	}
 	p.running = true
-	if p.busy != nil {
-		p.busy(true)
+	if p.Busy != nil {
+		p.Busy(true)
 	}
 	p.clearSecrets()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -167,8 +167,8 @@ func (p *recoveryPanel) preparePlan() {
 		r.Close()
 		cancel()
 		dispatch(func() {
-			if p.busy != nil {
-				p.busy(false)
+			if p.Busy != nil {
+				p.Busy(false)
 			}
 			if p.closed || p.generation != generation {
 				if plan != nil {
@@ -182,23 +182,23 @@ func (p *recoveryPanel) preparePlan() {
 				if plan != nil {
 					plan.Close()
 				}
-				p.status = "核验失败，未创建确认计划。请重新读取状态并检查公钥、权限及策略。"
+				p.Status = "核验失败，未创建确认计划。请重新读取状态并检查公钥、权限及策略。"
 				return
 			}
-			p.plan = plan
-			p.status = "已核验；请阅读影响后确认。"
+			p.Plan = plan
+			p.Status = "已核验；请阅读影响后确认。"
 		})
 	}()
 }
-func (p *recoveryPanel) commitPlan() {
-	if p.blocked() || p.plan == nil || p.commit == nil || p.dispatch == nil {
+func (p *RecoveryPanel) CommitPlan() {
+	if p.blocked() || p.Plan == nil || p.commit == nil || p.dispatch == nil {
 		return
 	}
-	plan := p.plan
-	p.plan = nil
+	plan := p.Plan
+	p.Plan = nil
 	p.running = true
-	if p.busy != nil {
-		p.busy(true)
+	if p.Busy != nil {
+		p.Busy(true)
 	}
 	p.submitting = true
 	ctx, cancel := context.WithCancel(context.Background())
@@ -210,8 +210,8 @@ func (p *recoveryPanel) commitPlan() {
 		plan.Close()
 		cancel()
 		dispatch(func() {
-			if p.busy != nil {
-				p.busy(false)
+			if p.Busy != nil {
+				p.Busy(false)
 			}
 			if p.closed || p.generation != generation {
 				return
@@ -223,20 +223,20 @@ func (p *recoveryPanel) commitPlan() {
 			p.clearSecrets()
 			switch {
 			case result.Unknown:
-				p.status = "结果未知或可能部分完成。请核对持久记录及服务器状态，禁止重复提交。"
+				p.Status = "结果未知或可能部分完成。请核对持久记录及服务器状态，禁止重复提交。"
 			case err != nil:
-				p.status = "操作未获得确认。请核对记录；重新读取后再开始新的流程。"
+				p.Status = "操作未获得确认。请核对记录；重新读取后再开始新的流程。"
 			case result.Confirmed && result.RequireTargetLogin:
-				p.status = "服务器确认恢复。目标旧会话与 AutoFill 不得继续使用；需要重新登录、完整同步与核验。"
+				p.Status = "服务器确认恢复。目标旧会话与 AutoFill 不得继续使用；需要重新登录、完整同步与核验。"
 			case result.Confirmed:
-				p.status = "服务器已确认，请重新读取最新授权状态。"
+				p.Status = "服务器已确认，请重新读取最新授权状态。"
 			default:
-				p.status = "未取得可靠结果，请核对状态。"
+				p.Status = "未取得可靠结果，请核对状态。"
 			}
 		})
 	}()
 }
-func (p *recoveryPanel) View(c *ui.Context) {
+func (p *RecoveryPanel) View(c *ui.Context) {
 	if p.closed {
 		return
 	}
@@ -245,7 +245,7 @@ func (p *recoveryPanel) View(c *ui.Context) {
 		title = "紧急访问"
 	}
 	ui.Text(c, title).FontSize(22)
-	disabled := p.blocked() || p.plan != nil
+	disabled := p.blocked() || p.Plan != nil
 	if p.emergency {
 		if p.trusted {
 			ui.Text(c, "我信任的联系人（我授予访问权限）")
@@ -284,10 +284,10 @@ func (p *recoveryPanel) View(c *ui.Context) {
 			}
 		}
 		if p.operation == "invite" {
-			ui.TextInput(c, &p.email).Label("联系人邮箱").Disabled(disabled)
+			ui.TextInput(c, &p.Email).Label("联系人邮箱").Disabled(disabled)
 		}
 		if p.operation == "accept" {
-			ui.TextInput(c, &p.email).Label("邮件中的紧急访问 ID").Disabled(disabled)
+			ui.TextInput(c, &p.Email).Label("邮件中的紧急访问 ID").Disabled(disabled)
 			ui.TextInput(c, &p.token).Label("邮件令牌").Password().Disabled(disabled)
 		}
 		if p.operation == "invite" || p.operation == "update" {
@@ -330,8 +330,8 @@ func (p *recoveryPanel) View(c *ui.Context) {
 		ui.TextInput(c, &p.newPassword).Label("目标账号新主密码（至少12字符）").Password().Disabled(disabled)
 		ui.TextInput(c, &p.repeatPassword).Label("再次输入新主密码").Password().Disabled(disabled)
 	}
-	if p.plan != nil {
-		summary := p.plan.Summary()
+	if p.Plan != nil {
+		summary := p.Plan.Summary()
 		ui.Text(c, "已核验目标："+summary.TargetEmail+" · "+summary.Target.Account)
 		if summary.OrganizationID != "" {
 			ui.Text(c, "组织："+summary.OrganizationID+" · 成员："+summary.MembershipID)
@@ -343,22 +343,22 @@ func (p *recoveryPanel) View(c *ui.Context) {
 			}
 			ui.Text(c, fmt.Sprintf("联系人：%s · %s · 等待 %d 天", summary.CounterpartyEmail, kind, summary.WaitTimeDays))
 		}
-		ui.Text(c, p.plan.Impact())
+		ui.Text(c, p.Plan.Impact())
 		if kit.Action(c, "我已核对对象并授权执行", "", true, p.blocked()).Key("recovery-confirm").Clicked() {
-			p.commitPlan()
+			p.CommitPlan()
 		}
 		if kit.Action(c, "取消此计划", "", false, p.blocked()).Key("recovery-discard").Clicked() {
-			p.plan.Close()
-			p.plan = nil
-			p.status = "已取消；未提交。"
+			p.Plan.Close()
+			p.Plan = nil
+			p.Status = "已取消；未提交。"
 		}
 	} else if kit.Action(c, "读取核验并准备确认", "", true, p.blocked()).Key("recovery-prepare").Clicked() {
-		p.preparePlan()
+		p.PreparePlan()
 	}
 	if p.running && kit.Action(c, "取消并核对结果", "", false, false).Key("recovery-cancel").Clicked() {
 		p.cancelOperation()
 	}
-	if p.status != "" {
-		ui.Text(c, p.status)
+	if p.Status != "" {
+		ui.Text(c, p.Status)
 	}
 }

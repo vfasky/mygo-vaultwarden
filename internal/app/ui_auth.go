@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 )
 
@@ -137,8 +138,8 @@ func (a *app) serverLogin(c *ui.Context) {
 		a.deviceLoginSetupView(c)
 		return
 	}
-	if a.accountForm != nil && a.accountForm.mode == "register" {
-		accountFormView(c, a.accountForm)
+	if a.accountForm != nil && a.accountForm.Mode == "register" {
+		account.FormView(c, a.accountForm)
 		if authLink(c, "返回登录", false).Clicked() {
 			a.advanceEpoch()
 		}

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 // supplies its authenticated Session/VaultData, current checkpoint implementation
 // and UI scope/epoch lease. Commit separately supplies durable BeforeDispatch.
 // It must never be invoked on the UI thread or reuse a vault after lock/switch.
-func prepareRecoveryForm(ctx context.Context, s *vaultwarden.Session, v *vaultwarden.VaultData, r recoveryFormRequest, persist func(vaultwarden.SessionCheckpoint) error) (*vaultwarden.RecoveryPlan, error) {
+func prepareRecoveryForm(ctx context.Context, s *vaultwarden.Session, v *vaultwarden.VaultData, r RecoveryFormRequest, persist func(vaultwarden.SessionCheckpoint) error) (*vaultwarden.RecoveryPlan, error) {
 	if s == nil || v == nil {
 		return nil, vaultwarden.ErrExpired
 	}

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package app
 
-import "github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+import (
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+)
 
 func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerLease, epoch uint64, dispatch func(func())) func(func()) {
 	return func(f func()) {
@@ -36,10 +39,10 @@ func (a *app) openDevicesWith(dispatch func(func()), storage func(storageRequest
 	if lease == nil {
 		return
 	}
-	host := DeviceHost{Busy: a.componentBusy, Dispatch: a.componentDispatch(session, lease, a.epoch, dispatch),
+	host := account.DeviceHost{Busy: a.componentBusy, Dispatch: a.componentDispatch(session, lease, a.epoch, dispatch),
 		Check: func() error { return lease.check(storage) }, Checkpoint: func(cp vaultwarden.SessionCheckpoint) error { return lease.persist(cp, storage) },
 		Changed: func() { a.syncVaultWith(false, dispatch, storage) }}
-	a.devicePanel = NewDevicePanel(session, a.vault, host)
+	a.devicePanel = account.NewDevicePanel(session, a.vault, host)
 	a.category, a.showSettings = "devices", false
 	a.devicePanel.Refresh()
 }

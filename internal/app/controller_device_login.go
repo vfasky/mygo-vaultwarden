@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -26,7 +27,7 @@ func (l *deviceLoginLifecycle) check(scope vaultwarden.Scope, epoch uint64) erro
 	}
 	return l.checkSource()
 }
-func (a *app) retainDeviceWarnings(panel *DeviceLoginPanel) {
+func (a *app) retainDeviceWarnings(panel *account.DeviceLoginPanel) {
 	if panel == nil {
 		return
 	}
@@ -71,15 +72,15 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 		return
 	}
 	email := vaultwarden.NormalizeEmail(a.email)
-	account := a.deviceAccountID
-	if account == "" && a.snapshot.Scope != nil && a.snapshot.Scope.Server == server && a.snapshot.PasswordUnlock != nil && a.snapshot.PasswordUnlock.Email == email {
-		account = a.snapshot.Scope.Account
+	accountID := a.deviceAccountID
+	if accountID == "" && a.snapshot.Scope != nil && a.snapshot.Scope.Server == server && a.snapshot.PasswordUnlock != nil && a.snapshot.PasswordUnlock.Email == email {
+		accountID = a.snapshot.Scope.Account
 	}
-	if account == "" {
+	if accountID == "" {
 		a.status = "请输入此已登记设备对应的已知账号编号，或使用已有本机账号的邮箱。服务器不会通过邮箱为新设备发现账号身份。"
 		return
 	}
-	scope := vaultwarden.Scope{Server: server, Account: account}
+	scope := vaultwarden.Scope{Server: server, Account: accountID}
 	client, err := vaultwarden.NewClient(server, a.deviceID)
 	if err != nil {
 		a.status = err.Error()
@@ -143,8 +144,8 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 				return
 			}
 			platform := sysauth.NewAuthenticationPlatform(a.window)
-			var panel *DeviceLoginPanel
-			host := DeviceLoginHost{Check: lifetime.check, Platform: platform.MFA(server, epoch), AcceptingMessage: "设备凭据已验证，正在核对本机策略与恢复屏障…"}
+			var panel *account.DeviceLoginPanel
+			host := account.DeviceLoginHost{Check: lifetime.check, Platform: platform.MFA(server, epoch), AcceptingMessage: "设备凭据已验证，正在核对本机策略与恢复屏障…"}
 			host.Dispatch = func(f func()) { dispatch(func() { f(); a.retainDeviceWarnings(panel) }) }
 			host.Accept = func(flow *vaultwarden.DeviceLogin, result vaultwarden.DeviceLoginResult) error {
 				if a.epoch != epoch || a.deviceLifecycle != lifetime || !lifetime.active.Load() || result.Session == nil || result.Sync.Scope != scope || result.Sync.Vault == nil {
@@ -230,7 +231,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 				}()
 				return nil
 			}
-			panel = NewDeviceLoginPanel(client, email, scope, epoch, host)
+			panel = account.NewDeviceLoginPanel(client, email, scope, epoch, host)
 			a.deviceLoginPanel = panel
 			a.deviceLoginSetup = false
 			panel.Start()

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -9,9 +9,9 @@ import (
 
 func TestAuthManagementUnknownRequiresRead(t *testing.T) {
 	calls := 0
-	var request authManagementRequest
+	var request AuthManagementRequest
 	scope := vaultwarden.Scope{Server: "https://vault.example", Account: "account"}
-	f := newAuthManagementForm(scope, 3, func(r authManagementRequest) { calls++; request = r })
+	f := NewAuthManagementForm(scope, 3, func(r AuthManagementRequest) { calls++; request = r })
 	f.operation = "disable"
 	f.password = "password"
 	f.values["type"] = "0"
@@ -24,7 +24,7 @@ func TestAuthManagementUnknownRequiresRead(t *testing.T) {
 	if calls != 1 || f.password != "" {
 		t.Fatal("dispatch cleanup")
 	}
-	f.complete(scope, 3, f.sequence, "", context.Canceled)
+	f.Complete(scope, 3, f.sequence, "", context.Canceled)
 	f.dispatch()
 	if calls != 1 {
 		t.Fatal("unknown mutation retried")
@@ -40,17 +40,17 @@ func TestAuthManagementUnknownRequiresRead(t *testing.T) {
 
 func TestAuthRecoveryConfirmationAndLease(t *testing.T) {
 	calls := 0
-	var emitted authRequest
-	f := newAuthForm(vaultwarden.Scope{Server: "https://vault.example", Account: "account"}, 10, func(r authRequest) { calls++; emitted = r })
-	f.provider = 8
-	f.token = "recovery-secret"
-	f.dispatch()
-	if calls != 0 || !f.confirming {
+	var emitted AuthRequest
+	f := NewAuthForm(vaultwarden.Scope{Server: "https://vault.example", Account: "account"}, 10, func(r AuthRequest) { calls++; emitted = r })
+	f.Provider = 8
+	f.Token = "recovery-secret"
+	f.Dispatch()
+	if calls != 0 || !f.Confirming {
 		t.Fatal("missing destructive confirmation")
 	}
-	f.dispatch()
+	f.Dispatch()
 	defer emitted.Close()
-	if calls != 1 || !emitted.Response.ConfirmRemoveAllMFA || f.token != "" {
+	if calls != 1 || !emitted.Response.ConfirmRemoveAllMFA || f.Token != "" {
 		t.Fatal("dispatch")
 	}
 	if f.complete(f.scope, 11, emitted.Sequence, nil) {

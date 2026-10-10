@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -40,16 +41,16 @@ type app struct {
 	workerEpoch                               atomic.Uint64
 	componentLease                            *controllerLease
 	sendPanel                                 *SendPanel
-	devicePanel                               *DevicePanel
+	devicePanel                               *account.DevicePanel
 	orgServices                               *orgServicesController
 	targetRecovery                            *targetRecoveryController
-	accountForm                               *accountForm
+	accountForm                               *account.Form
 	recoveryForm                              *accountRecoveryForm
-	authManagement                            *authManagementForm
+	authManagement                            *account.AuthManagementForm
 	componentCancel                           context.CancelFunc
 	runtimeVault                              *runtimeVault
 	diskSnapshot                              *snapshotStatus
-	deviceLoginPanel                          *DeviceLoginPanel
+	deviceLoginPanel                          *account.DeviceLoginPanel
 	deviceLifecycle                           *deviceLoginLifecycle
 	deviceFlow                                *vaultwarden.DeviceLogin
 	runtimeExpiry                             *time.Timer

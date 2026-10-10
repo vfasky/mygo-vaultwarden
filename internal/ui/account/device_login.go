@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -33,7 +33,7 @@ type DeviceLoginPanel struct {
 	flow                   *vaultwarden.DeviceLogin
 	busy, closed, accepted bool
 	status, fingerprint    string
-	auth                   *authForm
+	auth                   *AuthForm
 	providers              map[int]string
 	platformProviders      map[int]string
 	platform               func(int)
@@ -238,21 +238,21 @@ func (p *DeviceLoginPanel) prompt(ctx context.Context, seq uint64, ch vaultwarde
 				p.providers[provider] = labels[provider]
 			}
 		}
-		p.auth = newAuthForm(p.scope, p.epoch, func(r authRequest) {
+		p.auth = NewAuthForm(p.scope, p.epoch, func(r AuthRequest) {
 			defer r.Close()
 			deliver(vaultwarden.MFAResponse{Provider: r.Response.Provider, Token: append([]byte(nil), r.Response.Token...), Remember: r.Response.Remember, ConfirmRemoveAllMFA: r.Response.ConfirmRemoveAllMFA})
 		})
 		for _, id := range []int{0, 1, 3} {
 			if _, ok := p.providers[id]; ok {
-				p.auth.provider = id
+				p.auth.Provider = id
 				break
 			}
 		}
 		p.platform = func(provider int) {
-			if p.auth.busy {
+			if p.auth.Busy {
 				return
 			}
-			p.auth.busy = true
+			p.auth.Busy = true
 			go func() {
 				response, e := p.host.Platform(ctx, ch, provider)
 				if e != nil {
@@ -290,14 +290,14 @@ func (p *DeviceLoginPanel) View(c *ui.Context) {
 			ui.Text(c, p.status).MaxLines(6)
 			ui.Text(c, "未绑定主密码时不会保存可恢复的登录会话，也不能在访问令牌到期后续期。系统认证快照只可提供受保护的最小自动填充数据，不能恢复主界面网络会话。已有密码快照会保留。 ").MaxLines(6)
 			if p.auth != nil {
-				authFormView(c, p.auth, p.providers)
-				if p.auth.closed {
+				AuthFormView(c, p.auth, p.providers)
+				if p.auth.Closed {
 					p.Cancel()
 					return
 				}
 				for _, id := range []int{2, 7} {
 					if label, ok := p.platformProviders[id]; ok {
-						if ui.Button(c, label).Disabled(p.auth.busy).Clicked() {
+						if ui.Button(c, label).Disabled(p.auth.Busy).Clicked() {
 							p.platform(id)
 						}
 					}

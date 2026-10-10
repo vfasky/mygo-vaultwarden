@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -151,15 +152,15 @@ func TestNativeEmergencyControllerPersistsBeforeTransportAndLateOutcome(t *testi
 			defer clear(unlock)
 			f.a.openEmergencyServices()
 			controller := f.a.orgServices
-			panel := newEmergencyPanel(nil, true, controller.prepareRecovery, controller.commitRecovery, controller.deliver)
+			panel := account.NewEmergencyPanel(nil, true, controller.prepareRecovery, controller.commitRecovery, controller.deliver)
 			controller.replacePanel(panel)
-			panel.email = "recipient@example.invalid"
-			panel.preparePlan()
+			panel.Email = "recipient@example.invalid"
+			panel.PreparePlan()
 			f.drain()
-			if panel.plan == nil {
-				t.Fatal(panel.status)
+			if panel.Plan == nil {
+				t.Fatal(panel.Status)
 			}
-			operation := panel.plan.Summary().OperationID
+			operation := panel.Plan.Summary().OperationID
 			entered, release := make(chan struct{}), make(chan struct{})
 			var writes atomic.Int32
 			f.mu.Lock()
@@ -188,7 +189,7 @@ func TestNativeEmergencyControllerPersistsBeforeTransportAndLateOutcome(t *testi
 				return true
 			}
 			f.mu.Unlock()
-			panel.commitPlan()
+			panel.CommitPlan()
 			if late {
 				select {
 				case <-entered:
@@ -214,7 +215,7 @@ func TestNativeEmergencyControllerPersistsBeforeTransportAndLateOutcome(t *testi
 			if !pending.OK || !found || writes.Load() != 1 {
 				t.Fatalf("original actor outcome missing: phase=%s writes=%d", expected, writes.Load())
 			}
-			panel.commitPlan()
+			panel.CommitPlan()
 			if writes.Load() != 1 {
 				t.Fatal("terminal operation replayed")
 			}
