@@ -26,6 +26,7 @@ internal/
   platform/
     nativelib/                 定位应用包内的原生 Swift 桥库
     sysauth/                   WebAuthn、Duo、SSO 等交互认证到 macOS 系统认证的桥
+  testfixture/                 共享测试数据、隔离 C ABI 与工具链辅助；仅测试导入
   passwordstrength/            主密码强度评估（goja 执行官方 zxcvbn）
 resources/                     图标与图片；resources.go 嵌入运行期绘制的 Logo
 third_party/
@@ -58,11 +59,9 @@ internal/passwordstrength → third_party/zxcvbn
 
 - Go 单元测试与被测代码同包，白盒测试可以访问未导出符号。
 - 需要 `app` 对象、`writableUIFixture` 等夹具的控制器集成测试留在 `internal/app`。
-- 跨包共享的测试辅助放在 `internal/ui/uitest` 这类只被测试导入的包中。
-- 以下测试辅助在两个包里各有一份逐字副本，因为 `_test.go` 中的声明不能跨包使用。修改时必须同步：
-  - `recoveryNativeCall`、`targetFixture`：`internal/localstore` 测试与 `internal/app/localstore_fixture_darwin_test.go`
-  - `orgResourceUIFixture`：`internal/ui/organization/resource_test.go` 与 `internal/app/org_resource_fixture_test.go`
-  - `backupTestDirectory`：`internal/fileio/backup_test.go` 与 `internal/app/backup_controller_test.go`
+- 跨包共享的测试辅助放在 `internal/testfixture` 与 `internal/ui/uitest`，只允许 `_test.go` 导入。生产依赖不得导入这些包。
+- `internal/testfixture` 统一提供恢复 C ABI 调用、目标快照、组织资源归档与规范化临时目录。各包原有的小写 helper 只转发调用，夹具数据和资源生命周期只有一份实现。
+- 原生 helper 使用泛型请求/回执，并由调用测试注入 `BoundedStorageCall`；它不导入 `localstore`，避免同包测试的依赖循环。`testfixture/toolchain` 独立于业务包，为 live SMTP 子进程选择 `GO_BIN` 或 PATH 中的 Go。
 - Swift 测试位于 `macos/Tests` 与 `macos/Authentication/Tests`。
 
 ## 新代码放在哪里
@@ -80,7 +79,9 @@ internal/passwordstrength → third_party/zxcvbn
 | 第三方源码或资源 | `third_party/`，并更新 `THIRD_PARTY_NOTICES.md` 与 `scripts/collect-licenses.sh` |
 | 开发辅助程序 | `tools/` |
 
-## 已知限制
+## 集成前的结构基线与待核对项
+
+以下描述对应本次审计修复的起始基线，并非领域拆分完成声明。C1 的 app 领域控制器和 Session 拆分由其他组件实施；合入后必须据实际类型、窄接口和依赖重新校正此节及上方依赖图，不能以文件移动或测试通过代替架构验收。
 
 - `internal/app` 的 `app` 类型保存单窗口的全部状态，约 160 个方法分布在约 45 个文件中。Go 要求方法与类型同包，因此控制器层仍集中在一个包。进一步拆分需要先把编辑器和控制器改成持有窄接口的独立对象，属于设计调整，而不是目录迁移。
 - `internal/vaultwarden` 以 `Session` 为核心（约 250 个方法），同样只拆出了不依赖 Session 的叶子部分。

@@ -109,7 +109,7 @@ func TestLiveRotationCipherResources(t *testing.T) {
 		}
 		return result.Vault
 	}
-	vault := syncVault()
+	syncVault()
 	// Real legacy owner-key cipher with every FIDO secret and history/custom data.
 	doc, err := NewPersonalCipher(CipherFields{Type: 1, Name: "rotation legacy", Login: map[string]any{"username": "user", "password": "password", "uris": []any{map[string]any{"uri": "https://example.invalid/path", "match": json.Number("3")}}}}, owner.key, owner.account)
 	if err != nil {
@@ -147,7 +147,7 @@ func TestLiveRotationCipherResources(t *testing.T) {
 	id := fields.ID
 	plain := bytes.Repeat([]byte("legacy-binary\x00\xff"), 4096)
 	liveLegacyAttachment(t, ctx, owner, id, owner.key, owner.key, "rotation.bin", plain)
-	vault = syncVault()
+	vault := syncVault()
 	probe := AccountRotationInput{Scope: vault.Scope, Sync: vault.Sync, OldUserKey: owner.key, NewUserKey: bytes.Repeat([]byte{82}, 64)}
 	readiness, err := AnalyzeAccountRotationCipherResources(ctx, probe)
 	if err != nil || readiness.Ready || len(readiness.Preparations) != 1 {
