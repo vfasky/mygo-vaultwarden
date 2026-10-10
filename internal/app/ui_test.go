@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -20,8 +21,8 @@ import (
 func previewApp() *app {
 	return &app{
 		status: "离线快照已解锁。", itemsRevision: "preview",
-		snapshot: &snapshotStatus{Revision: "preview", Available: true, Count: 8, UpdatedAt: 1791302700000},
-		items: []displayCredential{
+		snapshot: &localstore.SnapshotStatus{Revision: "preview", Available: true, Count: 8, UpdatedAt: 1791302700000},
+		items: []localstore.DisplayCredential{
 			{ID: "1", Title: "Apple", Username: "alex@example.com", URL: "https://account.apple.com"},
 			{ID: "2", Title: "Figma", Username: "alex.design@example.com", URL: "https://www.figma.com"},
 			{ID: "3", Title: "GitHub", Username: "alex-dev", URL: "https://github.com/login"},
@@ -252,7 +253,7 @@ func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 	if a.selectedID == "" {
 		t.Fatal("returning to logins did not select item")
 	}
-	a.observeSnapshot(&snapshotStatus{Revision: "revoked", Available: true})
+	a.observeSnapshot(&localstore.SnapshotStatus{Revision: "revoked", Available: true})
 	tt.Frame()
 	if a.selectedID != "" || slices.Contains(tt.Texts(), "alex@example.com") {
 		t.Fatal("revocation retained credential details")
@@ -263,12 +264,12 @@ func TestVaultSelectionSurvivesReplacement(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1060, 700)
 	uitest.Click(t, tt, "Figma")
-	a.items = append([]displayCredential{{ID: "0", Title: "A new login"}}, a.items...)
+	a.items = append([]localstore.DisplayCredential{{ID: "0", Title: "A new login"}}, a.items...)
 	tt.Frame()
 	if a.selectedID != "2" {
 		t.Fatal("insertion changed selected identity")
 	}
-	a.items = slices.DeleteFunc(a.items, func(item displayCredential) bool { return item.ID == "2" })
+	a.items = slices.DeleteFunc(a.items, func(item localstore.DisplayCredential) bool { return item.ID == "2" })
 	tt.Frame()
 	if a.selectedID == "2" || slices.Contains(tt.Texts(), "alex.design@example.com") {
 		t.Fatal("deleted item survived in details")
@@ -313,10 +314,10 @@ func TestVaultVisualPreviews(t *testing.T) {
 			case "settings":
 				a.showSettings = true
 			case "login":
-				a = &app{snapshot: &snapshotStatus{Revision: "empty"}, deviceID: "preview",
+				a = &app{snapshot: &localstore.SnapshotStatus{Revision: "empty"}, deviceID: "preview",
 					serverURL: "https://vault.example.com", email: "alex@example.com", masterPassword: "fixture-password"}
 			case "verification", "verification-error":
-				a = &app{snapshot: &snapshotStatus{Revision: "empty"}, showLogin: true, epoch: 1, pending: 1,
+				a = &app{snapshot: &localstore.SnapshotStatus{Revision: "empty"}, showLogin: true, epoch: 1, pending: 1,
 					serverURL: "https://vault.example.com", email: "alex@example.com"}
 				challenge := newLoginChallenge(context.Background(), 1)
 				t.Cleanup(challenge.cancel)

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package app
 
-import "github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+import (
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+)
 
 func (a *app) unlockWithPassword() {
 	if a.pending != 0 || a.snapshot == nil || !a.snapshot.Available || a.snapshot.Scope == nil {
@@ -22,17 +25,17 @@ func (a *app) unlockWithPassword() {
 	}
 	password := []byte(a.masterPassword)
 	config, scope := *a.snapshot.PasswordUnlock, *a.snapshot.Scope
-	request := storageRequest{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: &scope}
+	request := localstore.Request{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: &scope}
 	a.clearLoginInputs()
-	a.startStorage(request, func() storageReply {
+	a.startStorage(request, func() localstore.Reply {
 		defer clear(password)
 		key, err := vaultwarden.DeriveSnapshotUnlockKey(password, config)
 		clear(password)
 		if err != nil {
-			return storageReply{Code: "invalid_password_config", Message: err.Error()}
+			return localstore.Reply{Code: "invalid_password_config", Message: err.Error()}
 		}
 		defer clear(key)
 		request.UnlockKey = key
-		return callStorage(request)
+		return localstore.Call(request)
 	})
 }

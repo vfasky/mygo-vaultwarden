@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -129,16 +130,16 @@ func newRuntimeResourceControllerFixture(t *testing.T) *resourceControllerFixtur
 	f.device = d
 	a.serverURL, a.email, a.deviceID = a.liveScope.Server, d.email, "runtime-controller-device"
 	a.uiDispatcher = f.dispatch
-	sourceStorage := func(r storageRequest) storageReply {
+	sourceStorage := func(r localstore.Request) localstore.Reply {
 		if r.Operation == "list" || r.Operation == "targetRecoveryRuntimePending" {
 			f.mu.Lock()
 			defer f.mu.Unlock()
 			if r.ExpectedRevision != f.state.Revision {
-				return storageReply{Code: "stale_revision"}
+				return localstore.Reply{Code: "stale_revision"}
 			}
 			v := *f.vault
 			v.Sync = append([]byte(nil), v.Sync...)
-			return storageReply{OK: true, State: f.state, Vault: &v, TargetRecords: []targetRecoveryRecord{}}
+			return localstore.Reply{OK: true, State: f.state, Vault: &v, TargetRecords: []localstore.TargetRecoveryRecord{}}
 		}
 		if r.Operation == "lock" {
 			f.mu.Lock()
@@ -146,17 +147,17 @@ func newRuntimeResourceControllerFixture(t *testing.T) *resourceControllerFixtur
 			state := *f.state
 			state.Revision += "-locked"
 			f.state = &state
-			return storageReply{OK: true, State: &state}
+			return localstore.Reply{OK: true, State: &state}
 		}
 		return f.storage(r)
 	}
 	a.storageBackend = sourceStorage
 	var nativeMu sync.Mutex
-	active := map[string]runtimeSecretRequest{}
+	active := map[string]localstore.RuntimeSecretRequest{}
 	nativeCall := func(raw []byte) ([]byte, error) {
 		nativeMu.Lock()
 		defer nativeMu.Unlock()
-		var request runtimeSecretRequest
+		var request localstore.RuntimeSecretRequest
 		if json.Unmarshal(raw, &request) != nil {
 			t.Fatal("native request")
 		}
@@ -166,11 +167,11 @@ func newRuntimeResourceControllerFixture(t *testing.T) *resourceControllerFixtur
 		} else if request.Operation == "revoke" {
 			delete(active, request.Purpose)
 		} else if active[request.Purpose].Generation != request.Generation {
-			return json.Marshal(runtimeSecretReply{OK: false})
+			return json.Marshal(localstore.RuntimeSecretReply{OK: false})
 		}
-		return json.Marshal(runtimeSecretReply{OK: true, LeaseID: request.LeaseID, Generation: request.Generation, DeadlineUnixMS: request.DeadlineUnixMS})
+		return json.Marshal(localstore.RuntimeSecretReply{OK: true, LeaseID: request.LeaseID, Generation: request.Generation, DeadlineUnixMS: request.DeadlineUnixMS})
 	}
-	a.openDeviceLoginWith(f.dispatch, sourceStorage, func() *nativeRuntimeSecrets { return &nativeRuntimeSecrets{call: nativeCall} })
+	a.openDeviceLoginWith(f.dispatch, sourceStorage, func() *localstore.NativeRuntimeSecrets { return &localstore.NativeRuntimeSecrets{Call: nativeCall} })
 	deadline := time.After(10 * time.Second)
 	for a.runtimeVault == nil {
 		select {

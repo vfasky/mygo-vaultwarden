@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -40,7 +41,7 @@ func TestPersonalSecretCopyUsesAuthenticatedProtocolAndPersistedValue(t *testing
 		}
 	}
 	calls := 0
-	a.copyPersonalSecret("password", func(request storageRequest) storageReply {
+	a.copyPersonalSecret("password", func(request localstore.Request) localstore.Reply {
 		calls++
 		if request.Operation != "copySecret" || request.Secret != "fixture-secret" || len(request.UnlockKey) != 32 || request.Scope == nil || *request.Scope != *a.liveScope || request.ExpectedRevision != a.sessionRevision || request.SecretProtocol != 1 {
 			t.Fatal("copy missing secret/lease authentication")
@@ -48,7 +49,7 @@ func TestPersonalSecretCopyUsesAuthenticatedProtocolAndPersistedValue(t *testing
 		if remaining := time.Until(time.UnixMilli(request.SecretNotAfter)); remaining <= 0 || remaining > 30*time.Second {
 			t.Fatal("invalid expiry")
 		}
-		return storageReply{OK: true}
+		return localstore.Reply{OK: true}
 	})
 	if calls != 1 || !a.secretClipboardOwned || strings.Contains(a.status, "fixture-secret") {
 		t.Fatal("copy state leaked secret or omitted ownership")
@@ -68,9 +69,9 @@ func TestPersonalSecretCopyRejectsStaleLockedAndBusyUI(t *testing.T) {
 			case "lock":
 				a.lockInterface()
 			}
-			a.copyPersonalSecret("password", func(storageRequest) storageReply {
+			a.copyPersonalSecret("password", func(localstore.Request) localstore.Reply {
 				t.Fatal("late/stale copy reached native bridge")
-				return storageReply{}
+				return localstore.Reply{}
 			})
 		})
 	}
@@ -124,11 +125,11 @@ func TestRepromptEditorRequiresPasswordAndExpires(t *testing.T) {
 
 func TestSecretDisplayFailureAndLockClear(t *testing.T) {
 	a := secretUIFixture(t)
-	a.showPersonalSecret("password", func(request storageRequest) storageReply {
+	a.showPersonalSecret("password", func(request localstore.Request) localstore.Reply {
 		if request.Operation != "authorizeSecretDisplay" || request.Secret != "" || len(request.UnlockKey) != 32 {
 			t.Fatal("display gate leaked secret")
 		}
-		return storageReply{OK: true}
+		return localstore.Reply{OK: true}
 	})
 	e := a.editor
 	if e.shownSecret != "fixture-secret" || strings.Contains(a.status, "fixture-secret") {
@@ -139,7 +140,7 @@ func TestSecretDisplayFailureAndLockClear(t *testing.T) {
 		t.Fatal("lock retained newly displayed secret")
 	}
 	b := secretUIFixture(t)
-	b.showPersonalSecret("password", func(storageRequest) storageReply { return storageReply{Code: "stale", Message: "expired"} })
+	b.showPersonalSecret("password", func(localstore.Request) localstore.Reply { return localstore.Reply{Code: "stale", Message: "expired"} })
 	if b.editor.shownSecret != "" {
 		t.Fatal("failed bridge auth exposed secret")
 	}

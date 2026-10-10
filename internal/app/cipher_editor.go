@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -140,9 +141,9 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 		return err
 	}
 	entries = append(entries, orgEntries...)
-	items := make([]displayCredential, 0, len(entries))
+	items := make([]localstore.DisplayCredential, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, displayCredential{OrganizationID: e.OrganizationID, CollectionIDs: e.CollectionIDs, Readable: e.Readable, ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, RequiresPassword: e.RequiresPassword, FolderID: e.FolderID})
+		items = append(items, localstore.DisplayCredential{OrganizationID: e.OrganizationID, CollectionIDs: e.CollectionIDs, Readable: e.Readable, ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, RequiresPassword: e.RequiresPassword, FolderID: e.FolderID})
 	}
 	a.clearSecretClipboard()
 	if a.editor != nil {
@@ -555,18 +556,18 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	parent := a.window
 	a.status = "正在保存修改…"
 	go func() {
-		var reply storageReply
-		var checkpointState *snapshotStatus
+		var reply localstore.Reply
+		var checkpointState *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			reply, err = saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err = localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior = reply.State
 				checkpointState = reply.State
 			}
 			return err
 		}
-		current := callStorage(storageRequest{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: "status"})
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
 			err = vaultwarden.ErrConflict
@@ -596,7 +597,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	}()
 }
 
-func (a *app) completeCipherMutation(epoch uint64, editor *cipherEditor, checkpointState *snapshotStatus, reply storageReply, err error, cancel context.CancelFunc) {
+func (a *app) completeCipherMutation(epoch uint64, editor *cipherEditor, checkpointState *localstore.SnapshotStatus, reply localstore.Reply, err error, cancel context.CancelFunc) {
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {

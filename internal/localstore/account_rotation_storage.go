@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package localstore
 
 import (
 	"bytes"
@@ -48,7 +48,7 @@ type accountRecoveryResolution struct {
 // Call Close on lock/account switch. Recreate and Query after authenticating the
 // old snapshot password to enter recovery after restart. Never restore OldSession
 // as offline/network authority. No method sends or retries a server request.
-type accountRecoveryStorage struct {
+type AccountRecoveryStorage struct {
 	mu           sync.Mutex
 	scope        vaultwarden.Scope
 	revision     string
@@ -57,32 +57,32 @@ type accountRecoveryStorage struct {
 	unlockKey    []byte
 	binding      *accountRecoveryBinding
 	kind         vaultwarden.AccountChangeKind
-	call         func(storageRequest) storageReply
+	call         func(Request) Reply
 	closed       bool
 }
 
-func newAccountRecoveryStorage(state *snapshotStatus, epoch uint64, currentEpoch func() uint64, key []byte, call func(storageRequest) storageReply) (*accountRecoveryStorage, error) {
+func NewAccountRecoveryStorage(state *SnapshotStatus, epoch uint64, currentEpoch func() uint64, key []byte, call func(Request) Reply) (*AccountRecoveryStorage, error) {
 	if state == nil || !state.Available || state.Scope == nil || state.Revision == "" || len(key) != 32 || epoch == 0 || currentEpoch == nil || currentEpoch() != epoch || call == nil {
 		return nil, vaultwarden.ErrIdentity
 	}
-	return &accountRecoveryStorage{scope: *state.Scope, revision: state.Revision, epoch: epoch, currentEpoch: currentEpoch, unlockKey: bytes.Clone(key), call: call}, nil
+	return &AccountRecoveryStorage{scope: *state.Scope, revision: state.Revision, epoch: epoch, currentEpoch: currentEpoch, unlockKey: bytes.Clone(key), call: call}, nil
 }
-func (s *accountRecoveryStorage) Close() {
+func (s *AccountRecoveryStorage) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	clear(s.unlockKey)
 	s.closed = true
 	s.binding = nil
 }
-func (s *accountRecoveryStorage) active() bool {
+func (s *AccountRecoveryStorage) active() bool {
 	return !s.closed && s.currentEpoch() != 0 && s.currentEpoch() == s.epoch
 }
-func (s *accountRecoveryStorage) request(operation string) storageRequest {
-	return storageRequest{Operation: operation, Scope: &s.scope, ExpectedRevision: s.revision, UnlockKey: s.unlockKey, RecoveryBinding: s.binding}
+func (s *AccountRecoveryStorage) request(operation string) Request {
+	return Request{Operation: operation, Scope: &s.scope, ExpectedRevision: s.revision, UnlockKey: s.unlockKey, RecoveryBinding: s.binding}
 }
-func (s *accountRecoveryStorage) receive(request storageRequest) (storageReply, error) {
+func (s *AccountRecoveryStorage) receive(request Request) (Reply, error) {
 	if !s.active() {
-		return storageReply{}, vaultwarden.ErrExpired
+		return Reply{}, vaultwarden.ErrExpired
 	}
 	reply := s.call(request)
 	if !s.active() {
@@ -90,28 +90,28 @@ func (s *accountRecoveryStorage) receive(request storageRequest) (storageReply, 
 			reply.Recovery.Close()
 		}
 		clear(reply.Session)
-		return storageReply{}, vaultwarden.ErrExpired
+		return Reply{}, vaultwarden.ErrExpired
 	}
 	if !reply.OK {
-		return reply, reply.failure()
+		return reply, reply.Failure()
 	}
 	if reply.State == nil || reply.State.Revision == "" || (request.Operation != "accountRecoveryQuery" && reply.State.Revision == s.revision) {
-		return storageReply{}, vaultwarden.ErrIdentity
+		return Reply{}, vaultwarden.ErrIdentity
 	}
 	if reply.State.RecoveryPending != (request.Operation != "accountRecoveryResolve") ||
 		(request.Operation == "accountRecoveryQuery" && reply.State.Revision != s.revision) {
 		if reply.Recovery != nil {
 			reply.Recovery.Close()
 		}
-		return storageReply{}, vaultwarden.ErrIdentity
+		return Reply{}, vaultwarden.ErrIdentity
 	}
 	deleting := request.RecoveryResolution != nil && request.RecoveryResolution.Mode == "delete"
 	if deleting {
 		if reply.State.Available || reply.State.Scope != nil || reply.Recovery != nil {
-			return storageReply{}, vaultwarden.ErrIdentity
+			return Reply{}, vaultwarden.ErrIdentity
 		}
 	} else if !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != s.scope || reply.State.SnapshotID == "" {
-		return storageReply{}, vaultwarden.ErrIdentity
+		return Reply{}, vaultwarden.ErrIdentity
 	}
 	if request.Operation != "accountRecoveryResolve" {
 		r := reply.Recovery
@@ -122,13 +122,13 @@ func (s *accountRecoveryStorage) receive(request storageRequest) (storageReply, 
 			if r != nil {
 				r.Close()
 			}
-			return storageReply{}, vaultwarden.ErrIdentity
+			return Reply{}, vaultwarden.ErrIdentity
 		}
 		var original vaultwarden.AccountRecovery
 		if json.Unmarshal(r.Record, &original) != nil || original.Version != 1 || original.Scope != s.scope || original.OperationID != r.Binding.OperationID || original.OldRevision != r.Binding.OldRevision {
 			original.Close()
 			r.Close()
-			return storageReply{}, vaultwarden.ErrIdentity
+			return Reply{}, vaultwarden.ErrIdentity
 		}
 		s.kind = original.Kind
 		original.Close()
@@ -142,7 +142,7 @@ func (s *accountRecoveryStorage) receive(request storageRequest) (storageReply, 
 // Begin is the exact AccountRecoveryPersistence hook for CommitAccountChange.
 // It runs synchronously under the Session lock and never calls Session methods.
 // If receipt delivery fails, do NOT dispatch: recreate/query the same operation.
-func (s *accountRecoveryStorage) Begin(record vaultwarden.AccountRecovery) error {
+func (s *AccountRecoveryStorage) Begin(record vaultwarden.AccountRecovery) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.active() || s.binding != nil || record.Version != 1 || record.Scope != s.scope || record.OldRevision != s.revision || record.OldUnlock == nil || !bytes.Equal(record.OldUnlock.Key, s.unlockKey) {
@@ -163,14 +163,14 @@ func (s *accountRecoveryStorage) Begin(record vaultwarden.AccountRecovery) error
 	}
 	return err
 }
-func (s *accountRecoveryStorage) Query() (storageReply, error) {
+func (s *AccountRecoveryStorage) Query() (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.receive(s.request("accountRecoveryQuery"))
 }
 
 // Result only annotates the durable record; even Confirmed leaves the barrier.
-func (s *accountRecoveryStorage) Result(result vaultwarden.AccountChangeResult) error {
+func (s *AccountRecoveryStorage) Result(result vaultwarden.AccountChangeResult) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.binding == nil || result.Scope != s.scope || result.OperationID != s.binding.OperationID || result.PreviousRevision != s.binding.OldRevision || result.Kind != s.kind || (result.Confirmed && (!result.Dispatched || result.Unknown)) {
@@ -195,7 +195,7 @@ func (s *accountRecoveryStorage) Result(result vaultwarden.AccountChangeResult) 
 // New login may rotate a refresh token during recovery. Save it separately; the
 // immutable original OldSession and both user keys remain intact. This callback
 // is for a newly logged-in session without installed offline snapshot authority.
-func (s *accountRecoveryStorage) Checkpoint(checkpoint vaultwarden.SessionCheckpoint) error {
+func (s *AccountRecoveryStorage) Checkpoint(checkpoint vaultwarden.SessionCheckpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.binding == nil || checkpoint.Scope != s.scope {
@@ -217,11 +217,11 @@ func (s *accountRecoveryStorage) Checkpoint(checkpoint vaultwarden.SessionCheckp
 // Failed/unknown/partial conversion keeps the journal: there is no retry/rollback.
 // On success caller installs reply.Vault via freshSession.AcceptAuthenticatedSnapshot
 // only after its own current UI epoch check; reply includes merged local policies.
-func (s *accountRecoveryStorage) ResolveVerified(fresh vaultwarden.SyncResult, userConfirmed, authorityVerified, resourcesVerified bool) (storageReply, error) {
+func (s *AccountRecoveryStorage) ResolveVerified(fresh vaultwarden.SyncResult, userConfirmed, authorityVerified, resourcesVerified bool) (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.binding == nil || fresh.Scope != s.scope || fresh.Vault == nil || fresh.Vault.Scope != s.scope || fresh.PasswordUnlock == nil || len(fresh.Session) == 0 || !userConfirmed || !authorityVerified || !resourcesVerified {
-		return storageReply{}, vaultwarden.ErrIdentity
+		return Reply{}, vaultwarden.ErrIdentity
 	}
 	request := s.request("accountRecoveryResolve")
 	request.PasswordUnlock = fresh.PasswordUnlock
@@ -232,7 +232,7 @@ func (s *accountRecoveryStorage) ResolveVerified(fresh vaultwarden.SyncResult, u
 	reply, err := s.receive(request)
 	if err == nil {
 		if reply.Recovery != nil || reply.Vault == nil || reply.Vault.Scope != s.scope || !bytes.Equal(reply.Vault.Sync, fresh.Vault.Sync) {
-			return storageReply{}, vaultwarden.ErrIdentity
+			return Reply{}, vaultwarden.ErrIdentity
 		}
 		clear(s.unlockKey)
 		s.closed = true
@@ -240,11 +240,11 @@ func (s *accountRecoveryStorage) ResolveVerified(fresh vaultwarden.SyncResult, u
 	}
 	return reply, err
 }
-func (s *accountRecoveryStorage) DeleteConfirmed(userConfirmed bool) (storageReply, error) {
+func (s *AccountRecoveryStorage) DeleteConfirmed(userConfirmed bool) (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.binding == nil || s.kind != vaultwarden.AccountDelete || !userConfirmed {
-		return storageReply{}, vaultwarden.ErrIdentity
+		return Reply{}, vaultwarden.ErrIdentity
 	}
 	request := s.request("accountRecoveryResolve")
 	request.RecoveryResolution = &accountRecoveryResolution{Binding: *s.binding, Mode: "delete", UserConfirmed: true, AuthorityVerified: true}

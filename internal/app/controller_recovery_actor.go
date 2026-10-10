@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -73,7 +74,7 @@ func (c *orgServicesController) prepareRecovery(ctx context.Context, request rec
 // The adapter's lifetime belongs to this already-owned operation, so a late
 // result can update ONLY its original metadata journal. Begin separately checks
 // the actual UI lease, and native scope/revision/binding still gate every write.
-func (c *orgServicesController) recoveryAdapter(env orgServiceSnapshot, description vaultwarden.RecoveryDispatch, active *atomic.Bool) (*targetRecoveryStorage, func(), error) {
+func (c *orgServicesController) recoveryAdapter(env orgServiceSnapshot, description vaultwarden.RecoveryDispatch, active *atomic.Bool) (*localstore.TargetRecoveryStorage, func(), error) {
 	current := func() uint64 {
 		if active.Load() {
 			return env.epoch
@@ -85,13 +86,13 @@ func (c *orgServicesController) recoveryAdapter(env orgServiceSnapshot, descript
 		if !valid {
 			return nil, func() {}, vaultwarden.ErrExpired
 		}
-		var adapter *targetRecoveryStorage
+		var adapter *localstore.TargetRecoveryStorage
 		err := env.session.WithTargetRecoveryStorageKey(env.vault, state.Revision, func(scope vaultwarden.Scope, key []byte) error {
 			if state.Scope == nil || scope != *state.Scope {
 				return vaultwarden.ErrIdentity
 			}
 			var err error
-			adapter, err = newTargetRecoveryStorage(&state, env.epoch, current, key, c.baseStorage)
+			adapter, err = localstore.NewTargetRecoveryStorage(&state, env.epoch, current, key, c.baseStorage)
 			return err
 		})
 		return adapter, func() {
@@ -107,9 +108,9 @@ func (c *orgServicesController) recoveryAdapter(env orgServiceSnapshot, descript
 	runtime.mu.Lock()
 	cap, source, backend := runtime.authority, runtime.source, runtime.native
 	runtime.mu.Unlock()
-	native, ok := backend.(*nativeRuntimeSecrets)
+	native, ok := backend.(*localstore.NativeRuntimeSecrets)
 	if !ok {
-		return nil, func() {}, errRuntimeSecretUnavailable
+		return nil, func() {}, localstore.ErrRuntimeSecretUnavailable
 	}
 	raw, err := json.Marshal(description)
 	if err != nil {
@@ -120,7 +121,9 @@ func (c *orgServicesController) recoveryAdapter(env orgServiceSnapshot, descript
 		return nil, func() {}, err
 	}
 	// Native activation may wait for the UI thread; never call it under Session.mu.
-	binding, err := native.activateBound(cap.Scope(), "recovery", deadline, func(uint64, int64) (string, string) { return description.OperationID, targetRecoveryHash(raw) })
+	binding, err := native.ActivateBound(cap.Scope(), "recovery", deadline, func(uint64, int64) (string, string) {
+		return description.OperationID, localstore.TargetRecoveryHash(raw)
+	})
 	if err != nil {
 		return nil, func() {}, err
 	}
@@ -129,8 +132,8 @@ func (c *orgServicesController) recoveryAdapter(env orgServiceSnapshot, descript
 		cleanup()
 		return nil, func() {}, vaultwarden.ErrCancelled
 	}
-	authority := targetRecoveryRuntimeAuthority{Scope: binding.Scope, Generation: binding.Generation, DeadlineUnixMS: binding.DeadlineUnixMS, LeaseID: binding.LeaseID, OperationID: binding.OperationID, SummaryHash: binding.SummaryHash}
-	adapter, err := newTargetRecoveryRuntimeStorage(&source, env.epoch, current, authority, c.baseStorage)
+	authority := localstore.TargetRecoveryRuntimeAuthority{Scope: binding.Scope, Generation: binding.Generation, DeadlineUnixMS: binding.DeadlineUnixMS, LeaseID: binding.LeaseID, OperationID: binding.OperationID, SummaryHash: binding.SummaryHash}
+	adapter, err := localstore.NewTargetRecoveryRuntimeStorage(&source, env.epoch, current, authority, c.baseStorage)
 	return adapter, func() {
 		if adapter != nil {
 			adapter.Close()
@@ -161,9 +164,9 @@ func (c *orgServicesController) commitRecovery(ctx context.Context, plan *vaultw
 	})
 	recordErr := adapter.Result(result)
 	receipt := adapter.Receipt()
-	var observed storageReply
+	var observed localstore.Reply
 	if result.IsolationAttempted && receipt == nil {
-		observed = c.baseStorage(storageRequest{Operation: "status"})
+		observed = c.baseStorage(localstore.Request{Operation: "status"})
 		if observed.OK {
 			receipt = observed.State
 		}

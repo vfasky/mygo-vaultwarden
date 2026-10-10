@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -17,7 +18,7 @@ import (
 type backupEditor struct {
 	revision                      string
 	format                        vaultwarden.BackupFormat
-	candidates                    []displayCredential
+	candidates                    []localstore.DisplayCredential
 	selected                      map[string]bool
 	importing, confirm, submitted bool
 	plan                          *vaultwarden.ImportPlan
@@ -185,7 +186,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 func (a *app) backupCurrent(e *backupEditor, epoch uint64) bool {
 	return a.epoch == epoch && a.backupEditor == e && a.sessionOwnsSnapshot() && e.revision == a.sessionRevision
 }
-func backupLease(state *snapshotStatus, scope vaultwarden.Scope, revision string) bool {
+func backupLease(state *localstore.SnapshotStatus, scope vaultwarden.Scope, revision string) bool {
 	return state != nil && state.Available && state.Scope != nil && *state.Scope == scope && state.Revision == revision
 }
 func backupDialogFilter(format vaultwarden.BackupFormat) mygo.FileFilter {
@@ -239,7 +240,7 @@ func (a *app) chooseImportFile() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
 		var plan *vaultwarden.ImportPlan
 		if err == nil && len(paths) == 1 && ctx.Err() == nil {
-			status := callStorage(storageRequest{Operation: "status"})
+			status := callStorage(localstore.Request{Operation: "status"})
 			if !status.OK || !backupLease(status.State, scope, revision) {
 				err = vaultwarden.ErrConflict
 			} else {
@@ -313,7 +314,7 @@ func (a *app) chooseExportFile() {
 	go func() {
 		defer clear(password)
 		// Preflight before showing Save or touching any target file.
-		status := callStorage(storageRequest{Operation: "status"})
+		status := callStorage(localstore.Request{Operation: "status"})
 		var data []byte
 		var err error
 		var stage *stagedBackup
@@ -344,7 +345,7 @@ func (a *app) chooseExportFile() {
 					a.window.Update(func() { a.completeBackupExport(e, epoch, ctx, nil, err, cancel) })
 					return
 				}
-				status = callStorage(storageRequest{Operation: "status"})
+				status = callStorage(localstore.Request{Operation: "status"})
 				if !status.OK || !backupLease(status.State, scope, revision) {
 					err = vaultwarden.ErrConflict
 				} else {
@@ -379,7 +380,7 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 	}
 	// Publication stays on the UI thread so a processed lock/cancel cannot race
 	// a later callback writing the final plaintext file. Recheck the storage lease.
-	status := callStorage(storageRequest{Operation: "status"})
+	status := callStorage(localstore.Request{Operation: "status"})
 	if !status.OK || !backupLease(status.State, *a.liveScope, e.revision) {
 		a.status = vaultwarden.ErrConflict.Error()
 		return
@@ -398,10 +399,10 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 	a.status = "明文备份已安全写入新文件，请妥善保管并在不再需要时删除。"
 }
 func (a *app) importBackup() {
-	a.importBackupWith(a.window.Update, callStorage, func() { a.syncVault(false) })
+	a.importBackupWith(a.window.Update, localstore.Call, func() { a.syncVault(false) })
 }
 
-func (a *app) importBackupWith(dispatch func(func()), storage func(storageRequest) storageReply, refresh func()) {
+func (a *app) importBackupWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply, refresh func()) {
 	e := a.backupEditor
 	if a.pending != 0 || e == nil || !e.importing || e.plan == nil || e.submitted || !a.backupCurrent(e, a.epoch) {
 		return
@@ -422,18 +423,18 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(storageReques
 	a.pending++
 	go func() {
 		defer plan.Clear()
-		var reply storageReply
-		var checkpoint *snapshotStatus
+		var reply localstore.Reply
+		var checkpoint *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			reply, err = saveSessionCheckpoint(prior, cp, storage)
+			reply, err = localstore.SaveSessionCheckpoint(prior, cp, storage)
 			if err == nil {
 				prior = reply.State
 				checkpoint = reply.State
 			}
 			return err
 		}
-		state := storage(storageRequest{Operation: "status"})
+		state := storage(localstore.Request{Operation: "status"})
 		var result vaultwarden.ImportResult
 		var err error
 		if !state.OK || !backupLease(state.State, scope, prior.Revision) || ctx.Err() != nil {

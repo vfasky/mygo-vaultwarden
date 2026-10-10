@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin
 
-package app
+package localstore
 
 import (
 	"encoding/json"
@@ -46,7 +46,7 @@ func loadStorageBridge() error {
 }
 
 func nativeStorageCall(input []byte) ([]byte, error) {
-	return boundedStorageCall(input, nativeStorageFrame)
+	return BoundedStorageCall(input, nativeStorageFrame)
 }
 
 func nativeStorageFrame(input []byte) ([]byte, error) {

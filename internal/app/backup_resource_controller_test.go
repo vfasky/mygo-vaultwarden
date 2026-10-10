@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -29,7 +30,7 @@ type resourceControllerFixture struct {
 	mu                                    sync.Mutex
 	body                                  map[string]any
 	files                                 map[string][]byte
-	state                                 *snapshotStatus
+	state                                 *localstore.SnapshotStatus
 	vault                                 *vaultwarden.VaultData
 	serial, creates, uploads              int
 	failPublish, unknownUpload            bool
@@ -193,24 +194,24 @@ func (f *resourceControllerFixture) cipher(id string) map[string]any {
 	}
 	return nil
 }
-func (f *resourceControllerFixture) storage(r storageRequest) storageReply {
+func (f *resourceControllerFixture) storage(r localstore.Request) localstore.Reply {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if r.Operation == "status" {
 		if f.failLease {
-			return storageReply{OK: false}
+			return localstore.Reply{OK: false}
 		}
-		return storageReply{OK: true, State: f.state}
+		return localstore.Reply{OK: true, State: f.state}
 	}
 	if r.ExpectedRevision != f.state.Revision {
-		return storageReply{Code: "stale_revision", State: f.state}
+		return localstore.Reply{Code: "stale_revision", State: f.state}
 	}
 	if r.Operation != "saveSession" && r.Operation != "publishVault" {
 		f.t.Errorf("unexpected storage %s", r.Operation)
-		return storageReply{}
+		return localstore.Reply{}
 	}
 	if r.Operation == "publishVault" && f.failPublish {
-		return storageReply{Code: "write_failed", Message: "injected publication failure"}
+		return localstore.Reply{Code: "write_failed", Message: "injected publication failure"}
 	}
 	next := *f.state
 	f.serial++
@@ -220,7 +221,7 @@ func (f *resourceControllerFixture) storage(r storageRequest) storageReply {
 		f.vault = r.Vault
 	}
 	f.state = &next
-	return storageReply{OK: true, State: f.state, Vault: f.vault}
+	return localstore.Reply{OK: true, State: f.state, Vault: f.vault}
 }
 func (f *resourceControllerFixture) dispatch(fn func()) { f.q <- fn }
 func (f *resourceControllerFixture) drain() {

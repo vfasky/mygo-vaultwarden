@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -30,9 +31,9 @@ func TestAuthenticatedUnlockRestoresSyncAndWipesTransport(t *testing.T) {
 		t.Run(operation, func(t *testing.T) {
 			a := passwordLockedApp()
 			a.epoch, a.pending = 2, 1
-			request := storageRequest{Operation: operation, ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}
+			request := localstore.Request{Operation: operation, ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}
 			data := savedUIFixture(t, a)
-			a.completeStorage(request, a.epoch, storageReply{OK: true, State: a.snapshot, Session: data, Items: []displayCredential{{ID: "one"}}})
+			a.completeStorage(request, a.epoch, localstore.Reply{OK: true, State: a.snapshot, Session: data, Items: []localstore.DisplayCredential{{ID: "one"}}})
 			if !a.unlocked() || !a.sessionOwnsSnapshot() || a.sessionRevision != request.ExpectedRevision {
 				t.Fatal("authenticated unlock did not restore sync authority")
 			}
@@ -56,10 +57,10 @@ func TestLateOrUnauthenticatedReceiptNeverRestoresSession(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			a := passwordLockedApp()
 			a.epoch, a.pending = 2, 1
-			request := storageRequest{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}
+			request := localstore.Request{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}
 			state := *a.snapshot
 			data := savedUIFixture(t, a)
-			reply := storageReply{OK: true, State: &state, Session: data}
+			reply := localstore.Reply{OK: true, State: &state, Session: data}
 			epoch := a.epoch
 			switch scenario {
 			case "late":
@@ -89,8 +90,8 @@ func TestLateOrUnauthenticatedReceiptNeverRestoresSession(t *testing.T) {
 func TestLegacyUnlockSyncButtonOpensLoginWithoutDeletingVault(t *testing.T) {
 	a := passwordLockedApp()
 	a.pending, a.epoch = 1, 1
-	a.completeStorage(storageRequest{Operation: "list", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1,
-		storageReply{OK: true, State: a.snapshot, Items: []displayCredential{{ID: "one"}}})
+	a.completeStorage(localstore.Request{Operation: "list", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1,
+		localstore.Reply{OK: true, State: a.snapshot, Items: []localstore.DisplayCredential{{ID: "one"}}})
 	tt := ui.NewTester(a.view, 1060, 700)
 	uitest.Click(t, tt, "同步")
 	if !a.showLogin || !a.unlocked() || a.pending != 0 || !tt.HasText("登录服务器") {
@@ -105,11 +106,11 @@ func TestRefreshCheckpointAdoptionPreservesMetadataWithoutRebasingRevokedSession
 	checkpoint := vaultwarden.SessionCheckpoint{Scope: *a.liveScope, Session: []byte("encrypted-by-storage"), UnlockKey: make([]byte, 32)}
 	state := *a.snapshot
 	state.Revision = "checkpoint-r2"
-	reply, err := saveSessionCheckpoint(a.snapshot, checkpoint, func(request storageRequest) storageReply {
+	reply, err := localstore.SaveSessionCheckpoint(a.snapshot, checkpoint, func(request localstore.Request) localstore.Reply {
 		if request.Operation != "saveSession" || request.ExpectedRevision != "authorized-r1" {
 			t.Fatal("checkpoint borrowed wrong CAS revision")
 		}
-		return storageReply{OK: true, State: &state}
+		return localstore.Reply{OK: true, State: &state}
 	})
 	if err != nil || !a.adoptSessionCheckpoint(reply.State) || !a.sessionOwnsSnapshot() || a.itemsRevision != state.Revision || len(a.items) != 1 {
 		t.Fatal("refresh persistence discarded unchanged offline metadata")
@@ -132,7 +133,7 @@ func TestRefreshCheckpointRejectsInvalidReceipts(t *testing.T) {
 			a.snapshot.SnapshotID = "snapshot-a"
 			state := *a.snapshot
 			state.Revision = "checkpoint-r2"
-			reply := storageReply{OK: true, State: &state}
+			reply := localstore.Reply{OK: true, State: &state}
 			switch scenario {
 			case "failure":
 				reply.OK = false
@@ -147,7 +148,7 @@ func TestRefreshCheckpointRejectsInvalidReceipts(t *testing.T) {
 			case "different-snapshot":
 				state.SnapshotID = "replacement"
 			}
-			if _, err := saveSessionCheckpoint(a.snapshot, vaultwarden.SessionCheckpoint{Scope: *a.liveScope}, func(storageRequest) storageReply { return reply }); err == nil {
+			if _, err := localstore.SaveSessionCheckpoint(a.snapshot, vaultwarden.SessionCheckpoint{Scope: *a.liveScope}, func(localstore.Request) localstore.Reply { return reply }); err == nil {
 				t.Fatal("invalid checkpoint accepted")
 			}
 			if a.sessionRevision != "authorized-r1" {

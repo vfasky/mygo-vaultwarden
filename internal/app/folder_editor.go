@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
@@ -117,18 +118,18 @@ func (a *app) mutateFolder(remove bool) {
 	a.pending++
 	a.status = "正在保存文件夹…"
 	go func() {
-		var reply storageReply
-		var checkpoint *snapshotStatus
+		var reply localstore.Reply
+		var checkpoint *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			reply, err = saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err = localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior = reply.State
 				checkpoint = reply.State
 			}
 			return err
 		}
-		current := callStorage(storageRequest{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: "status"})
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
 			err = vaultwarden.ErrConflict
@@ -141,7 +142,7 @@ func (a *app) mutateFolder(remove bool) {
 	}()
 }
 
-func (a *app) completeFolderMutation(epoch uint64, e *folderEditor, checkpoint *snapshotStatus, reply storageReply, err error, cancel context.CancelFunc) {
+func (a *app) completeFolderMutation(epoch uint64, e *folderEditor, checkpoint *localstore.SnapshotStatus, reply localstore.Reply, err error, cancel context.CancelFunc) {
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {

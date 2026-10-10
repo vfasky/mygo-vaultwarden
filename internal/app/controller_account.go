@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 func (a *app) openAccount()      { a.openAccountWith(a.dispatchUI, a.storageCall, false) }
 func (a *app) openRegistration() { a.openAccountWith(a.dispatchUI, a.storageCall, true) }
-func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest) storageReply, registration bool) {
+func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply, registration bool) {
 	if a.pending != 0 {
 		return
 	}
@@ -86,7 +87,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 			var result vaultwarden.AccountChangeResult
 			var key vaultwarden.AccountAPIKey
 			var registered vaultwarden.AccountRegistrationVerification
-			var journal *accountRecoveryStorage
+			var journal *localstore.AccountRecoveryStorage
 			persist := func(cp vaultwarden.SessionCheckpoint) error { return lease.persist(cp, storage) }
 			if !registration {
 				err = lease.check(storage)
@@ -138,7 +139,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 								return vaultwarden.ErrCancelled
 							}
 							var e error
-							journal, e = newAccountRecoveryStorage(&prior, epoch, a.workerEpoch.Load, record.OldUnlock.Key, storage)
+							journal, e = localstore.NewAccountRecoveryStorage(&prior, epoch, a.workerEpoch.Load, record.OldUnlock.Key, storage)
 							if e != nil {
 								return e
 							}
@@ -158,9 +159,9 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 					}
 				}
 			}
-			var state *snapshotStatus
+			var state *localstore.SnapshotStatus
 			if journal != nil {
-				reply := storage(storageRequest{Operation: "status"})
+				reply := storage(localstore.Request{Operation: "status"})
 				state = reply.State
 			}
 			dispatch(func() {

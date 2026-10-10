@@ -4,6 +4,7 @@ package app
 import (
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
@@ -22,7 +23,7 @@ func clearCipherRowReveal(e *cipherEditor) {
 		e.rowPreview = nil
 	}
 }
-func (a *app) revealCipherRows(path string, storage func(storageRequest) storageReply) {
+func (a *app) revealCipherRows(path string, storage func(localstore.Request) localstore.Reply) {
 	a.prepareRuntimeSecret()
 	e := a.editor
 	if e == nil || e.comparison == nil || a.pending != 0 || !a.sessionOwnsSnapshot() {
@@ -34,9 +35,9 @@ func (a *app) revealCipherRows(path string, storage func(storageRequest) storage
 	}
 	clearCipherRowReveal(e)
 	err := session.WithCipherComparisonRows(a.vault, a.sessionRevision, e.comparison, path, func(local, remote []vaultwarden.CipherRowPreview, key []byte, deadline time.Time) error {
-		reply := storage(storageRequest{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+		reply := storage(localstore.Request{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
-			return reply.failure()
+			return reply.Failure()
 		}
 		if !time.Now().Before(deadline) {
 			return vaultwarden.ErrExpired

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package localstore
 
 import (
 	"bytes"
@@ -12,9 +12,9 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-var errTargetRecovery = errors.New("target recovery binding or receipt invalid")
+var ErrTargetRecovery = errors.New("target recovery binding or receipt invalid")
 
-type targetRecoveryBinding struct {
+type TargetRecoveryBinding struct {
 	OperationID        string            `json:"operationId"`
 	Actor              vaultwarden.Scope `json:"actor"`
 	Target             vaultwarden.Scope `json:"target"`
@@ -24,11 +24,11 @@ type targetRecoveryBinding struct {
 	SummaryHash        string            `json:"summaryHash"`
 }
 type targetRecoveryOriginalResult = vaultwarden.TargetRecoveryOriginalResult
-type targetRecoveryRecord struct {
+type TargetRecoveryRecord struct {
 	OriginalResult      targetRecoveryOriginalResult `json:"originalResult,omitzero"`
 	Verification        *targetRecoveryResolution    `json:"verification,omitempty"`
-	Protection          *targetRecoveryProtection    `json:"protection,omitempty"`
-	Binding             targetRecoveryBinding        `json:"binding"`
+	Protection          *TargetRecoveryProtection    `json:"protection,omitempty"`
+	Binding             TargetRecoveryBinding        `json:"binding"`
 	Summary             []byte                       `json:"summary"`
 	Phase               string                       `json:"phase"`
 	RequireTargetLogin  bool                         `json:"requireTargetLogin"`
@@ -38,11 +38,11 @@ type targetRecoveryRecord struct {
 	VerifiedUnlockHash  string                       `json:"verifiedUnlockHash,omitempty"`
 }
 
-func (r *targetRecoveryRecord) Close() { clear(r.Summary); *r = targetRecoveryRecord{} }
+func (r *TargetRecoveryRecord) Close() { clear(r.Summary); *r = TargetRecoveryRecord{} }
 
 type targetRecoveryResolution struct {
 	Kind                string                `json:"kind,omitempty"`
-	Binding             targetRecoveryBinding `json:"binding"`
+	Binding             TargetRecoveryBinding `json:"binding"`
 	ExpectedRevision    string                `json:"expectedRevision"`
 	Target              vaultwarden.Scope     `json:"target"`
 	VaultHash           string                `json:"vaultHash"`
@@ -60,14 +60,14 @@ type targetRecoveryResolution struct {
 // Each digest must identify the actual verified data (including an explicit
 // verified 'not applicable' result for MFA/membership), not arbitrary UI flags.
 // The storage layer cannot attest remote server truth or validate other users' keys.
-type targetRecoveryVerification struct {
+type TargetRecoveryVerification struct {
 	Kind                                                              string
 	AuthorityHash, KeyHash, MembershipHash, MFAHash, ConfirmationHash string
 	AuthenticationEpoch                                               uint64
 }
-type targetRecoveryStorage struct {
-	runtime      *targetRecoveryRuntimeAuthority
-	receipt      *snapshotStatus
+type TargetRecoveryStorage struct {
+	runtime      *TargetRecoveryRuntimeAuthority
+	receipt      *SnapshotStatus
 	snapshotID   string
 	login        *targetRecoveryResolution
 	loginVault   *vaultwarden.VaultData
@@ -80,12 +80,12 @@ type targetRecoveryStorage struct {
 	epoch        uint64
 	currentEpoch func() uint64
 	key          []byte
-	call         func(storageRequest) storageReply
-	binding      *targetRecoveryBinding
+	call         func(Request) Reply
+	binding      *TargetRecoveryBinding
 	summary      []byte
 }
 
-func targetRecoveryHash(data []byte) string {
+func TargetRecoveryHash(data []byte) string {
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:])
 }
@@ -93,13 +93,13 @@ func targetValidHash(s string) bool {
 	b, e := hex.DecodeString(s)
 	return e == nil && len(b) == 32 && hex.EncodeToString(b) == s
 }
-func newTargetRecoveryStorage(state *snapshotStatus, epoch uint64, currentEpoch func() uint64, key []byte, call func(storageRequest) storageReply) (*targetRecoveryStorage, error) {
+func NewTargetRecoveryStorage(state *SnapshotStatus, epoch uint64, currentEpoch func() uint64, key []byte, call func(Request) Reply) (*TargetRecoveryStorage, error) {
 	if state == nil || state.Scope == nil || !state.Available || state.Revision == "" || epoch == 0 || currentEpoch == nil || currentEpoch() != epoch || len(key) != 32 || call == nil {
-		return nil, errTargetRecovery
+		return nil, ErrTargetRecovery
 	}
-	return &targetRecoveryStorage{snapshotID: state.SnapshotID, localScope: state.Scope, scope: *state.Scope, revision: state.Revision, epoch: epoch, currentEpoch: currentEpoch, key: bytes.Clone(key), call: call}, nil
+	return &TargetRecoveryStorage{snapshotID: state.SnapshotID, localScope: state.Scope, scope: *state.Scope, revision: state.Revision, epoch: epoch, currentEpoch: currentEpoch, key: bytes.Clone(key), call: call}, nil
 }
-func (s *targetRecoveryStorage) Close() {
+func (s *TargetRecoveryStorage) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	clear(s.key)
@@ -118,12 +118,12 @@ func (s *targetRecoveryStorage) Close() {
 	s.summary = nil
 	s.binding = nil
 }
-func (s *targetRecoveryStorage) active() bool {
+func (s *TargetRecoveryStorage) active() bool {
 	return (len(s.key) == 32 || s.runtime != nil) && s.currentEpoch() != 0 && s.currentEpoch() == s.epoch
 }
-func (s *targetRecoveryStorage) request(operation string) storageRequest {
+func (s *TargetRecoveryStorage) request(operation string) Request {
 	scope := s.scope
-	req := storageRequest{Operation: operation, Scope: &scope, ExpectedRevision: s.revision, UnlockKey: s.key, TargetBinding: s.binding}
+	req := Request{Operation: operation, Scope: &scope, ExpectedRevision: s.revision, UnlockKey: s.key, TargetBinding: s.binding}
 	req.TargetRuntime = s.runtime
 	if s.login != nil {
 		proof := *s.login
@@ -135,7 +135,7 @@ func (s *targetRecoveryStorage) request(operation string) storageRequest {
 	}
 	return req
 }
-func validTargetRecord(r targetRecoveryRecord) bool {
+func validTargetRecord(r TargetRecoveryRecord) bool {
 	d, err := vaultwarden.DecodeRecoveryDispatch(r.Summary)
 	if err != nil {
 		return false
@@ -152,73 +152,73 @@ func validTargetRecord(r targetRecoveryRecord) bool {
 		}
 	}
 	b := r.Binding
-	return b.OperationID == d.OperationID && b.Actor == d.Actor && b.Target == d.Target && b.AuthorizationEpoch == d.AuthorizationEpoch && b.AuthorizationEpoch > 0 && b.HostEpoch > 0 && b.StorageRevision != "" && b.SummaryHash == targetRecoveryHash(r.Summary) && r.RequireTargetLogin == d.RequireTargetLogin && (r.Phase == "prepared" || r.Phase == "unknown" || r.Phase == "confirmed" || r.Phase == "not-dispatched" || r.Phase == "verified" || r.Phase == "resolved")
+	return b.OperationID == d.OperationID && b.Actor == d.Actor && b.Target == d.Target && b.AuthorizationEpoch == d.AuthorizationEpoch && b.AuthorizationEpoch > 0 && b.HostEpoch > 0 && b.StorageRevision != "" && b.SummaryHash == TargetRecoveryHash(r.Summary) && r.RequireTargetLogin == d.RequireTargetLogin && (r.Phase == "prepared" || r.Phase == "unknown" || r.Phase == "confirmed" || r.Phase == "not-dispatched" || r.Phase == "verified" || r.Phase == "resolved")
 }
-func (s *targetRecoveryStorage) receive(req storageRequest) (storageReply, error) {
+func (s *TargetRecoveryStorage) receive(req Request) (Reply, error) {
 	s.receipt = nil
 	if !s.active() {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	reply := s.call(req)
 	if !s.active() {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	if !reply.OK {
-		return reply, reply.failure()
+		return reply, reply.Failure()
 	}
 	if reply.State == nil || (s.login == nil && s.runtime == nil && (reply.State.Scope == nil || *reply.State.Scope != s.scope)) || (!reply.State.TargetRecoveryPresent && req.Operation != "targetRecoveryPending") || reply.State.Revision == "" {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	query := req.Operation == "targetRecoveryQuery" || req.Operation == "targetRecoveryPending" || req.Operation == "targetRecoveryInspectLocal"
 	if query && reply.State.Revision != s.revision {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	if !query && reply.State.Revision == s.revision {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	if req.Operation == "targetRecoveryBegin" && s.runtime == nil && !reply.State.Available {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	if (req.Operation == "targetRecoveryResolve" || req.Operation == "targetRecoveryResolveLocal") && (!reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != req.TargetResolution.Target) {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	if len(reply.TargetRecords) > 1024 {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	seen := map[string]bool{}
 	for _, record := range reply.TargetRecords {
 		if !validTargetRecord(record) || seen[record.Binding.OperationID] || (record.Binding.Actor != s.scope && record.Binding.Target != s.scope) {
-			return storageReply{}, errTargetRecovery
+			return Reply{}, ErrTargetRecovery
 		}
 		seen[record.Binding.OperationID] = true
 	}
 	if req.Operation != "targetRecoveryPending" {
 		if len(reply.TargetRecords) != 1 || req.TargetBinding == nil || reply.TargetRecords[0].Binding != *req.TargetBinding {
-			return storageReply{}, errTargetRecovery
+			return Reply{}, ErrTargetRecovery
 		}
 		r := reply.TargetRecords[0]
 		if req.Operation == "targetRecoveryBegin" {
 			local := r.RequireTargetLogin && s.localScope != nil && r.Binding.Target == *s.localScope
 			if s.runtime == nil && ((local && (reply.State.SnapshotID == s.snapshotID || reply.State.Count != 0)) || (!local && reply.State.SnapshotID != s.snapshotID)) {
-				return storageReply{}, errTargetRecovery
+				return Reply{}, ErrTargetRecovery
 			}
 		}
 		if req.Operation == "targetRecoveryBegin" && (r.Phase != "prepared" || !bytes.Equal(r.Summary, req.TargetSummary) || r.NoLocalTarget != (s.localScope == nil || r.Binding.Target != *s.localScope) || reply.State.Revision == req.ExpectedRevision) {
-			return storageReply{}, errTargetRecovery
+			return Reply{}, ErrTargetRecovery
 		}
 		if req.Operation == "targetRecoveryVerify" || req.Operation == "targetRecoveryResolve" || req.Operation == "targetRecoveryResolveLocal" {
 			if r.Verification == nil || req.TargetResolution == nil || *r.Verification != *req.TargetResolution {
-				return storageReply{}, errTargetRecovery
+				return Reply{}, ErrTargetRecovery
 			}
 		}
 		if req.Operation == "targetRecoveryResult" && r.Phase != req.TargetPhase {
-			return storageReply{}, errTargetRecovery
+			return Reply{}, ErrTargetRecovery
 		}
 		if req.Operation == "targetRecoveryVerify" && (r.Phase != "verified" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash) {
-			return storageReply{}, errTargetRecovery
+			return Reply{}, ErrTargetRecovery
 		}
-		if (req.Operation == "targetRecoveryResolve" || req.Operation == "targetRecoveryResolveLocal") && (r.Phase != "resolved" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash || reply.Vault == nil || targetRecoveryHash(reply.Vault.Sync) != req.TargetResolution.VaultHash) {
-			return storageReply{}, errTargetRecovery
+		if (req.Operation == "targetRecoveryResolve" || req.Operation == "targetRecoveryResolveLocal") && (r.Phase != "resolved" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash || reply.Vault == nil || TargetRecoveryHash(reply.Vault.Sync) != req.TargetResolution.VaultHash) {
+			return Reply{}, ErrTargetRecovery
 		}
 	}
 	s.revision = reply.State.Revision
@@ -231,17 +231,17 @@ func (s *targetRecoveryStorage) receive(req storageRequest) (storageReply, error
 
 // Exact RecoveryBeforeDispatch hook. It calls no Session methods or app fields.
 // Unknown native/fsync/receipt failures remain errors: zero mutation POST.
-func (s *targetRecoveryStorage) Begin(d vaultwarden.RecoveryDispatch) error {
+func (s *TargetRecoveryStorage) Begin(d vaultwarden.RecoveryDispatch) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.active() || s.login != nil || s.binding != nil || d.Actor != s.scope || d.AuthorizationEpoch == 0 || d.PreviousRevision == "" || d.OperationID == "" || d.Kind == "" || (d.RequireTargetLogin && d.Target.Account == "") || d.Target.Server != s.scope.Server {
-		return errTargetRecovery
+		return ErrTargetRecovery
 	}
 	raw, err := json.Marshal(d)
 	if err != nil || len(raw) > 32768 {
-		return errTargetRecovery
+		return ErrTargetRecovery
 	}
-	b := targetRecoveryBinding{d.OperationID, d.Actor, d.Target, s.revision, s.epoch, d.AuthorizationEpoch, targetRecoveryHash(raw)}
+	b := TargetRecoveryBinding{d.OperationID, d.Actor, d.Target, s.revision, s.epoch, d.AuthorizationEpoch, TargetRecoveryHash(raw)}
 	// Keep the exact binding even on unknown commit, for explicit Query only.
 	s.binding = &b
 	s.summary = raw
@@ -252,11 +252,11 @@ func (s *targetRecoveryStorage) Begin(d vaultwarden.RecoveryDispatch) error {
 }
 
 // Reopen selects a durable operation after Pending on a new authenticated adapter.
-func (s *targetRecoveryStorage) Select(record targetRecoveryRecord) error {
+func (s *TargetRecoveryStorage) Select(record TargetRecoveryRecord) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.active() || s.binding != nil || !validTargetRecord(record) || (record.Binding.Actor != s.scope && record.Binding.Target != s.scope) {
-		return errTargetRecovery
+		return ErrTargetRecovery
 	}
 	b := record.Binding
 	s.binding = &b
@@ -264,31 +264,31 @@ func (s *targetRecoveryStorage) Select(record targetRecoveryRecord) error {
 	_, err := s.receive(s.request("targetRecoveryQuery"))
 	return err
 }
-func (s *targetRecoveryStorage) Pending() (storageReply, error) {
+func (s *TargetRecoveryStorage) Pending() (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.receive(s.request("targetRecoveryPending"))
 }
-func (s *targetRecoveryStorage) Query() (storageReply, error) {
+func (s *TargetRecoveryStorage) Query() (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.binding == nil {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	return s.receive(s.request("targetRecoveryQuery"))
 }
-func (s *targetRecoveryStorage) Result(result vaultwarden.RecoveryOperationResult) error {
+func (s *TargetRecoveryStorage) Result(result vaultwarden.RecoveryOperationResult) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !result.IsolationAttempted {
 		if s.binding == nil && !result.Dispatched && !result.Confirmed && !result.Unknown {
 			return nil
 		}
-		return errTargetRecovery
+		return ErrTargetRecovery
 	}
 	raw, err := json.Marshal(result.RecoveryDispatch)
 	if err != nil || s.binding == nil || !bytes.Equal(raw, s.summary) || (result.Confirmed && (!result.Dispatched || result.Unknown)) || (result.Unknown && !result.Dispatched) {
-		return errTargetRecovery
+		return ErrTargetRecovery
 	}
 	phase := "not-dispatched"
 	if result.Dispatched {
@@ -307,27 +307,27 @@ func (s *targetRecoveryStorage) Result(result vaultwarden.RecoveryOperationResul
 // a verified, still-blocked target record; after logout, ordinary target publish
 // accepts only these exact fresh vault/session/unlock digests, atomically consuming
 // the permission. Same-target resolve atomically publishes through the native path.
-func (s *targetRecoveryStorage) ResolveVerified(fresh vaultwarden.SyncResult, evidence targetRecoveryVerification) (storageReply, error) {
+func (s *TargetRecoveryStorage) ResolveVerified(fresh vaultwarden.SyncResult, evidence TargetRecoveryVerification) (Reply, error) {
 	return s.resolveVerified(fresh, evidence, false, false)
 }
-func (s *targetRecoveryStorage) ResolveVerifiedWithLocalAuthentication(fresh vaultwarden.SyncResult, evidence targetRecoveryVerification) (storageReply, error) {
+func (s *TargetRecoveryStorage) ResolveVerifiedWithLocalAuthentication(fresh vaultwarden.SyncResult, evidence TargetRecoveryVerification) (Reply, error) {
 	return s.resolveVerified(fresh, evidence, true, false)
 }
-func (s *targetRecoveryStorage) StageVerified(fresh vaultwarden.SyncResult, evidence targetRecoveryVerification) (storageReply, error) {
+func (s *TargetRecoveryStorage) StageVerified(fresh vaultwarden.SyncResult, evidence TargetRecoveryVerification) (Reply, error) {
 	return s.resolveVerified(fresh, evidence, false, true)
 }
-func (s *targetRecoveryStorage) resolveVerified(fresh vaultwarden.SyncResult, evidence targetRecoveryVerification, localAuthentication, verifyOnly bool) (storageReply, error) {
+func (s *TargetRecoveryStorage) resolveVerified(fresh vaultwarden.SyncResult, evidence TargetRecoveryVerification, localAuthentication, verifyOnly bool) (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.binding == nil || fresh.Vault == nil || fresh.PasswordUnlock == nil || fresh.Scope != fresh.Vault.Scope || fresh.Vault.Scope != s.binding.Target || len(fresh.Session) == 0 || len(fresh.PasswordUnlock.Key) != 32 || evidence.AuthenticationEpoch == 0 {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	for _, h := range []string{evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash} {
 		if !targetValidHash(h) {
-			return storageReply{}, errTargetRecovery
+			return Reply{}, ErrTargetRecovery
 		}
 	}
-	proof := targetRecoveryResolution{evidence.Kind, *s.binding, s.revision, s.binding.Target, targetRecoveryHash(fresh.Vault.Sync), targetRecoveryHash(fresh.Session), targetRecoveryHash(fresh.PasswordUnlock.Key), evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash, evidence.AuthenticationEpoch}
+	proof := targetRecoveryResolution{evidence.Kind, *s.binding, s.revision, s.binding.Target, TargetRecoveryHash(fresh.Vault.Sync), TargetRecoveryHash(fresh.Session), TargetRecoveryHash(fresh.PasswordUnlock.Key), evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash, evidence.AuthenticationEpoch}
 	req := s.request("targetRecoveryVerify")
 	if !verifyOnly && (s.localScope == nil || *s.localScope == s.binding.Target) {
 		req.Operation = "targetRecoveryResolve"
@@ -337,7 +337,7 @@ func (s *targetRecoveryStorage) resolveVerified(fresh vaultwarden.SyncResult, ev
 		target := s.binding.Target
 		req.Scope = &target
 	} else if localAuthentication {
-		return storageReply{}, errTargetRecovery
+		return Reply{}, ErrTargetRecovery
 	}
 	req.TargetResolution = &proof
 	req.Vault = fresh.Vault

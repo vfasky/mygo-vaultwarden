@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin
 
-package app
+package localstore
 
 import (
 	"context"
@@ -114,7 +114,7 @@ func TestLiveAccountRecoveryStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal("initial sync", err)
 	}
-	state := call(storageRequest{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &syncResult.Scope, PasswordUnlock: syncResult.PasswordUnlock, Session: syncResult.Session, Vault: syncResult.Vault, Credentials: syncResult.Credentials})
+	state := call(Request{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &syncResult.Scope, PasswordUnlock: syncResult.PasswordUnlock, Session: syncResult.Session, Vault: syncResult.Vault, Credentials: syncResult.Credentials})
 	if !state.OK {
 		t.Fatal(state.Code)
 	}
@@ -130,7 +130,7 @@ func TestLiveAccountRecoveryStorage(t *testing.T) {
 	if err != nil {
 		t.Fatal("seed sync", err)
 	}
-	state = call(storageRequest{Operation: "publishVault", ExpectedRevision: state.State.Revision, Scope: &syncResult.Scope, PasswordUnlock: syncResult.PasswordUnlock, Session: syncResult.Session, Vault: syncResult.Vault, Credentials: syncResult.Credentials})
+	state = call(Request{Operation: "publishVault", ExpectedRevision: state.State.Revision, Scope: &syncResult.Scope, PasswordUnlock: syncResult.PasswordUnlock, Session: syncResult.Session, Vault: syncResult.Vault, Credentials: syncResult.Credentials})
 	if !state.OK {
 		t.Fatal(state.Code)
 	}
@@ -140,12 +140,12 @@ func TestLiveAccountRecoveryStorage(t *testing.T) {
 	var epoch atomic.Uint64
 	epoch.Store(1)
 	for cycle := 0; cycle < 2; cycle++ {
-		storage, err := newAccountRecoveryStorage(state.State, epoch.Load(), epoch.Load, syncResult.PasswordUnlock.Key, call)
+		storage, err := NewAccountRecoveryStorage(state.State, epoch.Load(), epoch.Load, syncResult.PasswordUnlock.Key, call)
 		if err != nil {
 			t.Fatal(err)
 		}
 		checkpoint := func(cp vaultwarden.SessionCheckpoint) error {
-			reply, err := saveSessionCheckpoint(state.State, cp, call)
+			reply, err := SaveSessionCheckpoint(state.State, cp, call)
 			if err == nil {
 				state = reply
 			}
@@ -196,11 +196,11 @@ func TestLiveAccountRecoveryStorage(t *testing.T) {
 		// restored. The same persisted operation is discovered after lock/re-auth.
 		storage.Close()
 		epoch.Add(1)
-		locked := call(storageRequest{Operation: "lock"})
+		locked := call(Request{Operation: "lock"})
 		if !locked.OK {
 			t.Fatal(locked.Code)
 		}
-		storage, err = newAccountRecoveryStorage(locked.State, epoch.Load(), epoch.Load, recovery.OldUnlock.Key, call)
+		storage, err = NewAccountRecoveryStorage(locked.State, epoch.Load(), epoch.Load, recovery.OldUnlock.Key, call)
 		if err != nil {
 			t.Fatal(err)
 		}

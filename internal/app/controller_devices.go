@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package app
 
-import "github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+import (
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+)
 
 func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerLease, epoch uint64, dispatch func(func())) func(func()) {
 	return func(f func()) {
@@ -22,7 +25,7 @@ func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerL
 	}
 }
 func (a *app) openDevices() { a.openDevicesWith(a.dispatchUI, a.storageCall) }
-func (a *app) openDevicesWith(dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) openDevicesWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
 	}

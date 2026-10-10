@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"sync/atomic"
 )
@@ -28,7 +29,7 @@ func (n *controllerNotifications) close() {
 		go n.stream.Wait()
 	}
 }
-func (a *app) startNotifications(dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) startNotifications(dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if !a.notificationsEnabled || !a.sessionOwnsSnapshot() {
 		return
 	}

@@ -15,13 +15,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 // Actual production controller + actual Go password login/Sync/verification +
 // isolated Swift C ABI. The prepared record is a structural storage fixture;
 // this test does not claim that a remote administrator mutation was performed.
-func targetControllerFixture(t *testing.T, mode string) (*resourceControllerFixture, func(storageRequest) storageReply, vaultwarden.Scope) {
+func targetControllerFixture(t *testing.T, mode string) (*resourceControllerFixture, func(localstore.Request) localstore.Reply, vaultwarden.Scope) {
 	t.Helper()
 	native := recoveryNativeCall(t)
 	f := newRuntimeResourceControllerFixture(t)
@@ -87,17 +88,17 @@ func targetControllerFixture(t *testing.T, mode string) (*resourceControllerFixt
 		actor.Account = "original-local-account"
 	}
 	old := targetFixture(actor)
-	state := native(storageRequest{Operation: "status"}).State
-	saved := native(storageRequest{Operation: "publishVault", ExpectedRevision: state.Revision, Scope: &actor, PasswordUnlock: old.PasswordUnlock, Session: old.Session, Vault: old.Vault})
+	state := native(localstore.Request{Operation: "status"}).State
+	saved := native(localstore.Request{Operation: "publishVault", ExpectedRevision: state.Revision, Scope: &actor, PasswordUnlock: old.PasswordUnlock, Session: old.Session, Vault: old.Vault})
 	if !saved.OK {
 		t.Fatal(saved.Code)
 	}
-	expectation := vaultwarden.RecoveryVerificationExpectation{Version: 1, ResetPassword: true, ResetMFA: true, ExpectedUserKeySHA256: targetRecoveryHash(device.key), ExpectedMasterWrapperSHA256: targetRecoveryHash([]byte(device.wrapped))}
+	expectation := vaultwarden.RecoveryVerificationExpectation{Version: 1, ResetPassword: true, ResetMFA: true, ExpectedUserKeySHA256: localstore.TargetRecoveryHash(device.key), ExpectedMasterWrapperSHA256: localstore.TargetRecoveryHash([]byte(device.wrapped))}
 	if mode == "nondispatch" || mode == "partial" {
-		expectation.ExpectedMasterWrapperSHA256 = targetRecoveryHash([]byte("never observed future wrapper"))
+		expectation.ExpectedMasterWrapperSHA256 = localstore.TargetRecoveryHash([]byte("never observed future wrapper"))
 	}
 	d := vaultwarden.RecoveryDispatch{OperationID: strings.Repeat("d", 32), Actor: actor, Target: scope, Kind: "administrator-recovery", PreviousRevision: "fixture-original-authority", AuthorizationEpoch: 1, OrganizationID: "recovery-org", MembershipID: "recovery-member", RequireTargetLogin: true, Verification: expectation}
-	adapter, e := newTargetRecoveryStorage(saved.State, 1, func() uint64 { return 1 }, bytes.Repeat([]byte{41}, 32), native)
+	adapter, e := localstore.NewTargetRecoveryStorage(saved.State, 1, func() uint64 { return 1 }, bytes.Repeat([]byte{41}, 32), native)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -112,7 +113,7 @@ func targetControllerFixture(t *testing.T, mode string) (*resourceControllerFixt
 	if mode == "multiple" {
 		d.OperationID = strings.Repeat("e", 32)
 		d.OrganizationID = "recovery-org-two"
-		second, e := newTargetRecoveryStorage(native(storageRequest{Operation: "status"}).State, 1, func() uint64 { return 1 }, bytes.Repeat([]byte{41}, 32), native)
+		second, e := localstore.NewTargetRecoveryStorage(native(localstore.Request{Operation: "status"}).State, 1, func() uint64 { return 1 }, bytes.Repeat([]byte{41}, 32), native)
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -124,7 +125,7 @@ func targetControllerFixture(t *testing.T, mode string) (*resourceControllerFixt
 		}
 		second.Close()
 	}
-	f.a.snapshot = native(storageRequest{Operation: "status"}).State
+	f.a.snapshot = native(localstore.Request{Operation: "status"}).State
 	f.a.serverURL, f.a.email, f.a.deviceID = scope.Server, device.email, "fresh-target-controller-device"
 	f.a.storageBackend = native
 	f.a.uiDispatcher = f.dispatch
@@ -169,8 +170,8 @@ func TestNativeEmergencyControllerPersistsBeforeTransportAndLateOutcome(t *testi
 					return previous(w, r)
 				}
 				writes.Add(1)
-				state := native(storageRequest{Operation: "status"}).State
-				pending := native(storageRequest{Operation: "targetRecoveryPending", ExpectedRevision: state.Revision, Scope: &scope, UnlockKey: unlock})
+				state := native(localstore.Request{Operation: "status"}).State
+				pending := native(localstore.Request{Operation: "targetRecoveryPending", ExpectedRevision: state.Revision, Scope: &scope, UnlockKey: unlock})
 				found := false
 				for _, record := range pending.TargetRecords {
 					if record.Binding.OperationID == operation && record.Phase == "prepared" {
@@ -199,8 +200,8 @@ func TestNativeEmergencyControllerPersistsBeforeTransportAndLateOutcome(t *testi
 				close(release)
 			}
 			f.drain()
-			state := native(storageRequest{Operation: "status"}).State
-			pending := native(storageRequest{Operation: "targetRecoveryPending", ExpectedRevision: state.Revision, Scope: &scope, UnlockKey: unlock})
+			state := native(localstore.Request{Operation: "status"}).State
+			pending := native(localstore.Request{Operation: "targetRecoveryPending", ExpectedRevision: state.Revision, Scope: &scope, UnlockKey: unlock})
 			expected := "confirmed"
 			if late {
 				expected = "unknown"
@@ -235,7 +236,7 @@ func TestNativeTargetMainControllerLateResolveCannotReopenUI(t *testing.T) {
 		t.Fatal(panel.status)
 	}
 	entered, release := make(chan struct{}), make(chan struct{})
-	panel.storage = func(request storageRequest) storageReply {
+	panel.storage = func(request localstore.Request) localstore.Reply {
 		if request.Operation == "targetRecoveryResolveLocal" {
 			close(entered)
 			<-release
@@ -274,7 +275,7 @@ func TestNativeTargetMainControllerFreshAuthenticationAndPublication(t *testing.
 			if mode == "foreign" || mode == "multiple" {
 				panel.verify(0)
 				f.drain()
-				if f.a.liveScope != nil || native(storageRequest{Operation: "status"}).State.Scope.Account != "original-local-account" {
+				if f.a.liveScope != nil || native(localstore.Request{Operation: "status"}).State.Scope.Account != "original-local-account" {
 					t.Fatal("foreign cache replaced without consent/all records")
 				}
 				panel.replaceForeign = true
@@ -286,8 +287,8 @@ func TestNativeTargetMainControllerFreshAuthenticationAndPublication(t *testing.
 			panel.verify(index)
 			f.drain()
 			if mode == "partial" {
-				state := native(storageRequest{Operation: "status"}).State
-				unlock := native(storageRequest{Operation: "listPassword", ExpectedRevision: state.Revision, Scope: &scope, UnlockKey: bytes.Repeat([]byte{41}, 32)})
+				state := native(localstore.Request{Operation: "status"}).State
+				unlock := native(localstore.Request{Operation: "listPassword", ExpectedRevision: state.Revision, Scope: &scope, UnlockKey: bytes.Repeat([]byte{41}, 32)})
 				if f.a.liveScope != nil || f.a.targetRecovery != panel || unlock.OK {
 					t.Fatal("partial outcome cleared target barrier")
 				}

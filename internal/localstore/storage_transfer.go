@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package localstore
 
 import (
 	"crypto/sha256"
@@ -33,7 +33,7 @@ type storageTransferReply struct {
 
 // Retains storageRequest/storageReply unchanged. Control operations use v1 so a
 // lock/logout can revoke an in-flight authenticated download immediately.
-func boundedStorageCall(input []byte, call func([]byte) ([]byte, error)) ([]byte, error) {
+func BoundedStorageCall(input []byte, call func([]byte) ([]byte, error)) ([]byte, error) {
 	var request struct {
 		Operation string `json:"operation"`
 	}

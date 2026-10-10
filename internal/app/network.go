@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -25,7 +26,7 @@ func (a *app) sessionOwnsSnapshot() bool {
 		a.liveScope != nil && a.snapshot.Scope != nil && *a.liveScope == *a.snapshot.Scope
 }
 
-func (a *app) observeSnapshot(state *snapshotStatus) {
+func (a *app) observeSnapshot(state *localstore.SnapshotStatus) {
 	a.snapshot = state
 	if state == nil || state.Revision != a.itemsRevision {
 		if a.editor != nil {
@@ -50,11 +51,11 @@ func (a *app) observeSnapshot(state *snapshotStatus) {
 	}
 }
 
-func (a *app) syncFailed(reply storageReply, err error) {
+func (a *app) syncFailed(reply localstore.Reply, err error) {
 	if reply.State != nil {
 		a.observeSnapshot(reply.State)
 	}
-	var storageErr *storageFailure
+	var storageErr *localstore.Failure
 	if errors.As(err, &storageErr) || errors.Is(err, vaultwarden.ErrExpired) || errors.Is(err, vaultwarden.ErrIdentity) {
 		a.stopNetwork()
 	}
@@ -115,7 +116,7 @@ func (a *app) syncVault(login bool) {
 	a.syncVaultWith(login, a.dispatchUI, a.storageCall)
 }
 
-func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if a.pending != 0 || a.snapshot == nil {
 		return
 	}
@@ -194,17 +195,17 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 		defer clear(password)
 		var session vaultSession = existing
 		var result vaultwarden.SyncResult
-		var metadata []displayCredential
-		var reply storageReply
+		var metadata []localstore.DisplayCredential
+		var reply localstore.Reply
 		var workErr error
-		var checkpointState *snapshotStatus
+		var checkpointState *localstore.SnapshotStatus
 		if login {
 			// Revoke the previous account before prompting, including offline copies.
-			reply = storage(storageRequest{Operation: "logout", ExpectedRevision: expected})
+			reply = storage(localstore.Request{Operation: "logout", ExpectedRevision: expected})
 			if !reply.OK || reply.State == nil {
-				workErr = reply.failure()
+				workErr = reply.Failure()
 				if reply.OK {
-					workErr = (storageReply{Code: "invalid_reply", Message: "未能确认本机账号撤销结果。"}).failure()
+					workErr = (localstore.Reply{Code: "invalid_reply", Message: "未能确认本机账号撤销结果。"}).Failure()
 				}
 			} else {
 				expected = reply.State.Revision
@@ -252,7 +253,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 				prior := initialSnapshot
 				persist = func(checkpoint vaultwarden.SessionCheckpoint) error {
 					var err error
-					reply, err = saveSessionCheckpoint(prior, checkpoint, storage)
+					reply, err = localstore.SaveSessionCheckpoint(prior, checkpoint, storage)
 					if err == nil {
 						checkpointState, prior = reply.State, reply.State
 						expected = reply.State.Revision
@@ -263,11 +264,11 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 			result, workErr = session.SyncWithCheckpoint(ctx, persist)
 		}
 		if workErr == nil && ctx.Err() == nil {
-			metadata = make([]displayCredential, 0, len(result.Credentials))
+			metadata = make([]localstore.DisplayCredential, 0, len(result.Credentials))
 			for _, item := range result.Credentials {
-				metadata = append(metadata, displayCredential{ID: item.ID, Title: item.Title, Username: item.Username, URL: item.URL})
+				metadata = append(metadata, localstore.DisplayCredential{ID: item.ID, Title: item.Title, Username: item.Username, URL: item.URL})
 			}
-			reply = storage(storageRequest{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
+			reply = storage(localstore.Request{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
 			if reply.OK && reply.Vault != nil {
 				result.Vault = reply.Vault
 			}
@@ -288,9 +289,9 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 				}
 			}
 			if !reply.OK {
-				workErr = reply.failure()
+				workErr = reply.Failure()
 			} else if reply.Vault == nil || reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != result.Scope || reply.State.SnapshotID == "" || reply.State.Revision == "" || reply.State.Revision == expected {
-				workErr = (storageReply{Code: "invalid_reply", Message: "未能确认本次快照的发布版本。"}).failure()
+				workErr = (localstore.Reply{Code: "invalid_reply", Message: "未能确认本次快照的发布版本。"}).Failure()
 			}
 		}
 		// No password-bearing results live in the UI model.
@@ -305,7 +306,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 		}
 		result.Credentials = nil
 		if errors.Is(workErr, vaultwarden.ErrExpired) || errors.Is(workErr, vaultwarden.ErrIdentity) {
-			reply = storage(storageRequest{Operation: "logout", ExpectedRevision: expected})
+			reply = storage(localstore.Request{Operation: "logout", ExpectedRevision: expected})
 			if session != nil {
 				session.Close()
 			}

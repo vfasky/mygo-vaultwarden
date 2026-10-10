@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"testing"
@@ -63,7 +64,7 @@ func TestFolderStaleDraftCheckpointAndLateResponse(t *testing.T) {
 	epoch := a.epoch
 	a.lockInterface()
 	ctx, cancel := context.WithCancel(context.Background())
-	a.completeFolderMutation(epoch, e, &next, storageReply{}, nil, cancel)
+	a.completeFolderMutation(epoch, e, &next, localstore.Reply{}, nil, cancel)
 	if e.name != "" || a.folderEditor != nil || a.session != nil || ctx.Err() == nil {
 		t.Fatal("late response resurrected folder")
 	}
@@ -77,7 +78,7 @@ func TestFolderUncertainResultKeepsDraftAndBlocksRetry(t *testing.T) {
 	e.name = "retained"
 	a.pending = 1
 	_, cancel := context.WithCancel(context.Background())
-	a.completeFolderMutation(a.epoch, e, nil, storageReply{}, &vaultwarden.MutationUncertainError{Cause: vaultwarden.ErrNetwork}, cancel)
+	a.completeFolderMutation(a.epoch, e, nil, localstore.Reply{}, &vaultwarden.MutationUncertainError{Cause: vaultwarden.ErrNetwork}, cancel)
 	a.mutateFolder(false)
 	if !e.uncertain || a.pending != 0 || e.name != "retained" {
 		t.Fatal("unknown mutation retried/lost draft")

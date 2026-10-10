@@ -5,6 +5,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -43,7 +44,7 @@ type controllerLease struct {
 	scope                vaultwarden.Scope
 	revision, snapshotID string
 	active               bool
-	checkpoint           *snapshotStatus
+	checkpoint           *localstore.SnapshotStatus
 }
 
 func (a *app) advanceEpoch() uint64 {
@@ -81,27 +82,27 @@ func (l *controllerLease) revoke() {
 	l.checkpoint = nil
 	l.mu.Unlock()
 }
-func (l *controllerLease) state() (snapshotStatus, bool) {
+func (l *controllerLease) state() (localstore.SnapshotStatus, bool) {
 	if l == nil {
-		return snapshotStatus{}, false
+		return localstore.SnapshotStatus{}, false
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	scope := l.scope
-	return snapshotStatus{Available: true, Scope: &scope, Revision: l.revision, SnapshotID: l.snapshotID}, l.active && l.clock.Load() == l.epoch
+	return localstore.SnapshotStatus{Available: true, Scope: &scope, Revision: l.revision, SnapshotID: l.snapshotID}, l.active && l.clock.Load() == l.epoch
 }
-func (l *controllerLease) check(storage func(storageRequest) storageReply) error {
+func (l *controllerLease) check(storage func(localstore.Request) localstore.Reply) error {
 	prior, active := l.state()
 	if !active {
 		return vaultwarden.ErrCancelled
 	}
-	reply := storage(storageRequest{Operation: "status"})
+	reply := storage(localstore.Request{Operation: "status"})
 	next, active := l.state()
 	if !active || next.Revision != prior.Revision {
 		return vaultwarden.ErrCancelled
 	}
 	if !reply.OK {
-		return reply.failure()
+		return reply.Failure()
 	}
 	if reply.State == nil || !reply.State.Available || reply.State.Scope == nil ||
 		*reply.State.Scope != *prior.Scope || reply.State.Revision != prior.Revision || reply.State.SnapshotID != prior.SnapshotID {
@@ -112,12 +113,12 @@ func (l *controllerLease) check(storage func(storageRequest) storageReply) error
 
 // Called under Session.mu. Saving and receipt validation must finish before
 // returning, but adoption (which reenters Session) belongs to the UI dispatch.
-func (l *controllerLease) persist(cp vaultwarden.SessionCheckpoint, storage func(storageRequest) storageReply) error {
+func (l *controllerLease) persist(cp vaultwarden.SessionCheckpoint, storage func(localstore.Request) localstore.Reply) error {
 	prior, active := l.state()
 	if !active {
 		return vaultwarden.ErrCancelled
 	}
-	reply, err := saveSessionCheckpoint(&prior, cp, storage)
+	reply, err := localstore.SaveSessionCheckpoint(&prior, cp, storage)
 	if err != nil {
 		return err
 	}
@@ -133,7 +134,7 @@ func (l *controllerLease) persist(cp vaultwarden.SessionCheckpoint, storage func
 	l.checkpoint = &state
 	return nil
 }
-func (l *controllerLease) takeCheckpoint() *snapshotStatus {
+func (l *controllerLease) takeCheckpoint() *localstore.SnapshotStatus {
 	if l == nil {
 		return nil
 	}

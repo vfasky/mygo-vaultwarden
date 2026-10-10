@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -47,7 +48,7 @@ func TestCipherComparisonRepromptNeedsLatestGrant(t *testing.T) {
 	// A second server conflict keeps this new draft and disables repeat save.
 	a.pending = 1
 	_, cancel := context.WithCancel(context.Background())
-	a.completeCipherMutation(a.epoch, e, nil, storageReply{}, vaultwarden.ErrConflict, cancel)
+	a.completeCipherMutation(a.epoch, e, nil, localstore.Reply{}, vaultwarden.ErrConflict, cancel)
 	a.saveCipher()
 	if !e.conflict || e.fields.Name != "protected draft" || a.pending != 0 {
 		t.Fatal("second conflict dispatched or lost draft")

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin
 
-package app
+package localstore
 
 import (
 	"bytes"
@@ -16,11 +16,11 @@ func targetFixture(scope vaultwarden.Scope) vaultwarden.SyncResult {
 }
 func targetFixtureExpectation() vaultwarden.RecoveryVerificationExpectation {
 	// Structural native-storage fixture; this is not a remote verification proof.
-	return vaultwarden.RecoveryVerificationExpectation{Version: 1, ResetPassword: true, ResetMFA: true, ExpectedUserKeySHA256: targetRecoveryHash([]byte("fixture-user-key")), ExpectedMasterWrapperSHA256: targetRecoveryHash([]byte("fixture-wrapper"))}
+	return vaultwarden.RecoveryVerificationExpectation{Version: 1, ResetPassword: true, ResetMFA: true, ExpectedUserKeySHA256: TargetRecoveryHash([]byte("fixture-user-key")), ExpectedMasterWrapperSHA256: TargetRecoveryHash([]byte("fixture-wrapper"))}
 }
-func targetEvidence() targetRecoveryVerification {
-	h := targetRecoveryHash([]byte("test-only verified evidence"))
-	return targetRecoveryVerification{Kind: vaultwarden.TargetEvidenceEffects, AuthorityHash: h, KeyHash: h, MembershipHash: h, MFAHash: h, ConfirmationHash: h, AuthenticationEpoch: 19}
+func targetEvidence() TargetRecoveryVerification {
+	h := TargetRecoveryHash([]byte("test-only verified evidence"))
+	return TargetRecoveryVerification{Kind: vaultwarden.TargetEvidenceEffects, AuthorityHash: h, KeyHash: h, MembershipHash: h, MFAHash: h, ConfirmationHash: h, AuthenticationEpoch: 19}
 }
 func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 	for _, self := range []bool{true, false} {
@@ -32,13 +32,13 @@ func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 				target.Account = "target"
 			}
 			initial := targetFixture(actor)
-			first := call(storageRequest{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &actor, PasswordUnlock: initial.PasswordUnlock, Session: initial.Session, Vault: initial.Vault})
+			first := call(Request{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &actor, PasswordUnlock: initial.PasswordUnlock, Session: initial.Session, Vault: initial.Vault})
 			if !first.OK {
 				t.Fatal(first.Code)
 			}
 			var epoch atomic.Uint64
 			epoch.Store(3)
-			adapter, err := newTargetRecoveryStorage(first.State, 3, epoch.Load, initial.PasswordUnlock.Key, call)
+			adapter, err := NewTargetRecoveryStorage(first.State, 3, epoch.Load, initial.PasswordUnlock.Key, call)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -55,7 +55,7 @@ func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 			if pending.TargetRecords[0].NoLocalTarget == self {
 				t.Fatal("wrong target fact")
 			}
-			read := call(storageRequest{Operation: "listPassword", Scope: &actor, ExpectedRevision: pending.State.Revision, UnlockKey: initial.PasswordUnlock.Key})
+			read := call(Request{Operation: "listPassword", Scope: &actor, ExpectedRevision: pending.State.Revision, UnlockKey: initial.PasswordUnlock.Key})
 			if read.OK == self {
 				t.Fatal("incorrect actor access")
 			}
@@ -76,7 +76,7 @@ func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 			fresh := targetFixture(target)
 			fresh.Session = []byte("newly-authenticated-target")
 			fresh.PasswordUnlock.Key = bytes.Repeat([]byte{71}, 32)
-			if _, err := adapter.ResolveVerified(fresh, targetRecoveryVerification{}); err == nil {
+			if _, err := adapter.ResolveVerified(fresh, TargetRecoveryVerification{}); err == nil {
 				t.Fatal("missing evidence accepted")
 			}
 			if !self {
@@ -89,7 +89,7 @@ func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 				}
 				saved = verified
 			}
-			logout := call(storageRequest{Operation: "logout", ExpectedRevision: saved.State.Revision})
+			logout := call(Request{Operation: "logout", ExpectedRevision: saved.State.Revision})
 			if !logout.OK {
 				t.Fatal(logout.Code)
 			}
@@ -97,11 +97,11 @@ func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 			if _, err := adapter.Query(); err == nil {
 				t.Fatal("late epoch accepted")
 			}
-			old := call(storageRequest{Operation: "publishVault", Scope: &target, ExpectedRevision: logout.State.Revision, PasswordUnlock: initial.PasswordUnlock, Session: initial.Session, Vault: fresh.Vault})
+			old := call(Request{Operation: "publishVault", Scope: &target, ExpectedRevision: logout.State.Revision, PasswordUnlock: initial.PasswordUnlock, Session: initial.Session, Vault: fresh.Vault})
 			if old.OK {
 				t.Fatal("old target published")
 			}
-			login, err := newTargetRecoveryLoginStorage(logout.State, epoch.Load(), epoch.Load, fresh, targetEvidence(), call)
+			login, err := NewTargetRecoveryLoginStorage(logout.State, epoch.Load(), epoch.Load, fresh, targetEvidence(), call)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -120,7 +120,7 @@ func TestNativeTargetRecoveryLifecycle(t *testing.T) {
 			if complete.TargetRecords[0].Phase != "resolved" || *complete.State.Scope != target {
 				t.Fatal("resolve receipt")
 			}
-			unlocked := call(storageRequest{Operation: "listPassword", Scope: &target, ExpectedRevision: complete.State.Revision, UnlockKey: fresh.PasswordUnlock.Key})
+			unlocked := call(Request{Operation: "listPassword", Scope: &target, ExpectedRevision: complete.State.Revision, UnlockKey: fresh.PasswordUnlock.Key})
 			if !unlocked.OK || !bytes.Equal(unlocked.Session, fresh.Session) {
 				t.Fatal("fresh target unavailable")
 			}
@@ -131,10 +131,10 @@ func TestNativeTargetRecoveryUnknownInviteAndFailure(t *testing.T) {
 	call := recoveryNativeCall(t)
 	scope := vaultwarden.Scope{Server: "https://target.example.invalid", Account: "actor"}
 	fresh := targetFixture(scope)
-	state := call(storageRequest{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault}).State
+	state := call(Request{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault}).State
 	var epoch atomic.Uint64
 	epoch.Store(1)
-	adapter, err := newTargetRecoveryStorage(state, 1, epoch.Load, fresh.PasswordUnlock.Key, call)
+	adapter, err := NewTargetRecoveryStorage(state, 1, epoch.Load, fresh.PasswordUnlock.Key, call)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,12 +151,12 @@ func TestNativeTargetRecoveryUnknownInviteAndFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("failed persistence allowed mutation callback")
 	}
-	status := call(storageRequest{Operation: "status"})
+	status := call(Request{Operation: "status"})
 	if status.State.Revision != state.Revision {
 		t.Fatal("failed begin mutated vault")
 	}
 	adapter.Close()
-	next, err := newTargetRecoveryStorage(state, 1, epoch.Load, fresh.PasswordUnlock.Key, call)
+	next, err := NewTargetRecoveryStorage(state, 1, epoch.Load, fresh.PasswordUnlock.Key, call)
 	if err != nil {
 		t.Fatal(err)
 	}

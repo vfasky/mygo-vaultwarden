@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -32,14 +33,14 @@ type targetRecoveryController struct {
 	epoch                           uint64
 	generation                      uint64
 	server, email, password, status string
-	source                          *snapshotStatus
-	records                         []targetRecoveryRecord
+	source                          *localstore.SnapshotStatus
+	records                         []localstore.TargetRecoveryRecord
 	workspace                       *targetRecoveryWorkspace
 	replaceForeign, running, closed bool
 	ctx                             context.Context
 	cancel                          context.CancelFunc
 	dispatch                        func(func())
-	storage                         func(storageRequest) storageReply
+	storage                         func(localstore.Request) localstore.Reply
 }
 
 func (p *targetRecoveryController) Close() {
@@ -58,10 +59,10 @@ func (p *targetRecoveryController) Close() {
 	}
 	p.records = nil
 }
-func targetStorageEvidence(e vaultwarden.TargetRecoveryEvidence) targetRecoveryVerification {
-	return targetRecoveryVerification{Kind: e.Kind, AuthorityHash: e.AuthorityHash, KeyHash: e.KeyHash, MembershipHash: e.MembershipHash, MFAHash: e.MFAHash, ConfirmationHash: e.ConfirmationHash, AuthenticationEpoch: e.AuthenticationEpoch}
+func targetStorageEvidence(e vaultwarden.TargetRecoveryEvidence) localstore.TargetRecoveryVerification {
+	return localstore.TargetRecoveryVerification{Kind: e.Kind, AuthorityHash: e.AuthorityHash, KeyHash: e.KeyHash, MembershipHash: e.MembershipHash, MFAHash: e.MFAHash, ConfirmationHash: e.ConfirmationHash, AuthenticationEpoch: e.AuthenticationEpoch}
 }
-func targetDiscoveryAdapter(ctx context.Context, workspace *targetRecoveryWorkspace, state *snapshotStatus, epoch uint64, current func() uint64, storage func(storageRequest) storageReply) (*targetRecoveryStorage, error) {
+func targetDiscoveryAdapter(ctx context.Context, workspace *targetRecoveryWorkspace, state *localstore.SnapshotStatus, epoch uint64, current func() uint64, storage func(localstore.Request) localstore.Reply) (*localstore.TargetRecoveryStorage, error) {
 	var nonce [16]byte
 	if _, err := rand.Read(nonce[:]); err != nil {
 		return nil, err
@@ -70,7 +71,7 @@ func targetDiscoveryAdapter(ctx context.Context, workspace *targetRecoveryWorksp
 	if err != nil {
 		return nil, err
 	}
-	return newTargetRecoveryLoginStorage(state, epoch, func() uint64 {
+	return localstore.NewTargetRecoveryLoginStorage(state, epoch, func() uint64 {
 		if ctx.Err() != nil {
 			return 0
 		}
@@ -78,7 +79,7 @@ func targetDiscoveryAdapter(ctx context.Context, workspace *targetRecoveryWorksp
 	}, workspace.inspection.Fresh, targetStorageEvidence(evidence), storage)
 }
 func (a *app) openTargetRecovery() { a.openTargetRecoveryWith(a.dispatchUI, a.storageCall) }
-func (a *app) openTargetRecoveryWith(dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) openTargetRecoveryWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if a.pending != 0 {
 		return
 	}
@@ -122,7 +123,7 @@ func (p *targetRecoveryController) inspect() {
 	go func() {
 		defer clear(password)
 		var workspace *targetRecoveryWorkspace
-		var reply storageReply
+		var reply localstore.Reply
 		client, err := vaultwarden.NewClient(server, device)
 		if err == nil {
 			result, e := client.LoginMFA(ctx, email, password, "", func(promptCtx context.Context, challenge vaultwarden.MFAChallenge) (vaultwarden.MFAResponse, error) {
@@ -142,13 +143,13 @@ func (p *targetRecoveryController) inspect() {
 			workspace.inspection, err = workspace.session.InspectFreshTargetRecovery(ctx)
 		}
 		if err == nil {
-			reply = p.storage(storageRequest{Operation: "status"})
+			reply = p.storage(localstore.Request{Operation: "status"})
 			if !reply.OK || reply.State == nil {
-				err = reply.failure()
+				err = reply.Failure()
 			}
 		}
 		if err == nil {
-			var adapter *targetRecoveryStorage
+			var adapter *localstore.TargetRecoveryStorage
 			adapter, err = targetDiscoveryAdapter(ctx, workspace, reply.State, epoch, clock.Load, p.storage)
 			if err == nil {
 				reply, err = adapter.Pending()
@@ -186,12 +187,12 @@ func (p *targetRecoveryController) inspect() {
 		})
 	}()
 }
-func targetAllVerified(records []targetRecoveryRecord, fresh vaultwarden.SyncResult) bool {
+func targetAllVerified(records []localstore.TargetRecoveryRecord, fresh vaultwarden.SyncResult) bool {
 	found := false
 	for _, record := range records {
 		if record.RequireTargetLogin && record.Binding.Target == fresh.Scope && record.Phase != "resolved" {
 			found = true
-			if record.Phase != "verified" || record.VerifiedVaultHash != targetRecoveryHash(fresh.Vault.Sync) || record.VerifiedSessionHash != targetRecoveryHash(fresh.Session) || record.VerifiedUnlockHash != targetRecoveryHash(fresh.PasswordUnlock.Key) {
+			if record.Phase != "verified" || record.VerifiedVaultHash != localstore.TargetRecoveryHash(fresh.Vault.Sync) || record.VerifiedSessionHash != localstore.TargetRecoveryHash(fresh.Session) || record.VerifiedUnlockHash != localstore.TargetRecoveryHash(fresh.PasswordUnlock.Key) {
 				return false
 			}
 		}
@@ -215,7 +216,7 @@ func (p *targetRecoveryController) verify(index int) {
 	a.pending++
 	go func() {
 		defer record.Close()
-		var reply storageReply
+		var reply localstore.Reply
 		var notes []string
 		adopted := false
 		adapter, err := targetDiscoveryAdapter(ctx, workspace, source, epoch, clock.Load, p.storage)
@@ -231,7 +232,7 @@ func (p *targetRecoveryController) verify(index int) {
 		var evidence vaultwarden.TargetRecoveryEvidence
 		if err == nil {
 			if len(reply.TargetRecords) != 1 {
-				err = errTargetRecovery
+				err = localstore.ErrTargetRecovery
 			} else {
 				current := reply.TargetRecords[0]
 				var description vaultwarden.RecoveryDispatch
@@ -253,10 +254,10 @@ func (p *targetRecoveryController) verify(index int) {
 			switch {
 			case reply.State.Scope != nil && *reply.State.Scope != fresh.Scope:
 				if replace {
-					var binding accountSwitchBinding
-					binding, err = newAccountSwitchBinding(reply.State, fresh.Scope)
+					var binding localstore.AccountSwitchBinding
+					binding, err = localstore.NewAccountSwitchBinding(reply.State, fresh.Scope)
 					if err == nil {
-						reply, err = publishBoundAccount(ctx, reply.State, fresh, binding, p.storage)
+						reply, err = localstore.PublishBoundAccount(ctx, reply.State, fresh, binding, p.storage)
 						adopted = err == nil
 					}
 				} else {
@@ -273,7 +274,7 @@ func (p *targetRecoveryController) verify(index int) {
 			notes = append(notes, "此操作已核验；其它目标记录仍须逐项以本次材料核验，整体屏障继续保留。")
 		}
 		if err != nil {
-			status := p.storage(storageRequest{Operation: "status"})
+			status := p.storage(localstore.Request{Operation: "status"})
 			if status.OK {
 				reply.State = status.State
 			}

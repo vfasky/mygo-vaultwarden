@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -135,11 +136,11 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 	e.attachmentBusy = true
 	id, grant, vault, parent, scope, revision, prior := e.fields.ID, e.authorization, a.vault, a.window, *a.liveScope, e.revision, a.snapshot
 	go func() {
-		var checkpoint *snapshotStatus
-		var storage storageReply
+		var checkpoint *localstore.SnapshotStatus
+		var storage localstore.Reply
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			storage, err = saveSessionCheckpoint(prior, cp, callStorage)
+			storage, err = localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior, checkpoint = storage.State, storage.State
 			}
@@ -149,7 +150,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 			if ctx.Err() != nil {
 				return vaultwarden.ErrCancelled
 			}
-			status := callStorage(storageRequest{Operation: "status"})
+			status := callStorage(localstore.Request{Operation: "status"})
 			if !status.OK || !backupLease(status.State, scope, revision) {
 				return vaultwarden.ErrConflict
 			}

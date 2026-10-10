@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -128,7 +129,7 @@ func TestOrganizationIsolationReceiptKeepsSessionAndPersonalVault(t *testing.T) 
 	a.pending = 1
 	a.lockInterface()
 	_, cancel := context.WithCancel(context.Background())
-	a.completeOrganizationManagement(epoch, e, "leave", vaultwarden.OrganizationProfile{}, &state, storageReply{}, nil, cancel)
+	a.completeOrganizationManagement(epoch, e, "leave", vaultwarden.OrganizationProfile{}, &state, localstore.Reply{}, nil, cancel)
 	if a.session != nil || a.vault != nil || a.organizationEditor != nil || e.password != "" || a.pending != 0 {
 		t.Fatal("late response revived locked UI")
 	}

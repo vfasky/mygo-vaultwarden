@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -55,14 +56,14 @@ func (a *app) accountRecoveryView(c *ui.Context) {
 		f.confirmed = !f.confirmed
 	}
 	if ui.Button(c, "全新登录并核验恢复").Disabled(f.busy || !f.confirmed || f.oldPassword == "" || f.currentPassword == "").Clicked() {
-		a.resolveAccountRecoveryWith(false, a.window.Update, callStorage)
+		a.resolveAccountRecoveryWith(false, a.window.Update, localstore.Call)
 	}
 	ui.Text(c, "仅当加密日志记录服务器已确认删除账号时，才能明确删除本机恢复副本。").MaxLines(3)
 	if ui.Button(c, "确认删除本机恢复副本").Disabled(f.busy).Clicked() {
 		f.deleteConfirmed = !f.deleteConfirmed
 	}
 	if f.deleteConfirmed && ui.Button(c, "执行本机恢复副本删除").Disabled(f.busy || f.oldPassword == "").Clicked() {
-		a.resolveAccountRecoveryWith(true, a.window.Update, callStorage)
+		a.resolveAccountRecoveryWith(true, a.window.Update, localstore.Call)
 	}
 	if ui.Button(c, "取消并保留恢复记录").Clicked() {
 		a.runStorage("lock")
@@ -81,7 +82,7 @@ func clearSyncSecrets(result *vaultwarden.SyncResult) {
 	}
 	result.Credentials = nil
 }
-func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	f := a.recoveryForm
 	if f == nil || f.closed || f.busy || a.snapshot == nil || a.snapshot.Scope == nil || a.snapshot.PasswordUnlock == nil || !a.snapshot.RecoveryPending || (deleting && !f.deleteConfirmed) || (!deleting && !f.confirmed) {
 		return
@@ -104,15 +105,15 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 		defer clear(oldPassword)
 		defer clear(password)
 		defer cancel()
-		var reply storageReply
+		var reply localstore.Reply
 		var verified vaultwarden.AccountRecoveryVerification
 		var session *vaultwarden.Session
 		key, err := vaultwarden.DeriveSnapshotUnlockKey(oldPassword, config)
 		clear(oldPassword)
 		defer clear(key)
-		var adapter *accountRecoveryStorage
+		var adapter *localstore.AccountRecoveryStorage
 		if err == nil {
-			adapter, err = newAccountRecoveryStorage(&source, epoch, a.workerEpoch.Load, key, storage)
+			adapter, err = localstore.NewAccountRecoveryStorage(&source, epoch, a.workerEpoch.Load, key, storage)
 		}
 		if adapter != nil {
 			defer adapter.Close()
@@ -121,7 +122,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 		defer record.Close()
 		phase := ""
 		if err == nil {
-			var queried storageReply
+			var queried localstore.Reply
 			queried, err = adapter.Query()
 			reply = queried
 			if queried.Recovery != nil {
@@ -181,7 +182,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 			session = nil
 		}
 		if err != nil {
-			status := storage(storageRequest{Operation: "status"})
+			status := storage(localstore.Request{Operation: "status"})
 			if status.State != nil {
 				reply.State = status.State
 			}

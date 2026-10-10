@@ -4,12 +4,13 @@ package app
 import (
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 // Called only from a synchronous UI event: lock/account-switch UI events cannot
 // interleave with the native write. No worker or late network callback copies.
-func (a *app) copyPersonalSecret(kind string, storage func(storageRequest) storageReply) {
+func (a *app) copyPersonalSecret(kind string, storage func(localstore.Request) localstore.Reply) {
 	a.prepareRuntimeSecret()
 	e := a.editor
 	if a.pending != 0 || e == nil || e.fields.ID == "" || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
@@ -28,9 +29,9 @@ func (a *app) copyPersonalSecret(kind string, storage func(storageRequest) stora
 		useSecret = s.WithOrganizationSecret
 	}
 	err := useSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
-		reply := storage(storageRequest{Operation: "copySecret", SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+		reply := storage(localstore.Request{Operation: "copySecret", SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
-			return reply.failure()
+			return reply.Failure()
 		}
 		a.secretClipboardOwned = true
 		return nil
@@ -42,7 +43,7 @@ func (a *app) copyPersonalSecret(kind string, storage func(storageRequest) stora
 	a.status = "已复制已保存的内容；最多 30 秒后尽力清除。"
 }
 
-func (a *app) showPersonalSecret(kind string, storage func(storageRequest) storageReply) {
+func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) localstore.Reply) {
 	a.prepareRuntimeSecret()
 	e := a.editor
 	if a.pending != 0 || e == nil || e.fields.ID == "" || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
@@ -61,9 +62,9 @@ func (a *app) showPersonalSecret(kind string, storage func(storageRequest) stora
 		useSecret = s.WithOrganizationSecret
 	}
 	err := useSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
-		reply := storage(storageRequest{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+		reply := storage(localstore.Request{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
-			return reply.failure()
+			return reply.Failure()
 		}
 		if !time.Now().Before(deadline) {
 			return vaultwarden.ErrExpired
@@ -86,5 +87,5 @@ func (a *app) clearSecretClipboard() {
 		a.runtimeVault.revokeSecrets()
 		return
 	}
-	_ = callStorage(storageRequest{Operation: "clearSecretClipboard"})
+	_ = localstore.Call(localstore.Request{Operation: "clearSecretClipboard"})
 }
