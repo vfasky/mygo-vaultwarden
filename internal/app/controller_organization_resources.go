@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
@@ -43,7 +44,7 @@ func (c *orgServicesController) openCopy(entry vaultwarden.VaultEntry) {
 		c.mu.Unlock()
 		c.installResources(plan, map[string]string{entry.ID: resourceDocumentID(document)}, targetOrg, true)
 		if err != nil {
-			c.status = "复制元数据结果需核对；请先同步并核对已创建目标编号，不会再次创建。"
+			c.status = i18n.T("复制元数据结果需核对；请先同步并核对已创建目标编号，不会再次创建。")
 		}
 	}, c.deliver)
 	c.replacePanel(panel)
@@ -111,7 +112,7 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 					}
 					c.installResources(resources, targets, orgID, false)
 					if err != nil {
-						c.status = "导入结果需核对；未核实的目标编号保持空白，不会重发元数据。"
+						c.status = i18n.T("导入结果需核对；未核实的目标编号保持空白，不会重发元数据。")
 					}
 				}, c.deliver)
 				if e != nil {
@@ -121,9 +122,9 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 				}
 				c.replacePanel(panel)
 			} else {
-				format := "MyGo 组织备份"
+				format := i18n.T("MyGo 组织备份")
 				if official {
-					format = "官方明文组织 JSON"
+					format = i18n.T("官方明文组织 JSON")
 				}
 				c.replacePanel(organization.NewImportPanel(plan, format, choices, allowed, execute, c.deliver))
 			}
@@ -163,7 +164,7 @@ func (c *orgServicesController) installResources(plan *vaultwarden.ResourceImpor
 	c.mu.Lock()
 	c.resourceTarget = orgID
 	c.mu.Unlock()
-	c.status = "目标组织：" + orgID + "。先正常同步并采用认证回执，再逐文件操作；不会自动创建、上传或重放。"
+	c.status = i18n.Tf("目标组织：%s。先正常同步并采用认证回执，再逐文件操作；不会自动创建、上传或重放。", orgID)
 }
 
 // Called by the resource component's worker. Only the UI installation of a
@@ -278,11 +279,11 @@ func (c *orgServicesController) refreshResources(ctx context.Context) error {
 				c.panel.Close()
 				c.panel = nil
 			}
-			c.status = "目标组织权限已变化，资源表单已关闭；原文件与服务器数据保留。"
+			c.status = i18n.T("目标组织权限已变化，资源表单已关闭；原文件与服务器数据保留。")
 			completed <- vaultwarden.ErrPermission
 			return
 		}
-		c.status = "已采用完整认证同步；请继续显式文件核验，不会自动重放操作。"
+		c.status = i18n.T("已采用完整认证同步；请继续显式文件核验，不会自动重放操作。")
 		a.startNotifications(c.dispatch, c.baseStorage)
 		completed <- nil
 	})

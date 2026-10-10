@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -128,7 +129,7 @@ func (a *app) openOrganizationEditor(id string) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil || a.organizationEditor != nil {
 		return
 	}
-	e := &organizationEditor{id: id, revision: a.sessionRevision, owner: id == "", loaded: id == "", collection: "默认集合"}
+	e := &organizationEditor{id: id, revision: a.sessionRevision, owner: id == "", loaded: id == "", collection: i18n.T("默认集合")}
 	if id != "" {
 		found := false
 		for _, org := range a.organizations {
@@ -157,36 +158,36 @@ func (a *app) organizationEditorView(c *ui.Context) {
 	e := a.organizationEditor
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c.Key("organization-management")).Padding(18).Gap(12).Children(func() {
-			title := "管理组织"
+			title := i18n.T("管理组织")
 			if e.id == "" {
-				title = "创建组织"
+				title = i18n.T("创建组织")
 			}
 			ui.Text(c, title).FontSize(23)
-			ui.Text(c, "同步会关闭此表单。组织名称与账单邮箱由服务器明文保存，集合名称端到端加密。").MaxLines(3)
+			ui.Text(c, i18n.T("同步会关闭此表单。组织名称与账单邮箱由服务器明文保存，集合名称端到端加密。")).MaxLines(3)
 			disabled := a.pending != 0 || e.uncertain
 			if e.id == "" {
 				a.memberInvitationView(c, e, disabled)
 			}
 			if e.owner {
-				ui.TextInput(c, &e.name).Label("组织名称").Disabled(disabled || !e.loaded)
-				ui.TextInput(c, &e.email).Label("账单邮箱").Disabled(disabled || !e.loaded)
+				ui.TextInput(c, &e.name).Label(i18n.T("组织名称")).Disabled(disabled || !e.loaded)
+				ui.TextInput(c, &e.email).Label(i18n.T("账单邮箱")).Disabled(disabled || !e.loaded)
 				if e.id == "" {
-					ui.TextInput(c, &e.collection).Label("默认集合名称").Disabled(disabled)
+					ui.TextInput(c, &e.collection).Label(i18n.T("默认集合名称")).Disabled(disabled)
 				}
-				if kit.Action(c, "保存组织", "", true, disabled || !e.loaded || e.name == "" || e.email == "").Key("organization-save").Clicked() {
+				if kit.Action(c, i18n.T("保存组织"), "", true, disabled || !e.loaded || e.name == "" || e.email == "").Key("organization-save").Clicked() {
 					a.runOrganizationManagement("save")
 				}
-				if !e.loaded && kit.Action(c, "重新加载组织资料", "sync", false, disabled).Clicked() {
+				if !e.loaded && kit.Action(c, i18n.T("重新加载组织资料"), "sync", false, disabled).Clicked() {
 					a.runOrganizationManagement("load")
 				}
 			} else {
 				ui.Text(c, e.name)
-				ui.Text(c, "组织资料仅所有者可以修改。")
+				ui.Text(c, i18n.T("组织资料仅所有者可以修改。"))
 			}
 			if e.isolated {
-				ui.Text(c, "此组织的本机访问已隔离。只有重新连接服务器并核验您当前已确认的成员身份和组织密钥后，才可恢复本机访问；不会重新提交退出或删除请求。").MaxLines(5)
+				ui.Text(c, i18n.T("此组织的本机访问已隔离。只有重新连接服务器并核验您当前已确认的成员身份和组织密钥后，才可恢复本机访问；不会重新提交退出或删除请求。")).MaxLines(5)
 				a.pendingPolicyRecoveryView(c, e, disabled)
-				if !a.hasPendingPolicy(e.id) && kit.Action(c, "确认重新核验并恢复访问", "sync", true, disabled).Clicked() {
+				if !a.hasPendingPolicy(e.id) && kit.Action(c, i18n.T("确认重新核验并恢复访问"), "sync", true, disabled).Clicked() {
 					a.runOrganizationManagement("restore")
 				}
 			}
@@ -199,41 +200,41 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				a.groupManagementView(c, e, disabled)
 				a.memberManagementView(c, e, disabled)
 				if e.confirmation == "" {
-					if kit.Action(c, "退出组织", "", false, disabled).Key("organization-leave").Clicked() {
+					if kit.Action(c, i18n.T("退出组织"), "", false, disabled).Key("organization-leave").Clicked() {
 						e.confirmation = "leave"
 					}
-					if e.owner && kit.Action(c, "删除组织", "", false, disabled).Key("organization-delete").Clicked() {
+					if e.owner && kit.Action(c, i18n.T("删除组织"), "", false, disabled).Key("organization-delete").Clicked() {
 						e.confirmation = "delete"
 					}
 				} else if e.confirmation == "leave" || e.confirmation == "delete" {
-					label := "确认退出组织"
+					label := i18n.T("确认退出组织")
 					if e.confirmation == "delete" {
-						label = "确认永久删除组织"
-						ui.Text(c, "这会永久删除整个组织及其密码库，影响所有成员，无法恢复。继续将立即隔离本机此组织访问，其他密码库保留。请输入当前账号主密码确认。").MaxLines(4)
-						ui.TextInput(c, &e.password).Label("当前账号主密码").Password().Disabled(disabled)
+						label = i18n.T("确认永久删除组织")
+						ui.Text(c, i18n.T("这会永久删除整个组织及其密码库，影响所有成员，无法恢复。继续将立即隔离本机此组织访问，其他密码库保留。请输入当前账号主密码确认。")).MaxLines(4)
+						ui.TextInput(c, &e.password).Label(i18n.T("当前账号主密码")).Password().Disabled(disabled)
 					} else {
-						ui.Text(c, "继续将立即隔离本机此组织访问，其他密码库保留。退出后需要重新邀请才能加入；最后一位所有者须先转移所有权，服务器会再次核验。").MaxLines(4)
+						ui.Text(c, i18n.T("继续将立即隔离本机此组织访问，其他密码库保留。退出后需要重新邀请才能加入；最后一位所有者须先转移所有权，服务器会再次核验。")).MaxLines(4)
 					}
 					if kit.Action(c, label, "", true, disabled || (e.confirmation == "delete" && e.password == "")).Key("organization-danger-confirm").Clicked() {
 						a.runOrganizationManagement(e.confirmation)
 					}
-					if kit.Action(c, "取消组织操作", "", false, a.pending != 0).Clicked() {
+					if kit.Action(c, i18n.T("取消组织操作"), "", false, a.pending != 0).Clicked() {
 						e.confirmation, e.password = "", ""
 						a.secretInputVersion++
 					}
 				}
 			}
 			if e.uncertain {
-				ui.Text(c, "请求可能已部分执行。请同步核对组织列表与资料，此表单不能再次提交。").MaxLines(3)
-				if kit.Action(c, "同步核对组织", "sync", false, a.pending != 0).Clicked() {
+				ui.Text(c, i18n.T("请求可能已部分执行。请同步核对组织列表与资料，此表单不能再次提交。")).MaxLines(3)
+				if kit.Action(c, i18n.T("同步核对组织"), "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
 				}
 			}
 			if a.pending != 0 {
-				if kit.Action(c, "取消并锁定密码库", "", false, false).Clicked() {
+				if kit.Action(c, i18n.T("取消并锁定密码库"), "", false, false).Clicked() {
 					a.runStorage("lock")
 				}
-			} else if kit.Action(c, "关闭组织管理", "", false, false).Clicked() {
+			} else if kit.Action(c, i18n.T("关闭组织管理"), "", false, false).Clicked() {
 				a.clearOrganizationEditor()
 			}
 		})
@@ -331,7 +332,7 @@ func (a *app) runOrganizationManagement(operation string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++
-	a.status = "正在处理组织请求…"
+	a.status = i18n.T("正在处理组织请求…")
 	go func() {
 		defer policyRecovery.Close()
 		var loadedPolicyRecovery *vaultwarden.PolicyRecoveryReview
@@ -549,11 +550,11 @@ func (a *app) runOrganizationManagement(operation string) {
 					e.policyConsent.Close()
 					e.policyConsent = nil
 					e.confirmation = ""
-					a.status = "已加载策略，保存前请核对影响与本机执行范围"
+					a.status = i18n.T("已加载策略，保存前请核对影响与本机执行范围")
 				} else {
 					loadedPolicy.Close()
 					if a.epoch == epoch && err == nil && checkpoint != nil {
-						a.status = "登录凭据已安全更新，请重新加载策略后编辑。"
+						a.status = i18n.T("登录凭据已安全更新，请重新加载策略后编辑。")
 					}
 				}
 			}
@@ -567,7 +568,7 @@ func (a *app) runOrganizationManagement(operation string) {
 					e.groupConsent.Close()
 					e.groupConsent = nil
 					e.confirmation = ""
-					a.status = "已加载群组，请明确设置本次保存的访问范围"
+					a.status = i18n.T("已加载群组，请明确设置本次保存的访问范围")
 				} else {
 					loadedGroup.Close()
 				}
@@ -578,13 +579,13 @@ func (a *app) runOrganizationManagement(operation string) {
 					// Do not present a consent draft from the previous revision.
 					loadedInvitation.Close()
 					e.invitationLink = invitationLink
-					a.status = "登录凭据已安全更新，请重新核验邀请策略"
+					a.status = i18n.T("登录凭据已安全更新，请重新核验邀请策略")
 				} else if a.epoch == epoch && a.organizationEditor == e && err == nil {
 					e.invitationAcceptance.Close()
 					e.invitationAcceptance = loadedInvitation
 					e.invitationLink, e.trustedRecoveryKey = "", ""
 					a.secretInputVersion++
-					a.status = "已核验邀请策略，请确认是否接受"
+					a.status = i18n.T("已核验邀请策略，请确认是否接受")
 				} else {
 					loadedInvitation.Close()
 				}
@@ -592,13 +593,13 @@ func (a *app) runOrganizationManagement(operation string) {
 			if (operation == "recovery-key-load" || operation == "recovery-key-create") && a.epoch == epoch && a.organizationEditor == e && err == nil {
 				e.organizationRecoveryKey = recoveryPublicKey
 				e.confirmation = ""
-				a.status = "组织恢复公钥已核验；公钥为空时可初始化"
+				a.status = i18n.T("组织恢复公钥已核验；公钥为空时可初始化")
 			}
 			if loadedRole != nil {
 				if a.epoch == epoch && a.organizationEditor == e && err == nil {
 					e.memberRole.Close()
 					e.memberRole = loadedRole
-					a.status = "已加载成员角色及完整直接分配"
+					a.status = i18n.T("已加载成员角色及完整直接分配")
 				} else {
 					loadedRole.Close()
 				}
@@ -608,7 +609,7 @@ func (a *app) runOrganizationManagement(operation string) {
 					e.members.Close()
 					e.members = loadedMembers
 					e.inviteRole = 2
-					a.status = "成员列表已加载"
+					a.status = i18n.T("成员列表已加载")
 				} else {
 					loadedMembers.Close()
 				}
@@ -618,7 +619,7 @@ func (a *app) runOrganizationManagement(operation string) {
 					e.memberProof.Close()
 					e.memberProof = loadedProof
 					e.verifiedSPKI = ""
-					a.status = "请与受邀人通过可信渠道核验完整公钥"
+					a.status = i18n.T("请与受邀人通过可信渠道核验完整公钥")
 				} else {
 					loadedProof.Close()
 				}
@@ -627,7 +628,7 @@ func (a *app) runOrganizationManagement(operation string) {
 				if a.epoch == epoch && a.organizationEditor == e && err == nil {
 					e.collectionDraft.Close()
 					e.collectionDraft = loadedCollection
-					a.status = "集合详情已加载；保存名称会保留原访问配置。"
+					a.status = i18n.T("集合详情已加载；保存名称会保留原访问配置。")
 				} else {
 					loadedCollection.Close()
 				}
@@ -687,7 +688,7 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		if (operation == "leave" || operation == "delete") && a.vault != nil {
 			for _, id := range a.vault.QuarantinedOrganizations {
 				if id == e.id || a.organizationEditor == nil {
-					a.status += " 该组织的本机访问已隔离；可从侧栏重新核验访问，原操作不会重试。"
+					a.status = i18n.Tf("%s 该组织的本机访问已隔离；可从侧栏重新核验访问，原操作不会重试。", a.status)
 					break
 				}
 			}
@@ -700,26 +701,26 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 	if operation == "restore" || operation == "policy-restore" {
 		if operation == "policy-restore" {
 			a.syncVault(false)
-			a.status = "已核验当前策略并解除对应待核验限制，正在同步访问状态；失效成员的组织隔离仍保留。"
+			a.status = i18n.T("已核验当前策略并解除对应待核验限制，正在同步访问状态；失效成员的组织隔离仍保留。")
 		} else {
-			a.status = "已重新核验成员身份并恢复该组织的本机访问。"
+			a.status = i18n.T("已重新核验成员身份并恢复该组织的本机访问。")
 		}
 		return
 	}
 	if operation == "load" {
 		e.name, e.email, e.loaded = result.Name, result.BillingEmail, true
-		a.status = "组织资料已加载"
+		a.status = i18n.T("组织资料已加载")
 		return
 	}
 	e.uncertain = true
 	if operation == "leave" || operation == "delete" {
-		a.status = "组织操作已提交，本机该组织已隔离。其他密码库仍可使用；请同步核对最新状态。"
+		a.status = i18n.T("组织操作已提交，本机该组织已隔离。其他密码库仍可使用；请同步核对最新状态。")
 		a.syncVault(false)
 		return
 	}
-	a.status = "组织修改已提交，正在同步核对…"
+	a.status = i18n.T("组织修改已提交，正在同步核对…")
 	if operation == "collection-save" || operation == "collection-delete" {
-		a.status = "集合修改已提交，正在同步核对；若侧栏出现“重新核验”，请完成核验以恢复组织访问。"
+		a.status = i18n.T("集合修改已提交，正在同步核对；若侧栏出现“重新核验”，请完成核验以恢复组织访问。")
 	}
 	a.syncVault(false)
 }
