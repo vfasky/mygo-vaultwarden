@@ -19,6 +19,21 @@
 - `go` 不在 PATH 时使用 `GO_BIN=/absolute/path/to/go`；`scripts/resolve-go.sh` 也识别项目用户缓存工具链。
 - 真实 AutoFill 安装需要 Apple Developer Program、Xcode 登录账号、相应证书及 provisioning profile。未签名构建不能证明系统填充可用。
 
+## 目录结构
+
+| 目录 | 内容 |
+|---|---|
+| `main.go` | 薄入口，调用 `internal/app` |
+| `internal/app` | 应用控制器：主窗口、生命周期、登录解锁、同步与密码库编辑器 |
+| `internal/ui` | UI：`kit` 共享组件，`account`、`send`、`organization` 领域面板 |
+| `internal/vaultwarden` | Vaultwarden 协议客户端，`vaultcrypto`、`totp`、`vaulterr` 子包 |
+| `internal/localstore`、`internal/fileio`、`internal/platform` | 本机加密快照、本地文件暂存、原生桥与系统认证 |
+| `third_party` | 官方 zxcvbn 与第三方许可证 |
+| `tools`、`scripts` | Go 开发工具；构建、安装与许可证脚本 |
+| `macos` | Xcode 工程、AutoFill 扩展与 Swift 安全存储桥 |
+
+依赖方向、测试放置约定和新代码的归属见 [docs/architecture.md](docs/architecture.md)。
+
 ## 构建与安装
 
 完整开发入口：
