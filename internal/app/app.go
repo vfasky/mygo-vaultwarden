@@ -227,7 +227,10 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 func Run() {
 	a := &app{status: "正在读取本机存储状态…", notificationsEnabled: true}
 	mygo.App.WhenReady(func() {
-		a.window = mygo.NewWindow(mygo.WindowOptions{Title: "MyGo Vaultwarden", Width: 1280, Height: 820, MinWidth: 1060, MinHeight: 700, StateKey: "main", TitleBarStyle: mygo.TitleBarHiddenInset, Content: ui.View(a.view)})
+		// Pinning the traffic lights where hiddenInset puts them makes the
+		// title bar exactly as tall as their row, centered on them, so the
+		// sidebar toggle and toolbar can center on c.TitleBar().Height.
+		a.window = mygo.NewWindow(mygo.WindowOptions{Title: "MyGo Vaultwarden", Width: 1280, Height: 820, MinWidth: 1060, MinHeight: 700, StateKey: "main", TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 18, Y: 18}, Content: ui.View(a.view)})
 		a.runStorage("settings")
 		mygo.Power.OnLockScreen(func() { a.window.Update(func() { a.runStorage("lock") }) })
 		mygo.Power.OnSuspend(func() { a.window.Update(func() { a.runStorage("lock") }) })

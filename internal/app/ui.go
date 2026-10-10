@@ -350,8 +350,9 @@ func (a *app) header(c *ui.Context) {
 	if a.sidebarCollapsed {
 		left = 12
 	}
-	ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).Gap(10).AlignItems(ui.Center).
-		Padding(0, 20, 0, max(left, bar.Left-a.sidebarWidth(c))).DragWindow().Children(func() {
+	row, below := titleBarRow(bar)
+	ui.Row(c).Height(row+below).Shrink(0).Gap(10).AlignItems(ui.Center).
+		Padding(0, 20, below, max(left, bar.Left-a.sidebarWidth(c))).DragWindow().Children(func() {
 		// The expanded sidebar carries the toggle; the collapsed rail only
 		// fits the traffic lights, so it leads the toolbar instead.
 		if a.sidebarCollapsed {
@@ -396,6 +397,18 @@ func (a *app) header(c *ui.Context) {
 	})
 }
 
+// titleBarRow returns the height of the row that title bar controls center
+// on, the traffic lights' row, and the room left below it so the title bar
+// area stays at least 52 tall. Without traffic lights (full screen) the
+// controls center on the whole 52.
+func titleBarRow(bar ui.TitleBar) (row, below float32) {
+	row = bar.Height
+	if row == 0 {
+		row = 52
+	}
+	return row, max(row, 52) - row
+}
+
 // sidebarWidth keeps the collapsed rail at least as wide as the traffic
 // lights, so the rail runs unbroken from the top of the window.
 func (a *app) sidebarWidth(c *ui.Context) float32 {
@@ -410,11 +423,15 @@ func (a *app) sidebar(c *ui.Context) {
 	width := a.sidebarWidth(c)
 	ui.Row(c).Width(width + 1).Shrink(0).AlignItems(ui.Stretch).Children(func() {
 		ui.Column(c).Width(width).Shrink(0).Background(kit.SidebarBackground).Children(func() {
-			top := ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).AlignItems(ui.Center).DragWindow()
+			row, below := titleBarRow(bar)
+			top := ui.Row(c).Height(row).Shrink(0).AlignItems(ui.Center).DragWindow()
 			if !a.sidebarCollapsed {
 				// Like native split views, the toggle sits just past the
-				// traffic lights.
-				top.Padding(0, 0, 0, max(14, bar.Left)).Children(func() { a.sidebarToggle(c) })
+				// traffic lights, centered on their row.
+				top.Padding(0, 0, 0, max(14, bar.Left+8)).Children(func() { a.sidebarToggle(c) })
+			}
+			if below > 0 {
+				ui.Box(c).Height(below).Shrink(0).DragWindow()
 			}
 			ui.Column(c).Grow(1).MinHeight(0).Padding(0, 0, 12, 0).Gap(6).Children(func() { a.sidebarContent(c, width) })
 		})
