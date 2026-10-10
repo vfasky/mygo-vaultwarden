@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/mail"
@@ -121,7 +122,7 @@ func (s *Session) SaveOrganization(ctx context.Context, vault *VaultData, orgID 
 			return OrganizationProfile{}, err
 		}
 		if policies.singleOrganization {
-			return OrganizationProfile{}, fmt.Errorf("单一组织策略或待核验的策略变更禁止创建其他组织：%w", ErrPermission)
+			return OrganizationProfile{}, fmt.Errorf(i18n.T("单一组织策略或待核验的策略变更禁止创建其他组织：%w"), ErrPermission)
 		}
 		previousGuard := guard
 		guard = func() error {

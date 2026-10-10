@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 	"sort"
 )
 
-var ErrMemberRoleGroupsDisabled = errors.New("服务器未启用群组，无法无损保留隐藏的群组关联；请联系服务器管理员启用群组后重新加载成员角色")
+var ErrMemberRoleGroupsDisabled = errors.New(i18n.T("服务器未启用群组，无法无损保留隐藏的群组关联；请联系服务器管理员启用群组后重新加载成员角色"))
 
 // MemberRoleDraft captures direct assignments from collection/user endpoints.
 // Admin member details alone omit them when a group grants full access.

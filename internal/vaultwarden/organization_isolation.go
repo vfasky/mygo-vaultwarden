@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package vaultwarden
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+)
 
 // IsolatedOrganizations returns only the names needed for explicit recovery.
 // Missing memberships remain listed so ordinary sync cannot hide a local marker.
@@ -28,7 +31,7 @@ func (s *Session) IsolatedOrganizations(vault *VaultData) ([]Organization, error
 	}
 	result := make([]Organization, 0, len(vault.QuarantinedOrganizations))
 	for _, id := range vault.QuarantinedOrganizations {
-		name := "已退出或删除的组织"
+		name := i18n.T("已退出或删除的组织")
 		for _, org := range data.Profile.Organizations {
 			if org.ID == id {
 				name = org.Name

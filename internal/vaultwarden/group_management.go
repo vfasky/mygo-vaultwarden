@@ -5,13 +5,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 	"strings"
 )
 
-var ErrGroupsDisabled = errors.New("服务器未启用群组，无法读取或修改群组")
+var ErrGroupsDisabled = errors.New(i18n.T("服务器未启用群组，无法读取或修改群组"))
 
 // GroupScope has an explicit unset state: Vaultwarden 1.37.4 never returns
 // accessAll, although every group PUT overwrites it.

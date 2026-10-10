@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"strings"
@@ -66,7 +67,7 @@ func (p *ImportPlan) PreviewItems() []ImportPreview {
 }
 
 func backupError(index int, reason string) error {
-	return fmt.Errorf("第 %d 个项目无法无损转换：%s", index+1, reason)
+	return fmt.Errorf(i18n.T("第 %d 个项目无法无损转换：%s"), index+1, reason)
 }
 
 // strictJSON rejects duplicate keys as well as trailing documents. Importing a
@@ -160,16 +161,16 @@ func decodeBackup(data []byte, format BackupFormat) (backupFile, error) {
 		}
 		id, ok := item["id"].(string)
 		if !ok || !validObjectID(id) || seen[id] {
-			return file, backupError(i, "项目标识缺失或重复")
+			return file, backupError(i, i18n.T("项目标识缺失或重复"))
 		}
 		if format == BitwardenJSON && !backupUUID(id) {
-			return file, backupError(i, "Bitwarden 格式要求 UUID 项目标识")
+			return file, backupError(i, i18n.T("Bitwarden 格式要求 UUID 项目标识"))
 		}
 		seen[id] = true
 		if folder := item["folderId"]; folder != nil {
 			id, ok := folder.(string)
 			if !ok || !folders[id] {
-				return file, backupError(i, "文件夹引用不存在")
+				return file, backupError(i, i18n.T("文件夹引用不存在"))
 			}
 		}
 	}
@@ -291,26 +292,26 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 	}
 	if format == BitwardenJSON {
 		if strings.TrimSpace(fields.Name) == "" || (fields.Notes != nil && strings.TrimSpace(*fields.Notes) == "") {
-			return fmt.Errorf("Bitwarden 会改写空白名称或备注，请使用 MyGo 备份")
+			return fmt.Errorf("%s", i18n.T("Bitwarden 会改写空白名称或备注，请使用 MyGo 备份"))
 		}
 		for _, entry := range fields.PasswordHistory {
 			date, _ := time.Parse(time.RFC3339Nano, entry["lastUsedDate"].(string))
 			if date.Nanosecond()%1000000 != 0 {
-				return fmt.Errorf("Bitwarden 无法保留亚毫秒密码历史时间，请使用 MyGo 备份")
+				return fmt.Errorf("%s", i18n.T("Bitwarden 无法保留亚毫秒密码历史时间，请使用 MyGo 备份"))
 			}
 		}
 		if fields.Type == 8 {
-			return fmt.Errorf("此版本 Bitwarden 格式不支持护照，请改用 MyGo 备份")
+			return fmt.Errorf("%s", i18n.T("此版本 Bitwarden 格式不支持护照，请改用 MyGo 备份"))
 		}
 		if len(fields.PasswordHistory) > 5 {
-			return fmt.Errorf("Bitwarden 导入器只保留五条密码历史，请改用 MyGo 备份")
+			return fmt.Errorf("%s", i18n.T("Bitwarden 导入器只保留五条密码历史，请改用 MyGo 备份"))
 		}
 		if fields.DeletedDate != nil {
-			return fmt.Errorf("回收站项目请使用 MyGo 备份")
+			return fmt.Errorf("%s", i18n.T("回收站项目请使用 MyGo 备份"))
 		}
 		if fields.Login != nil {
 			if !emptyCopyArray(fields.Login["fido2Credentials"]) {
-				return fmt.Errorf("完整通行密钥请使用 MyGo 备份；官方 JSON 适配尚未验证")
+				return fmt.Errorf("%s", i18n.T("完整通行密钥请使用 MyGo 备份；官方 JSON 适配尚未验证"))
 			}
 			if err := copyKeys(fields.Login, "username", "password", "totp", "uris", "fido2Credentials"); err != nil {
 				return err
@@ -440,7 +441,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 			delete(object, "attachments")
 		}
 		if err = validateCopyObject(object); err != nil {
-			return nil, backupError(len(file.Items), "包含尚不支持的附件、通行密钥、扩展或权限")
+			return nil, backupError(len(file.Items), i18n.T("包含尚不支持的附件、通行密钥、扩展或权限"))
 		}
 		fields, err := DecryptCipherDocument(doc, s.key)
 		if err != nil {
@@ -464,12 +465,12 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 			if alias := login["uri"]; alias != nil {
 				uris, _ := login["uris"].([]any)
 				if len(uris) == 0 || uris[0].(map[string]any)["uri"] != alias {
-					return nil, backupError(len(file.Items), "旧网址与网址列表不同，请使用 MyGo 备份")
+					return nil, backupError(len(file.Items), i18n.T("旧网址与网址列表不同，请使用 MyGo 备份"))
 				}
 			}
 			delete(login, "uri")
 			if login["autofillOnPageLoad"] != nil || login["passwordRevisionDate"] != nil {
-				return nil, backupError(len(file.Items), "登录自动填充设置或密码修订时间需 MyGo 备份")
+				return nil, backupError(len(file.Items), i18n.T("登录自动填充设置或密码修订时间需 MyGo 备份"))
 			}
 			delete(login, "autofillOnPageLoad")
 			delete(login, "passwordRevisionDate")
@@ -480,7 +481,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 						text, ok := uri["uri"].(string)
 						hash := sha256.Sum256([]byte(text))
 						if !ok || checksum != base64.StdEncoding.EncodeToString(hash[:]) {
-							return nil, backupError(len(file.Items), "网址校验值无法重建，请使用 MyGo 备份")
+							return nil, backupError(len(file.Items), i18n.T("网址校验值无法重建，请使用 MyGo 备份"))
 						}
 					}
 					delete(uri, "uriChecksum")

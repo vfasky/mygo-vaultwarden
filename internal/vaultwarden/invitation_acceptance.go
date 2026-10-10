@@ -10,12 +10,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
-var ErrInvitationAlreadyAccepted = errors.New("此邀请已接受，不能重复提交；请同步核对成员确认与账号恢复登记状态")
+var ErrInvitationAlreadyAccepted = errors.New(i18n.T("此邀请已接受，不能重复提交；请同步核对成员确认与账号恢复登记状态"))
 
 // InvitationAcceptance binds consent to the authenticated account, snapshot,
 // invitation, policies and exact recovery public key. It contains no user key.

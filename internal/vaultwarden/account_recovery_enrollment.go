@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"reflect"
 )
 
@@ -126,7 +127,7 @@ func (s *Session) PrepareRecoveryEnrollment(ctx context.Context, vault *VaultDat
 		accountProof
 	}{}
 	kind := "recovery-withdraw"
-	impact := "退出组织账号恢复。已获知用户密钥的管理员仍可能保留副本；退出不会轮换用户密钥。"
+	impact := i18n.T("退出组织账号恢复。已获知用户密钥的管理员仍可能保留副本；退出不会轮换用户密钥。")
 	if enroll {
 		if trustedPublicKey != state.PublicKey {
 			return nil, ErrIdentity
@@ -141,7 +142,7 @@ func (s *Session) PrepareRecoveryEnrollment(ctx context.Context, vault *VaultDat
 		}
 		payload.ResetPasswordKey = &wrapped
 		kind = "recovery-enroll"
-		impact = "授权组织恢复私钥持有者恢复此账号并访问个人密码库。请通过独立渠道核对组织恢复公钥。"
+		impact = i18n.T("授权组织恢复私钥持有者恢复此账号并访问个人密码库。请通过独立渠道核对组织恢复公钥。")
 	}
 	p, err := s.recoveryPlanLocked(kind, "PUT", "/api/organizations/"+orgID+"/users/"+s.account+"/reset-password-enrollment", state.Membership, s.account, impact, payload)
 	if err != nil {

@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
@@ -193,7 +194,7 @@ func shareRecoveryAttachmentSnapshots(object map[string]any) (map[string]map[str
 }
 
 func inspectShareRecovery(payload cipherShareRecoveryPayload, current CipherDocument) (CipherShareRecoveryInspection, error) {
-	result := CipherShareRecoveryInspection{CipherID: payload.CipherID, OrganizationID: payload.OrganizationID, OperationID: payload.OperationID, CipherState: "缺失"}
+	result := CipherShareRecoveryInspection{CipherID: payload.CipherID, OrganizationID: payload.OrganizationID, OperationID: payload.OperationID, CipherState: i18n.Key("缺失")}
 	if len(current.JSON) == 0 {
 		return result, nil
 	}
@@ -209,12 +210,12 @@ func inspectShareRecovery(payload cipherShareRecoveryPayload, current CipherDocu
 	if err != nil {
 		return result, err
 	}
-	result.CipherState = "外部修改"
+	result.CipherState = i18n.Key("外部修改")
 	if reflect.DeepEqual(shareRecoveryComparable(actual), shareRecoveryComparable(old)) {
-		result.CipherState = "旧个人"
+		result.CipherState = i18n.Key("旧个人")
 	}
 	if reflect.DeepEqual(shareRecoveryComparable(actual), shareRecoveryComparable(target)) {
-		result.CipherState = "新组织"
+		result.CipherState = i18n.Key("新组织")
 	}
 	originals, err := shareRecoveryAttachmentSnapshots(old)
 	if err != nil {
@@ -228,29 +229,29 @@ func inspectShareRecovery(payload cipherShareRecoveryPayload, current CipherDocu
 	if err != nil {
 		return result, err
 	}
-	safe := result.CipherState == "旧个人" || result.CipherState == "新组织"
+	safe := result.CipherState == i18n.Key("旧个人") || result.CipherState == i18n.Key("新组织")
 	needsRepair := false
 	for id, original := range originals {
-		state := "外部修改"
+		state := i18n.Key("外部修改")
 		if observed[id] == nil {
-			state = "缺失"
+			state = i18n.Key("缺失")
 		} else if reflect.DeepEqual(observed[id], original) {
-			state = "旧包装"
+			state = i18n.Key("旧包装")
 		} else if reflect.DeepEqual(observed[id], desired[id]) {
-			state = "新包装"
+			state = i18n.Key("新包装")
 		}
 		result.Attachments = append(result.Attachments, CipherShareRecoveryAttachment{ID: id, State: state})
-		if state == "外部修改" || state == "缺失" {
+		if state == i18n.Key("外部修改") || state == i18n.Key("缺失") {
 			safe = false
 		}
-		if (result.CipherState == "旧个人" && state == "新包装") || (result.CipherState == "新组织" && state == "旧包装") {
+		if (result.CipherState == i18n.Key("旧个人") && state == i18n.Key("新包装")) || (result.CipherState == i18n.Key("新组织") && state == i18n.Key("旧包装")) {
 			needsRepair = true
 		}
 	}
 	for id := range observed {
 		if originals[id] == nil {
 			safe = false
-			result.Attachments = append(result.Attachments, CipherShareRecoveryAttachment{ID: id, State: "远端新增"})
+			result.Attachments = append(result.Attachments, CipherShareRecoveryAttachment{ID: id, State: i18n.Key("远端新增")})
 		}
 	}
 	result.CanRepair = safe && needsRepair
@@ -373,7 +374,7 @@ func (s *Session) RepairCipherShareRecovery(ctx context.Context, vault *VaultDat
 		return ErrConflict
 	}
 	desiredRaw := payload.Original
-	if inspection.CipherState == "新组织" {
+	if inspection.CipherState == i18n.Key("新组织") {
 		desiredRaw = payload.Target
 	}
 	desired, err := documentObject(CipherDocument{JSON: desiredRaw})

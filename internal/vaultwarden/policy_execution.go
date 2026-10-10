@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 )
@@ -237,7 +238,7 @@ func (s *Session) organizationCipherPolicyGuardLocked(ctx context.Context, data 
 		return nil, ErrPermission
 	}
 	if policies.restrictedOrganizations[orgID][kind] {
-		return nil, fmt.Errorf("目标组织策略限制此项目类型，不能保存或共享：%w", ErrPermission)
+		return nil, fmt.Errorf(i18n.T("目标组织策略限制此项目类型，不能保存或共享：%w"), ErrPermission)
 	}
 	return func() error {
 		if err := s.checkOperationPoliciesLocked(ctx, policies); err != nil {
@@ -290,7 +291,7 @@ func (s *Session) personalCipherStatePolicyLocked(ctx context.Context, ids []str
 			return ErrPermission
 		}
 		if policies.restrictedPersonal[*meta.Type] {
-			return fmt.Errorf("组织策略限制此项目类型，不能修改其状态：%w", ErrPermission)
+			return fmt.Errorf(i18n.T("组织策略限制此项目类型，不能修改其状态：%w"), ErrPermission)
 		}
 		found[meta.ID] = true
 	}
@@ -368,10 +369,10 @@ func (s *Session) personalCipherPolicyGuardLocked(ctx context.Context, kind int,
 		return nil, err
 	}
 	if policies.personalOwnership {
-		return nil, fmt.Errorf("组织策略禁止保存到个人密码库，请选择允许的组织：%w", ErrPermission)
+		return nil, fmt.Errorf(i18n.T("组织策略禁止保存到个人密码库，请选择允许的组织：%w"), ErrPermission)
 	}
 	if policies.restrictedPersonal[kind] {
-		return nil, fmt.Errorf("组织策略限制此项目类型，不能保存到个人密码库：%w", ErrPermission)
+		return nil, fmt.Errorf(i18n.T("组织策略限制此项目类型，不能保存到个人密码库：%w"), ErrPermission)
 	}
 	return func() error {
 		if err := s.checkOperationPoliciesLocked(ctx, policies); err != nil {

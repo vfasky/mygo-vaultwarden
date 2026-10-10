@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"io"
 	"os"
 	"path/filepath"
@@ -17,7 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var errBackupFile = errors.New("无法安全访问文件。请选择本地普通文件和非符号链接目录；导出请使用尚不存在的新文件名。")
+var errBackupFile = errors.New(i18n.T("无法安全访问文件。请选择本地普通文件和非符号链接目录；导出请使用尚不存在的新文件名。"))
 
 // Pin every parent component by descriptor, refusing symlinks. Path replacement
 // after selection cannot redirect a secret write outside the selected directory.

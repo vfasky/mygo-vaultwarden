@@ -6,6 +6,7 @@ package localstore
 import (
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"log"
 )
@@ -106,23 +107,23 @@ type Reply struct {
 func Call(request Request) Reply {
 	input, err := json.Marshal(request)
 	if err != nil {
-		return Reply{Code: "invalid_input", Message: "无法编码快照请求。"}
+		return Reply{Code: "invalid_input", Message: i18n.T("无法编码快照请求。")}
 	}
 	defer clear(input)
 	output, err := nativeStorageCall(input)
 	if err != nil {
 		if errors.Is(err, errSnapshotTooLarge) {
-			return Reply{Code: "snapshot_too_large", Message: "密码库超过本版有界传输上限，无法保存。"}
+			return Reply{Code: "snapshot_too_large", Message: i18n.T("密码库超过本版有界传输上限，无法保存。")}
 		}
 		// Loader/ABI failures contain paths and codes only, never the request body.
 		log.Printf("snapshot bridge unavailable: %v", err)
-		return Reply{Code: "bridge_unavailable", Message: "安全存储组件不可用，请运行完整签名安装版。"}
+		return Reply{Code: "bridge_unavailable", Message: i18n.T("安全存储组件不可用，请运行完整签名安装版。")}
 	}
 	defer clear(output)
 	var reply Reply
 	if err := json.Unmarshal(output, &reply); err != nil {
 		clear(reply.Session)
-		return Reply{Code: "invalid_reply", Message: "安全存储返回了无效响应。"}
+		return Reply{Code: "invalid_reply", Message: i18n.T("安全存储返回了无效响应。")}
 	}
 	return reply
 }

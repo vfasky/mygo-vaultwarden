@@ -6,13 +6,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"sync/atomic"
 	"time"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-var ErrRuntimeTargetBlocked = errors.New("此账号存在未解除的跨账号恢复记录；请先通过当前主密码登录并完成专用恢复核验")
+var ErrRuntimeTargetBlocked = errors.New(i18n.T("此账号存在未解除的跨账号恢复记录；请先通过当前主密码登录并完成专用恢复核验"))
 
 func SameStorageSource(a, b *SnapshotStatus) bool {
 	if a == nil || b == nil || a.Revision != b.Revision || a.SnapshotID != b.SnapshotID || a.Available != b.Available || a.RecoveryPending != b.RecoveryPending || a.AccountSwitchPending != b.AccountSwitchPending || a.TargetRecoveryPresent != b.TargetRecoveryPresent {

@@ -7,13 +7,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"reflect"
 	"sort"
 )
 
 const rotationGit1374 = "7c188967e7a467b19b2757bc3326f9cf3ccae327"
 
-var ErrRotationCompatibility = errors.New("无法确认支持完整恢复核验的 Vaultwarden 1.37.4 实现，未提交用户密钥轮换")
+var ErrRotationCompatibility = errors.New(i18n.T("无法确认支持完整恢复核验的 Vaultwarden 1.37.4 实现，未提交用户密钥轮换"))
 
 // This is a compatibility declaration over the configured trusted server/TLS
 // origin, not attestation of its binary. /api/config.version is deliberately
