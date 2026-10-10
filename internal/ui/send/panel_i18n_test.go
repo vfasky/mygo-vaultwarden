@@ -21,7 +21,7 @@ func TestSendEnglishViewAndDefaultFilename(t *testing.T) {
 	if _, ok := tester.Find("Received Send link"); !ok {
 		t.Fatal("Send link accessibility label was not translated")
 	}
-	if got := sendSaveName(".."); got != "Send File" {
+	if got := sendSaveName(".."); got != "Send file" {
 		t.Fatalf("English fallback filename = %q", got)
 	}
 	if got := sendSaveName("report.txt"); got != "report.txt" {

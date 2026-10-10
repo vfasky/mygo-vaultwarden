@@ -27,7 +27,7 @@ var uriMatches = []struct {
 	value any
 	label string
 }{
-	{nil, "vault.uri.default"}, {json.Number("0"), "vault.uri.base_domain"}, {json.Number("1"), "vault.uri.host"}, {json.Number("2"), "vault.uri.starts_with"}, {json.Number("3"), "vault.uri.exact"}, {json.Number("4"), "vault.uri.regular_expression"}, {json.Number("5"), "vault.uri.never"},
+	{nil, "common.default"}, {json.Number("0"), "vault.uri.base_domain"}, {json.Number("1"), "urimatch.host"}, {json.Number("2"), "vault.uri.starts_with"}, {json.Number("3"), "urimatch.exact"}, {json.Number("4"), "urimatch.regular_expression"}, {json.Number("5"), "vault.uri.never"},
 }
 
 func (a *app) uriMatchPicker(c *ui.Context, u *editorURI, disabled bool) {

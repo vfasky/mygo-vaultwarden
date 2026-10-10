@@ -122,9 +122,9 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 		f := &d.Fields[i]
 		ui.Text(c, f.Label)
 		if f.Kind == "uri" && (f.Value == "2" || f.Value == "4") {
-			label := i18n.T("org.policy.uri_starts_with")
+			label := i18n.T("urimatch.starts_with")
 			if f.Value == "4" {
-				label = i18n.T("org.policy.uri_regex")
+				label = i18n.T("urimatch.regular_expression")
 			}
 			ui.Text(c, i18n.Tf("org.policy.current_uri_rule_hint", label)).MaxLines(3)
 		}
@@ -132,14 +132,14 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 			ui.TextInput(c, &f.Value).Label(i18n.Tf("org.policy.number_range_hint", f.Min, f.Max)).Disabled(disabled || confirming)
 			continue
 		}
-		options := []struct{ value, label string }{{"", i18n.T("org.policy.default_value")}}
+		options := []struct{ value, label string }{{"", i18n.T("common.default")}}
 		switch f.Kind {
 		case "bool":
-			options = append(options, struct{ value, label string }{"true", i18n.T("org.policy.yes")}, struct{ value, label string }{"false", i18n.T("org.policy.no")})
+			options = append(options, struct{ value, label string }{"true", i18n.T("common.yes")}, struct{ value, label string }{"false", i18n.T("common.no")})
 		case "generator":
-			options = append(options, struct{ value, label string }{"password", i18n.T("common.password")}, struct{ value, label string }{"passphrase", i18n.T("org.policy.passphrase")})
+			options = append(options, struct{ value, label string }{"password", i18n.T("common.password")}, struct{ value, label string }{"passphrase", i18n.T("policy.value.passphrase")})
 		case "uri":
-			for n, label := range []string{i18n.T("org.policy.uri_base_domain"), i18n.T("org.policy.uri_host"), i18n.T("org.policy.uri_starts_with"), i18n.T("org.policy.uri_exact"), i18n.T("org.policy.uri_regex"), i18n.T("org.policy.uri_never")} {
+			for n, label := range []string{i18n.T("urimatch.base_domain"), i18n.T("urimatch.host"), i18n.T("urimatch.starts_with"), i18n.T("urimatch.exact"), i18n.T("urimatch.regular_expression"), i18n.T("urimatch.never")} {
 				if n == 2 || n == 4 {
 					continue
 				}

@@ -133,10 +133,10 @@ func (p *OperationsPanel) View(c *ui.Context) {
 	}
 	if p.Confirmation {
 		ui.Text(c, i18n.Tf("org.ops.confirm_selected", len(p.ids())))
-		if kit.Action(c, i18n.T("org.services.confirm_execute"), "", true, p.running).Key("org-operation-confirm").Clicked() {
+		if kit.Action(c, i18n.T("org.services.confirm_submit_request"), "", true, p.running).Key("org-operation-confirm").Clicked() {
 			p.Start()
 		}
-		if kit.Action(c, i18n.T("org.ops.back_select"), "", false, p.running).Key("org-operation-back").Clicked() {
+		if kit.Action(c, i18n.T("org.ops.back_to_selection"), "", false, p.running).Key("org-operation-back").Clicked() {
 			p.Confirmation = false
 		}
 	} else if kit.Action(c, i18n.T("org.ops.review_selected"), "", true, p.running || p.terminal || len(p.ids()) == 0 || p.execute == nil || p.dispatch == nil).Key("org-operation-review").Clicked() {

@@ -114,7 +114,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 						}
 					} else {
 						ui.Text(c, i18n.Tf("backup.import.preview_summary", e.plan.Items, e.plan.Folders, e.plan.Archived, e.plan.Deleted)).MaxLines(3)
-						ui.Text(c, i18n.T("backup.import.confirm_hint")).MaxLines(6)
+						ui.Text(c, i18n.T("backup.import.confirm_create_hint")).MaxLines(6)
 						for _, item := range e.plan.PreviewItems() {
 							label := []string{"", i18n.T("itemtype.login"), i18n.T("itemtype.note"), i18n.T("itemtype.card"), i18n.T("itemtype.identity"), i18n.T("itemtype.ssh_key"), i18n.T("itemtype.bank"), i18n.T("itemtype.license"), i18n.T("itemtype.passport")}[item.Type] + " · " + item.Name
 							if item.Archived {

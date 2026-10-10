@@ -55,7 +55,7 @@ func (a *app) authentication(c *ui.Context) {
 						} else {
 							binding := a.switchReceipt.Binding
 							ui.Text(c, i18n.Tf("login.account_switch.summary", binding.Source.Server, binding.Source.Account, binding.Target.Server, binding.Target.Account)).MaxLines(6)
-							if authPrimary(c, i18n.T("login.account_switch.confirm"), a.pending != 0).Clicked() {
+							if authPrimary(c, i18n.T("login.account_switch.confirm_replace_account"), a.pending != 0).Clicked() {
 								a.runStorage("confirmAccountSwitch")
 							}
 						}
@@ -150,7 +150,7 @@ func (a *app) serverLogin(c *ui.Context) {
 	ready := !busy && a.snapshot != nil && a.deviceID != ""
 	submitted := false
 	ui.Column(c.Key(a.secretInputVersion)).Gap(16).Children(func() {
-		ui.Field(c, i18n.T("login.server_url"), func() {
+		ui.Field(c, i18n.T("common.server_url"), func() {
 			field := ui.TextInput(c, &a.serverURL).Placeholder("https://vault.example.com").
 				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(busy)
 			if a.serverURL == "" {
@@ -179,7 +179,7 @@ func (a *app) serverLogin(c *ui.Context) {
 		}
 		label := i18n.T("login.submit")
 		if busy {
-			label = i18n.T("common.processing")
+			label = i18n.T("common.status_processing")
 		}
 		clicked := authPrimary(c, label, !ready).Clicked()
 		if ready && (clicked || submitted) {
@@ -233,7 +233,7 @@ func (a *app) twoFactorLogin(c *ui.Context) {
 	submitted := false
 	ui.Column(c.Key(a.secretInputVersion)).Gap(16).Children(func() {
 		ui.Text(c, a.email+" · "+websiteHost(a.serverURL)).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center).MaxLines(2)
-		ui.Field(c, i18n.T("login.mfa.code"), func() {
+		ui.Field(c, i18n.T("common.verification_code"), func() {
 			field := ui.TextInput(c, &a.verificationCode).Password().Placeholder(i18n.T("login.mfa.code_placeholder")).
 				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(!ready).AutoFocus()
 			submitted = field.Submitted()
@@ -267,7 +267,7 @@ func (a *app) vaultUnlock(c *ui.Context) {
 		})
 		label := i18n.T("login.unlock.submit")
 		if busy {
-			label = i18n.T("common.processing")
+			label = i18n.T("common.status_processing")
 		}
 		clicked := authPrimary(c, label, busy || !passwordReady).Clicked()
 		if !busy && passwordReady && (clicked || submitted) {
@@ -278,7 +278,7 @@ func (a *app) vaultUnlock(c *ui.Context) {
 			a.runStorage("list")
 		}
 		ui.Text(c, i18n.T("login.unlock.touch_id_hint")).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
-		if authLink(c, i18n.T("login.device.use_another"), busy).Clicked() {
+		if authLink(c, i18n.T("account.device_login.title"), busy).Clicked() {
 			a.openUnlockLogin()
 			a.deviceLoginSetup = true
 		}

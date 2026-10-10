@@ -134,7 +134,7 @@ func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
 	}
 	ui.TextInput(c, &f.password).Label(i18n.T("account.mfa.master_password_hint")).Password().Disabled(f.busy)
 	ui.TextInput(c, &f.otp).Label(i18n.T("account.mfa.sensitive_email_otp")).Password().Disabled(f.busy)
-	labels := map[string]string{"name": i18n.T("account.mfa.security_key_name"), "key": i18n.T("account.mfa.authenticator_key"), "token": i18n.T("account.mfa.verification_code"), "email": i18n.T("account.mfa.recipient_email"), "host": i18n.T("account.mfa.duo_host"), "clientId": i18n.T("account.mfa.duo_client_id"), "clientSecret": i18n.T("account.mfa.duo_client_secret"), "id": i18n.T("account.mfa.security_key_id"), "type": i18n.T("account.mfa.method_id")}
+	labels := map[string]string{"name": i18n.T("account.mfa.security_key_name"), "key": i18n.T("account.mfa.authenticator_key"), "token": i18n.T("common.verification_code"), "email": i18n.T("account.mfa.recipient_email"), "host": i18n.T("account.mfa.duo_host"), "clientId": i18n.T("account.mfa.duo_client_id"), "clientSecret": i18n.T("account.mfa.duo_client_secret"), "id": i18n.T("account.mfa.security_key_id"), "type": i18n.T("account.mfa.method_id")}
 	for _, entry := range authManagementOperations {
 		if entry.op != f.operation {
 			continue

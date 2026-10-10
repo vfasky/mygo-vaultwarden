@@ -77,13 +77,13 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 func (f *orgBusinessFlow) footer(c *ui.Context, key, warning string, ready bool, start func()) {
 	if f.confirm {
 		ui.Text(c, warning)
-		if kit.Action(c, i18n.T("org.services.confirm_execute"), "", true, f.blocked() || !ready).Key(key + "-confirm").Clicked() {
+		if kit.Action(c, i18n.T("org.services.confirm_submit_request"), "", true, f.blocked() || !ready).Key(key + "-confirm").Clicked() {
 			start()
 		}
-		if kit.Action(c, i18n.T("org.services.back_edit"), "", false, f.blocked()).Key(key + "-back").Clicked() {
+		if kit.Action(c, i18n.T("org.services.back_to_edit"), "", false, f.blocked()).Key(key + "-back").Clicked() {
 			f.confirm = false
 		}
-	} else if kit.Action(c, i18n.T("org.services.review_continue"), "", true, f.blocked() || !ready || f.dispatch == nil).Key(key + "-review").Clicked() {
+	} else if kit.Action(c, i18n.T("org.services.review_and_continue"), "", true, f.blocked() || !ready || f.dispatch == nil).Key(key + "-review").Clicked() {
 		f.confirm = true
 	}
 	if f.running && kit.Action(c, i18n.T("org.services.cancel_review"), "", false, false).Key(key+"-cancel").Clicked() {

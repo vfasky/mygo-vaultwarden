@@ -492,7 +492,7 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		ui.Column(uiContext.Key(prompt.challenge)).Gap(10).Children(func() {
 			ui.Text(uiContext, prompt.label).MaxLines(4)
 			ui.TextInput(uiContext, &prompt.password).Label(i18n.T("org.services.authorization_password")).Password()
-			if ui.Button(uiContext, i18n.T("org.services.verify_continue")).Clicked() {
+			if ui.Button(uiContext, i18n.T("org.services.verify_and_continue")).Clicked() {
 				prompt.challenge.submit([]byte(prompt.password))
 				prompt.password = ""
 				c.prompt = nil
@@ -506,10 +506,10 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		return
 	}
 	ui.Text(uiContext, i18n.T("org.services.title")).FontSize(22)
-	if ui.Button(uiContext, i18n.T("org.services.emergency_contacts")).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("account.emergency.show_trusted_contacts")).Disabled(c.owner.pending != 0).Clicked() {
 		c.loadEmergency(true)
 	}
-	if ui.Button(uiContext, i18n.T("org.services.emergency_grants")).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("account.emergency.show_granted_access")).Disabled(c.owner.pending != 0).Clicked() {
 		c.loadEmergency(false)
 	}
 	if ui.Button(uiContext, i18n.T("org.services.account_recovery")).Disabled(c.owner.pending != 0 || len(c.organizations) == 0).Clicked() {
@@ -518,7 +518,7 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	if !c.emergencyTrusted {
 		for _, contact := range c.emergencyContacts {
 			if vaultwarden.EmergencyActionAllowed(contact, false, "view") {
-				if ui.Button(uiContext, i18n.Tf("org.services.view_contact", contact.Name, contact.Email)).Disabled(c.owner.pending != 0).Clicked() {
+				if ui.Button(uiContext, i18n.Tf("account.emergency.view_contact", contact.Name, contact.Email)).Disabled(c.owner.pending != 0).Clicked() {
 					c.openEmergencyView(contact)
 				}
 			}
@@ -548,7 +548,7 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		}
 	}
 	ui.Row(uiContext).Wrap().Gap(6).Children(func() {
-		for _, action := range []struct{ id, label string }{{"state", i18n.T("org.ops.open")}, {"copy", i18n.T("org.transfer.copy_open")}, {"collections", i18n.T("org.transfer.assign_collections")}, {"export", i18n.T("org.transfer.export_open")}, {"events", i18n.T("org.events.title")}, {"cipher-events", i18n.T("org.events.selected_item")}, {"api-key", i18n.T("org.apikey.title")}, {"directory", i18n.T("org.directory.title")}} {
+		for _, action := range []struct{ id, label string }{{"state", i18n.T("org.ops.open")}, {"copy", i18n.T("org.transfer.open_copy")}, {"collections", i18n.T("org.transfer.assign_collections")}, {"export", i18n.T("org.transfer.open_export")}, {"events", i18n.T("org.events.title")}, {"cipher-events", i18n.T("org.events.selected_item")}, {"api-key", i18n.T("org.apikey.title")}, {"directory", i18n.T("org.directory.title")}} {
 			disabled := c.owner.pending != 0 || c.selectedOrg == "" || ((action.id == "copy" || action.id == "collections" || action.id == "cipher-events") && c.selectedItem == "")
 			if ui.Button(uiContext, action.label).Disabled(disabled).Clicked() {
 				c.selectAction(action.id)

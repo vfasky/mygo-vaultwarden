@@ -55,7 +55,7 @@ func (s *Session) WithCipherComparisonRows(vault *VaultData, revision string, pl
 			value := CipherRowPreview{Index: i}
 			known := map[string]bool{"name": true, "value": true, "type": true, "linkedId": true}
 			if path == "login.uris" {
-				value.Name = i18n.T("server.rebase.uri")
+				value.Name = i18n.T("vault.field.uri")
 				value.Value, _ = row["uri"].(string)
 				value.Metadata = i18n.Tf("server.rebase.match_rule", row["match"])
 				known = map[string]bool{"uri": true, "match": true, "uriChecksum": true}

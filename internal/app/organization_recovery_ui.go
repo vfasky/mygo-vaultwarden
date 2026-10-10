@@ -21,7 +21,7 @@ func (a *app) organizationRecoveryKeyView(c *ui.Context, e *organizationEditor, 
 				e.confirmation = "recovery-key-create"
 			}
 		} else {
-			ui.Text(c, i18n.T("org.recovery.initialize_hint")).MaxLines(6)
+			ui.Text(c, i18n.T("org.recovery.confirm_initialize_hint")).MaxLines(6)
 			if kit.Action(c, i18n.T("org.recovery.confirm_initialize"), "", true, disabled).Key("organization-recovery-key-confirm").Clicked() {
 				a.runOrganizationManagement("recovery-key-create")
 			}

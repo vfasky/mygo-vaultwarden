@@ -50,9 +50,9 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 		}
 		for i := range draft.Access {
 			entry := &draft.Access[i]
-			label := i18n.Tf("org.member.label_member", entry.Label)
+			label := i18n.Tf("org.member.member_label", entry.Label)
 			if entry.Group {
-				label = i18n.Tf("org.group.label_group", entry.Label)
+				label = i18n.Tf("org.group.group_label", entry.Label)
 			}
 			ui.Text(c, label).MaxLines(2)
 			assigned := i18n.T("org.collection.allow_access")
@@ -106,7 +106,7 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 				e.confirmation = "collection-delete"
 			}
 		} else {
-			ui.Text(c, i18n.T("org.collection.delete_hint")).MaxLines(4)
+			ui.Text(c, i18n.T("org.collection.confirm_delete_hint")).MaxLines(4)
 			if kit.Action(c, i18n.T("org.collection.confirm_delete"), "", true, disabled).Key("collection-delete-confirm").Clicked() {
 				a.runOrganizationManagement("collection-delete")
 			}
