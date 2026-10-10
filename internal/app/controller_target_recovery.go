@@ -104,7 +104,7 @@ func (p *targetRecoveryController) inspect() {
 	p.generation++
 	if !strings.Contains(email, "@") {
 		clear(password)
-		p.status = i18n.T("请输入目标本人的登录邮箱。")
+		p.status = i18n.T("crossaccount.recovery.err_email_required")
 		return
 	}
 	if p.cancel != nil {
@@ -174,7 +174,7 @@ func (p *targetRecoveryController) inspect() {
 				if workspace != nil {
 					go workspace.close()
 				}
-				p.status = i18n.Tf("重新认证或读取核验事实失败，屏障保留：%s", err.Error())
+				p.status = i18n.Tf("crossaccount.recovery.err_inspection_failed", err.Error())
 				return
 			}
 			p.workspace = workspace
@@ -185,7 +185,7 @@ func (p *targetRecoveryController) inspect() {
 			}
 			p.records = reply.TargetRecords
 			p.server, p.email = server, email
-			p.status = i18n.T("已完成本人全新认证和实际状态读取；请选择具体操作确认核验。未启用普通库或AutoFill。")
+			p.status = i18n.T("crossaccount.recovery.status_inspected")
 		})
 	}()
 }
@@ -263,7 +263,7 @@ func (p *targetRecoveryController) verify(index int) {
 						adopted = err == nil
 					}
 				} else {
-					notes = append(notes, i18n.T("全部当前目标记录已核验；尚未替换原本机账号。请明确确认下方旧/新账号及影响后再次选择记录。"))
+					notes = append(notes, i18n.T("crossaccount.recovery.status_replace_confirmation_required"))
 				}
 			case reply.State.Scope != nil:
 				reply, err = adapter.ResolveVerifiedWithLocalAuthentication(fresh, targetStorageEvidence(evidence))
@@ -273,7 +273,7 @@ func (p *targetRecoveryController) verify(index int) {
 				adopted = err == nil
 			}
 		} else if err == nil {
-			notes = append(notes, i18n.T("此操作已核验；其它目标记录仍须逐项以本次材料核验，整体屏障继续保留。"))
+			notes = append(notes, i18n.T("crossaccount.recovery.status_partially_verified"))
 		}
 		if err != nil {
 			status := p.storage(localstore.Request{Operation: "status"})
@@ -293,13 +293,13 @@ func (p *targetRecoveryController) verify(index int) {
 				a.snapshot = reply.State
 			}
 			if err != nil {
-				p.status = i18n.Tf("未解除屏障；不重放原操作：%s", err.Error())
+				p.status = i18n.Tf("crossaccount.recovery.err_barrier_retained", err.Error())
 				if reply.State != nil && reply.State.AccountSwitchPending {
 					p.workspace = nil
 					go workspace.close()
 					a.targetRecovery = nil
 					p.Close()
-					a.status = i18n.T("账号替换回执尚未确认，请通过系统认证检查同一切换，不重试或回滚。")
+					a.status = i18n.T("crossaccount.recovery.status_switch_pending")
 				}
 				return
 			}
@@ -351,7 +351,7 @@ func (p *targetRecoveryController) verify(index int) {
 			workspace.inspection.Close()
 			a.showLogin = false
 			a.category = "all"
-			a.status = i18n.T("目标恢复记录已通过专用认证发布；既有本机保护已合并。")
+			a.status = i18n.T("crossaccount.recovery.status_published")
 			a.startNotifications(p.dispatch, p.storage)
 		})
 	}()
@@ -360,36 +360,36 @@ func (p *targetRecoveryController) View(c *ui.Context) {
 	if p.closed {
 		return
 	}
-	ui.Text(c, i18n.T("目标本人重新认证与恢复核验")).FontSize(20)
-	ui.Text(c, i18n.T("不会复用旧会话、重发恢复请求或清除其它账号记录。密码与MFA须属于目标本人。")).MaxLines(4)
-	ui.TextInput(c, &p.server).Label(i18n.T("目标服务器")).Disabled(p.running)
-	ui.TextInput(c, &p.email).Label(i18n.T("目标当前邮箱")).Disabled(p.running)
+	ui.Text(c, i18n.T("crossaccount.recovery.title")).FontSize(20)
+	ui.Text(c, i18n.T("crossaccount.recovery.authentication_hint")).MaxLines(4)
+	ui.TextInput(c, &p.server).Label(i18n.T("crossaccount.recovery.server")).Disabled(p.running)
+	ui.TextInput(c, &p.email).Label(i18n.T("crossaccount.recovery.email")).Disabled(p.running)
 	ui.Column(c.Key(fmt.Sprintf("target-password-%d", p.generation))).Children(func() {
-		ui.TextInput(c, &p.password).Label(i18n.T("目标当前主密码")).Password().Disabled(p.running)
+		ui.TextInput(c, &p.password).Label(i18n.T("crossaccount.recovery.master_password")).Password().Disabled(p.running)
 	})
-	if ui.Button(c, i18n.T("全新登录并读取待核验记录")).Disabled(p.running || p.password == "").Clicked() {
+	if ui.Button(c, i18n.T("crossaccount.recovery.login_inspect")).Disabled(p.running || p.password == "").Clicked() {
 		p.inspect()
 	}
 	if p.workspace != nil && p.source != nil && p.source.Scope != nil && *p.source.Scope != p.workspace.inspection.Fresh.Scope {
 		old, new := *p.source.Scope, p.workspace.inspection.Fresh.Scope
-		ui.Text(c, i18n.Tf("原本机账号：%s / %s\n核验目标：%s / %s\n确认后将系统认证并原子保存目标；成功确认前保留旧密文与密钥。旧账号有未决保护时拒绝替换。", old.Server, old.Account, new.Server, new.Account)).MaxLines(10)
-		label := i18n.T("明确同意替换原本机账号并保存核验目标")
+		ui.Text(c, i18n.Tf("crossaccount.recovery.confirm_replace_hint", old.Server, old.Account, new.Server, new.Account)).MaxLines(10)
+		label := i18n.T("crossaccount.recovery.confirm_replace")
 		if p.replaceForeign {
-			label = i18n.T("已同意替换（点击撤回）")
+			label = i18n.T("crossaccount.recovery.revoke_replace")
 		}
 		if ui.Button(c, label).Disabled(p.running).Clicked() {
 			p.replaceForeign = !p.replaceForeign
 		}
 	}
 	for index, record := range p.records {
-		ui.Text(c, i18n.Tf("操作 %s · %s\n目标：%s / %s", record.Binding.OperationID, record.Phase, record.Binding.Target.Server, record.Binding.Target.Account)).MaxLines(5)
+		ui.Text(c, i18n.Tf("crossaccount.recovery.operation_summary", record.Binding.OperationID, record.Phase, record.Binding.Target.Server, record.Binding.Target.Account)).MaxLines(5)
 		candidate := p.workspace != nil && record.RequireTargetLogin && record.Binding.Target == p.workspace.inspection.Fresh.Scope && record.Phase != "resolved"
-		if ui.Button(c, i18n.Tf("确认核验并仅解除此目标操作 %s", record.Binding.OperationID)).Disabled(p.running || !candidate).Clicked() {
+		if ui.Button(c, i18n.Tf("crossaccount.recovery.confirm_verify", record.Binding.OperationID)).Disabled(p.running || !candidate).Clicked() {
 			p.verify(index)
 		}
 	}
 	ui.Text(c, p.status).MaxLines(20)
-	if ui.Button(c, i18n.T("结束核验并保留未决记录")).Clicked() {
+	if ui.Button(c, i18n.T("crossaccount.recovery.finish")).Clicked() {
 		p.owner.stopNetwork()
 	}
 }

@@ -81,7 +81,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(localstore.Reques
 					} else {
 						// Refresh has revoked Send drafts. Never assign a new revision to them.
 						a.advanceEpoch()
-						a.status = i18n.T("登录凭据已更新，请重新打开 Send。")
+						a.status = i18n.T("send.panel.status_credentials_updated")
 					}
 				}
 			}
