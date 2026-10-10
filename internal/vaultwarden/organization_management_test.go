@@ -157,12 +157,18 @@ func TestOrganizationManagementOwnerUpdateIdentityAndPasswordDelete(t *testing.T
 	if _, err := s.SaveOrganization(context.Background(), vault, "org-1", OrganizationSettings{Name: "new name", BillingEmail: "owner@example.invalid"}, nil); err != nil {
 		t.Fatal(err)
 	}
+	s.passwordUnlock.Config.KDF.Iterations = 100000
 	master, err := vaultcrypto.DeriveMaster([]byte("master"), s.passwordUnlock.Config.Email, s.passwordUnlock.Config.KDF)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clear(master)
 	expectedHash = vaultcrypto.AuthorizationHash(master, []byte("master"))
+	s.passwordUnlock.Config.KDF.Iterations = 5000
+	if err := s.DeleteOrganization(context.Background(), vault, "org-1", []byte("master"), func(SessionCheckpoint) error { isolated = true; return nil }, nil); err != ErrWeakKDF || len(methods) != 2 {
+		t.Fatalf("weak proof must not reach server: %v, methods=%v", err, methods)
+	}
+	s.passwordUnlock.Config.KDF.Iterations = 100000
 	if err := s.DeleteOrganization(context.Background(), vault, "org-1", []byte("master"), func(SessionCheckpoint) error { isolated = true; return nil }, nil); err != nil {
 		t.Fatal(err)
 	}

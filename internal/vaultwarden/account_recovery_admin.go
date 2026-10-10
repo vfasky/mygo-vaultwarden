@@ -52,14 +52,14 @@ func recoveryPasswordPayload(ctx context.Context, password []byte, email string,
 	if err != nil || normalized != email {
 		return "", "", ErrIdentity
 	}
-	// Keep the target's actual KDF, including supported legacy iteration counts.
+	// Keep the target's actual KDF, but never create an online weak password proof.
 	if policy.MinLength < 12 {
 		policy.MinLength = 12
 	}
 	if err = policy.Check(ctx, password, email, false); err != nil {
 		return "", "", err
 	}
-	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, email, kdf)
 	if err != nil {
 		return "", "", err
 	}

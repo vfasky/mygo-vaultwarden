@@ -36,7 +36,7 @@ func TestOfficialHKDFVector(t *testing.T) {
 	}
 }
 func TestKDFRejectsUnsafeParameters(t *testing.T) {
-	for _, kdf := range []KDF{{Type: 2, Iterations: 600000}, {Type: 0, Iterations: 1}, {Type: 0, Iterations: 2000001}, {Type: 1, Iterations: 1, Memory: 32, Parallelism: 4}, {Type: 1, Iterations: 3, Memory: 257, Parallelism: 4}, {Type: 1, Iterations: 3, Memory: 64, Parallelism: 256}} {
+	for _, kdf := range []KDF{{Type: 2, Iterations: 600000}, {Type: 0, Iterations: 1}, {Type: 0, Iterations: 2000001}, {Type: 1, Iterations: 1, Memory: 32, Parallelism: 4}, {Type: 1, Iterations: 3, Memory: 1025, Parallelism: 4}, {Type: 1, Iterations: 3, Memory: 64, Parallelism: 256}} {
 		if _, err := DeriveMaster([]byte("password"), "test@example.invalid", kdf); err != vaulterr.ErrKDF {
 			t.Fatalf("unbounded KDF accepted: %+v", kdf)
 		}

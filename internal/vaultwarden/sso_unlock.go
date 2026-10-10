@@ -33,7 +33,7 @@ func (c *Client) UnlockSSOVault(ctx context.Context, raw json.RawMessage, email 
 	if json.Unmarshal(data, &kdf) != nil {
 		return nil, ErrProtocol
 	}
-	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, email, kdf)
 	if err != nil {
 		return nil, err
 	}

@@ -160,13 +160,13 @@ func (c *Client) Login(ctx context.Context, email string, password []byte, promp
 		return nil, err
 	}
 	if status != 200 {
-		return nil, ErrProtocol
+		return nil, statusError(status)
 	}
 	var kdf vaultcrypto.KDF
 	if json.Unmarshal(data, &kdf) != nil {
 		return nil, ErrProtocol
 	}
-	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, email, kdf)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +213,7 @@ func (c *Client) Login(ctx context.Context, email string, password []byte, promp
 				passwordUnlock: &PasswordUnlock{Config: PasswordUnlockConfig{Email: email, KDF: kdf}, Key: unlockKey}}, nil
 		}
 		if status != 400 && status != 401 {
-			return nil, ErrNetwork
+			return nil, statusError(status)
 		}
 		var challenge struct {
 			Providers []json.RawMessage          `json:"twoFactorProviders"`
@@ -276,6 +276,11 @@ func (c *Client) Login(ctx context.Context, email string, password []byte, promp
 }
 
 type Session struct {
+	// mu deliberately serializes network I/O with token refresh, key changes,
+	// authorization epochs and checkpoint publication. Releasing it around I/O
+	// would allow responses to commit against stale security state. The cost is
+	// serialized session operations; operationMu lets Close cancel an in-flight
+	// request before waiting for mu, without weakening this ordering.
 	mu                                       sync.Mutex
 	client                                   *Client
 	email, account, wrapped, access, refresh string

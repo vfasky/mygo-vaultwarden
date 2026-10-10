@@ -209,7 +209,7 @@ func (s *Session) PrepareAccountCredentials(ctx context.Context, vault *VaultDat
 	if _, err = s.accountProfileLocked(ctx, "GET", "/api/accounts/profile", nil, persist); err != nil {
 		return nil, err
 	}
-	master, err := vaultcrypto.DeriveMaster(newPassword, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(newPassword, email, kdf)
 	if err != nil {
 		return nil, err
 	}

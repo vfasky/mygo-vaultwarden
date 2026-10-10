@@ -43,7 +43,7 @@ type deviceLoginFixture struct {
 func newDeviceLoginFixture(t *testing.T) (*deviceLoginFixture, *Client, Scope) {
 	t.Helper()
 	key := bytes.Repeat([]byte{19}, 64)
-	master, _ := vaultcrypto.DeriveMaster([]byte("fixture-password"), "fixture@example.invalid", vaultcrypto.KDF{Iterations: 5000})
+	master, _ := vaultcrypto.DeriveMaster([]byte("fixture-password"), "fixture@example.invalid", vaultcrypto.KDF{Iterations: 100000})
 	defer clear(master)
 	stretched, _ := vaultcrypto.StretchMaster(master)
 	defer clear(stretched)
@@ -122,7 +122,7 @@ func newDeviceLoginFixture(t *testing.T) (*deviceLoginFixture, *Client, Scope) {
 			if f.preloginHook != nil {
 				f.preloginHook()
 			}
-			fmt.Fprint(w, `{"kdf":0,"kdfIterations":5000}`)
+			fmt.Fprint(w, `{"kdf":0,"kdfIterations":100000}`)
 		default:
 			w.WriteHeader(404)
 		}

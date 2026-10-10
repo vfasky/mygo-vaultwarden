@@ -37,6 +37,7 @@ func TestOrgAPIKeyOwnerConsentAndSecretLifetime(t *testing.T) {
 	source, _, _ := protectedItemFixture(t, server.URL)
 	defer source.Close()
 	s.passwordUnlock = &PasswordUnlock{Config: source.passwordUnlock.Config, Key: append([]byte(nil), source.passwordUnlock.Key...)}
+	s.passwordUnlock.Config.KDF.Iterations = 100000
 	password := []byte("test-master")
 	master, err := vaultcrypto.DeriveMaster(password, s.passwordUnlock.Config.Email, s.passwordUnlock.Config.KDF)
 	if err != nil {
@@ -82,5 +83,9 @@ func TestOrgAPIKeyOwnerConsentAndSecretLifetime(t *testing.T) {
 	}
 	if calls.Load() != 2 {
 		t.Fatal(calls.Load())
+	}
+	s.passwordUnlock.Config.KDF.Iterations = 5000
+	if err := s.WithOrganizationAPIKey(context.Background(), v, "org-1", password, false, true, consume, nil); err != ErrWeakKDF || calls.Load() != 2 {
+		t.Fatalf("weak proof must not reach server: %v, calls=%d", err, calls.Load())
 	}
 }

@@ -39,13 +39,13 @@ func (c *Client) LoginMFA(ctx context.Context, email string, password []byte, re
 		return MFALoginResult{}, err
 	}
 	if status != 200 {
-		return MFALoginResult{}, ErrProtocol
+		return MFALoginResult{}, statusError(status)
 	}
 	var kdf vaultcrypto.KDF
 	if json.Unmarshal(data, &kdf) != nil {
 		return MFALoginResult{}, ErrProtocol
 	}
-	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, email, kdf)
 	if err != nil {
 		return MFALoginResult{}, err
 	}

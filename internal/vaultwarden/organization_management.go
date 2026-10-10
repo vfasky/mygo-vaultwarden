@@ -236,7 +236,7 @@ func (s *Session) removeOrganization(ctx context.Context, vault *VaultData, orgI
 			return ErrPermission
 		}
 		config := s.passwordUnlock.Config
-		master, err := vaultcrypto.DeriveMaster(password, config.Email, config.KDF)
+		master, err := vaultcrypto.DeriveOnlineMaster(password, config.Email, config.KDF)
 		if err != nil {
 			return err
 		}
