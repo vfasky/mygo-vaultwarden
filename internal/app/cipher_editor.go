@@ -108,6 +108,9 @@ func sectionFields(f *vaultwarden.CipherFields) map[string]any {
 	return nil
 }
 func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
+	if a.session != nil {
+		a.idleLock.start()
+	}
 	a.clearOrganizationEditor()
 	organizationPrompt := a.editor != nil && a.organizationItem(a.editor.repromptID)
 	a.vault = nil

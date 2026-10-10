@@ -3,32 +3,97 @@ package app
 
 import (
 	"context"
+	"sync/atomic"
+
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
-	"sync/atomic"
 )
+
+// notificationSession exposes only the capability needed to subscribe. The
+// controller owns stream installation, cancellation and checkpoint persistence;
+// it has no access to the app or its editors/navigation/authentication state.
+type notificationSession interface {
+	StartNotifications(context.Context, vaultwarden.Scope, func(vaultwarden.SessionCheckpoint) error, vaultwarden.NotificationCallback) (*vaultwarden.NotificationStream, error)
+}
 
 // Notification lifetime is tied to a Session, not a navigation page. A separate
 // immutable clock keeps read hints alive across same-session snapshot revisions.
-// The lease revision still advances only after authenticated receipts.
 type controllerNotifications struct {
 	clock  atomic.Uint64
 	lease  *controllerLease
 	cancel context.CancelFunc
 	stream *vaultwarden.NotificationStream
+	closed bool // UI thread only
 }
 
 func (n *controllerNotifications) close() {
-	if n == nil {
+	if n == nil || n.closed {
 		return
 	}
+	n.closed = true
 	n.lease.revoke()
 	n.cancel()
-	if n.stream != nil {
-		n.stream.Stop()
-		go n.stream.Wait()
+	stopNotificationStream(n.stream)
+}
+
+func stopNotificationStream(stream *vaultwarden.NotificationStream) {
+	if stream != nil {
+		stream.Stop()
+		go stream.Wait()
 	}
 }
+
+func (n *controllerNotifications) refresh(revision, snapshotID string) bool {
+	if n.closed || n.stream == nil || n.stream.Err() != nil {
+		return false
+	}
+	n.lease.mu.Lock()
+	n.lease.revision, n.lease.snapshotID = revision, snapshotID
+	n.lease.mu.Unlock()
+	return true
+}
+
+func newControllerNotifications(scope vaultwarden.Scope, revision, snapshotID string) *controllerNotifications {
+	n := &controllerNotifications{}
+	n.lease = &controllerLease{clock: &n.clock, scope: scope, revision: revision, snapshotID: snapshotID, active: true}
+	return n
+}
+
+func (n *controllerNotifications) start(session notificationSession, dispatch func(func()), storage func(localstore.Request) localstore.Reply, event func(vaultwarden.NotificationEvent, *localstore.SnapshotStatus)) {
+	ctx, cancel := context.WithCancel(context.Background())
+	n.cancel = cancel
+	scope := n.lease.scope
+	// Session may be busy: subscription and persistence stay on the worker.
+	go func() {
+		stream, err := session.StartNotifications(ctx, scope,
+			func(cp vaultwarden.SessionCheckpoint) error { return n.lease.persist(cp, storage) },
+			func(ctx context.Context, hint vaultwarden.NotificationEvent) error {
+				if ctx.Err() != nil {
+					return vaultwarden.ErrCancelled
+				}
+				dispatch(func() {
+					if !n.closed {
+						event(hint, n.lease.takeCheckpoint())
+					}
+				})
+				return nil
+			})
+		dispatch(func() {
+			if n.closed || ctx.Err() != nil {
+				stopNotificationStream(stream)
+				return
+			}
+			if err != nil {
+				n.close()
+				stopNotificationStream(stream)
+				return
+			}
+			n.stream = stream
+		})
+	}()
+}
+
+// The app only assembles the capability and applies events to its current view.
 func (a *app) startNotifications(dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if !a.notificationsEnabled || !a.sessionOwnsSnapshot() {
 		return
@@ -38,67 +103,34 @@ func (a *app) startNotifications(dispatch func(func()), storage func(localstore.
 		return
 	}
 	if n := a.notifications; n != nil {
-		if n.stream != nil && n.stream.Err() == nil {
-			n.lease.mu.Lock()
-			n.lease.revision = a.sessionRevision
-			n.lease.snapshotID = a.snapshot.SnapshotID
-			n.lease.mu.Unlock()
+		if n.refresh(a.sessionRevision, a.snapshot.SnapshotID) {
 			return
 		}
 		n.close()
-		a.notifications = nil
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	n := &controllerNotifications{cancel: cancel}
 	scope := *a.liveScope
-	n.lease = &controllerLease{clock: &n.clock, scope: scope, revision: a.sessionRevision, snapshotID: a.snapshot.SnapshotID, active: true}
+	n := newControllerNotifications(scope, a.sessionRevision, a.snapshot.SnapshotID)
 	a.notifications = n
-	// StartNotifications briefly takes Session.mu; perform it on a worker so UI
-	// never waits for an in-flight request. Installation is also scope checked.
-	go func() {
-		stream, err := session.StartNotifications(ctx, scope, func(cp vaultwarden.SessionCheckpoint) error { return n.lease.persist(cp, storage) }, func(ctx context.Context, event vaultwarden.NotificationEvent) error {
-			if ctx.Err() != nil {
-				return vaultwarden.ErrCancelled
-			}
-			dispatch(func() {
-				if a.notifications != n || a.session != session || a.liveScope == nil || *a.liveScope != scope {
-					return
-				}
-				if checkpoint := n.lease.takeCheckpoint(); checkpoint != nil {
-					if !a.adoptSessionCheckpoint(checkpoint) {
-						a.stopNetwork()
-						a.status = vaultwarden.ErrIdentity.Error()
-						return
-					}
-					a.advanceEpoch()
-				}
-				if event.Kind == vaultwarden.NotificationLogout {
-					a.runStorage("logout")
-					return
-				}
-				// Events contain hints only. Coalesce while a normal request is running.
-				if a.pending != 0 {
-					a.notificationSyncPending = true
-					return
-				}
-				a.syncVaultWith(false, dispatch, storage)
-			})
-			return nil
-		})
-		dispatch(func() {
-			if a.notifications != n || ctx.Err() != nil {
-				if stream != nil {
-					stream.Stop()
-					go stream.Wait()
-				}
+	n.start(session, dispatch, storage, func(event vaultwarden.NotificationEvent, checkpoint *localstore.SnapshotStatus) {
+		if a.notifications != n || a.session != session || a.liveScope == nil || *a.liveScope != scope {
+			return
+		}
+		if checkpoint != nil {
+			if !a.adoptSessionCheckpoint(checkpoint) {
+				a.stopNetwork()
+				a.status = vaultwarden.ErrIdentity.Error()
 				return
 			}
-			if err != nil {
-				n.close()
-				a.notifications = nil
-				return
-			}
-			n.stream = stream
-		})
-	}()
+			a.advanceEpoch()
+		}
+		if event.Kind == vaultwarden.NotificationLogout {
+			a.runStorage("logout")
+			return
+		}
+		if a.pending != 0 {
+			a.notificationSyncPending = true
+			return
+		}
+		a.syncVaultWith(false, dispatch, storage)
+	})
 }

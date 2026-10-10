@@ -67,6 +67,7 @@ func (a *app) syncFailed(reply localstore.Reply, err error) {
 }
 
 func (a *app) stopNetwork() {
+	a.idleLock.stop()
 	a.runtimeReplaceConfirmed = false
 	a.switchReceipt = nil
 	// Invalidate worker leases before native cleanup or any Session close.

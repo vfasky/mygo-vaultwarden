@@ -65,6 +65,7 @@ type app struct {
 	mfaWarnings                               mfaRecoveryWarnings
 	targetOutcomeWarnings                     map[vaultwarden.Scope]string
 	loginSSO                                  bool
+	idleLock                                  *idleLockController
 	notificationsEnabled                      bool
 	notifications                             *controllerNotifications
 	notificationSyncPending                   bool
@@ -182,7 +183,8 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 		}
 		a.itemsRevision = reply.State.Revision
 		a.showSettings, a.showLogin = false, false
-		a.startNotifications(a.window.Update, localstore.Call)
+		a.idleLock.start()
+		a.startNotifications(a.dispatchUI, a.storageCall)
 		return
 	}
 	switch request.Operation {
@@ -232,6 +234,10 @@ func Run() {
 		// title bar exactly as tall as their row, centered on them, so the
 		// sidebar toggle and toolbar can center on c.TitleBar().Height.
 		a.window = mygo.NewWindow(mygo.WindowOptions{Title: "MyGo Vaultwarden", Width: 1280, Height: 820, MinWidth: 1060, MinHeight: 700, StateKey: "main", TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 18, Y: 18}, Content: ui.View(a.view)})
+		a.idleLock = &idleLockController{
+			now: time.Now, idle: mygo.Power.IdleTime, after: idleAfter,
+			dispatch: a.dispatchUI, lock: func() { a.runStorage("lock") },
+		}
 		a.runStorage("settings")
 		mygo.Power.OnLockScreen(func() { a.window.Update(func() { a.runStorage("lock") }) })
 		mygo.Power.OnSuspend(func() { a.window.Update(func() { a.runStorage("lock") }) })
