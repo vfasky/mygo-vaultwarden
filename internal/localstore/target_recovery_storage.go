@@ -121,7 +121,7 @@ func (s *TargetRecoveryStorage) Close() {
 func (s *TargetRecoveryStorage) active() bool {
 	return (len(s.key) == 32 || s.runtime != nil) && s.currentEpoch() != 0 && s.currentEpoch() == s.epoch
 }
-func (s *TargetRecoveryStorage) request(operation string) Request {
+func (s *TargetRecoveryStorage) request(operation Operation) Request {
 	scope := s.scope
 	req := Request{Operation: operation, Scope: &scope, ExpectedRevision: s.revision, UnlockKey: s.key, TargetBinding: s.binding}
 	req.TargetRuntime = s.runtime
@@ -166,20 +166,20 @@ func (s *TargetRecoveryStorage) receive(req Request) (Reply, error) {
 	if !reply.OK {
 		return reply, reply.Failure()
 	}
-	if reply.State == nil || (s.login == nil && s.runtime == nil && (reply.State.Scope == nil || *reply.State.Scope != s.scope)) || (!reply.State.TargetRecoveryPresent && req.Operation != "targetRecoveryPending") || reply.State.Revision == "" {
+	if reply.State == nil || (s.login == nil && s.runtime == nil && (reply.State.Scope == nil || *reply.State.Scope != s.scope)) || (!reply.State.TargetRecoveryPresent && req.Operation != OperationTargetRecoveryPending) || reply.State.Revision == "" {
 		return Reply{}, ErrTargetRecovery
 	}
-	query := req.Operation == "targetRecoveryQuery" || req.Operation == "targetRecoveryPending" || req.Operation == "targetRecoveryInspectLocal"
+	query := req.Operation == OperationTargetRecoveryQuery || req.Operation == OperationTargetRecoveryPending || req.Operation == OperationTargetRecoveryInspectLocal
 	if query && reply.State.Revision != s.revision {
 		return Reply{}, ErrTargetRecovery
 	}
 	if !query && reply.State.Revision == s.revision {
 		return Reply{}, ErrTargetRecovery
 	}
-	if req.Operation == "targetRecoveryBegin" && s.runtime == nil && !reply.State.Available {
+	if req.Operation == OperationTargetRecoveryBegin && s.runtime == nil && !reply.State.Available {
 		return Reply{}, ErrTargetRecovery
 	}
-	if (req.Operation == "targetRecoveryResolve" || req.Operation == "targetRecoveryResolveLocal") && (!reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != req.TargetResolution.Target) {
+	if (req.Operation == OperationTargetRecoveryResolve || req.Operation == OperationTargetRecoveryResolveLocal) && (!reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != req.TargetResolution.Target) {
 		return Reply{}, ErrTargetRecovery
 	}
 	if len(reply.TargetRecords) > 1024 {
@@ -192,32 +192,32 @@ func (s *TargetRecoveryStorage) receive(req Request) (Reply, error) {
 		}
 		seen[record.Binding.OperationID] = true
 	}
-	if req.Operation != "targetRecoveryPending" {
+	if req.Operation != OperationTargetRecoveryPending {
 		if len(reply.TargetRecords) != 1 || req.TargetBinding == nil || reply.TargetRecords[0].Binding != *req.TargetBinding {
 			return Reply{}, ErrTargetRecovery
 		}
 		r := reply.TargetRecords[0]
-		if req.Operation == "targetRecoveryBegin" {
+		if req.Operation == OperationTargetRecoveryBegin {
 			local := r.RequireTargetLogin && s.localScope != nil && r.Binding.Target == *s.localScope
 			if s.runtime == nil && ((local && (reply.State.SnapshotID == s.snapshotID || reply.State.Count != 0)) || (!local && reply.State.SnapshotID != s.snapshotID)) {
 				return Reply{}, ErrTargetRecovery
 			}
 		}
-		if req.Operation == "targetRecoveryBegin" && (r.Phase != "prepared" || !bytes.Equal(r.Summary, req.TargetSummary) || r.NoLocalTarget != (s.localScope == nil || r.Binding.Target != *s.localScope) || reply.State.Revision == req.ExpectedRevision) {
+		if req.Operation == OperationTargetRecoveryBegin && (r.Phase != "prepared" || !bytes.Equal(r.Summary, req.TargetSummary) || r.NoLocalTarget != (s.localScope == nil || r.Binding.Target != *s.localScope) || reply.State.Revision == req.ExpectedRevision) {
 			return Reply{}, ErrTargetRecovery
 		}
-		if req.Operation == "targetRecoveryVerify" || req.Operation == "targetRecoveryResolve" || req.Operation == "targetRecoveryResolveLocal" {
+		if req.Operation == OperationTargetRecoveryVerify || req.Operation == OperationTargetRecoveryResolve || req.Operation == OperationTargetRecoveryResolveLocal {
 			if r.Verification == nil || req.TargetResolution == nil || *r.Verification != *req.TargetResolution {
 				return Reply{}, ErrTargetRecovery
 			}
 		}
-		if req.Operation == "targetRecoveryResult" && r.Phase != req.TargetPhase {
+		if req.Operation == OperationTargetRecoveryResult && r.Phase != req.TargetPhase {
 			return Reply{}, ErrTargetRecovery
 		}
-		if req.Operation == "targetRecoveryVerify" && (r.Phase != "verified" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash) {
+		if req.Operation == OperationTargetRecoveryVerify && (r.Phase != "verified" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash) {
 			return Reply{}, ErrTargetRecovery
 		}
-		if (req.Operation == "targetRecoveryResolve" || req.Operation == "targetRecoveryResolveLocal") && (r.Phase != "resolved" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash || reply.Vault == nil || TargetRecoveryHash(reply.Vault.Sync) != req.TargetResolution.VaultHash) {
+		if (req.Operation == OperationTargetRecoveryResolve || req.Operation == OperationTargetRecoveryResolveLocal) && (r.Phase != "resolved" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash || reply.Vault == nil || TargetRecoveryHash(reply.Vault.Sync) != req.TargetResolution.VaultHash) {
 			return Reply{}, ErrTargetRecovery
 		}
 	}
@@ -245,7 +245,7 @@ func (s *TargetRecoveryStorage) Begin(d vaultwarden.RecoveryDispatch) error {
 	// Keep the exact binding even on unknown commit, for explicit Query only.
 	s.binding = &b
 	s.summary = raw
-	req := s.request("targetRecoveryBegin")
+	req := s.request(OperationTargetRecoveryBegin)
 	req.TargetSummary = raw
 	_, err = s.receive(req)
 	return err
@@ -261,13 +261,13 @@ func (s *TargetRecoveryStorage) Select(record TargetRecoveryRecord) error {
 	b := record.Binding
 	s.binding = &b
 	s.summary = bytes.Clone(record.Summary)
-	_, err := s.receive(s.request("targetRecoveryQuery"))
+	_, err := s.receive(s.request(OperationTargetRecoveryQuery))
 	return err
 }
 func (s *TargetRecoveryStorage) Pending() (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.receive(s.request("targetRecoveryPending"))
+	return s.receive(s.request(OperationTargetRecoveryPending))
 }
 func (s *TargetRecoveryStorage) Query() (Reply, error) {
 	s.mu.Lock()
@@ -275,7 +275,7 @@ func (s *TargetRecoveryStorage) Query() (Reply, error) {
 	if s.binding == nil {
 		return Reply{}, ErrTargetRecovery
 	}
-	return s.receive(s.request("targetRecoveryQuery"))
+	return s.receive(s.request(OperationTargetRecoveryQuery))
 }
 func (s *TargetRecoveryStorage) Result(result vaultwarden.RecoveryOperationResult) error {
 	s.mu.Lock()
@@ -297,7 +297,7 @@ func (s *TargetRecoveryStorage) Result(result vaultwarden.RecoveryOperationResul
 			phase = "confirmed"
 		}
 	}
-	req := s.request("targetRecoveryResult")
+	req := s.request(OperationTargetRecoveryResult)
 	req.TargetPhase = phase
 	_, err = s.receive(req)
 	return err
@@ -328,11 +328,11 @@ func (s *TargetRecoveryStorage) resolveVerified(fresh vaultwarden.SyncResult, ev
 		}
 	}
 	proof := targetRecoveryResolution{evidence.Kind, *s.binding, s.revision, s.binding.Target, TargetRecoveryHash(fresh.Vault.Sync), TargetRecoveryHash(fresh.Session), TargetRecoveryHash(fresh.PasswordUnlock.Key), evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash, evidence.AuthenticationEpoch}
-	req := s.request("targetRecoveryVerify")
+	req := s.request(OperationTargetRecoveryVerify)
 	if !verifyOnly && (s.localScope == nil || *s.localScope == s.binding.Target) {
-		req.Operation = "targetRecoveryResolve"
+		req.Operation = OperationTargetRecoveryResolve
 		if localAuthentication && s.localScope != nil {
-			req.Operation = "targetRecoveryResolveLocal"
+			req.Operation = OperationTargetRecoveryResolveLocal
 		}
 		target := s.binding.Target
 		req.Scope = &target

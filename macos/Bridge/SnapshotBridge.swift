@@ -3,7 +3,7 @@ import Foundation
 import LocalAuthentication
 
 private struct BridgeRequest: Decodable {
-    let operation: String
+    let operation: StorageOperation
     let expectedRevision: String?
     let credentials: [VaultCredential]?
     let scope: SnapshotScope?
@@ -117,7 +117,7 @@ private func clearSecretClipboard() {
 private func execute(_ request: BridgeRequest) -> BridgeReply {
     var store: SnapshotStore?
     do {
-        if request.operation == "clearSecretClipboard" {
+        if request.operation == .clearSecretClipboard {
             clearSecretClipboard()
             return BridgeReply(ok: true, code: "ok", message: "", state: nil)
         }
@@ -128,7 +128,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             return revision
         }
         switch request.operation {
-        case "authorizeSecretDisplay":
+        case .authorizeSecretDisplay:
             guard request.secretProtocol == 1, let scope = request.scope,
                   let key = request.unlockKey, let notAfter = request.secretNotAfter else { throw SnapshotError.invalidInput }
             return try onClipboardThread {
@@ -136,7 +136,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                     BridgeReply(ok: true, code: "ok", message: "", state: nil)
                 }
             }
-        case "copySecret":
+        case .copySecret:
             guard request.secretProtocol == 1, let secret = request.secret,
                   !secret.isEmpty, secret.utf8.count <= 65536,
                   let scope = request.scope, let unlockKey = request.unlockKey,
@@ -150,7 +150,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                     return BridgeReply(ok: true, code: "ok", message: "", state: nil)
                 }
             }
-        case "publishBoundAccount":
+        case .publishBoundAccount:
             guard let binding = request.switchBinding, request.scope == binding.target,
                   let credentials = request.credentials, let material = request.passwordUnlock,
                   let session = request.session, let data = request.vault else { throw SnapshotError.invalidInput }
@@ -160,10 +160,10 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 BridgeReply(ok:true,code:"switch_pending",message:L10n.t("bridge.account_switch.status_pending"),state:BridgeStatus(try vault.files.read()),vault:lease.vault,
                             accountSwitch:AccountSwitchReceipt(binding:binding,newSnapshotID:lease.header.id,phase:"pending"))
             }
-        case "inspectAccountSwitch":
+        case .inspectAccountSwitch:
             let result = try vault.inspectAccountSwitch(expected:expected(),operationID:request.switchOperationID)
             return BridgeReply(ok:true,code:"ok",message:L10n.t("bridge.account_switch.status_authenticated"),state:BridgeStatus(result.0),accountSwitch:result.1)
-        case "confirmAccountSwitch":
+        case .confirmAccountSwitch:
             guard let operationID = request.switchOperationID else { throw SnapshotError.invalidInput }
             let result = try vault.confirmAccountSwitch(expected:expected(),operationID:operationID,unlockKey:request.unlockKey)
             try? vault.retryCleanup()
@@ -171,10 +171,10 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             return try vault.withCurrentLease(result.0) {
                 BridgeReply(ok:true,code:result.0.recoveryOnly ? "target_recovery_pending" : "ok",message:result.0.recoveryOnly ? L10n.t("bridge.account_switch.status_recovery_pending") : L10n.t("bridge.account_switch.status_confirmed"),state:BridgeStatus(try vault.files.read()),items:result.0.credentials.map(DisplayCredential.init),session:result.0.session,vault:result.0.vault,accountSwitch:result.1)
             }
-        case "targetRecoveryBegin", "targetRecoveryQuery", "targetRecoveryPending", "targetRecoveryRuntimePending", "targetRecoveryResult", "targetRecoveryVerify":
+        case .targetRecoveryBegin, .targetRecoveryQuery, .targetRecoveryPending, .targetRecoveryRuntimePending, .targetRecoveryResult, .targetRecoveryVerify:
             guard let scope = request.scope, request.unlockKey != nil || request.targetRuntime != nil else { throw SnapshotError.invalidInput }
             let key = request.unlockKey ?? Data()
-            let (state, records) = try vault.targetRecovery(operation: request.operation, scope: scope,
+            let (state, records) = try vault.targetRecovery(operation: request.operation.rawValue, scope: scope,
                 expected: expected(), unlockKey: key, binding: request.targetBinding, summary: request.targetSummary,
                 phase: request.targetPhase, resolution: request.targetResolution, vault: request.vault,
                 session: request.session, material: request.passwordUnlock, login: request.targetLogin, runtime: request.targetRuntime)
@@ -187,7 +187,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 guard try vault.files.read().revision == state.revision else { throw SnapshotError.stale }
                 return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), targetRecords: records)
             }
-        case "targetRecoveryInspectLocal":
+        case .targetRecoveryInspectLocal:
             guard let binding = request.targetBinding, request.scope == binding.target else { throw SnapshotError.invalidInput }
             let (state, protection, journal) = try vault.inspectLocalTarget(binding: binding, expected: expected())
             return try vault.files.locked {
@@ -195,7 +195,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), targetProtection: protection,
                     targetRecords: try vault.files.targetRecords(state).filter { $0.binding == binding }, recovery: journal)
             }
-        case "targetRecoveryResolveLocal":
+        case .targetRecoveryResolveLocal:
             guard let proof = request.targetResolution, proof.binding == request.targetBinding,
                   proof.expectedRevision == (try expected()), let credentials = request.credentials,
                   let material = request.passwordUnlock, let session = request.session, let data = request.vault else { throw SnapshotError.invalidInput }
@@ -206,7 +206,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), vault: lease.vault,
                     targetRecords: try vault.files.targetRecords(state).filter { $0.binding == proof.binding })
             }
-        case "targetRecoveryResolve":
+        case .targetRecoveryResolve:
             guard let scope = request.scope, let proof = request.targetResolution, proof.target == scope, request.targetBinding == proof.binding,
                   let credentials = request.credentials else { throw SnapshotError.invalidInput }
             let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock,
@@ -217,10 +217,10 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(state), vault: lease.vault,
                     targetRecords: try vault.files.targetRecords(state).filter { $0.binding == proof.binding })
             }
-        case "accountRecoveryBegin", "accountRecoveryQuery", "accountRecoveryResult", "accountRecoveryCheckpoint", "accountRecoveryResolve":
+        case .accountRecoveryBegin, .accountRecoveryQuery, .accountRecoveryResult, .accountRecoveryCheckpoint, .accountRecoveryResolve:
             guard let scope = request.scope, let key = request.unlockKey else { throw SnapshotError.invalidInput }
             defer { clearSecretClipboard() }
-            let (lease, journal) = try vault.accountRecovery(operation: request.operation, scope: scope,
+            let (lease, journal) = try vault.accountRecovery(operation: request.operation.rawValue, scope: scope,
                 expected: expected(), unlockKey: key, binding: request.recoveryBinding, record: request.recoveryRecord,
                 phase: request.recoveryPhase, resolution: request.recoveryResolution, credentials: request.credentials,
                 material: request.passwordUnlock, session: request.session, vault: request.vault)
@@ -237,27 +237,27 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(try vault.files.read()),
                     vault: lease.vault, recovery: journal)
             }
-        case "status":
+        case .status:
             let state = try vault.state()
             // Repair legacy/late candidates on a signed-out vault without authentication.
             if state.snapshot == nil && state.indexPending { scheduleBridgeIndex(store: vault, lease: nil) }
-        case "settings":
+        case .settings:
             let settings = UserDefaults.standard
             let deviceID = settings.string(forKey: "vaultwardenDeviceID") ?? UUID().uuidString
             settings.set(deviceID, forKey: "vaultwardenDeviceID")
             return BridgeReply(ok: true, code: "ok", message: "", state: BridgeStatus(try vault.state()), deviceID: deviceID)
-        case "publishVault", "restoreOrganizationAccess", "restorePolicyAccess":
+        case .publishVault, .restoreOrganizationAccess, .restorePolicyAccess:
             guard let credentials = request.credentials, credentials.allSatisfy({ $0.uris != nil }),
                   let scope = request.scope, scope.valid, scope != .demo else { throw SnapshotError.invalidInput }
-            if request.operation == "restorePolicyAccess" && request.clearingPolicy == nil { throw SnapshotError.invalidInput }
-            if request.operation == "restoreOrganizationAccess" && request.organizationID == nil { throw SnapshotError.invalidInput }
-            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session, vault: request.vault, includeVault: true, restoringOrganization: request.operation != "publishVault" ? request.organizationID : nil, clearingPolicy: request.operation == "restorePolicyAccess" ? request.clearingPolicy : nil)
+            if request.operation == .restorePolicyAccess && request.clearingPolicy == nil { throw SnapshotError.invalidInput }
+            if request.operation == .restoreOrganizationAccess && request.organizationID == nil { throw SnapshotError.invalidInput }
+            let lease = try vault.publish(credentials, scope: scope, expected: expected(), passwordUnlock: request.passwordUnlock, session: request.session, vault: request.vault, includeVault: true, restoringOrganization: request.operation != .publishVault ? request.organizationID : nil, clearingPolicy: request.operation == .restorePolicyAccess ? request.clearingPolicy : nil)
             scheduleBridgeIndex(store: vault, lease: lease)
             // Do not return a later writer's revision as this session's write authority.
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_snapshot_saved"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
-        case "quarantineOrganization":
+        case .quarantineOrganization:
             guard let scope = request.scope, let id = request.organizationID, let key = request.unlockKey, let session = request.session else { throw SnapshotError.invalidInput }
             defer { clearSecretClipboard() }
             let lease = try vault.quarantineOrganization(id, scope: scope, expected: expected(), unlockKey: key, session: session, pendingPolicy: request.pendingPolicy)
@@ -265,16 +265,16 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_organization_quarantined"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
-        case "saveSession":
+        case .saveSession:
             guard let scope = request.scope, let session = request.session, let key = request.unlockKey else { throw SnapshotError.invalidInput }
             let lease = try vault.saveSession(session, scope: scope, expected: expected(), unlockKey: key)
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_credentials_updated"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
-        case "lock":
+        case .lock:
             defer { clearSecretClipboard() }
             try vault.lock()
-        case "logout":
+        case .logout:
             defer { clearSecretClipboard() }
             // Index clear is scheduled even when key cleanup returns an error after
             // the tombstone was committed. Callers still receive that cleanup failure.
@@ -282,29 +282,29 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
                 if let state = try? vault.state(), state.snapshot == nil { scheduleBridgeIndex(store: vault, lease: nil) }
             }
             try vault.logout(expected: expected())
-        case "retryCleanup":
+        case .retryCleanup:
             try vault.retryCleanup()
-        case "listPassword":
+        case .listPassword:
             guard let scope = request.scope, let unlockKey = request.unlockKey else { throw SnapshotError.invalidInput }
             let lease = try vault.unlockWithPassword(scope: scope, expected: expected(), unlockKey: unlockKey)
             return try vault.withCurrentLease(lease) {
                 BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_vault_unlocked"), state: BridgeStatus(try vault.files.read()),
                             items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
             }
-        case "reindex", "list":
+        case .reindex, .list:
             let context = LAContext()
             defer { context.invalidate() }
             guard let scope = try vault.state().snapshot?.header.scope else { throw SnapshotError.unavailable }
-            let lease = try vault.unlock(scope: scope, context: context, allowUI: true, includeSession: request.operation == "list")
-            if request.operation == "list" {
+            let lease = try vault.unlock(scope: scope, context: context, allowUI: true, includeSession: request.operation == .list)
+            if request.operation == .list {
                 guard lease.revision == request.expectedRevision else { throw SnapshotError.stale }
                 return try vault.withCurrentLease(lease) {
                     BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_snapshot_unlocked"), state: BridgeStatus(try vault.files.read()),
                                 items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
                 }
             }
-            if request.operation == "reindex" { scheduleBridgeIndex(store: vault, lease: lease) }
-        default: throw SnapshotError.invalidInput
+            if request.operation == .reindex { scheduleBridgeIndex(store: vault, lease: lease) }
+        case .clearSecretClipboard: throw SnapshotError.invalidInput
         }
         let state = try vault.state()
         var message = L10n.t("bridge.status_storage_completed")
@@ -328,7 +328,7 @@ private func executeTransfer(_ frame: SnapshotTransferFrame) throws -> SnapshotT
             if let count = parsed.unlockKey?.count { parsed.unlockKey?.resetBytes(in: 0..<count) }
             if let count = parsed.session?.count { parsed.session?.resetBytes(in: 0..<count) }
         }
-        guard ["publishBoundAccount", "inspectAccountSwitch", "confirmAccountSwitch", "targetRecoveryInspectLocal", "targetRecoveryResolveLocal", "targetRecoveryBegin", "targetRecoveryQuery", "targetRecoveryPending", "targetRecoveryRuntimePending", "targetRecoveryResult", "targetRecoveryVerify", "targetRecoveryResolve", "accountRecoveryBegin", "accountRecoveryQuery", "accountRecoveryResult", "accountRecoveryCheckpoint", "accountRecoveryResolve", "publishVault", "restoreOrganizationAccess", "restorePolicyAccess", "quarantineOrganization", "saveSession", "listPassword", "list", "reindex"].contains(parsed.operation) else { throw SnapshotError.invalidInput }
+        guard parsed.operation.allowsTransfer else { throw SnapshotError.invalidInput }
         let expires = ProcessInfo.processInfo.systemUptime + 60
         let reply = execute(parsed)
         let encoded = try snapshotJSON(reply)
@@ -353,7 +353,7 @@ private func executeTransfer(_ frame: SnapshotTransferFrame) throws -> SnapshotT
                 }
             })
         }
-        if parsed.operation == "accountRecoveryResolve", parsed.recoveryResolution?.mode == "delete" {
+        if parsed.operation == .accountRecoveryResolve, parsed.recoveryResolution?.mode == "delete" {
             return (encoded, { bytes, range in
                 try store.files.locked {
                     let current = try store.files.read()
@@ -366,7 +366,7 @@ private func executeTransfer(_ frame: SnapshotTransferFrame) throws -> SnapshotT
         let current = try store.state()
         guard current.revision == receipt.revision, let snapshot = current.snapshot,
               snapshot.header.id == receipt.snapshotID, snapshot.header.scope == scope else { throw SnapshotError.stale }
-        let lease = SnapshotLease(revision: receipt.revision, header: snapshot.header, expiresAt: expires, credentials: [], recoveryOnly: reply.recovery != nil || reply.targetRecords != nil || parsed.operation == "accountRecoveryResolve")
+        let lease = SnapshotLease(revision: receipt.revision, header: snapshot.header, expiresAt: expires, credentials: [], recoveryOnly: reply.recovery != nil || reply.targetRecords != nil || parsed.operation == .accountRecoveryResolve)
         return (encoded, { bytes, range in
             try store.withCurrentLease(lease) { bytes.subdata(in: range) }
         })

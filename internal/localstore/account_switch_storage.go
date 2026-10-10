@@ -38,7 +38,7 @@ func PublishBoundAccount(ctx context.Context, source *SnapshotStatus, fresh vaul
 	if source == nil || source.Scope == nil || *source.Scope != binding.Source || source.SnapshotID != binding.SourceSnapshotID || fresh.Scope != binding.Target || fresh.PasswordUnlock == nil || len(fresh.Session) == 0 || fresh.Vault == nil {
 		return Reply{}, vaultwarden.ErrIdentity
 	}
-	reply := storage(Request{Operation: "publishBoundAccount", ExpectedRevision: source.Revision, Scope: &fresh.Scope, SwitchBinding: &binding, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
+	reply := storage(Request{Operation: OperationPublishBoundAccount, ExpectedRevision: source.Revision, Scope: &fresh.Scope, SwitchBinding: &binding, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
 	if !reply.OK {
 		return reply, reply.Failure()
 	}
@@ -51,7 +51,7 @@ func PublishBoundAccount(ctx context.Context, source *SnapshotStatus, fresh vaul
 	pendingID := reply.State.SnapshotID
 	// This is acknowledgement of the successful atomic publication, never a
 	// retry of an unknown write. Failure retains the encrypted old-account copy.
-	reply = storage(Request{Operation: "confirmAccountSwitch", ExpectedRevision: reply.State.Revision, Scope: &fresh.Scope, SwitchOperationID: binding.OperationID, UnlockKey: fresh.PasswordUnlock.Key})
+	reply = storage(Request{Operation: OperationConfirmAccountSwitch, ExpectedRevision: reply.State.Revision, Scope: &fresh.Scope, SwitchOperationID: binding.OperationID, UnlockKey: fresh.PasswordUnlock.Key})
 	if !reply.OK {
 		return reply, reply.Failure()
 	}
