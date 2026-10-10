@@ -23,10 +23,10 @@ func TestBackendEnglishTextAndStableRecoveryState(t *testing.T) {
 		t.Fatalf("backup error: %q", got)
 	}
 	inspection, err := inspectShareRecovery(cipherShareRecoveryPayload{}, CipherDocument{})
-	if err != nil || inspection.CipherState != "缺失" {
+	if err != nil || inspection.CipherState != ShareRecoveryMissing {
 		t.Fatalf("English must preserve recovery state: %+v, %v", inspection, err)
 	}
-	if got := i18n.T(inspection.CipherState); got != "Missing" {
+	if got := ShareRecoveryStateText(inspection.CipherState); got != "Missing" {
 		t.Fatalf("recovery display text: %q", got)
 	}
 }

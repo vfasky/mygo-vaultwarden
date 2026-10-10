@@ -26,7 +26,7 @@ func TestFolderEditorEnglishConfirmation(t *testing.T) {
 		t.Fatal("cancel changed the folder draft")
 	}
 	// Type names also form organization selector keys; English must not change them.
-	if cipherTypeNames[3] != "支付卡" || i18n.T(cipherTypeNames[3]) != "Card" {
+	if cipherTypeNames[3] != "itemtype.card" || i18n.T(cipherTypeNames[3]) != "Card" {
 		t.Fatal("item type identity changed or its display label was not translated")
 	}
 }

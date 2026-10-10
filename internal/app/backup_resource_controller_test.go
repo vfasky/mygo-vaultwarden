@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"io"
 	"net/http"
@@ -323,7 +324,7 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 					t.Fatalf("upload/sync %d did not continue: %+v status=%s", i, e.resources.rows[i], f.a.status)
 				}
 				f.file(i, true)
-				if e.resources.rows[i].State != "已核验" {
+				if e.resources.rows[i].State != organization.ResourceVerified {
 					t.Fatalf("verify %d: %s", i, f.a.status)
 				}
 			}
@@ -345,7 +346,7 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 				for i := 0; i < 2; i++ {
 					f.file(i, false)
 					f.file(i, true)
-					if e.resources.rows[i].State != "已核验" {
+					if e.resources.rows[i].State != organization.ResourceVerified {
 						t.Fatalf("copied file %d: %s", i, f.a.status)
 					}
 				}
@@ -363,7 +364,7 @@ func TestResourceControllerUnknownUploadNeverReplays(t *testing.T) {
 	f.file(0, false)
 	e := f.a.backupEditor
 	row := &e.resources.rows[0]
-	if row.AttachmentID == "" || row.State != "待同步核对" || !f.a.backupCurrent(e, f.a.epoch) {
+	if row.AttachmentID == "" || row.State != organization.ResourcePendingSync || !f.a.backupCurrent(e, f.a.epoch) {
 		t.Fatalf("unknown receipt lost: %+v %s", row, f.a.status)
 	}
 	f.file(0, false)
@@ -373,12 +374,12 @@ func TestResourceControllerUnknownUploadNeverReplays(t *testing.T) {
 	id := row.AttachmentID
 	row.AttachmentID = ""
 	f.file(0, true)
-	if f.a.pending != 0 || row.State != "待同步核对" {
+	if f.a.pending != 0 || row.State != organization.ResourcePendingSync {
 		t.Fatal("unknown ID accepted")
 	}
 	row.AttachmentID = id
 	f.file(0, true)
-	if row.State != "已核验" || f.uploads != 1 {
+	if row.State != organization.ResourceVerified || f.uploads != 1 {
 		t.Fatalf("explicit verification failed: %s", f.a.status)
 	}
 }
@@ -467,7 +468,7 @@ func TestResourceControllerRechecksTargetAndReprompt(t *testing.T) {
 				t.Fatalf("accepted sync did not continue form: %s", f.a.status)
 			}
 			f.file(0, false)
-			if f.uploads != 0 || e.resources.rows[0].Problem == "" || e.resources.rows[0].State == "已核验" {
+			if f.uploads != 0 || e.resources.rows[0].Problem == "" || e.resources.rows[0].State == organization.ResourceVerified {
 				t.Fatalf("target restriction bypassed/hidden: %s %+v", scenario, e.resources.rows[0])
 			}
 		})

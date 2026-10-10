@@ -143,7 +143,7 @@ func TestOrgResourceRestoreUnknownUploadSyncAndVerify(t *testing.T) {
 	uitest.Click(t, tester, "确认向目标上传一次（保留源文件）")
 	orgUIComplete(t, q)
 	tester.Frame()
-	if uploads != 1 || panel.rows[0].AttachmentID != "server-file" || panel.rows[0].State != "待核对" || !panel.NeedsRefresh {
+	if uploads != 1 || panel.rows[0].AttachmentID != "server-file" || panel.rows[0].State != ResourcePendingVerify || !panel.NeedsRefresh {
 		t.Fatal("partial upload not retained")
 	}
 	uitest.Click(t, tester, "同步并刷新权限后继续")
@@ -155,7 +155,7 @@ func TestOrgResourceRestoreUnknownUploadSyncAndVerify(t *testing.T) {
 	uitest.Click(t, tester, "下载并核验所选附件")
 	orgUIComplete(t, q)
 	tester.Frame()
-	if verifications != 1 || uploads != 1 || panel.rows[0].State != "已核验" || !panel.filesVerified("source-item", "target-item") {
+	if verifications != 1 || uploads != 1 || panel.rows[0].State != ResourceVerified || !panel.filesVerified("source-item", "target-item") {
 		t.Fatal("independent verification missing")
 	}
 	panel.Close()

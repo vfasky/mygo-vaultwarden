@@ -186,7 +186,7 @@ func TestLegacyShareRecoveryNontransactionalAttachments(t *testing.T) {
 				t.Fatal("inspect", err)
 			}
 			if scenario == "response-lost" {
-				if inspection.CipherState != "新组织" || inspection.CanRepair {
+				if inspection.CipherState != ShareRecoveryNewOrganization || inspection.CanRepair {
 					t.Fatal("committed share misclassified", inspection)
 				}
 				return
@@ -211,9 +211,9 @@ func TestLegacyShareRecoveryNontransactionalAttachments(t *testing.T) {
 			if err != nil || inspection.CanRepair || repairs != 1 {
 				t.Fatal("repair not reconciled", inspection, err)
 			}
-			desired := "旧个人"
+			desired := ShareRecoveryOldPersonal
 			if scenario == "new-cipher-mixed" {
-				desired = "新组织"
+				desired = ShareRecoveryNewOrganization
 			}
 			if inspection.CipherState != desired {
 				t.Fatal("ownership changed during repair")

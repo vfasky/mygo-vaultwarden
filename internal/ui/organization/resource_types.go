@@ -6,6 +6,29 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
+// Resource states are in-memory workflow identifiers; translate only for display.
+const (
+	ResourceNotStarted    = "not_started"
+	ResourcePendingVerify = "pending_verify"
+	ResourceVerified      = "verified"
+	ResourcePendingSync   = "pending_sync"
+)
+
+func ResourceStateText(state string) string {
+	switch state {
+	case ResourceNotStarted:
+		return i18n.T("state.resource.not_started")
+	case ResourcePendingVerify:
+		return i18n.T("state.resource.pending_verify")
+	case ResourceVerified:
+		return i18n.T("state.resource.verified")
+	case ResourcePendingSync:
+		return i18n.T("state.resource.pending_sync")
+	default:
+		return state
+	}
+}
+
 type ResourceRow struct {
 	Resource                    vaultwarden.BackupResource
 	Target, AttachmentID, State string
