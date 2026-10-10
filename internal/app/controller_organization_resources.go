@@ -74,7 +74,7 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 		}
 		c.deliver(func() {
 			c.busy(false)
-			if c.owner.orgServices != c || c.owner.epoch != env.epoch {
+			if !c.host.Current(env) {
 				if plan != nil {
 					plan.Clear()
 				}
@@ -217,61 +217,35 @@ func (c *orgServicesController) refreshResources(ctx context.Context) error {
 	reply.Session = nil
 	completed := make(chan error, 1)
 	c.dispatch(func() {
-		a := c.owner
-		if a.orgServices != c || a.epoch != env.epoch || a.session != env.session || a.snapshot == nil || a.snapshot.Scope == nil || *a.snapshot.Scope != *original.Scope || a.snapshot.Revision != original.Revision || a.snapshot.SnapshotID != original.SnapshotID || ctx.Err() != nil {
+		if !c.host.ResourceSourceCurrent(env, original) || ctx.Err() != nil {
 			completed <- vaultwarden.ErrCancelled
 			return
 		}
 		if cp := env.lease.takeCheckpoint(); cp != nil {
-			if !a.adoptSessionCheckpoint(cp) {
-				a.stopNetwork()
-				completed <- vaultwarden.ErrIdentity
+			if err := c.host.AdoptResourceCheckpoint(cp); err != nil {
+				completed <- err
 				return
 			}
 		}
 		if err != nil {
-			a.syncFailed(reply, err)
+			c.host.ResourceFailure(reply, err)
 			completed <- err
 			return
 		}
-		if !env.runtime {
-			if e := env.session.AcceptAuthenticatedSnapshot(reply.Vault, reply.State.Revision); e != nil {
-				a.stopNetwork()
-				completed <- e
-				return
-			}
-		}
-		// Detach exactly this owned continuation while all other drafts are revoked.
-		a.orgServices = nil
-		a.componentCancel = nil
-		a.advanceEpoch()
-		a.snapshot = reply.State
-		a.sessionRevision = reply.State.Revision
-		if e := a.adoptVault(reply.Vault); e != nil {
-			c.Close()
-			a.stopNetwork()
-			completed <- e
-			return
-		}
-		a.itemsRevision = reply.State.Revision
-		lease := a.newControllerLease()
-		if lease == nil {
-			c.Close()
-			a.stopNetwork()
-			completed <- vaultwarden.ErrIdentity
+		update, adoptionErr := c.host.AdoptResourceSnapshot(env, reply)
+		if adoptionErr != nil {
+			completed <- adoptionErr
 			return
 		}
 		c.mu.Lock()
-		c.snapshot = orgServiceSnapshot{env.session, reply.Vault, lease, a.epoch, env.runtime, a.routeStorage(c.baseStorage, a.epoch)}
+		c.snapshot = update.snapshot
 		c.grant = nil
 		c.grantContext = nil
 		targetOrg := c.resourceTarget
 		c.mu.Unlock()
-		c.organizations = append([]vaultwarden.Organization(nil), a.organizations...)
-		c.collections = append([]vaultwarden.Collection(nil), a.collections...)
+		c.organizations = update.organizations
+		c.collections = update.collections
 		c.entries, _ = env.session.OrganizationEntries(reply.Vault)
-		a.orgServices = c
-		a.componentCancel = c.cancel
 		authorized := false
 		for _, org := range c.organizations {
 			if org.ID == targetOrg {
@@ -288,7 +262,7 @@ func (c *orgServicesController) refreshResources(ctx context.Context) error {
 			return
 		}
 		c.status = i18n.T("org.resource.status_sync_accepted")
-		a.startNotifications(c.dispatch, c.baseStorage)
+		c.host.ResourceNotifications()
 		completed <- nil
 	})
 	select {

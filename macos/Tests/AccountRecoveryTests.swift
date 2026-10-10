@@ -121,6 +121,52 @@ final class AccountRecoveryTests: XCTestCase {
         XCTAssertEqual(try Data(contentsOf: file), original)
         XCTAssertEqual(try store.state().revision, old.revision)
     }
+    func testArgonMemoryBoundsPublishAndRecoveryResolve() throws {
+        // Synthetic wrapping keys exercise the real encrypted store, without
+        // allocating Argon working memory or accessing the system Keychain.
+        for memory in [15, 16, 256, 257, 1024, 1025] {
+            let allowed = (16...1024).contains(memory)
+            let kdf = PasswordUnlockKDF(kdf: 1, kdfIterations: 2, kdfMemory: memory, kdfParallelism: 1, salt: nil)
+            let config = PasswordUnlockConfig(email: material.config.email, kdf: kdf)
+            let replacement = PasswordUnlockMaterial(config: config, key: Data(repeating: 72, count: 32))
+            XCTAssertEqual(kdf.valid, allowed, "memory=\(memory)")
+            XCTAssertEqual(config.valid, allowed, "memory=\(memory)")
+
+            keys = RecoveryMemoryKeys()
+            store = try SnapshotStore(directory: directory.appendingPathComponent("publish-\(memory)"), keys: keys)
+            if allowed {
+                let published = try store.publish([], scope: scope, expected: "empty-v1", passwordUnlock: replacement, session: session, vault: vault)
+                let unlocked = try store.unlockWithPassword(scope: scope, expected: published.revision, unlockKey: replacement.key)
+                XCTAssertEqual(unlocked.session, session)
+                XCTAssertEqual(try store.state().snapshot?.passwordUnlock?.config, config)
+            } else {
+                XCTAssertThrowsError(try store.publish([], scope: scope, expected: "empty-v1", passwordUnlock: replacement, session: session, vault: vault))
+                XCTAssertEqual(try store.state().revision, "empty-v1")
+            }
+
+            keys = RecoveryMemoryKeys()
+            store = try SnapshotStore(directory: directory.appendingPathComponent("resolve-\(memory)"), keys: keys)
+            let (old, binding, raw) = try fixture()
+            let barrier = try begin(old, binding, raw)
+            let fresh = VaultData(version: 1, scope: scope, sync: vault.sync)
+            let resolution = AccountRecoveryResolution(binding: binding, mode: "verified", userConfirmed: true, authorityVerified: true, resourcesVerified: true, vaultHash: recoveryDigest(fresh.sync))
+            if allowed {
+                let (complete, journal) = try store.accountRecovery(operation: "accountRecoveryResolve", scope: scope, expected: barrier.revision, unlockKey: material.key, binding: binding, resolution: resolution, credentials: [], material: replacement, session: session, vault: fresh)
+                XCTAssertNil(journal)
+                XCTAssertEqual(try store.unlockWithPassword(scope: scope, expected: complete.revision, unlockKey: replacement.key).session, session)
+                XCTAssertEqual(try store.state().snapshot?.passwordUnlock?.config, config)
+                XCTAssertEqual(complete.vault?.pendingPolicyMutations, vault.pendingPolicyMutations)
+                XCTAssertEqual(complete.vault?.quarantinedOrganizations, vault.quarantinedOrganizations)
+                XCTAssertNil(keys.values[old.header.keyID])
+            } else {
+                XCTAssertThrowsError(try store.accountRecovery(operation: "accountRecoveryResolve", scope: scope, expected: barrier.revision, unlockKey: material.key, binding: binding, resolution: resolution, credentials: [], material: replacement, session: session, vault: fresh))
+                XCTAssertEqual(try store.state().revision, barrier.revision)
+                XCTAssertEqual(try query(binding).record, raw)
+                XCTAssertNotNil(keys.values[old.header.keyID])
+            }
+        }
+    }
+
     func testDeletionRequiresConfirmedResultAndExplicitReceipt() throws {
         let (old, binding, raw) = try fixture(kind: "delete")
         let barrier = try begin(old, binding, raw)

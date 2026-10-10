@@ -109,7 +109,7 @@ struct PasswordUnlockKDF: Codable, Equatable {
     var valid: Bool {
         switch kdf {
         case 0: return (5000...2000000).contains(kdfIterations)
-        case 1: return (2...10).contains(kdfIterations) && (16...256).contains(kdfMemory) && (1...16).contains(kdfParallelism)
+        case 1: return (2...10).contains(kdfIterations) && (16...1024).contains(kdfMemory) && (1...16).contains(kdfParallelism)
         default: return false
         }
     }

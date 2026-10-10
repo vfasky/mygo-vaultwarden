@@ -22,8 +22,16 @@
 | A3/A4 KDF | 弱在线 PBKDF2 拒绝及 Argon2id 上界测试通过；表单显示 16–1024 MiB；未实际进行 1 GiB 派生 |
 | A5 内存 | 测试只覆盖可控缓冲区及生命周期；Go/Swift 隐式副本、交换区、休眠与崩溃转储仍在保证范围外 |
 | A6 空闲锁定 | 注入时钟/活动源、后台不续期回归通过；未实机等待 15 分钟或验证睡眠、锁屏，其他应用的键鼠活动会续期，UI 阻塞可能推迟锁定 |
-| C1 结构 | 部分完成；真实领域提取及 app 68 字段/163 方法、Session 25 字段/246 方法的残余拆分清单见 [架构](architecture.md#c1-尚未完成的结构工作) |
+| C1 结构 | 部分完成；真实领域提取及 app 68 字段/163 方法、Session 25 字段/246 方法的残余拆分清单见 [架构](architecture.md#c1-本轮接缝与后续演进) |
 | 未执行 | Linux runtime、live Docker/真实服务器、GitHub hosted CI、Touch ID/Safari/签名安装；独立 reviewer 由父任务安排，当前没有自签 PASS |
+
+## 独立审查后的第一轮整改
+
+审查基准 `4cef772` 的两项阻塞均有源码依据。本轮保持原功能范围：
+
+- A4：修复 Swift `PasswordUnlockKDF.valid` 仍为16–256的遗漏，与Go同步至16–1024。MemoryKeys真实 publish、password unlock 和 accountRecoveryResolve 覆盖15/16/256/257/1024/1025：合法参数可发布和完成恢复，越界拒绝且保留原恢复屏障/密钥。使用合成包装密钥，未执行1GiB派生。
+- C1：按确认的三个接缝落实组织 host、拥有完整异步导入生命周期的备份控制器、个人备份导出窄接口服务；新增无需完整app/Session的fake回归。仍有其他编辑、组织与恢复编排留在app/Session，不宣称全部解耦；具体边界及薄适配器见架构文档。
+- 实际重跑受影响检查：Swift主包 **105项通过**；重新构建MemoryKeys harness后，app/vaultwarden/localstore普通测试、race和vet均通过；fixture生产依赖与diff检查通过。Authentication、未受影响的Go包、live、签名GUI、Linux及hosted CI未在本轮重跑。独立复审仍待父任务安排。
 
 ## 本轮重新执行记录（Board #44）
 

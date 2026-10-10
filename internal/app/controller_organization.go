@@ -58,7 +58,7 @@ type orgServicesController struct {
 	selectedOrg, selectedItem, selectedMember, path, status string
 	official, resources                                     bool
 	prompt                                                  *servicePasswordPrompt
-	owner                                                   *app // used only by UI dispatches and View
+	host                                                    orgServicesHost
 	runtime                                                 *runtimeVault
 }
 type servicePasswordPrompt struct {
@@ -111,29 +111,16 @@ func (c *orgServicesController) checkpoint(env orgServiceSnapshot) func(vaultwar
 }
 func (c *orgServicesController) deliver(f func()) {
 	c.dispatch(func() {
-		a := c.owner
 		env, err := c.environment()
-		if err == nil && a.orgServices == c && a.epoch == env.epoch && a.session == env.session {
+		if err == nil && c.host.Current(env) {
 			c.mu.Lock()
 			isolation, id := c.isolation, c.isolationOrg
 			c.isolation = nil
 			c.mu.Unlock()
 			if isolation != nil {
-				if !a.adoptOrganizationIsolation(isolation.State, isolation.Vault, id) {
-					a.stopNetwork()
-					a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
-				} else {
-					a.advanceEpoch()
-					a.status = i18n.T("org.services.status_quarantined")
-				}
+				c.host.AdoptIsolation(*isolation, id)
 			} else if cp := env.lease.takeCheckpoint(); cp != nil {
-				if !a.adoptSessionCheckpoint(cp) {
-					a.stopNetwork()
-					a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
-				} else {
-					a.advanceEpoch()
-					a.status = i18n.T("org.services.status_credentials_updated")
-				}
+				c.host.AdoptNotificationCheckpoint(cp)
 			}
 		}
 		f() // always let the component clean an in-flight result
@@ -185,7 +172,7 @@ func (c *orgServicesController) isolate(env orgServiceSnapshot, orgID string) fu
 func (c *orgServicesController) password(ctx context.Context, label string, env orgServiceSnapshot) ([]byte, error) {
 	challenge := newLoginChallenge(ctx, env.epoch)
 	c.dispatch(func() {
-		if c.owner.orgServices != c || c.owner.epoch != env.epoch || ctx.Err() != nil {
+		if !c.host.Current(env) || ctx.Err() != nil {
 			challenge.cancel()
 			return
 		}
@@ -315,12 +302,12 @@ func (a *app) openOrgServicesWith(dispatch func(func()), storage func(localstore
 		dispatch:      dispatch,
 		baseStorage:   baseStorage,
 		busy:          a.componentBusy,
-		owner:         a,
 		runtime:       a.runtimeVault,
 		organizations: append([]vaultwarden.Organization(nil), a.organizations...),
 		collections:   append([]vaultwarden.Collection(nil), a.collections...),
 		entries:       entries,
 	}
+	c.host = appOrgServicesHost{app: a, controller: c}
 	if len(c.organizations) > 0 {
 		c.selectedOrg = c.organizations[0].ID
 	}
@@ -443,7 +430,7 @@ func (c *orgServicesController) selectAction(action string) {
 		c.openCopy(entry)
 	case "export":
 		// Capture the native parent on the UI thread, before worker callbacks.
-		parent := c.owner.window
+		parent := c.host.Window()
 		c.replacePanel(organization.NewExportPanelWithResources(org.Name, org.Type == 0 || org.Type == 1, func(ctx context.Context, path string, official bool) error {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
@@ -507,7 +494,7 @@ func (c *orgServicesController) loadMembers() {
 		}
 		c.deliver(func() {
 			c.busy(false)
-			if c.owner.orgServices != c || c.owner.epoch != env.epoch {
+			if !c.host.Current(env) {
 				return
 			}
 			if err != nil {
@@ -550,31 +537,31 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		return
 	}
 	ui.Text(uiContext, i18n.T("org.services.title")).FontSize(22)
-	if ui.Button(uiContext, i18n.T("org.services.emergency_contacts")).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("org.services.emergency_contacts")).Disabled(c.host.Busy()).Clicked() {
 		c.loadEmergency(true)
 	}
-	if ui.Button(uiContext, i18n.T("org.services.emergency_grants")).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("org.services.emergency_grants")).Disabled(c.host.Busy()).Clicked() {
 		c.loadEmergency(false)
 	}
-	if ui.Button(uiContext, i18n.T("org.services.account_recovery")).Disabled(c.owner.pending != 0 || len(c.organizations) == 0).Clicked() {
+	if ui.Button(uiContext, i18n.T("org.services.account_recovery")).Disabled(c.host.Busy() || len(c.organizations) == 0).Clicked() {
 		c.loadRecoveryMembers()
 	}
 	if !c.emergencyTrusted {
 		for _, contact := range c.emergencyContacts {
 			if vaultwarden.EmergencyActionAllowed(contact, false, "view") {
-				if ui.Button(uiContext, i18n.Tf("org.services.view_contact", contact.Name, contact.Email)).Disabled(c.owner.pending != 0).Clicked() {
+				if ui.Button(uiContext, i18n.Tf("org.services.view_contact", contact.Name, contact.Email)).Disabled(c.host.Busy()).Clicked() {
 					c.openEmergencyView(contact)
 				}
 			}
 		}
 	}
 	if env, err := c.environment(); err == nil {
-		if warning := c.owner.targetOutcomeWarnings[env.vault.Scope]; warning != "" {
+		if warning := c.host.Warning(env.vault.Scope); warning != "" {
 			ui.Text(uiContext, warning).MaxLines(5)
 		}
 	}
 	for _, org := range c.organizations {
-		if ui.Button(uiContext, org.Name).Disabled(c.owner.pending != 0).Clicked() {
+		if ui.Button(uiContext, org.Name).Disabled(c.host.Busy()).Clicked() {
 			if c.panel != nil {
 				c.panel.Close()
 				c.panel = nil
@@ -586,7 +573,7 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	}
 	for _, entry := range c.entries {
 		if entry.OrganizationID == c.selectedOrg {
-			if ui.Button(uiContext, entry.Title+" · "+entry.ID).Disabled(c.owner.pending != 0).Clicked() {
+			if ui.Button(uiContext, entry.Title+" · "+entry.ID).Disabled(c.host.Busy()).Clicked() {
 				c.selectedItem = entry.ID
 			}
 		}
@@ -602,34 +589,34 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 			{"api-key", i18n.T("org.apikey.title")},
 			{"directory", i18n.T("org.directory.title")},
 		} {
-			disabled := c.owner.pending != 0 || c.selectedOrg == "" || ((action.id == "copy" || action.id == "collections" || action.id == "cipher-events") && c.selectedItem == "")
+			disabled := c.host.Busy() || c.selectedOrg == "" || ((action.id == "copy" || action.id == "collections" || action.id == "cipher-events") && c.selectedItem == "")
 			if ui.Button(uiContext, action.label).Disabled(disabled).Clicked() {
 				c.selectAction(action.id)
 			}
 		}
 	})
-	if ui.Button(uiContext, i18n.T("org.events.load_members")).Disabled(c.owner.pending != 0 || c.selectedOrg == "").Clicked() {
+	if ui.Button(uiContext, i18n.T("org.events.load_members")).Disabled(c.host.Busy() || c.selectedOrg == "").Clicked() {
 		c.loadMembers()
 	}
 	for _, member := range c.members {
-		if ui.Button(uiContext, i18n.Tf("org.events.view_member", member.Label)).Disabled(c.owner.pending != 0).Clicked() {
+		if ui.Button(uiContext, i18n.Tf("org.events.view_member", member.Label)).Disabled(c.host.Busy()).Clicked() {
 			c.selectedMember = member.MemberID
 			c.selectAction("member-events")
 		}
 	}
-	ui.TextInput(uiContext, &c.path).Label(i18n.T("org.transfer.import_path")).Disabled(c.owner.pending != 0)
-	if ui.Button(uiContext, orgBoolLabel(i18n.T("org.transfer.official_json"), c.official)).Disabled(c.owner.pending != 0).Clicked() {
+	ui.TextInput(uiContext, &c.path).Label(i18n.T("org.transfer.import_path")).Disabled(c.host.Busy())
+	if ui.Button(uiContext, orgBoolLabel(i18n.T("org.transfer.official_json"), c.official)).Disabled(c.host.Busy()).Clicked() {
 		c.official = !c.official
 		c.resources = false
 	}
-	if ui.Button(uiContext, orgBoolLabel(i18n.T("org.transfer.full_resources"), c.resources)).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(uiContext, orgBoolLabel(i18n.T("org.transfer.full_resources"), c.resources)).Disabled(c.host.Busy()).Clicked() {
 		c.resources = !c.resources
 		c.official = false
 	}
-	if ui.Button(uiContext, i18n.T("org.transfer.preview_import")).Disabled(c.owner.pending != 0 || c.path == "" || c.selectedOrg == "").Clicked() {
+	if ui.Button(uiContext, i18n.T("org.transfer.preview_import")).Disabled(c.host.Busy() || c.path == "" || c.selectedOrg == "").Clicked() {
 		c.openImport()
 	}
-	if ui.Button(uiContext, i18n.T("org.resource.continue_from_file")).Disabled(c.owner.pending != 0 || c.path == "" || c.selectedOrg == "").Clicked() {
+	if ui.Button(uiContext, i18n.T("org.resource.continue_from_file")).Disabled(c.host.Busy() || c.path == "" || c.selectedOrg == "").Clicked() {
 		c.resources = true
 		c.official = false
 		c.openImportMode(true)
@@ -637,8 +624,8 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 	if c.panel != nil {
 		c.panel.View(uiContext)
 	}
-	if ui.Button(uiContext, i18n.T("org.services.sync_reload")).Disabled(c.owner.pending != 0).Clicked() {
-		c.owner.syncVault(false)
+	if ui.Button(uiContext, i18n.T("org.services.sync_reload")).Disabled(c.host.Busy()).Clicked() {
+		c.host.RequestSync()
 	}
 	ui.Text(uiContext, c.status).MaxLines(8)
 }

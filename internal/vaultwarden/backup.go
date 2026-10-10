@@ -415,24 +415,17 @@ func (s *Session) ExportPersonalBackupAuthorized(ctx context.Context, vault *Vau
 	return s.exportPersonalBackup(ctx, vault, ids, format, grants, false)
 }
 
-func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, ids []string, format BackupFormat, grants map[string]*ItemAuthorization, resources bool) ([]byte, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ctx, finish, err := s.beginOperationLocked(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer finish()
+func (s *personalBackupService) export(ctx context.Context, vault *VaultData, ids []string, format BackupFormat, grants map[string]*ItemAuthorization, resources bool) ([]byte, error) {
 	if vault == nil {
 		return nil, ErrIdentity
 	}
-	if err = s.requireScopeLocked(vault.Scope); err != nil {
+	if err := s.access.checkScope(vault.Scope); err != nil {
 		return nil, err
 	}
 	if format != BitwardenJSON && format != MyGoBackup {
 		return nil, ErrValidation
 	}
-	policies, err := s.snapshotPoliciesLocked(vault)
+	policies, err := s.access.policies(vault)
 	if err != nil {
 		return nil, err
 	}
@@ -474,7 +467,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		if json.Unmarshal(doc.JSON, &metadata) != nil {
 			return nil, ErrProtocol
 		}
-		if metadata.OrganizationID != nil || (metadata.Reprompt != 0 && !s.validItemAuthorizationLocked(grants[id], doc)) || metadata.ViewPassword == nil || !*metadata.ViewPassword || policies.restricts(nil, metadata.Type) {
+		if metadata.OrganizationID != nil || (metadata.Reprompt != 0 && !s.access.validGrant(grants[id], doc)) || metadata.ViewPassword == nil || !*metadata.ViewPassword || policies.restricts(nil, metadata.Type) {
 			return nil, ErrPermission
 		}
 		if resources {
@@ -483,16 +476,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		if err = validateCopyObject(object); err != nil {
 			return nil, backupError(len(file.Items), i18n.T("server.backup.err_unsupported_content"))
 		}
-		fields, err := DecryptCipherDocument(doc, s.key)
-		if err != nil {
-			return nil, err
-		}
-		key, err := cipherItemKey(object, s.key)
-		if err != nil {
-			return nil, err
-		}
-		err = transformCompleteCipher(object, key, false)
-		clear(key)
+		fields, err := s.access.decryptItem(doc, object)
 		if err != nil {
 			return nil, err
 		}
@@ -550,7 +534,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		return nil, ErrProtocol
 	}
 	for _, folder := range folders.Folders {
-		plain, err := vaultcrypto.DecryptString(folder.Name, s.key)
+		plain, err := s.access.decryptFolder(folder.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -574,7 +558,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		clear(data)
 		return nil, ErrCancelled
 	}
-	if err := s.personalBackupAuthorizationLocked(vault, ids, grants); err != nil {
+	if err := s.access.checkExport(vault, ids, grants); err != nil {
 		clear(data)
 		return nil, err
 	}

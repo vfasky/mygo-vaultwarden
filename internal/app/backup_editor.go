@@ -3,7 +3,6 @@ package app
 
 import (
 	"context"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -21,6 +20,7 @@ type backupEditor struct {
 	candidates                    []localstore.DisplayCredential
 	selected                      map[string]bool
 	importing, confirm, submitted bool
+	importRun                     *backupImportController
 	plan                          *vaultwarden.ImportPlan
 	results                       []vaultwarden.ImportEntry
 	exportPassword                string
@@ -41,6 +41,9 @@ func backupSelectionRequiresPassword(e *backupEditor) bool {
 
 func (a *app) clearBackupEditor() {
 	if a.backupEditor != nil {
+		if a.backupEditor.importRun != nil {
+			a.backupEditor.importRun.Close()
+		}
 		a.backupEditor.plan.Clear()
 		if a.backupEditor.resources != nil {
 			a.backupEditor.resources.plan.Clear()
@@ -397,60 +400,11 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(localstore.Re
 	a.advanceEpoch()
 	epoch := a.epoch
 	storage = a.routeStorage(storage, epoch)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
-	a.cancel = cancel
+	host := appBackupImportHost{app: a, editor: e, epoch: epoch, refresh: refresh}
+	e.importRun = newBackupImportController(session, host, storage, dispatch, scope, prior, plan)
+	a.cancel = e.importRun.Close
 	a.pending++
-	go func() {
-		defer plan.Clear()
-		var reply localstore.Reply
-		var checkpoint *localstore.SnapshotStatus
-		persist := func(cp vaultwarden.SessionCheckpoint) error {
-			var err error
-			reply, err = localstore.SaveSessionCheckpoint(prior, cp, storage)
-			if err == nil {
-				prior = reply.State
-				checkpoint = reply.State
-			}
-			return err
-		}
-		state := storage(localstore.Request{Operation: localstore.OperationStatus})
-		var result vaultwarden.ImportResult
-		var err error
-		if !state.OK || !backupLease(state.State, scope, prior.Revision) || ctx.Err() != nil {
-			err = vaultwarden.ErrConflict
-		} else {
-			result, err = session.ImportPersonalBackup(ctx, scope, plan, persist)
-		}
-		dispatch(func() {
-			a.pending--
-			defer cancel()
-			if a.epoch != epoch || a.backupEditor != e {
-				return
-			}
-			a.cancel = nil
-			if checkpoint != nil && !a.adoptBackupCheckpoint(e, checkpoint) {
-				a.stopNetwork()
-				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
-				return
-			}
-			e.results = result.Entries
-			if e.resources != nil {
-				for _, entry := range result.Entries {
-					if entry.SourceID != "" && entry.ID != "" {
-						e.resources.targets[entry.SourceID] = entry.ID
-					}
-				}
-			}
-			if err != nil {
-				e.results = append(e.results, vaultwarden.ImportEntry{Kind: i18n.T("backup.import.status_stopped"), State: vaultwarden.ErrorMessage(err)})
-				a.syncFailed(reply, err)
-			}
-			if a.backupEditor == e && a.sessionOwnsSnapshot() {
-				a.status = i18n.T("backup.import.status_syncing")
-				refresh()
-			}
-		})
-	}()
+	e.importRun.Start()
 }
 func (a *app) reconcileImport(continuations ...*backupContinuation) {
 	e := a.backupEditor
