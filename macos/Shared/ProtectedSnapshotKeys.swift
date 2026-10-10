@@ -34,14 +34,14 @@ final class ProtectedSnapshotKeys: SnapshotKeyStore {
         var attributes = query(id)
         attributes[kSecAttrAccessControl as String] = acl
         attributes[kSecValueData as String] = key
-        attributes[kSecAttrLabel as String] = "MyGo Vaultwarden 自动填充快照密钥"
+        attributes[kSecAttrLabel as String] = L10n.t("MyGo Vaultwarden 自动填充快照密钥")
         let result = SecItemAdd(attributes as CFDictionary, nil)
         guard result == errSecSuccess else { throw SnapshotError.keychain(result) }
     }
     func read(id: String, context: LAContext, allowUI: Bool) throws -> Data {
         context.interactionNotAllowed = !allowUI
         context.touchIDAuthenticationAllowableReuseDuration = 0
-        context.localizedReason = "解锁 MyGo Vaultwarden 的本机自动填充快照"
+        context.localizedReason = L10n.t("解锁 MyGo Vaultwarden 的本机自动填充快照")
         var request = query(id)
         request[kSecReturnData as String] = true
         request[kSecMatchLimit as String] = kSecMatchLimitOne
