@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin || linux
 
-package app
+package fileio
 
 import (
 	"context"
@@ -48,7 +48,7 @@ func openBackupParent(path string) (int, string, error) {
 	return fd, name, nil
 }
 
-func readBackupFile(ctx context.Context, path string) ([]byte, error) {
+func ReadBackupFile(ctx context.Context, path string) ([]byte, error) {
 	fd, name, err := openBackupParent(path)
 	if err != nil {
 		return nil, err
@@ -76,26 +76,26 @@ func readBackupFile(ctx context.Context, path string) ([]byte, error) {
 	return data, nil
 }
 
-type stagedBackup struct {
+type StagedFile struct {
 	dir               int
-	temporary, target string
+	Temporary, target string
 }
 
-func (s *stagedBackup) Close() {
+func (s *StagedFile) Close() {
 	if s == nil || s.dir < 0 {
 		return
 	}
-	unix.Unlinkat(s.dir, s.temporary, 0)
+	unix.Unlinkat(s.dir, s.Temporary, 0)
 	unix.Close(s.dir)
 	s.dir = -1
 }
-func (s *stagedBackup) Commit() error {
+func (s *StagedFile) Commit() error {
 	if s == nil || s.dir < 0 {
 		return errBackupFile
 	}
 	// linkat provides atomic no-replace publication, unlike check-then-rename.
 	// Existing files (including symlinks/hardlinks) are never overwritten.
-	if err := unix.Linkat(s.dir, s.temporary, s.dir, s.target, 0); err != nil {
+	if err := unix.Linkat(s.dir, s.Temporary, s.dir, s.target, 0); err != nil {
 		return errBackupFile
 	}
 	err := unix.Fsync(s.dir)
@@ -105,14 +105,14 @@ func (s *stagedBackup) Commit() error {
 	}
 	return nil
 }
-func stageBackupFile(ctx context.Context, path string, data []byte) (*stagedBackup, error) {
+func StageBackupFile(ctx context.Context, path string, data []byte) (*StagedFile, error) {
 	if len(data) > vaultwarden.MaxBackupSize || ctx.Err() != nil {
 		return nil, vaultwarden.ErrCancelled
 	}
-	return stageBackupStream(ctx, path, func(file *os.File) error { _, err := file.Write(data); return err })
+	return StageBackupStream(ctx, path, func(file *os.File) error { _, err := file.Write(data); return err })
 }
 
-func stageBackupStream(ctx context.Context, path string, produce func(*os.File) error) (*stagedBackup, error) {
+func StageBackupStream(ctx context.Context, path string, produce func(*os.File) error) (*StagedFile, error) {
 	if ctx.Err() != nil || produce == nil {
 		return nil, vaultwarden.ErrCancelled
 	}
@@ -125,13 +125,13 @@ func stageBackupStream(ctx context.Context, path string, produce func(*os.File) 
 		unix.Close(fd)
 		return nil, errBackupFile
 	}
-	stage := &stagedBackup{dir: fd, target: name, temporary: ".mygo-backup-" + hex.EncodeToString(random)}
+	stage := &StagedFile{dir: fd, target: name, Temporary: ".mygo-backup-" + hex.EncodeToString(random)}
 	var stat unix.Stat_t
 	if err = unix.Fstatat(fd, name, &stat, unix.AT_SYMLINK_NOFOLLOW); err != unix.ENOENT {
 		stage.Close()
 		return nil, errBackupFile
 	}
-	raw, err := unix.Openat(fd, stage.temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
+	raw, err := unix.Openat(fd, stage.Temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
 	if err != nil {
 		stage.Close()
 		return nil, errBackupFile

@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -157,7 +158,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 		}
 		err := lease()
 		var rows []vaultwarden.AttachmentInfo
-		var stage *stagedBackup
+		var stage *fileio.StagedFile
 		var proof *vaultwarden.AttachmentPublication
 		var upload vaultwarden.AttachmentUploadResult
 		submitted := false
@@ -176,7 +177,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				}
 				if err == nil {
 					var file *os.File
-					file, err = openAttachmentInput(paths[0])
+					file, err = fileio.OpenAttachmentInput(paths[0])
 					if err == nil {
 						submitted = true
 						upload, err = session.UploadAttachment(ctx, vault, id, filepath.Base(paths[0]), file, grant, persist)
@@ -194,7 +195,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				if err == nil {
 					proof, err = session.DownloadAttachment(ctx, vault, id, attachment.ID, grant, persist, func(file *os.File, size int64) error {
 						var err error
-						stage, err = stageAttachmentFile(ctx, path, file, size)
+						stage, err = fileio.StageAttachmentFile(ctx, path, file, size)
 						return err
 					})
 				}

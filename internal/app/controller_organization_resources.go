@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -33,7 +34,7 @@ func (c *orgServicesController) openCopy(entry vaultwarden.VaultEntry) {
 		c.mu.Lock()
 		c.resourceTarget = targetOrg
 		c.mu.Unlock()
-		return prepareOrgResourceCopy(ctx, env.session, env.vault, source, targetOrg, targetCollection, grant, func() error { return env.lease.check(env.storage) }, c.checkpoint(env))
+		return fileio.PrepareOrgResourceCopy(ctx, env.session, env.vault, source, targetOrg, targetCollection, grant, func() error { return env.lease.check(env.storage) }, c.checkpoint(env))
 	}, func(plan *vaultwarden.ResourceImportPlan, document vaultwarden.CipherDocument, err error) {
 		c.mu.Lock()
 		targetOrg := c.resourceTarget
@@ -63,9 +64,9 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 		var resourcePlan *vaultwarden.ResourceImportPlan
 		if err == nil {
 			if resources {
-				resourcePlan, plan, err = readOrgResourceImportPlan(ctx, path)
+				resourcePlan, plan, err = fileio.ReadOrgResourceImportPlan(ctx, path)
 			} else {
-				plan, err = readOrgImportFormatPlan(ctx, path, official)
+				plan, err = fileio.ReadOrgImportFormatPlan(ctx, path, official)
 			}
 		}
 		c.deliver(func() {

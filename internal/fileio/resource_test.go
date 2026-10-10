@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin || linux
 
-package app
+package fileio
 
 import (
 	"bytes"
@@ -15,17 +15,17 @@ import (
 )
 
 func TestResourceFileUsesDistinctFormatAndStreamingStage(t *testing.T) {
-	path, err := backupOutputPath("/safe/archive", vaultwarden.MyGoResources)
+	path, err := BackupOutputPath("/safe/archive", vaultwarden.MyGoResources)
 	if err != nil || path != "/safe/archive.mygoresources" {
 		t.Fatal("resource extension", err)
 	}
-	if _, err = backupOutputPath("/safe/archive.json", vaultwarden.MyGoResources); err == nil {
+	if _, err = BackupOutputPath("/safe/archive.json", vaultwarden.MyGoResources); err == nil {
 		t.Fatal("resource masquerades as official JSON")
 	}
 	dir := backupTestDirectory(t)
 	target := filepath.Join(dir, "archive.mygoresources")
 	chunk := bytes.Repeat([]byte{42}, 64<<10)
-	stage, err := stageBackupStream(context.Background(), target, func(file *os.File) error {
+	stage, err := StageBackupStream(context.Background(), target, func(file *os.File) error {
 		for i := 0; i < 129; i++ {
 			if _, err := file.Write(chunk); err != nil {
 				return err
@@ -40,22 +40,22 @@ func TestResourceFileUsesDistinctFormatAndStreamingStage(t *testing.T) {
 	if _, err = os.Stat(target); !os.IsNotExist(err) {
 		t.Fatal("stream published early")
 	}
-	info, err := os.Stat(filepath.Join(dir, stage.temporary))
+	info, err := os.Stat(filepath.Join(dir, stage.Temporary))
 	if err != nil || info.Size() != 129*int64(len(chunk)) || info.Mode().Perm() != 0600 {
 		t.Fatal("unbounded bridge used or unsafe stage", err)
 	}
 	if err = stage.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = stageBackupStream(context.Background(), target, func(file *os.File) error { t.Error("overwrite producer reached"); return nil }); err == nil {
+	if _, err = StageBackupStream(context.Background(), target, func(file *os.File) error { t.Error("overwrite producer reached"); return nil }); err == nil {
 		t.Fatal("resource overwritten")
 	}
 	denied := filepath.Join(dir, "denied.mygoresources")
-	if stage, err = stageBackupStream(context.Background(), denied, func(*os.File) error { return vaultwarden.ErrPermission }); !errors.Is(err, vaultwarden.ErrPermission) || stage != nil {
+	if stage, err = StageBackupStream(context.Background(), denied, func(*os.File) error { return vaultwarden.ErrPermission }); !errors.Is(err, vaultwarden.ErrPermission) || stage != nil {
 		t.Fatal("source authorization error disguised as file error", err)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	if stage, err = stageBackupStream(ctx, filepath.Join(dir, "cancelled.mygoresources"), func(file *os.File) error { file.Write(chunk); cancel(); return nil }); err != vaultwarden.ErrCancelled || stage != nil {
+	if stage, err = StageBackupStream(ctx, filepath.Join(dir, "cancelled.mygoresources"), func(file *os.File) error { file.Write(chunk); cancel(); return nil }); err != vaultwarden.ErrCancelled || stage != nil {
 		t.Fatal("cancelled stream retained")
 	}
 	entries, err := os.ReadDir(dir)

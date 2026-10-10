@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package fileio
 
 import (
 	"context"
@@ -17,10 +17,10 @@ func exportOrgBackupFile(ctx context.Context, session *vaultwarden.Session, vaul
 	if session == nil {
 		return vaultwarden.ErrExpired
 	}
-	return exportOrgBackupFormatFile(ctx, session, vault, orgID, path, grants, confirmed, false, persist)
+	return ExportOrgBackupFormatFile(ctx, session, vault, orgID, path, grants, confirmed, false, persist)
 }
 
-func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed, official bool, persist func(vaultwarden.SessionCheckpoint) error, leases ...func() error) error {
+func ExportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed, official bool, persist func(vaultwarden.SessionCheckpoint) error, leases ...func() error) error {
 	if session == nil {
 		return vaultwarden.ErrExpired
 	}
@@ -34,7 +34,7 @@ func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session
 				return err
 			}
 		}
-		stage, err := stageBackupFile(ctx, path, data)
+		stage, err := StageBackupFile(ctx, path, data)
 		if err != nil {
 			return err
 		}
@@ -52,11 +52,11 @@ func exportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session
 }
 
 func readOrgImportPlan(ctx context.Context, path string) (*vaultwarden.OrganizationImportPlan, error) {
-	return readOrgImportFormatPlan(ctx, path, false)
+	return ReadOrgImportFormatPlan(ctx, path, false)
 }
 
-func readOrgImportFormatPlan(ctx context.Context, path string, official bool) (*vaultwarden.OrganizationImportPlan, error) {
-	raw, err := readBackupFile(ctx, path)
+func ReadOrgImportFormatPlan(ctx context.Context, path string, official bool) (*vaultwarden.OrganizationImportPlan, error) {
+	raw, err := ReadBackupFile(ctx, path)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func readOrgImportFormatPlan(ctx context.Context, path string, official bool) (*
 	return vaultwarden.ParseOrganizationImport(raw)
 }
 
-func exportOrgResourceFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed bool, lease func() error, persist func(vaultwarden.SessionCheckpoint) error) error {
+func ExportOrgResourceFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed bool, lease func() error, persist func(vaultwarden.SessionCheckpoint) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	if session == nil {
@@ -80,7 +80,7 @@ func exportOrgResourceFile(ctx context.Context, session *vaultwarden.Session, va
 		return err
 	}
 	var proof *vaultwarden.ResourceBackupPublication
-	stage, err := stageBackupStream(ctx, path, func(file *os.File) error {
+	stage, err := StageBackupStream(ctx, path, func(file *os.File) error {
 		var err error
 		proof, err = session.WriteResourceBackup(ctx, vault, nil, orgID, grants, confirmed, file, persist)
 		return err
@@ -97,10 +97,10 @@ func exportOrgResourceFile(ctx context.Context, session *vaultwarden.Session, va
 	})
 }
 
-func readOrgResourceImportPlan(ctx context.Context, path string) (*vaultwarden.ResourceImportPlan, *vaultwarden.OrganizationImportPlan, error) {
+func ReadOrgResourceImportPlan(ctx context.Context, path string) (*vaultwarden.ResourceImportPlan, *vaultwarden.OrganizationImportPlan, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	file, err := openAttachmentInput(path)
+	file, err := OpenAttachmentInput(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -119,7 +119,7 @@ func readOrgResourceImportPlan(ctx context.Context, path string) (*vaultwarden.R
 // prepareOrgResourceCopy validates every source binary before creating the new
 // metadata. Its returned plan remains owned by the caller for explicit per-file
 // restore/verification, including when a create response is ambiguous.
-func prepareOrgResourceCopy(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, sourceID, targetOrgID, targetCollectionID string, grant *vaultwarden.ItemAuthorization, lease func() error, persist func(vaultwarden.SessionCheckpoint) error) (*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error) {
+func PrepareOrgResourceCopy(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, sourceID, targetOrgID, targetCollectionID string, grant *vaultwarden.ItemAuthorization, lease func() error, persist func(vaultwarden.SessionCheckpoint) error) (*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	if session == nil {

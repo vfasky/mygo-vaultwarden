@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin || linux
 
-package app
+package fileio
 
 import (
 	"bytes"
@@ -24,13 +24,13 @@ func TestAttachmentFilesStreamingAndNoReplace(t *testing.T) {
 	if err := os.WriteFile(input, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	file, err := openAttachmentInput(input)
+	file, err := OpenAttachmentInput(input)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer file.Close()
 	target := filepath.Join(dir, "download")
-	stage, err := stageAttachmentFile(context.Background(), target, file, int64(len(data)))
+	stage, err := StageAttachmentFile(context.Background(), target, file, int64(len(data)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestAttachmentFilesStreamingAndNoReplace(t *testing.T) {
 	if _, err := os.Stat(target); !os.IsNotExist(err) {
 		t.Fatal("plaintext prematurely published")
 	}
-	info, err := os.Stat(filepath.Join(dir, stage.temporary))
+	info, err := os.Stat(filepath.Join(dir, stage.Temporary))
 	if err != nil || info.Mode().Perm() != 0600 {
 		t.Fatal("stage permissions", err)
 	}
@@ -50,7 +50,7 @@ func TestAttachmentFilesStreamingAndNoReplace(t *testing.T) {
 		t.Fatal("streamed data mismatch", err)
 	}
 	file.Seek(0, 0)
-	if result, err := stageAttachmentFile(context.Background(), target, file, int64(len(data))); err == nil || result != nil {
+	if result, err := StageAttachmentFile(context.Background(), target, file, int64(len(data))); err == nil || result != nil {
 		t.Fatal("existing file accepted")
 	}
 	if _, err := os.Stat(target); err != nil {
@@ -71,7 +71,7 @@ func TestAttachmentFilesRejectLinksCancelAndReplacement(t *testing.T) {
 	if err := os.Symlink(input, link); err != nil {
 		t.Fatal(err)
 	}
-	if file, err := openAttachmentInput(link); err == nil {
+	if file, err := OpenAttachmentInput(link); err == nil {
 		file.Close()
 		t.Fatal("symlink input opened")
 	}
@@ -79,11 +79,11 @@ func TestAttachmentFilesRejectLinksCancelAndReplacement(t *testing.T) {
 	if err := os.Symlink(dir, parentLink); err != nil {
 		t.Fatal(err)
 	}
-	if file, err := openAttachmentInput(filepath.Join(parentLink, "input")); err == nil {
+	if file, err := OpenAttachmentInput(filepath.Join(parentLink, "input")); err == nil {
 		file.Close()
 		t.Fatal("symlink ancestor opened")
 	}
-	file, err := openAttachmentInput(input)
+	file, err := OpenAttachmentInput(input)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestAttachmentFilesRejectLinksCancelAndReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := filepath.Join(dir, "target")
-	stage, err := stageAttachmentFile(context.Background(), target, file, 8)
+	stage, err := StageAttachmentFile(context.Background(), target, file, 8)
 	if err != nil {
 		t.Fatal("pinned input", err)
 	}
@@ -114,7 +114,7 @@ func TestAttachmentFilesRejectLinksCancelAndReplacement(t *testing.T) {
 	file.Seek(0, 0)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if stage, err := stageAttachmentFile(ctx, filepath.Join(dir, "cancelled"), file, 8); !errors.Is(err, vaultwarden.ErrCancelled) || stage != nil {
+	if stage, err := StageAttachmentFile(ctx, filepath.Join(dir, "cancelled"), file, 8); !errors.Is(err, vaultwarden.ErrCancelled) || stage != nil {
 		t.Fatal("cancelled stage", err)
 	}
 	entries, err := os.ReadDir(dir)
