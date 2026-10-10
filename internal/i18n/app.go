@@ -112,6 +112,8 @@ var app = map[string]text{
 	"app.toolbar.status_locked":                 {"未解锁", "Locked"},
 	"app.toolbar.status_sync_ready":             {"可同步", "Ready to sync"},
 	"app.toolbar.status_unlocked":               {"本机已解锁", "Unlocked on this Mac"},
+	"app.window.account_center_title":           {"账号中心", "Account center"},
+	"app.window.settings_title":                 {"设置", "Settings"},
 }
 
 var login = map[string]text{

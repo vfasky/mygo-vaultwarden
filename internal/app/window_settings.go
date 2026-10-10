@@ -4,11 +4,18 @@ package app
 import (
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 )
+
+// settingsWindowOptions are the Settings window's native options;
+// showSettingsWindow adds its StateKey and Content.
+func settingsWindowOptions() mygo.WindowOptions {
+	return mygo.WindowOptions{Title: i18n.T("app.window.settings_title"), Width: 720, Height: 560, MinWidth: 620, MinHeight: 460}
+}
 
 // settingsWindowView is the Settings window (⌘,).
 //
@@ -73,19 +80,19 @@ func (a *app) settings(c *ui.Context) {
 					}
 					busy := !ready || a.mainEditorOpen()
 					if kit.Action(c, i18n.T("account.emergency.title"), "vault", false, busy).Clicked() {
-						a.openEmergencyServices()
+						a.openAccountPage(accountTabEmergency)
 					}
 					if kit.Action(c, "Send", "send", false, busy).Clicked() {
-						a.openSend()
+						a.openAccountPage(accountTabSend)
 					}
 					if kit.Action(c, i18n.T("account.device.title"), "shield", false, busy).Clicked() {
-						a.openDevices()
+						a.openAccountPage(accountTabDevices)
 					}
 					if kit.Action(c, i18n.T("account.form.title"), "user", false, busy).Clicked() {
-						a.openAccount()
+						a.openAccountPage(accountTabSecurity)
 					}
 					if kit.Action(c, i18n.T("app.settings.mfa"), "shield", false, busy).Clicked() {
-						a.openAuthenticationManagement()
+						a.openAccountPage(accountTabMFA)
 					}
 				})
 			})

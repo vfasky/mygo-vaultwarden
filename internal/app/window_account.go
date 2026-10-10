@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
@@ -15,6 +16,35 @@ import (
 //
 // SKELETON: the pages the main window used to show in place of the vault,
 // moved as is. The account center lane replaces it with the final layout.
+// accountWindowOptions are the account center's native options;
+// selectAccountTab adds its StateKey and Content.
+func accountWindowOptions() mygo.WindowOptions {
+	return mygo.WindowOptions{Title: i18n.T("app.window.account_center_title"), Width: 1080, Height: 720, MinWidth: 900, MinHeight: 600}
+}
+
+// openAccountPage is the one entry to an account center page, from menus,
+// Settings and the account center's own navigation: it shows the page and
+// opens its panel when the vault allows it.
+//
+// SKELETON: opens the panel whenever the open* controller does; the account
+// center lane adds the conditions and their explanations.
+func (a *app) openAccountPage(tab accountTab) {
+	switch tab {
+	case accountTabDevices:
+		a.openDevices()
+	case accountTabSecurity:
+		a.openAccount()
+	case accountTabMFA:
+		a.openAuthenticationManagement()
+	case accountTabEmergency:
+		a.openEmergencyServices()
+	default:
+		tab = accountTabSend
+		a.openSend()
+	}
+	a.selectAccountTab(tab)
+}
+
 func (a *app) accountWindowView(c *ui.Context) {
 	a.framePrelude(c)
 	c.SetTheme(kit.Theme)

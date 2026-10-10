@@ -212,8 +212,10 @@ func (a *app) showSettingsWindow(tab settingsTab) {
 	}
 	if a.windows.settings == nil || a.windows.settings.IsDestroyed() {
 		var win *mygo.Window
-		win = mygo.NewWindow(mygo.WindowOptions{Title: i18n.T("app.settings.title"), Width: 720, Height: 560, MinWidth: 620, MinHeight: 460,
-			StateKey: "settings", Content: ui.View(a.frame(func() *mygo.Window { return win }, a.settingsWindowView))})
+		options := settingsWindowOptions()
+		options.StateKey = "settings"
+		options.Content = ui.View(a.frame(func() *mygo.Window { return win }, a.settingsWindowView))
+		win = mygo.NewWindow(options)
 		win.OnClosed(func() {
 			if a.windows.settings == win {
 				a.windows.settings, a.windows.settingsOpen = nil, false
@@ -226,8 +228,9 @@ func (a *app) showSettingsWindow(tab settingsTab) {
 	a.windows.settings.Focus()
 }
 
-// selectAccountTab shows the account center on tab. The open* controllers
-// call it once their panel exists, and the account center when a page is chosen.
+// selectAccountTab shows the account center on tab without opening its
+// panel. The open* controllers call it once their panel exists; menus and
+// buttons use openAccountPage (window_account.go) instead.
 func (a *app) selectAccountTab(tab accountTab) {
 	a.windows.accountOpen, a.windows.accountTab = true, tab
 	if !a.windows.native {
@@ -235,8 +238,10 @@ func (a *app) selectAccountTab(tab accountTab) {
 	}
 	if a.windows.account == nil || a.windows.account.IsDestroyed() {
 		var win *mygo.Window
-		win = mygo.NewWindow(mygo.WindowOptions{Title: i18n.T("app.settings.account_services"), Width: 1080, Height: 720, MinWidth: 900, MinHeight: 600,
-			StateKey: "account-center", Content: ui.View(a.frame(func() *mygo.Window { return win }, a.accountWindowView))})
+		options := accountWindowOptions()
+		options.StateKey = "account-center"
+		options.Content = ui.View(a.frame(func() *mygo.Window { return win }, a.accountWindowView))
+		win = mygo.NewWindow(options)
 		win.OnClosed(func() {
 			if a.windows.account == win {
 				a.windows.account, a.windows.accountOpen = nil, false
