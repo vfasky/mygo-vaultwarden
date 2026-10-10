@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -181,7 +182,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 					if journal == nil {
 						plan.Close()
 						a.advanceEpoch()
-						a.status = "登录凭据已更新，请重新打开账号页面。"
+						a.status = i18n.T("登录凭据已更新，请重新打开账号页面。")
 						return
 					}
 				}
@@ -192,7 +193,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 					if state != nil {
 						a.snapshot = state
 					}
-					a.status = message + " 请进入账号恢复以核验，原恢复记录不会因普通登录或同步清除。"
+					a.status = i18n.Tf("%s 请进入账号恢复以核验，原恢复记录不会因普通登录或同步清除。", message)
 					return
 				}
 				switch {
@@ -203,7 +204,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 					var preparations *vaultwarden.RotationCipherPreparationError
 					if errors.As(err, &preparations) {
 						f.RotationPreparations = append([]vaultwarden.RotationCipherPreparation(nil), preparations.Readiness.Preparations...)
-						f.Status = "先升级旧附件、核验新旧文件并明确删除原件，再同步后重新准备轮换。"
+						f.Status = i18n.T("先升级旧附件、核验新旧文件并明确删除原件，再同步后重新准备轮换。")
 					}
 					if errors.Is(err, vaultwarden.ErrRotationCompatibility) {
 						f.Status = err.Error()
@@ -211,14 +212,14 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 				case r.Operation == "rotation-recipients":
 					if f.Completed(scope, epoch, r.Sequence, result, err) && err == nil {
 						f.RotationRequirements = recipients
-						f.Status = "请从可信独立渠道取得并核对以上公钥，再准备轮换。"
+						f.Status = i18n.T("请从可信独立渠道取得并核对以上公钥，再准备轮换。")
 					}
 				case r.Operation == "api-key" || r.Operation == "rotate-api-key":
 					f.APIKeyCompleted(scope, epoch, r.Sequence, key, err)
 				default:
 					f.Completed(scope, epoch, r.Sequence, result, err)
 					if err == nil && r.Operation == "register-finish" {
-						f.Status = "注册已完成，请返回登录并同步。"
+						f.Status = i18n.T("注册已完成，请返回登录并同步。")
 					}
 				}
 			})
