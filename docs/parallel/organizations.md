@@ -47,7 +47,7 @@
 | `newOrgAPIKeyPanel` | owner 可用性、`WithOrganizationAPIKey` adapter；密码输入、读取/轮换确认、隐藏默认/显式显示/清除，关闭与迟到回调清除密钥。禁止日志/持久保存。 |
 | `newOrgDirectoryPanel` | owner/UseGroups、目录回调；邮箱/externalID/撤权行、群组名称/成员选择、删除预览行、overwrite 明确确认、临时 key、进行中/取消/部分结果。 |
 
-文件 adapter：`readOrgImportFormatPlan(ctx,path,official)` 使用现有受限安全文件读取；`exportOrgBackupFormatFile(...,confirmed,official,...)` 使用已有目录 descriptor/no-follow、0600 暂存、原子 no-replace 发布，不覆盖已有文件。旧 `readOrgImportPlan` / `exportOrgBackupFile` 保留为 MyGo 格式 wrapper。宿主原生文件选择器传入路径。回调不可在 Session 锁内重入 Session。
+文件 adapter：`readOrgImportFormatPlan(ctx,path,official)` 使用现有受限安全文件读取；`exportOrgBackupFormatFile(...,confirmed,official,...)` 使用已有目录 descriptor/no-follow、0600 暂存、原子 no-replace 发布，不覆盖已有文件。旧 `readOrgImportPlan` / `exportOrgBackupFile` wrapper 已在审计中移除；调用方使用对应 Format API。宿主原生文件选择器传入路径，导出时还需显式选择最终目录以授权同目录 staging。回调不可在 Session 锁内重入 Session。
 
 所有表单完成或不确定失败后冻结，不自动重试；新构造器必须使用新认证状态。Go string 和 UI 字符串历史副本不能保证物理归零；密码/key 的借用 byte slice 均清除。
 

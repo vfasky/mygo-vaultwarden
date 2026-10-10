@@ -12,8 +12,8 @@ func init() {
 }
 
 var backendError = map[string]text{
-	"error.weak_kdf": {"服务器提供的 PBKDF2 参数过低（少于 100000 次），已阻止在线认证。请使用可信的官方客户端提高账号 KDF 参数后重试", "The server supplied weak PBKDF2 parameters (fewer than 100000 iterations). Online authentication was blocked. Use a trusted official client to increase the account's KDF parameters before trying again"},
-	"error.unknown": {"操作失败，请重试；若问题持续，请检查配置", "The operation failed. Try again; if the problem persists, check the configuration"},
+	"error.weak_kdf":         {"服务器提供的 PBKDF2 参数过低（少于 100000 次），已阻止在线认证。请使用可信的官方客户端提高账号 KDF 参数后重试", "The server supplied weak PBKDF2 parameters (fewer than 100000 iterations). Online authentication was blocked. Use a trusted official client to increase the account's KDF parameters before trying again"},
+	"error.unknown":          {"操作失败，请重试；若问题持续，请检查配置", "The operation failed. Try again; if the problem persists, check the configuration"},
 	"error.cancelled":        {"操作已取消", "Operation canceled"},
 	"error.checkpoint":       {"登录凭据尚未安全保存，已阻止服务器请求", "Login credentials have not been saved securely. The server request was blocked"},
 	"error.conflict":         {"项目已发生变化，请同步后重新确认修改", "The item has changed. Sync, then confirm your changes again"},

@@ -15,6 +15,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -186,7 +187,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				}
 			case "download":
 				var path string
-				path, err = mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent})
+				path, err = send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent})
 				if err == nil && path == "" {
 					err = vaultwarden.ErrCancelled
 				}

@@ -27,8 +27,8 @@ func savedUIFixture(t *testing.T, a *app) []byte {
 }
 
 func TestAuthenticatedUnlockRestoresSyncAndWipesTransport(t *testing.T) {
-	for _, operation := range []string{"listPassword", "list"} {
-		t.Run(operation, func(t *testing.T) {
+	for _, operation := range []localstore.Operation{localstore.OperationListPassword, localstore.OperationList} {
+		t.Run(string(operation), func(t *testing.T) {
 			a := passwordLockedApp()
 			a.epoch, a.pending = 2, 1
 			request := localstore.Request{Operation: operation, ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}

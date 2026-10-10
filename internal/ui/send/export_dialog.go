@@ -39,7 +39,7 @@ func chooseExportPath(ctx context.Context, opts mygo.SaveDialogOptions, save fun
 	dirs, err := open(mygo.OpenDialogOptions{
 		Parent: opts.Parent, Title: opts.Title, DefaultPath: filepath.Dir(path),
 		Directory: true, CreateDirectories: true,
-		Message: i18n.T("选择本地目录和未使用的文件名；已有文件不会被覆盖。") + "\n" + filepath.Base(path),
+		Message: i18n.T("send.file.save_hint") + "\n" + filepath.Base(path),
 	})
 	if ctx.Err() != nil {
 		return "", vaultwarden.ErrCancelled

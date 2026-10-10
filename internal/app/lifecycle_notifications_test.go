@@ -11,8 +11,8 @@ import (
 )
 
 func TestUnlockNotificationsWithoutWindow(t *testing.T) {
-	for _, operation := range []string{"list", "listPassword"} {
-		t.Run(operation, func(t *testing.T) {
+	for _, operation := range []localstore.Operation{localstore.OperationList, localstore.OperationListPassword} {
+		t.Run(string(operation), func(t *testing.T) {
 			a := passwordLockedApp()
 			a.notificationsEnabled = true
 			queue := make(chan func(), 8)

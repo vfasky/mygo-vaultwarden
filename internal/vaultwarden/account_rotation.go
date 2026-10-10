@@ -383,7 +383,7 @@ func (s *Session) PrepareAccountRotation(ctx context.Context, vault *VaultData, 
 		return nil, err
 	}
 	kdf := s.passwordUnlock.Config.KDF
-	master, err := vaultcrypto.DeriveMaster(password, s.email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, s.email, kdf)
 	if err != nil {
 		return nil, err
 	}

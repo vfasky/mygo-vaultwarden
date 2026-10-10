@@ -8,11 +8,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -414,6 +416,8 @@ func (c *orgServicesController) selectAction(action string) {
 	case "copy":
 		c.openCopy(entry)
 	case "export":
+		// Capture the native parent on the UI thread, before worker callbacks.
+		parent := c.owner.window
 		c.replacePanel(organization.NewExportPanelWithResources(org.Name, org.Type == 0 || org.Type == 1, func(ctx context.Context, path string, official bool) error {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
@@ -422,6 +426,13 @@ func (c *orgServicesController) selectAction(action string) {
 			}
 			grants, err := c.allGrants(ctx, env, orgID)
 			if err != nil {
+				return err
+			}
+			path, err = send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, DefaultPath: path})
+			if err != nil {
+				return err
+			}
+			if err = env.lease.check(env.storage); err != nil {
 				return err
 			}
 			return fileio.ExportOrgBackupFormatFile(ctx, env.session, env.vault, orgID, path, grants, true, official, c.checkpoint(env), func() error { return env.lease.check(env.storage) })
@@ -433,6 +444,13 @@ func (c *orgServicesController) selectAction(action string) {
 			}
 			grants, err := c.allGrants(ctx, env, orgID)
 			if err != nil {
+				return err
+			}
+			path, err = send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, DefaultPath: path})
+			if err != nil {
+				return err
+			}
+			if err = env.lease.check(env.storage); err != nil {
 				return err
 			}
 			return fileio.ExportOrgResourceFile(ctx, env.session, env.vault, orgID, path, grants, true, func() error { return env.lease.check(env.storage) }, c.checkpoint(env))

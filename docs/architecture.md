@@ -52,7 +52,7 @@ internal/passwordstrength → third_party/zxcvbn
 ```
 
 - 只有 `internal/app` 可以把各层组装起来；其他包都不能导入 `internal/app`。
-- `internal/ui` 下的领域包互不依赖，只依赖 `kit`、`vaultwarden`、`passwordstrength`、MyGo 与标准库。面板通过 Host、回调或字段接收控制器能力，不直接访问存储或网络会话。
+- `internal/ui` 下的领域包互不依赖，只依赖 `kit`、`vaultwarden`、`passwordstrength`、MyGo 与标准库；`send` 的原生文件选择适配另依赖 `fileio` 读取用户选择的文件。面板通过 Host、回调或字段接收控制器能力，不直接访问存储或网络会话。
 - `vaultcrypto`、`totp`、`vaulterr` 是不依赖 Session 的叶子包。
 
 ## 测试放置
@@ -79,9 +79,11 @@ internal/passwordstrength → third_party/zxcvbn
 | 第三方源码或资源 | `third_party/`，并更新 `THIRD_PARTY_NOTICES.md` 与 `scripts/collect-licenses.sh` |
 | 开发辅助程序 | `tools/` |
 
-## 集成前的结构基线与待核对项
+## 已集成的领域边界与剩余耦合
 
-以下描述对应本次审计修复的起始基线，并非领域拆分完成声明。C1 的 app 领域控制器和 Session 拆分由其他组件实施；合入后必须据实际类型、窄接口和依赖重新校正此节及上方依赖图，不能以文件移动或测试通过代替架构验收。
+本次集成完成两个实际领域对象的抽取；Session 和 app 仍保留其他业务编排，后续维护拆分不能以文件移动代替边界设计。
 
-- `internal/app` 的 `app` 类型保存单窗口的全部状态，约 160 个方法分布在约 45 个文件中。Go 要求方法与类型同包，因此控制器层仍集中在一个包。进一步拆分需要先把编辑器和控制器改成持有窄接口的独立对象，属于设计调整，而不是目录迁移。
-- `internal/vaultwarden` 以 `Session` 为核心（约 250 个方法），同样只拆出了不依赖 Session 的叶子部分。
+- `controllerNotifications` 通过 `notificationSession` 窄接口启动订阅，独立管理通知工作线程、取消、检查点、revision 与迟到事件；它不持有 `*app`。app 负责组装 dispatcher/storage 能力和 UI 更新。
+- `idleLockController` 独立管理 15 分钟空闲期限、系统活动源、定时器和回调代次。后台同步与重绘不会续期；其他应用键鼠输入计入系统活动。
+- `resourceBackupService` 通过五方法 `resourceBackupAccess` 接口完成资源归档、附件恢复 staging/哈希验证及恢复内容核验；不嵌入 Session，也不访问 Session 字段。Session 的薄适配器保留授权、锁和生命周期检查。
+- 资源备份三个方法已移入服务，个人/组织元数据导入导出及授权编排仍保留九个有实际逻辑的 Session 备份方法。app 仍持有 UI、认证、编辑器等状态，尚未完成整体解耦。C3 的长文件可读性整理和 UI 错误展示迁移由后续串行阶段落实。

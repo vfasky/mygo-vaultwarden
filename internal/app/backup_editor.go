@@ -11,6 +11,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -316,7 +317,7 @@ func (a *app) chooseExportFile() {
 		data = nil // Never retain plaintext while the native Save panel waits.
 		if err == nil && ctx.Err() == nil {
 			var path string
-			path, err = mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
+			path, err = send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
 			if err == nil && path != "" && ctx.Err() == nil {
 				path, err = fileio.BackupOutputPath(path, format)
 				if err != nil {

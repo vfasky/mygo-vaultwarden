@@ -86,7 +86,7 @@ func (a *app) lockInterface() {
 	a.query = ""
 }
 
-func (a *app) runStorage(operation string) {
+func (a *app) runStorage(operation localstore.Operation) {
 	if runtime := a.runtimeVault; runtime != nil {
 		if operation == "logout" {
 			operation = "lock"

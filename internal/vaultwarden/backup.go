@@ -74,7 +74,7 @@ type BackupConversionError struct {
 }
 
 func (e *BackupConversionError) Error() string {
-	return fmt.Sprintf(i18n.T("第 %d 个项目无法无损转换：%s"), e.Index+1, e.Reason)
+	return fmt.Sprintf(i18n.T("server.backup.err_item_conversion"), e.Index+1, e.Reason)
 }
 func (e *BackupConversionError) Unwrap() error { return e.Cause }
 
@@ -178,16 +178,16 @@ func decodeBackup(data []byte, format BackupFormat) (backupFile, error) {
 		}
 		id, ok := item["id"].(string)
 		if !ok || !validObjectID(id) || seen[id] {
-			return file, backupError(i, i18n.T("项目标识缺失或重复"))
+			return file, backupError(i, i18n.T("server.backup.err_item_ids"))
 		}
 		if format == BitwardenJSON && !backupUUID(id) {
-			return file, backupError(i, i18n.T("Bitwarden 格式要求 UUID 项目标识"))
+			return file, backupError(i, i18n.T("server.backup.err_uuid_required"))
 		}
 		seen[id] = true
 		if folder := item["folderId"]; folder != nil {
 			id, ok := folder.(string)
 			if !ok || !folders[id] {
-				return file, backupError(i, i18n.T("文件夹引用不存在"))
+				return file, backupError(i, i18n.T("server.backup.err_folder_missing"))
 			}
 		}
 	}
@@ -313,7 +313,7 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 	}
 	if format == BitwardenJSON {
 		if strings.TrimSpace(fields.Name) == "" || (fields.Notes != nil && strings.TrimSpace(*fields.Notes) == "") {
-			return backupUnsupportedError{reason: "Bitwarden 会改写空白名称或备注，请使用 MyGo 备份"}
+			return backupUnsupportedError{reason: "server.backup.err_blank_text_loss"}
 		}
 		for _, entry := range fields.PasswordHistory {
 			text, ok := entry["lastUsedDate"].(string)
@@ -325,21 +325,21 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 				return ErrProtocol
 			}
 			if date.Nanosecond()%1000000 != 0 {
-				return backupUnsupportedError{reason: "Bitwarden 无法保留亚毫秒密码历史时间，请使用 MyGo 备份"}
+				return backupUnsupportedError{reason: "server.backup.err_history_timestamp_precision"}
 			}
 		}
 		if fields.Type == 8 {
-			return backupUnsupportedError{reason: "此版本 Bitwarden 格式不支持护照，请改用 MyGo 备份"}
+			return backupUnsupportedError{reason: "server.backup.err_passport_unsupported"}
 		}
 		if len(fields.PasswordHistory) > 5 {
-			return backupUnsupportedError{reason: "Bitwarden 导入器只保留五条密码历史，请改用 MyGo 备份"}
+			return backupUnsupportedError{reason: "server.backup.err_history_limit"}
 		}
 		if fields.DeletedDate != nil {
-			return backupUnsupportedError{reason: "回收站项目请使用 MyGo 备份"}
+			return backupUnsupportedError{reason: "server.backup.err_trash_unsupported"}
 		}
 		if fields.Login != nil {
 			if !emptyCopyArray(fields.Login["fido2Credentials"]) {
-				return backupUnsupportedError{reason: "完整通行密钥请使用 MyGo 备份；官方 JSON 适配尚未验证"}
+				return backupUnsupportedError{reason: "server.backup.err_passkeys_unverified"}
 			}
 			if err := copyKeys(fields.Login, "username", "password", "totp", "uris", "fido2Credentials"); err != nil {
 				return err
@@ -475,7 +475,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 			delete(object, "attachments")
 		}
 		if err = validateCopyObject(object); err != nil {
-			return nil, backupError(len(file.Items), i18n.T("包含尚不支持的附件、通行密钥、扩展或权限"))
+			return nil, backupError(len(file.Items), i18n.T("server.backup.err_unsupported_content"))
 		}
 		fields, err := DecryptCipherDocument(doc, s.key)
 		if err != nil {
@@ -506,12 +506,12 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 					return nil, ErrProtocol
 				}
 				if len(uris) == 0 || uris[0]["uri"] != text {
-					return nil, backupError(len(file.Items), i18n.T("旧网址与网址列表不同，请使用 MyGo 备份"))
+					return nil, backupError(len(file.Items), i18n.T("server.backup.err_legacy_uri_mismatch"))
 				}
 			}
 			delete(login, "uri")
 			if login["autofillOnPageLoad"] != nil || login["passwordRevisionDate"] != nil {
-				return nil, backupError(len(file.Items), i18n.T("登录自动填充设置或密码修订时间需 MyGo 备份"))
+				return nil, backupError(len(file.Items), i18n.T("server.backup.err_login_metadata_unsupported"))
 			}
 			delete(login, "autofillOnPageLoad")
 			delete(login, "passwordRevisionDate")
@@ -520,7 +520,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 					text, ok := uri["uri"].(string)
 					hash := sha256.Sum256([]byte(text))
 					if !ok || checksum != base64.StdEncoding.EncodeToString(hash[:]) {
-						return nil, backupError(len(file.Items), i18n.T("网址校验值无法重建，请使用 MyGo 备份"))
+						return nil, backupError(len(file.Items), i18n.T("server.backup.err_uri_checksum"))
 					}
 				}
 				delete(uri, "uriChecksum")

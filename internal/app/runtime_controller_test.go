@@ -80,6 +80,8 @@ func newRuntimeResourceControllerFixture(t *testing.T) *resourceControllerFixtur
 	f := newResourceControllerFixture(t, true)
 	a := f.a
 	d := &runtimeDeviceFixture{key: bytes.Repeat([]byte{4}, 64), email: a.snapshot.PasswordUnlock.Email, config: *a.snapshot.PasswordUnlock}
+	// This fixture serves online prelogin; keep the shared offline fixture at its legacy KDF.
+	d.config.KDF.Iterations = 100000
 	master, e := vaultcrypto.DeriveMaster([]byte("fixture-master"), d.email, d.config.KDF)
 	if e != nil {
 		t.Fatal(e)

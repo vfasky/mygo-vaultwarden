@@ -469,14 +469,14 @@ func (a *app) runOrganizationManagement(operation string) {
 					err = session.ValidatePolicyRecovery(synced, policyRecovery)
 				}
 				if err == nil {
-					storageOperation := "restoreOrganizationAccess"
+					storageOperation := localstore.OperationRestoreOrganizationAccess
 					restoreOrgID := id
 					var clearingPolicy *vaultwarden.PendingPolicyMutation
 					if operation == "policy-review" {
-						storageOperation = "publishVault"
+						storageOperation = localstore.OperationPublishVault
 					}
 					if operation == "policy-restore" {
-						storageOperation = "restorePolicyAccess"
+						storageOperation = localstore.OperationRestorePolicyAccess
 						if !policyRecovery.CanRestoreOrganization() {
 							restoreOrgID = ""
 						}

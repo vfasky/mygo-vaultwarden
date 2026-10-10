@@ -14,6 +14,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -25,7 +26,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 	if !vaultwarden.CipherShareRequiresRecovery(e.document) {
 		return session.SharePersonalCipher(ctx, vault, e.shareOrganizationID, e.shareCollectionID, e.document, e.fields, e.authorization, persist)
 	}
-	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
+	path, err := send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
 	if err != nil {
 		return vaultwarden.CipherDocument{}, err
 	}

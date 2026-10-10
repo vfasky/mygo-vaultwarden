@@ -51,7 +51,7 @@ func main() {
 
 func probe() error {
 	ctx := context.Background()
-	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: i18n.T("选择 Send 文件")})
+	paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Title: i18n.T("send.file.choose_title")})
 	if err != nil {
 		return err
 	}
@@ -71,7 +71,7 @@ func probe() error {
 		return err
 	}
 	defer input.Close()
-	path, err := send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Title: i18n.T("保存 Send 文件"), DefaultPath: "sandbox-probe-output.txt"})
+	path, err := send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Title: i18n.T("send.file.save_title"), DefaultPath: "sandbox-probe-output.txt"})
 	if err != nil {
 		return err
 	}

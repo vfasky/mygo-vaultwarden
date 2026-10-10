@@ -120,7 +120,7 @@ func TestIdleLockCancelsWorkAndRevokesRuntime(t *testing.T) {
 	a.diskSnapshot = a.snapshot
 	uiQueue := make(chan func(), 2)
 	a.uiDispatcher = func(f func()) { uiQueue <- f }
-	operations := make(chan string, 2)
+	operations := make(chan localstore.Operation, 2)
 	a.storageBackend = func(r localstore.Request) localstore.Reply {
 		operations <- r.Operation
 		return localstore.Reply{OK: true}

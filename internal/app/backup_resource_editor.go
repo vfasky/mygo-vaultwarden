@@ -13,6 +13,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -141,7 +142,7 @@ func (a *app) chooseResourceExportFile() {
 			}
 			return err
 		}
-		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(vaultwarden.MyGoResources)}})
+		path, err := send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(vaultwarden.MyGoResources)}})
 		var stage *fileio.StagedFile
 		var proof *vaultwarden.ResourceBackupPublication
 		grants := map[string]*vaultwarden.ItemAuthorization{}
