@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -39,7 +40,7 @@ type app struct {
 	epoch                                     uint64
 	workerEpoch                               atomic.Uint64
 	componentLease                            *controllerLease
-	sendPanel                                 *SendPanel
+	sendPanel                                 *send.Panel
 	devicePanel                               *DevicePanel
 	orgServices                               *orgServicesController
 	targetRecovery                            *targetRecoveryController

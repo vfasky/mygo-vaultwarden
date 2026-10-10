@@ -37,9 +37,9 @@ func TestSendPanelReceivePasswordIsolationAndHiddenText(t *testing.T) {
 	if e != nil {
 		t.Fatal(e)
 	}
-	p.client = c
-	p.password = "owner-edit-password-must-not-leak"
-	p.link = srv.URL + "/#/send/" + access + "/Pgui0FK85cNhBGWHAlBHBw"
+	p.Client = c
+	p.Password = "owner-edit-password-must-not-leak"
+	p.Link = srv.URL + "/#/send/" + access + "/Pgui0FK85cNhBGWHAlBHBw"
 	p.Receive()
 	select {
 	case done := <-queue:
@@ -50,8 +50,8 @@ func TestSendPanelReceivePasswordIsolationAndHiddenText(t *testing.T) {
 	if grantPassword != "" {
 		t.Fatal("owner editor password leaked to receiver grant")
 	}
-	if p.receiver == nil || p.fields.Name != "Test" {
-		t.Fatal("receiver view", p.status)
+	if p.Receiver == nil || p.Fields.Name != "Test" {
+		t.Fatal("receiver view", p.Status)
 	}
 	tt := ui.NewTester(p.View, 1000, 1400)
 	if tt.HasText("This is a test") || !tt.HasText("发送者：sender@example.invalid") {
@@ -70,10 +70,10 @@ func TestSendPanelReceivePasswordIsolationAndHiddenText(t *testing.T) {
 func TestSendPanelCancelledFileSelectionRetainsDraft(t *testing.T) {
 	p, queue := sendPanelFixture(t)
 	p.New(1)
-	p.fields.Name = "retained name"
-	p.fields.Notes = "retained note"
-	p.password = "retained new password"
-	p.host.ChooseSource = func(context.Context) (io.ReadCloser, int64, string, error) {
+	p.Fields.Name = "retained name"
+	p.Fields.Notes = "retained note"
+	p.Password = "retained new password"
+	p.Host.ChooseSource = func(context.Context) (io.ReadCloser, int64, string, error) {
 		return nil, 0, "", vaultwarden.ErrCancelled
 	}
 	p.Save()
@@ -83,19 +83,7 @@ func TestSendPanelCancelledFileSelectionRetainsDraft(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("file callback")
 	}
-	if p.draft == nil || p.fields.Name != "retained name" || p.password != "retained new password" || p.busy || p.uncertain {
+	if p.Draft == nil || p.Fields.Name != "retained name" || p.Password != "retained new password" || p.Busy || p.Uncertain {
 		t.Fatal("cancelled chooser lost pre-dispatch draft")
-	}
-}
-func TestSendNativeSaveName(t *testing.T) {
-	for _, name := range []string{"../private.txt", "C:\\secrets\\private.txt"} {
-		if sendSaveName(name) != "private.txt" {
-			t.Fatal("path in suggested filename")
-		}
-	}
-	for _, name := range []string{"..", "secret\nfile"} {
-		if sendSaveName(name) != "Send 文件" {
-			t.Fatal("unsafe suggested filename")
-		}
 	}
 }

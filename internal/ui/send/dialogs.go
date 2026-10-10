@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package send
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 // ConfigureSendDialogs installs actual MyGo native open/save sheets. The host
 // still owns Dispatch, Check, Checkpoint, Copy and Changed. Dialog APIs may run
 // on workers; cancellation is checked before and after the native sheet.
-func ConfigureSendDialogs(parent *mygo.Window, host *SendHost) {
+func ConfigureDialogs(parent *mygo.Window, host *Host) {
 	host.ChooseSource = func(ctx context.Context) (io.ReadCloser, int64, string, error) {
 		if ctx.Err() != nil {
 			return nil, 0, "", vaultwarden.ErrCancelled

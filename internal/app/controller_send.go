@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
 )
@@ -62,7 +63,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(storageRequest) s
 		return
 	}
 	epoch, vault, scope := a.epoch, a.vault, *a.liveScope
-	host := SendHost{
+	host := send.Host{
 		Busy:       a.componentBusy,
 		Check:      func() error { return lease.check(storage) },
 		Checkpoint: func(cp vaultwarden.SessionCheckpoint) error { return lease.persist(cp, storage) },
@@ -104,9 +105,9 @@ func (a *app) openSendWith(dispatch func(func()), storage func(storageRequest) s
 		})
 	}
 	if dialogs {
-		ConfigureSendDialogs(a.window, &host)
+		send.ConfigureDialogs(a.window, &host)
 	}
-	a.sendPanel = NewSendPanel(session, client, vault, scope, host)
+	a.sendPanel = send.NewPanel(session, client, vault, scope, host)
 	a.category, a.showSettings = "send", false
 	a.sendPanel.Offline()
 }
