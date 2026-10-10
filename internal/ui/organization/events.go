@@ -3,10 +3,10 @@ package organization
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -54,12 +54,12 @@ func (p *EventsPanel) load(next bool) {
 		var err error
 		query.Start, err = time.Parse(time.RFC3339, p.startDate)
 		if err != nil {
-			p.status = "请输入包含时区的开始日期，例如 2026-06-01T00:00:00Z"
+			p.status = i18n.T("请输入包含时区的开始日期，例如 2026-06-01T00:00:00Z")
 			return
 		}
 		query.End, err = time.Parse(time.RFC3339, p.endDate)
 		if err != nil || query.Start.After(query.End) {
-			p.status = "结束时间必须不早于开始时间"
+			p.status = i18n.T("结束时间必须不早于开始时间")
 			return
 		}
 		query.ContinuationToken = ""
@@ -70,7 +70,7 @@ func (p *EventsPanel) load(next bool) {
 	if p.Busy != nil {
 		p.Busy(true)
 	}
-	p.status = "正在读取审计事件…"
+	p.status = i18n.T("正在读取审计事件…")
 	generation := p.generation
 	fetch, dispatch := p.fetch, p.dispatch
 	go func() {
@@ -86,7 +86,7 @@ func (p *EventsPanel) load(next bool) {
 			p.running = false
 			p.cancel = nil
 			if err != nil {
-				p.status = "读取失败：" + err.Error()
+				p.status = i18n.Tf("读取失败：%s", err.Error())
 				return
 			}
 			if !next {
@@ -95,7 +95,7 @@ func (p *EventsPanel) load(next bool) {
 			p.events = append(p.events, page.Data...)
 			p.next = page.ContinuationToken
 			p.query = query
-			p.status = fmt.Sprintf("已加载 %d 条事件；空列表也可能表示服务器未启用审计。", len(p.events))
+			p.status = i18n.Tf("已加载 %d 条事件；空列表也可能表示服务器未启用审计。", len(p.events))
 		})
 	}()
 }
@@ -103,29 +103,29 @@ func (p *EventsPanel) View(c *ui.Context) {
 	if p.closed {
 		return
 	}
-	ui.Text(c, "组织审计事件").FontSize(22)
-	ui.TextInput(c, &p.startDate).Label("开始时间（含时区）").Disabled(p.running)
-	ui.TextInput(c, &p.endDate).Label("结束时间（含时区）").Disabled(p.running)
-	if kit.Action(c, "读取事件", "", true, p.running || p.fetch == nil || p.dispatch == nil).Key("org-events-load").Clicked() {
+	ui.Text(c, i18n.T("组织审计事件")).FontSize(22)
+	ui.TextInput(c, &p.startDate).Label(i18n.T("开始时间（含时区）")).Disabled(p.running)
+	ui.TextInput(c, &p.endDate).Label(i18n.T("结束时间（含时区）")).Disabled(p.running)
+	if kit.Action(c, i18n.T("读取事件"), "", true, p.running || p.fetch == nil || p.dispatch == nil).Key("org-events-load").Clicked() {
 		p.load(false)
 	}
 	for i, event := range p.events {
 		// Unknown event type numbers stay visible instead of being mislabeled.
-		ui.Text(c, fmt.Sprintf("%d. %s · 事件 %d", i+1, event.Date, event.Type))
+		ui.Text(c, i18n.Tf("%d. %s · 事件 %d", i+1, event.Date, event.Type))
 		if event.ActingUserID != nil {
-			ui.Text(c, "操作账号："+*event.ActingUserID)
+			ui.Text(c, i18n.Tf("操作账号：%s", *event.ActingUserID))
 		}
 		if event.OrganizationUserID != nil {
-			ui.Text(c, "组织成员："+*event.OrganizationUserID)
+			ui.Text(c, i18n.Tf("组织成员：%s", *event.OrganizationUserID))
 		}
 		if event.CipherID != nil {
-			ui.Text(c, "条目："+*event.CipherID)
+			ui.Text(c, i18n.Tf("条目：%s", *event.CipherID))
 		}
 	}
-	if kit.Action(c, "加载下一页", "", false, p.running || p.next == nil).Key("org-events-next").Clicked() {
+	if kit.Action(c, i18n.T("加载下一页"), "", false, p.running || p.next == nil).Key("org-events-next").Clicked() {
 		p.load(true)
 	}
-	if p.running && kit.Action(c, "取消读取", "", false, false).Key("org-events-cancel").Clicked() {
+	if p.running && kit.Action(c, i18n.T("取消读取"), "", false, false).Key("org-events-cancel").Clicked() {
 		if p.cancel != nil {
 			p.cancel()
 		}

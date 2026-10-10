@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/egoist/mygo"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -20,7 +21,7 @@ func ConfigureDialogs(parent *mygo.Window, host *Host) {
 		if ctx.Err() != nil {
 			return nil, 0, "", vaultwarden.ErrCancelled
 		}
-		paths, e := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Title: "选择 Send 文件", Message: "文件将加密后上传；最多512 MiB。", Multiple: false})
+		paths, e := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Title: i18n.T("选择 Send 文件"), Message: i18n.T("文件将加密后上传；最多512 MiB。"), Multiple: false})
 		if ctx.Err() != nil || len(paths) != 1 {
 			return nil, 0, "", vaultwarden.ErrCancelled
 		}
@@ -33,7 +34,7 @@ func ConfigureDialogs(parent *mygo.Window, host *Host) {
 		if ctx.Err() != nil {
 			return "", vaultwarden.ErrCancelled
 		}
-		path, e := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Title: "保存 Send 文件", DefaultPath: sendSaveName(name), Message: "选择本地目录和未使用的文件名；已有文件不会被覆盖。"})
+		path, e := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Title: i18n.T("保存 Send 文件"), DefaultPath: sendSaveName(name), Message: i18n.T("选择本地目录和未使用的文件名；已有文件不会被覆盖。")})
 		if ctx.Err() != nil || path == "" {
 			return "", vaultwarden.ErrCancelled
 		}
@@ -46,7 +47,7 @@ func ConfigureDialogs(parent *mygo.Window, host *Host) {
 func sendSaveName(name string) string {
 	name = filepath.Base(strings.ReplaceAll(name, "\\", "/"))
 	if name == "." || name == ".." || name == "/" || len(name) > 240 || strings.IndexFunc(name, unicode.IsControl) >= 0 {
-		return "Send 文件"
+		return i18n.T("Send 文件")
 	}
 	return name
 }
