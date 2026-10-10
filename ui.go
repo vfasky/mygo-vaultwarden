@@ -4,6 +4,7 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -31,6 +32,7 @@ func makeVaultTheme() *ui.Theme {
 	t.SurfaceHover, t.SurfacePressed = ui.Hex("#EFECF7"), vaultLavender
 	t.Selection, t.Focus = ui.RGBA(142, 121, 198, .2), ui.RGBA(117, 97, 170, .55)
 	t.FontSize, t.Radius = 14, 16
+	t.Scrollbar, t.ScrollbarWidth = ui.RGBA(38, 30, 62, .22), 5
 	return t
 }
 
@@ -47,12 +49,15 @@ var vaultCategories = []vaultCategory{
 	{"identity", "身份", "identity", true},
 	{"note", "安全笔记", "note", true},
 	{"ssh", "SSH 密钥", "key", true},
-	{"bank", "银行账户", "card", true},
-	{"license", "驾驶证", "identity", true},
-	{"passport", "护照", "identity", true},
-	{"archive", "归档", "vault", true},
-	{"trash", "回收站", "vault", true},
+	{"bank", "银行账户", "bank", true},
+	{"license", "驾驶证", "car", true},
+	{"passport", "护照", "passport", true},
+	{"archive", "归档", "archive", true},
+	{"trash", "回收站", "trash", true},
 }
+
+// categoryKinds maps type categories to Bitwarden cipher types.
+var categoryKinds = map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}
 
 func (a *app) currentCategory() vaultCategory {
 	if a.category == "org-services" {
@@ -116,6 +121,52 @@ func (a *app) releaseItemCount() int {
 	return count
 }
 
+// itemInCategory applies a sidebar destination's filter, without the search query.
+func itemInCategory(item displayCredential, category string) bool {
+	if (!organizationUIEnabled || category == "personal") && item.OrganizationID != "" {
+		return false
+	}
+	if strings.HasPrefix(category, "org:") && item.OrganizationID != strings.TrimPrefix(category, "org:") {
+		return false
+	}
+	if strings.HasPrefix(category, "collection:") && !slices.Contains(item.CollectionIDs, strings.TrimPrefix(category, "collection:")) {
+		return false
+	}
+	if strings.HasPrefix(category, "folder:") && item.FolderID != strings.TrimPrefix(category, "folder:") {
+		return false
+	}
+	if item.Deleted != (category == "trash") {
+		return false
+	}
+	if category != "trash" && item.Archived != (category == "archive") {
+		return false
+	}
+	if category == "favorites" && !item.Favorite {
+		return false
+	}
+	kind := categoryKinds[category]
+	return kind == 0 || item.Type == kind || (kind == 1 && item.Type == 0)
+}
+
+// sidebarCounts counts each destination shown with a badge in the sidebar.
+func (a *app) sidebarCounts() map[string]int {
+	counts := map[string]int{}
+	if !a.unlocked() {
+		return counts
+	}
+	for _, item := range a.items {
+		for _, category := range vaultCategories {
+			if itemInCategory(item, category.id) {
+				counts[category.id]++
+			}
+		}
+		if itemInCategory(item, "folder:"+item.FolderID) {
+			counts["folder:"+item.FolderID]++
+		}
+	}
+	return counts
+}
+
 func (a *app) filteredItems() []displayCredential {
 	if !a.currentCategory().supported || !a.unlocked() {
 		return nil
@@ -123,37 +174,7 @@ func (a *app) filteredItems() []displayCredential {
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	items := make([]displayCredential, 0, len(a.items))
 	for _, item := range a.items {
-		if (!organizationUIEnabled || a.category == "personal") && item.OrganizationID != "" {
-			continue
-		}
-		if strings.HasPrefix(a.category, "org:") && item.OrganizationID != strings.TrimPrefix(a.category, "org:") {
-			continue
-		}
-		if strings.HasPrefix(a.category, "collection:") {
-			found := false
-			for _, id := range item.CollectionIDs {
-				if a.category == "collection:"+id {
-					found = true
-				}
-			}
-			if !found {
-				continue
-			}
-		}
-		if strings.HasPrefix(a.category, "folder:") && item.FolderID != strings.TrimPrefix(a.category, "folder:") {
-			continue
-		}
-		if item.Deleted != (a.category == "trash") {
-			continue
-		}
-		if a.category != "trash" && item.Archived != (a.category == "archive") {
-			continue
-		}
-		if a.category == "favorites" && !item.Favorite {
-			continue
-		}
-		kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
-		if kind != 0 && item.Type != kind && !(kind == 1 && item.Type == 0) {
+		if !itemInCategory(item, a.category) {
 			continue
 		}
 		if strings.Contains(strings.ToLower(item.Title+" "+item.Username+" "+item.URL), query) {
@@ -401,10 +422,14 @@ func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) 
 // shares the content background, like a native macOS toolbar.
 func (a *app) header(c *ui.Context) {
 	bar := c.TitleBar()
+	left := float32(20)
+	if a.sidebarCollapsed {
+		left = 12
+	}
 	ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).Gap(10).AlignItems(ui.Center).
-		Padding(0, 20, 0, max(float32(20), bar.Left-a.sidebarWidth())).DragWindow().Children(func() {
-		// The expanded sidebar carries the toggle; the collapsed rail is
-		// narrower than the traffic lights, so it moves just past them.
+		Padding(0, 20, 0, max(left, bar.Left-a.sidebarWidth(c))).DragWindow().Children(func() {
+		// The expanded sidebar carries the toggle; the collapsed rail only
+		// fits the traffic lights, so it leads the toolbar instead.
 		if a.sidebarCollapsed {
 			a.sidebarToggle(c)
 		}
@@ -421,7 +446,7 @@ func (a *app) header(c *ui.Context) {
 			a.openBackupEditor()
 		}
 		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
-			kind := map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}[a.category]
+			kind := categoryKinds[a.category]
 			if kind == 0 {
 				kind = 1
 			}
@@ -447,76 +472,110 @@ func (a *app) header(c *ui.Context) {
 	})
 }
 
-func (a *app) sidebarWidth() float32 {
+// sidebarWidth keeps the collapsed rail at least as wide as the traffic
+// lights, so the rail runs unbroken from the top of the window.
+func (a *app) sidebarWidth(c *ui.Context) float32 {
 	if a.sidebarCollapsed {
-		return 64
+		return max(64, c.TitleBar().Left+10)
 	}
 	return 236
 }
 
+var (
+	sidebarBackground = ui.Hex("#F2F1F7")
+	sidebarText       = ui.Hex("#3E3D47")
+	sidebarIcon       = ui.Hex("#86858F")
+	sidebarFaint      = ui.Hex("#A4A3AE")
+)
+
 func (a *app) sidebar(c *ui.Context) {
 	bar := c.TitleBar()
-	height := max(bar.Height, 52)
-	ui.Column(c).Width(a.sidebarWidth() + 1).Shrink(0).Children(func() {
-		top := ui.Row(c).Height(height).Shrink(0).AlignItems(ui.Stretch).DragWindow()
-		if a.sidebarCollapsed {
-			// The traffic lights overflow the rail: share the content
-			// background so they sit on one continuous title bar.
-			top.Background(ui.Hex("#EAEAEF"))
-		} else {
-			top.Children(func() {
-				ui.Row(c).Grow(1).AlignItems(ui.Center).Padding(0, 14, 0, 0).Background(ui.Hex("#F2F1F7")).Children(func() {
-					ui.Spacer(c)
-					a.sidebarToggle(c)
-				})
-				ui.Box(c).Width(1).Background(vaultLine)
-			})
-		}
-		ui.Row(c).Grow(1).MinHeight(0).AlignItems(ui.Stretch).Children(func() {
-			ui.Column(c).Width(a.sidebarWidth()).Shrink(0).Padding(0, 12, 12, 12).Gap(8).Background(ui.Hex("#F2F1F7")).Children(func() { a.sidebarContent(c) })
-			ui.Box(c).Width(1).Background(vaultLine)
+	width := a.sidebarWidth(c)
+	ui.Row(c).Width(width + 1).Shrink(0).AlignItems(ui.Stretch).Children(func() {
+		ui.Column(c).Width(width).Shrink(0).Background(sidebarBackground).Children(func() {
+			top := ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).AlignItems(ui.Center).DragWindow()
+			if !a.sidebarCollapsed {
+				// Like native split views, the toggle sits just past the
+				// traffic lights.
+				top.Padding(0, 0, 0, max(14, bar.Left)).Children(func() { a.sidebarToggle(c) })
+			}
+			ui.Column(c).Grow(1).MinHeight(0).Padding(0, 0, 12, 0).Gap(6).Children(func() { a.sidebarContent(c, width) })
 		})
+		ui.Box(c).Width(1).Background(vaultLine)
 	})
 }
 
-func (a *app) sidebarContent(c *ui.Context) {
+func (a *app) sidebarContent(c *ui.Context, width float32) {
 	navItem := a.navItem
-	sectionLabel := func(c *ui.Context, text string) {
-		if !a.sidebarCollapsed {
-			sectionLabel(c, text)
+	collapsed := a.sidebarCollapsed
+	counts := a.sidebarCounts()
+	count := func(id string) string {
+		if n := counts[id]; n > 0 {
+			return fmt.Sprint(n)
 		}
+		return ""
 	}
-	{
-		brandPadding := float32(8)
-		if a.sidebarCollapsed {
-			brandPadding = 4
-		}
-		ui.Row(c).Padding(2, brandPadding, 8, brandPadding).Gap(10).AlignItems(ui.Center).Children(func() {
-			if appLogo != nil {
-				ui.Image(c, appLogo).Size(32, 32).Shrink(0)
-			}
-			if !a.sidebarCollapsed {
-				ui.Column(c).Gap(1).Children(func() {
-					ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).SingleLine()
-					ui.Text(c, "个人密码库").FontSize(11).TextColor(vaultMuted).SingleLine()
+	// Expanded groups are titled; the rail separates them with short hairlines.
+	first := true
+	section := func(title string, action func()) {
+		if collapsed {
+			if !first {
+				ui.Row(c).Justify(ui.Center).Padding(7, 0).Children(func() {
+					ui.Box(c).Width(20).Height(1).Background(ui.RGBA(38, 30, 62, .1))
 				})
 			}
-		})
-		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).Gap(2).Children(func() {
-				sectionLabel(c, "所有密码库")
-				if navItem(c, "我的密码库", "user", "", a.category == "personal", false).Clicked() {
-					a.category, a.query, a.showSettings = "personal", "", false
+		} else {
+			top := float32(16)
+			if first {
+				top = 4
+			}
+			ui.Row(c).Height(top+24).Padding(top, 4, 0, 10).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(sidebarFaint).Grow(1).SingleLine()
+				if action != nil {
+					action()
 				}
-				ui.Box(c).Height(10)
-				sectionLabel(c, "项目")
+			})
+		}
+		first = false
+	}
+	folderBusy := a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil
+	// Rows are inset from the edges, but the scroll view spans the full width
+	// so its bar runs along the sidebar's edge instead of over the counts.
+	inset := float32(12)
+	if collapsed {
+		inset = (width - 40) / 2
+	}
+
+	brand := ui.Row(c).Padding(2, inset+6, 8, inset+6).Gap(10).AlignItems(ui.Center)
+	if collapsed {
+		brand.Padding(2, 0, 8, 0).Justify(ui.Center)
+	}
+	brand.Children(func() {
+		if appLogo != nil {
+			ui.Image(c, appLogo).Size(30, 30).Shrink(0)
+		}
+		if collapsed {
+			return
+		}
+		ui.Column(c).Gap(2).MinWidth(0).Children(func() {
+			ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).TextColor(vaultInk).SingleLine()
+			ui.Text(c, "个人密码库").FontSize(11).TextColor(vaultMuted).SingleLine()
+		})
+	})
+	ui.Scroll(c).Grow(1).MinHeight(0).ScrollbarInsets(2, 3, 2, 0).Children(func() {
+		ui.Column(c).Gap(2).Padding(0, inset, 8, inset).Children(func() {
+			section("所有密码库", nil)
+			if navItem(c, "我的密码库", "user", "", a.category == "personal" && !a.showSettings, false).Clicked() {
+				a.category, a.query, a.showSettings = "personal", "", false
+			}
+			categoryGroup := func(title string, types bool) {
+				section(title, nil)
 				for _, category := range vaultCategories {
-					count := ""
-					if category.supported && a.unlocked() {
-						count = fmt.Sprint(a.releaseItemCount())
+					if (categoryKinds[category.id] != 0) != types {
+						continue
 					}
-					b := navItem(c, category.title, category.symbol, count, a.currentCategory().id == category.id && !a.showSettings, false)
-					if !category.supported && !a.sidebarCollapsed {
+					b := navItem(c, category.title, category.symbol, count(category.id), a.currentCategory().id == category.id && !a.showSettings, false)
+					if !category.supported && !collapsed {
 						b.Tooltip("此分类尚未同步")
 					}
 					if b.Clicked() {
@@ -524,65 +583,121 @@ func (a *app) sidebarContent(c *ui.Context) {
 						a.listState.ScrollTo(0, ui.Start)
 					}
 				}
-				if organizationUIEnabled {
-					sectionLabel(c, "组织")
-					if navItem(c, "创建或加入组织", "vault", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
-						a.openOrganizationEditor("")
+			}
+			categoryGroup("项目", false)
+			categoryGroup("类型", true)
+			if organizationUIEnabled {
+				section("组织", nil)
+				if navItem(c, "创建或加入组织", "plus", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
+					a.openOrganizationEditor("")
+				}
+				if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+					a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
+				}
+				for _, org := range a.organizations {
+					if navItem(c, org.Name, "building", "", a.category == "org:"+org.ID, false).Clicked() {
+						a.category, a.showSettings = "org:"+org.ID, false
 					}
-					if strings.HasPrefix(a.category, "org:") && navItem(c, "管理当前组织", "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
-						a.openOrganizationEditor(strings.TrimPrefix(a.category, "org:"))
-					}
-					for _, org := range a.organizations {
-						if navItem(c, org.Name, "vault", "", a.category == "org:"+org.ID, false).Clicked() {
-							a.category, a.showSettings = "org:"+org.ID, false
-						}
-						for _, collection := range a.collections {
-							if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "vault", "", a.category == "collection:"+collection.ID, false).Clicked() {
-								a.category, a.showSettings = "collection:"+collection.ID, false
-							}
-						}
-					}
-					for _, org := range a.isolatedOrganizations {
-						if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
-							a.openOrganizationEditor(org.ID)
+					for _, collection := range a.collections {
+						if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "folder", "", a.category == "collection:"+collection.ID, false).Clicked() {
+							a.category, a.showSettings = "collection:"+collection.ID, false
 						}
 					}
 				}
-				sectionLabel(c, "文件夹")
-				if navItem(c, "无文件夹", "vault", "", a.category == "folder:", false).Clicked() {
-					a.category, a.showSettings = "folder:", false
-				}
-				for _, f := range a.folders {
-					if navItem(c, f.Name, "vault", "", a.category == "folder:"+f.ID, false).Clicked() {
-						a.category, a.showSettings = "folder:"+f.ID, false
+				for _, org := range a.isolatedOrganizations {
+					if navItem(c, "重新核验："+org.Name, "settings", "", false, a.pending != 0 || a.organizationEditor != nil).Clicked() {
+						a.openOrganizationEditor(org.ID)
 					}
 				}
-				if navItem(c, "新建文件夹", "vault", "", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
+			}
+			section("文件夹", func() {
+				if sidebarAction(c, "新建文件夹", "plus", folderBusy).Clicked() {
 					a.openFolderEditor("")
 				}
-				if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
-					if navItem(c, "管理文件夹", "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
-						a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
-					}
-				}
 			})
+			if navItem(c, "无文件夹", "inbox", count("folder:"), a.category == "folder:" && !a.showSettings, false).Clicked() {
+				a.category, a.showSettings = "folder:", false
+			}
+			for _, f := range a.folders {
+				if navItem(c, f.Name, "folder", count("folder:"+f.ID), a.category == "folder:"+f.ID && !a.showSettings, false).Clicked() {
+					a.category, a.showSettings = "folder:"+f.ID, false
+				}
+			}
+			// The rail has no section titles to carry the add action.
+			if collapsed && navItem(c, "新建文件夹", "folder-plus", "", false, folderBusy).Clicked() {
+				a.openFolderEditor("")
+			}
+			if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
+				if navItem(c, "管理文件夹", "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
+					a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
+				}
+			}
 		})
+	})
+	ui.Column(c).Gap(6).Shrink(0).Padding(0, inset).Children(func() {
+		ui.Box(c).Height(1).Margin(0, 4).Background(ui.RGBA(38, 30, 62, .08))
 		if navItem(c, "账号与设置", "settings", "", a.showSettings, false).Clicked() {
 			a.showSettings = !a.showSettings
 		}
-	}
+	})
 }
 
-func sectionLabel(c *ui.Context, text string) {
-	ui.Text(c, text).Padding(3, 10).FontSize(11).TextColor(vaultMuted)
+// sidebarAction is a quiet inline button beside a sidebar section title.
+func sidebarAction(c *ui.Context, label, symbol string, disabled bool) *ui.Element {
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(22, 22).Padding(4).Radius(6).Shrink(0).Disabled(disabled).TextColor(sidebarIcon)
+	if disabled {
+		b.Opacity(.45)
+	} else if b.Pressed() {
+		b.Background(ui.RGBA(38, 30, 62, .1)).TextColor(vaultInk)
+	} else if b.Hovered() {
+		b.Background(ui.RGBA(38, 30, 62, .06)).TextColor(vaultInk)
+	}
+	return b.Children(func() { icon(c, symbol, 14) })
+}
+
+func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+	return sidebarItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
+}
+
+// sidebarItem is a source-list row: a soft rounded rectangle, a tinted icon
+// when selected, and a quiet trailing count instead of a badge.
+func sidebarItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {
+	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 10).Gap(10).Radius(9).Disabled(disabled).TextColor(sidebarText)
+	if collapsed {
+		b.Tooltip(title).Height(36).Padding(0).Justify(ui.Center)
+	}
+	iconColor := sidebarIcon
+	if selected {
+		b.Background(vaultWhite).TextColor(vaultInk).Shadow(0, 1, 3, 0, ui.RGBA(38, 30, 62, .08))
+		iconColor = vaultPurple
+	} else if disabled {
+		b.Opacity(.45)
+	} else if b.Pressed() {
+		b.Background(ui.RGBA(38, 30, 62, .08))
+	} else if b.Hovered() {
+		b.Background(ui.RGBA(38, 30, 62, .045))
+	}
+	b.Children(func() {
+		icon(c, symbol, 17).TextColor(iconColor)
+		if collapsed {
+			return
+		}
+		text := ui.Text(c, title).Grow(1).MinWidth(0).FontSize(13).SingleLine()
+		if selected {
+			text.FontWeight(600)
+		}
+		if count != "" {
+			badge := ui.Text(c, count).FontSize(11).TextColor(sidebarFaint).Shrink(0)
+			if selected {
+				badge.TextColor(vaultPurple)
+			}
+		}
+	})
+	return b
 }
 
 func navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
 	return navigationItem(c, title, symbol, count, selected, disabled, false)
-}
-
-func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
-	return navigationItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
 }
 
 func navigationItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {

@@ -93,16 +93,21 @@ func TestDumpAlignment(t *testing.T) {
 func TestVaultSidebarToggle(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1060, 700)
-	if a.sidebarCollapsed || a.sidebarWidth() != 236 {
+	if a.sidebarCollapsed {
 		t.Fatal("sidebar should start expanded")
 	}
 	tt.SetTitleBar(ui.TitleBar{Height: 52, Left: 88})
-	if r, ok := tt.Find("折叠侧栏"); !ok || r.X < 88 || r.X+r.W > a.sidebarWidth() || r.Y < 0 || r.Y+r.H > 52 {
+	if r, ok := tt.Find("折叠侧栏"); !ok || r.X < 88 || r.X+r.W > 236 || r.Y < 0 || r.Y+r.H > 52 {
 		t.Fatal("expanded toggle must remain in sidebar title bar past native window controls")
 	}
 	clickUI(t, tt, "折叠侧栏")
-	if !a.sidebarCollapsed || a.sidebarWidth() != 64 {
+	if !a.sidebarCollapsed {
 		t.Fatal("sidebar did not collapse")
+	}
+	// The rail grows to hold the traffic lights, so its background and edge
+	// run unbroken under them.
+	if r, ok := tt.Find("所有项目"); !ok || r.X+r.W > 98 || r.X < 0 {
+		t.Fatalf("collapsed rail item at %+v does not sit inside a rail clear of the traffic lights", r)
 	}
 	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 || r.Y < 0 || r.Y+r.H > 52 {
 		t.Fatal("collapsed toggle overlaps native window controls")
