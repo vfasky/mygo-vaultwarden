@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -11,16 +12,16 @@ func (a *app) unlockWithPassword() {
 		return
 	}
 	if a.snapshot.PasswordUnlock == nil {
-		a.status = "请重新登录一次，以启用主密码解锁；也可以使用 Touch ID 解锁。"
+		a.status = i18n.T("请重新登录一次，以启用主密码解锁；也可以使用 Touch ID 解锁。")
 		return
 	}
 	if a.masterPassword == "" {
-		a.status = "请输入主密码。"
+		a.status = i18n.T("请输入主密码。")
 		return
 	}
 	if len(a.masterPassword) > 8192 {
 		a.clearLoginInputs()
-		a.status = "主密码过长，请检查输入。"
+		a.status = i18n.T("主密码过长，请检查输入。")
 		return
 	}
 	password := []byte(a.masterPassword)

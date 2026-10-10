@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"strings"
 	"sync"
 
@@ -94,7 +95,7 @@ func (a *app) presentLoginChallenge(challenge *loginChallenge, attempt int) {
 	a.showVerification = true
 	a.status = ""
 	if attempt > 1 {
-		a.status = "验证码错误或已过期，请重新输入。"
+		a.status = i18n.T("验证码错误或已过期，请重新输入。")
 	}
 }
 
@@ -108,7 +109,7 @@ func (a *app) submitLoginCode() {
 	challenge := a.loginChallenge
 	if challenge == nil || challenge.epoch != a.epoch || challenge.ctx.Err() != nil {
 		a.clearLoginInputs()
-		a.status = "本次验证已失效，请重新登录。"
+		a.status = i18n.T("本次验证已失效，请重新登录。")
 		return
 	}
 	code := strings.ReplaceAll(strings.TrimSpace(a.verificationCode), " ", "")
@@ -119,15 +120,15 @@ func (a *app) submitLoginCode() {
 		}
 	}
 	if !valid {
-		a.status = "请输入 6 位数字验证码。"
+		a.status = i18n.T("请输入 6 位数字验证码。")
 		return
 	}
 	accepted := challenge.submit([]byte(code))
 	a.clearLoginInputs()
 	a.loginChallenge = nil
 	if accepted {
-		a.status = "正在验证并同步…"
+		a.status = i18n.T("正在验证并同步…")
 	} else {
-		a.status = "本次验证已失效，请重新登录。"
+		a.status = i18n.T("本次验证已失效，请重新登录。")
 	}
 }

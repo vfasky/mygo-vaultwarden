@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -17,7 +18,7 @@ func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerL
 						a.status = vaultwarden.ErrIdentity.Error()
 					} else {
 						a.advanceEpoch()
-						a.status = "登录凭据已更新，请重新打开此页面。"
+						a.status = i18n.T("登录凭据已更新，请重新打开此页面。")
 					}
 				}
 			}

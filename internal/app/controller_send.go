@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -80,7 +81,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(localstore.Reques
 					} else {
 						// Refresh has revoked Send drafts. Never assign a new revision to them.
 						a.advanceEpoch()
-						a.status = "登录凭据已更新，请重新打开 Send。"
+						a.status = i18n.T("登录凭据已更新，请重新打开 Send。")
 					}
 				}
 			}
