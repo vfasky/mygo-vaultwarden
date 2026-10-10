@@ -4,12 +4,13 @@ package app
 import (
 	"context"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 func (c *orgServicesController) openCopy(entry vaultwarden.VaultEntry) {
 	sourceOrg := entry.OrganizationID
-	panel := newOrgCopyPanelWithResources(entry, c.choices(""), func(ctx context.Context, source, targetOrg, targetCollection string) (vaultwarden.CipherDocument, error) {
+	panel := organization.NewCopyPanelWithResources(entry, c.choices(""), func(ctx context.Context, source, targetOrg, targetCollection string) (vaultwarden.CipherDocument, error) {
 		ctx, done, env, err := c.operation(ctx)
 		defer done()
 		if err != nil {
@@ -97,7 +98,7 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 					c.installResources(resourcePlan, map[string]string{}, orgID, false)
 					return
 				}
-				panel, e := newOrgResourceImportPanel(resourcePlan, choices, allowed, execute, func(resources *vaultwarden.ResourceImportPlan, result vaultwarden.OrganizationOperationResult, err error) {
+				panel, e := organization.NewResourceImportPanel(resourcePlan, choices, allowed, execute, func(resources *vaultwarden.ResourceImportPlan, result vaultwarden.OrganizationOperationResult, err error) {
 					targets := map[string]string{}
 					if result.ImportReconciliation != nil {
 						for _, item := range result.ImportReconciliation.Items {
@@ -122,40 +123,40 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 				if official {
 					format = "官方明文组织 JSON"
 				}
-				c.replacePanel(newOrgImportPanel(plan, format, choices, allowed, execute, c.deliver))
+				c.replacePanel(organization.NewImportPanel(plan, format, choices, allowed, execute, c.deliver))
 			}
 		})
 	}()
 }
 func (c *orgServicesController) installResources(plan *vaultwarden.ResourceImportPlan, targets map[string]string, orgID string, copyOnly bool) {
-	callbacks := orgResourceCallbacks{dispatch: c.deliver, busy: c.busy}
-	callbacks.file = func(ctx context.Context, plan *vaultwarden.ResourceImportPlan, index int, target, attachment string, verify bool) (vaultwarden.AttachmentUploadResult, error) {
+	callbacks := organization.ResourceCallbacks{Dispatch: c.deliver, Busy: c.busy}
+	callbacks.File = func(ctx context.Context, plan *vaultwarden.ResourceImportPlan, index int, target, attachment string, verify bool) (vaultwarden.AttachmentUploadResult, error) {
 		ctx, done, env, err := c.operation(ctx)
 		defer done()
 		if err != nil {
-			return vaultwarden.AttachmentUploadResult{}, &orgResourcePreparationError{err}
+			return vaultwarden.AttachmentUploadResult{}, &organization.ResourcePreparationError{Cause: err}
 		}
 		grant, err := c.grantFor(ctx, env, orgID, target)
 		if err != nil {
-			return vaultwarden.AttachmentUploadResult{}, &orgResourcePreparationError{err}
+			return vaultwarden.AttachmentUploadResult{}, &organization.ResourcePreparationError{Cause: err}
 		}
-		return executeOrgResourceFile(ctx, env.session, env.vault, plan, index, orgID, target, attachment, verify, grant, c.checkpoint(env))
+		return organization.ExecuteResourceFile(ctx, env.session, env.vault, plan, index, orgID, target, attachment, verify, grant, c.checkpoint(env))
 	}
-	callbacks.state = func(ctx context.Context, source vaultwarden.ResourceItemState, target, folder, operation string) error {
+	callbacks.State = func(ctx context.Context, source vaultwarden.ResourceItemState, target, folder, operation string) error {
 		ctx, done, env, err := c.operation(ctx)
 		defer done()
 		if err != nil {
-			return &orgResourcePreparationError{err}
+			return &organization.ResourcePreparationError{Cause: err}
 		}
 		grant, err := c.grantFor(ctx, env, orgID, target)
 		if err != nil {
-			return &orgResourcePreparationError{err}
+			return &organization.ResourcePreparationError{Cause: err}
 		}
-		return executeOrgResourceState(ctx, env.session, env.vault, source, orgID, target, folder, operation, grant, c.checkpoint(env))
+		return organization.ExecuteResourceState(ctx, env.session, env.vault, source, orgID, target, folder, operation, grant, c.checkpoint(env))
 	}
-	callbacks.refresh = c.refreshResources
-	panel := newOrgResourceRestorePanel(plan, targets, copyOnly, callbacks)
-	panel.needsRefresh = true
+	callbacks.Refresh = c.refreshResources
+	panel := organization.NewResourceRestorePanel(plan, targets, copyOnly, callbacks)
+	panel.NeedsRefresh = true
 	c.replacePanel(panel)
 	c.mu.Lock()
 	c.resourceTarget = orgID
@@ -290,11 +291,3 @@ func (c *orgServicesController) refreshResources(ctx context.Context) error {
 		return vaultwarden.ErrCancelled
 	}
 }
-
-// A callback refusing BEFORE entering the resource mutation is distinguishable
-// from an entered API with an unknown server result. It never licenses retries
-// of a possibly dispatched request.
-type orgResourcePreparationError struct{ cause error }
-
-func (e *orgResourcePreparationError) Error() string { return "尚未提交：" + e.cause.Error() }
-func (e *orgResourcePreparationError) Unwrap() error { return e.cause }

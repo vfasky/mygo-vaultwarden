@@ -294,7 +294,7 @@ func (f *resourceControllerFixture) open(importing bool) {
 	} else {
 		e.resources.targets["card-1"] = "card-1"
 		for i := range e.resources.rows {
-			e.resources.rows[i].target = "card-1"
+			e.resources.rows[i].Target = "card-1"
 		}
 	}
 	f.a.backupEditor = e
@@ -318,11 +318,11 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 			e := f.a.backupEditor
 			for i := 0; i < 2; i++ {
 				f.file(i, false)
-				if e.resources.rows[i].attachmentID == "" || !f.a.backupCurrent(e, f.a.epoch) {
+				if e.resources.rows[i].AttachmentID == "" || !f.a.backupCurrent(e, f.a.epoch) {
 					t.Fatalf("upload/sync %d did not continue: %+v status=%s", i, e.resources.rows[i], f.a.status)
 				}
 				f.file(i, true)
-				if e.resources.rows[i].state != "已核验" {
+				if e.resources.rows[i].State != "已核验" {
 					t.Fatalf("verify %d: %s", i, f.a.status)
 				}
 			}
@@ -344,7 +344,7 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 				for i := 0; i < 2; i++ {
 					f.file(i, false)
 					f.file(i, true)
-					if e.resources.rows[i].state != "已核验" {
+					if e.resources.rows[i].State != "已核验" {
 						t.Fatalf("copied file %d: %s", i, f.a.status)
 					}
 				}
@@ -362,22 +362,22 @@ func TestResourceControllerUnknownUploadNeverReplays(t *testing.T) {
 	f.file(0, false)
 	e := f.a.backupEditor
 	row := &e.resources.rows[0]
-	if row.attachmentID == "" || row.state != "待同步核对" || !f.a.backupCurrent(e, f.a.epoch) {
+	if row.AttachmentID == "" || row.State != "待同步核对" || !f.a.backupCurrent(e, f.a.epoch) {
 		t.Fatalf("unknown receipt lost: %+v %s", row, f.a.status)
 	}
 	f.file(0, false)
 	if f.uploads != 1 {
 		t.Fatal("unknown upload replayed")
 	}
-	id := row.attachmentID
-	row.attachmentID = ""
+	id := row.AttachmentID
+	row.AttachmentID = ""
 	f.file(0, true)
-	if f.a.pending != 0 || row.state != "待同步核对" {
+	if f.a.pending != 0 || row.State != "待同步核对" {
 		t.Fatal("unknown ID accepted")
 	}
-	row.attachmentID = id
+	row.AttachmentID = id
 	f.file(0, true)
-	if row.state != "已核验" || f.uploads != 1 {
+	if row.State != "已核验" || f.uploads != 1 {
 		t.Fatalf("explicit verification failed: %s", f.a.status)
 	}
 }
@@ -466,7 +466,7 @@ func TestResourceControllerRechecksTargetAndReprompt(t *testing.T) {
 				t.Fatalf("accepted sync did not continue form: %s", f.a.status)
 			}
 			f.file(0, false)
-			if f.uploads != 0 || e.resources.rows[0].problem == "" || e.resources.rows[0].state == "已核验" {
+			if f.uploads != 0 || e.resources.rows[0].Problem == "" || e.resources.rows[0].State == "已核验" {
 				t.Fatalf("target restriction bypassed/hidden: %s %+v", scenario, e.resources.rows[0])
 			}
 		})
@@ -486,7 +486,7 @@ func TestResourceControllerCancelDiscardsLateFileCallback(t *testing.T) {
 	}
 	f.a.lockInterface()
 	complete()
-	if f.a.backupEditor != nil || e.resources.plan != nil || e.resources.rows[0].attachmentID != "" || f.a.pending != 0 {
+	if f.a.backupEditor != nil || e.resources.plan != nil || e.resources.rows[0].AttachmentID != "" || f.a.pending != 0 {
 		t.Fatal("late callback revived locked form or retained plan")
 	}
 	if f.uploads != 1 {
@@ -507,9 +507,9 @@ func TestResourceFormContinueAndCancel(t *testing.T) {
 	if e.plan != nil || !e.submitted || e.resources.plan == nil || f.creates != 0 {
 		t.Fatal("native continue action created metadata or dropped resources")
 	}
-	e.resources.rows[0].problem = "目标权限已变化，请核对"
+	e.resources.rows[0].Problem = "目标权限已变化，请核对"
 	tester.Frame()
-	if !tester.HasText(e.resources.rows[0].problem) {
+	if !tester.HasText(e.resources.rows[0].Problem) {
 		t.Fatal("file error hidden by global sync status")
 	}
 	uitest.Click(t, tester, "取消并关闭导入导出")

@@ -198,7 +198,7 @@ func TestRuntimeControllerDeviceToResourceImportAndEveryFile(t *testing.T) {
 	for i := range 2 {
 		f.file(i, false)
 		f.file(i, true)
-		if e.resources.rows[i].state != "已核验" {
+		if e.resources.rows[i].State != "已核验" {
 			t.Fatal("runtime resource did not verify", i, f.a.status)
 		}
 	}
