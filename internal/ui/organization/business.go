@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -48,7 +49,7 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 		f.Busy(true)
 	}
 	f.confirm = false
-	f.status = "正在执行；取消不会回滚已发送的请求。"
+	f.status = i18n.T("正在执行；取消不会回滚已发送的请求。")
 	generation := f.generation
 	dispatch := f.dispatch
 	go func() {
@@ -66,9 +67,9 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 			f.cancel = nil
 			f.rows = rows
 			if err != nil {
-				f.status = "请求未完整完成，请检查逐项结果并重新读取；不要自动重发。"
+				f.status = i18n.T("请求未完整完成，请检查逐项结果并重新读取；不要自动重发。")
 			} else {
-				f.status = "本次请求已结束，请核对下列结果。"
+				f.status = i18n.T("本次请求已结束，请核对下列结果。")
 			}
 		})
 	}()
@@ -76,18 +77,18 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 func (f *orgBusinessFlow) footer(c *ui.Context, key, warning string, ready bool, start func()) {
 	if f.confirm {
 		ui.Text(c, warning)
-		if kit.Action(c, "确认执行", "", true, f.blocked() || !ready).Key(key + "-confirm").Clicked() {
+		if kit.Action(c, i18n.T("确认执行"), "", true, f.blocked() || !ready).Key(key + "-confirm").Clicked() {
 			start()
 		}
-		if kit.Action(c, "返回修改", "", false, f.blocked()).Key(key + "-back").Clicked() {
+		if kit.Action(c, i18n.T("返回修改"), "", false, f.blocked()).Key(key + "-back").Clicked() {
 			f.confirm = false
 		}
-	} else if kit.Action(c, "核对并继续", "", true, f.blocked() || !ready || f.dispatch == nil).Key(key + "-review").Clicked() {
+	} else if kit.Action(c, i18n.T("核对并继续"), "", true, f.blocked() || !ready || f.dispatch == nil).Key(key + "-review").Clicked() {
 		f.confirm = true
 	}
-	if f.running && kit.Action(c, "取消请求并核对", "", false, false).Key(key+"-cancel").Clicked() {
+	if f.running && kit.Action(c, i18n.T("取消请求并核对"), "", false, false).Key(key+"-cancel").Clicked() {
 		f.cancel()
-		f.status = "正在取消；服务器可能已部分执行。"
+		f.status = i18n.T("正在取消；服务器可能已部分执行。")
 	}
 	if f.status != "" {
 		ui.Text(c, f.status)
@@ -142,7 +143,7 @@ func (p *CopyPanel) start() {
 					ready(plan, document, err)
 				})
 			}
-			return []string{"副本元数据步骤结束，附件仍需逐项恢复、同步和下载核验；原件保留。结果未知不能再次创建。"}, err
+			return []string{i18n.T("副本元数据步骤结束，附件仍需逐项恢复、同步和下载核验；原件保留。结果未知不能再次创建。")}, err
 		})
 		return
 	}
@@ -151,27 +152,27 @@ func (p *CopyPanel) start() {
 		if err != nil {
 			return nil, err
 		}
-		return []string{"服务器已返回新副本；请重新读取目标集合。原条目保持原位置。"}, nil
+		return []string{i18n.T("服务器已返回新副本；请重新读取目标集合。原条目保持原位置。")}, nil
 	})
 }
 func (p *CopyPanel) View(c *ui.Context) {
 	if p.Flow.closed {
 		return
 	}
-	ui.Text(c, "复制组织条目").FontSize(22)
+	ui.Text(c, i18n.T("复制组织条目")).FontSize(22)
 	ui.Text(c, p.source.Title)
 	if p.source.RequiresPassword {
-		ui.Text(c, "执行时需通过主密码再次验证；取消验证不会提交。")
+		ui.Text(c, i18n.T("执行时需通过主密码再次验证；取消验证不会提交。"))
 	}
 	for i, choice := range p.choices {
 		if kit.Action(c, choice.Name, "", p.target == i, p.Flow.blocked() || p.Flow.confirm || !choice.Writable).Key("org-copy-" + choice.ID).Clicked() {
 			p.target = i
 		}
 	}
-	if kit.Action(c, "完整资源复制（含附件，先验证所有源文件）", "", p.resources, p.Flow.blocked() || p.Flow.confirm || p.prepareResources == nil || p.resourcesReady == nil).Key("org-copy-resources").Clicked() {
+	if kit.Action(c, i18n.T("完整资源复制（含附件，先验证所有源文件）"), "", p.resources, p.Flow.blocked() || p.Flow.confirm || p.prepareResources == nil || p.resourcesReady == nil).Key("org-copy-resources").Clicked() {
 		p.resources = !p.resources
 	}
-	p.Flow.footer(c, "org-copy", "确认在所选组织集合新建独立副本？完整资源复制会先验证源文件，再创建元数据并进入逐文件恢复核验；中途失败不自动重试或删除原件。普通复制不支持附件。", p.ready(), p.start)
+	p.Flow.footer(c, "org-copy", i18n.T("确认在所选组织集合新建独立副本？完整资源复制会先验证源文件，再创建元数据并进入逐文件恢复核验；中途失败不自动重试或删除原件。普通复制不支持附件。"), p.ready(), p.start)
 }
 
 type CollectionPanel struct {
@@ -213,21 +214,21 @@ func (p *CollectionPanel) start() {
 	id, execute := p.item.ID, p.execute
 	p.Flow.run(func(ctx context.Context) ([]string, error) {
 		err := execute(ctx, id, ids)
-		return []string{"集合关联变更可能撤回自身访问。组织保持隔离，需重新验证权限后恢复。"}, err
+		return []string{i18n.T("集合关联变更可能撤回自身访问。组织保持隔离，需重新验证权限后恢复。")}, err
 	})
 }
 func (p *CollectionPanel) View(c *ui.Context) {
 	if p.Flow.closed {
 		return
 	}
-	ui.Text(c, "调整组织集合").FontSize(22)
+	ui.Text(c, i18n.T("调整组织集合")).FontSize(22)
 	ui.Text(c, p.item.Title)
 	for _, choice := range p.choices {
 		if kit.Action(c, choice.Name, "", p.selected[choice.ID], p.Flow.blocked() || p.Flow.confirm || !choice.Writable).Key("org-assign-" + choice.ID).Clicked() {
 			p.selected[choice.ID] = !p.selected[choice.ID]
 		}
 	}
-	p.Flow.footer(c, "org-assign", "确认调整所选集合？提交前将持久隔离组织；失去访问后不会自动恢复。", p.execute != nil && p.item.Readable && p.item.Editable, p.start)
+	p.Flow.footer(c, "org-assign", i18n.T("确认调整所选集合？提交前将持久隔离组织；失去访问后不会自动恢复。"), p.execute != nil && p.item.Readable && p.item.Editable, p.start)
 }
 
 type ImportPanel struct {
@@ -260,7 +261,7 @@ func NewResourceImportPanel(resources *vaultwarden.ResourceImportPlan, choices [
 			return execute(ctx, plan, mappings)
 		}
 	}
-	panel := NewImportPanel(metadata, "MyGo 完整组织资源备份（非官方格式）", choices, createAllowed, boundedExecute, dispatch)
+	panel := NewImportPanel(metadata, i18n.T("MyGo 完整组织资源备份（非官方格式）"), choices, createAllowed, boundedExecute, dispatch)
 	panel.resourcePlan, panel.resourcePreview, panel.resourceStates, panel.resourcesReady = resources, resources.Resources(), resources.ItemStates(), ready
 	return panel, nil
 }
@@ -320,20 +321,20 @@ func (p *ImportPanel) start() {
 		}
 		rows := []string{}
 		if r := result.ImportReconciliation; r != nil {
-			rows = append(rows, fmt.Sprintf("读取前 %d 项，读取后 %d 项，新增 %d 项", len(r.BeforeIDs), len(r.AfterIDs), len(r.AddedIDs)))
+			rows = append(rows, i18n.Tf("读取前 %d 项，读取后 %d 项，新增 %d 项", len(r.BeforeIDs), len(r.AfterIDs), len(r.AddedIDs)))
 			for i, item := range r.Items {
 				label := item.SourceID
 				if i < len(preview) {
 					label = preview[i].Name
 				}
-				state := "待人工核对"
+				state := i18n.T("待人工核对")
 				if item.Verified {
-					state = "新读取已确认"
+					state = i18n.T("新读取已确认")
 				}
-				rows = append(rows, label+"："+state+"；"+item.Reason)
+				rows = append(rows, fmt.Sprintf("%s: %s; %s", label, state, item.Reason))
 			}
 		} else {
-			rows = append(rows, "尚无逐项核对结果；请求可能部分完成，请勿重发。")
+			rows = append(rows, i18n.T("尚无逐项核对结果；请求可能部分完成，请勿重发。"))
 		}
 		return rows, err
 	})
@@ -342,32 +343,32 @@ func (p *ImportPanel) View(c *ui.Context) {
 	if p.Flow.closed {
 		return
 	}
-	ui.Text(c, "组织导入预览与集合映射").FontSize(22)
+	ui.Text(c, i18n.T("组织导入预览与集合映射")).FontSize(22)
 	ui.Text(c, p.format)
 	if len(p.resourcePreview) > 0 {
-		ui.Text(c, "此步只创建元数据；附件尚未恢复。后续必须明确映射目标编号、上传、同步和逐文件下载核验。").MaxLines(4)
+		ui.Text(c, i18n.T("此步只创建元数据；附件尚未恢复。后续必须明确映射目标编号、上传、同步和逐文件下载核验。")).MaxLines(4)
 	}
 	for _, resource := range p.resourcePreview {
-		ui.Text(c, fmt.Sprintf("附件：%s · %s/%s · %d 字节", resource.FileName, resource.CipherID, resource.AttachmentID, resource.Size)).FontSize(12)
+		ui.Text(c, i18n.Tf("附件：%s · %s/%s · %d 字节", resource.FileName, resource.CipherID, resource.AttachmentID, resource.Size)).FontSize(12)
 	}
 	for _, state := range p.resourceStates {
 		if state.Archived || state.Deleted || state.FolderID != nil {
-			ui.Text(c, fmt.Sprintf("%s：文件核验后需恢复归档=%t、回收站=%t，并明确映射原文件夹引用。", state.SourceID, state.Archived, state.Deleted)).MaxLines(3)
+			ui.Text(c, i18n.Tf("%s：文件核验后需恢复归档=%t、回收站=%t，并明确映射原文件夹引用。", state.SourceID, state.Archived, state.Deleted)).MaxLines(3)
 		}
 	}
 	// The worker owns and clears the plaintext plan while running. Never read it
 	// from the UI after dispatch.
 	if !p.Flow.running && !p.Flow.terminal && p.plan != nil {
 		for i, item := range p.plan.PreviewItems() {
-			ui.Text(c, fmt.Sprintf("%d. %s（类型 %d）", i+1, item.Name, item.Type))
+			ui.Text(c, i18n.Tf("%d. %s（类型 %d）", i+1, item.Name, item.Type))
 			if item.Archived || item.Deleted {
-				ui.Text(c, "此条目有归档或回收站状态，官方组织导入端点不能保留，已阻止提交。")
+				ui.Text(c, i18n.T("此条目有归档或回收站状态，官方组织导入端点不能保留，已阻止提交。"))
 			}
 		}
 		for _, source := range p.plan.Collections() {
-			ui.Text(c, "源集合："+source.Name)
+			ui.Text(c, i18n.Tf("源集合：%s", source.Name))
 			value, set := p.mappings[source.ID]
-			if kit.Action(c, "创建同名新集合", "", set && value == "", p.Flow.confirm || !p.createAllowed).Key("org-map-new-" + source.ID).Clicked() {
+			if kit.Action(c, i18n.T("创建同名新集合"), "", set && value == "", p.Flow.confirm || !p.createAllowed).Key("org-map-new-" + source.ID).Clicked() {
 				p.mappings[source.ID] = ""
 			}
 			for _, target := range p.choices {
@@ -381,7 +382,7 @@ func (p *ImportPanel) View(c *ui.Context) {
 	if !p.Flow.blocked() {
 		ready = p.ready()
 	}
-	p.Flow.footer(c, "org-import", "确认导入预览条目及集合映射？此操作非事务，部分成功不能自动重发。", ready, p.start)
+	p.Flow.footer(c, "org-import", i18n.T("确认导入预览条目及集合映射？此操作非事务，部分成功不能自动重发。"), ready, p.start)
 }
 
 type ExportPanel struct {
@@ -418,25 +419,25 @@ func (p *ExportPanel) start() {
 		if err != nil {
 			return nil, err
 		}
-		return []string{"已安全保存明文组织文件；请妥善保管并在使用后移除。"}, nil
+		return []string{i18n.T("已安全保存明文组织文件；请妥善保管并在使用后移除。")}, nil
 	})
 }
 func (p *ExportPanel) View(c *ui.Context) {
 	if p.Flow.closed {
 		return
 	}
-	ui.Text(c, "导出组织："+p.organizationName).FontSize(22)
+	ui.Text(c, i18n.Tf("导出组织：%s", p.organizationName)).FontSize(22)
 	disabled := p.Flow.blocked() || p.Flow.confirm || !p.allowed
-	ui.TextInput(c, &p.path).Label("保存到新文件（禁止覆盖已有文件）").Disabled(disabled)
-	if kit.Action(c, "MyGo 组织备份 v1", "", !p.official && !p.resources, disabled).Key("org-export-mygo").Clicked() {
+	ui.TextInput(c, &p.path).Label(i18n.T("保存到新文件（禁止覆盖已有文件）")).Disabled(disabled)
+	if kit.Action(c, i18n.T("MyGo 组织备份 v1"), "", !p.official && !p.resources, disabled).Key("org-export-mygo").Clicked() {
 		p.official, p.resources = false, false
 	}
-	if kit.Action(c, "Bitwarden 官方明文 JSON", "", p.official && !p.resources, disabled).Key("org-export-official").Clicked() {
+	if kit.Action(c, i18n.T("Bitwarden 官方明文 JSON"), "", p.official && !p.resources, disabled).Key("org-export-official").Clicked() {
 		p.official, p.resources = true, false
 	}
-	if kit.Action(c, "MyGo 完整组织资源备份（附件与通行密钥，非官方格式）", "", p.resources, disabled || p.executeResources == nil).Key("org-export-resources").Clicked() {
+	if kit.Action(c, i18n.T("MyGo 完整组织资源备份（附件与通行密钥，非官方格式）"), "", p.resources, disabled || p.executeResources == nil).Key("org-export-resources").Clicked() {
 		p.resources = true
 		p.official = false
 	}
-	p.Flow.footer(c, "org-export", "此文件包含明文密码和所选格式支持的文件。完整资源格式最多 1 GiB 文件及 32 MiB 元数据，不是官方 JSON。确认组织、路径和格式，并允许安全保存？无法完整保留的字段将阻止导出。", p.allowed && ((!p.resources && p.execute != nil) || (p.resources && p.executeResources != nil)) && strings.TrimSpace(p.path) != "", p.start)
+	p.Flow.footer(c, "org-export", i18n.T("此文件包含明文密码和所选格式支持的文件。完整资源格式最多 1 GiB 文件及 32 MiB 元数据，不是官方 JSON。确认组织、路径和格式，并允许安全保存？无法完整保留的字段将阻止导出。"), p.allowed && ((!p.resources && p.execute != nil) || (p.resources && p.executeResources != nil)) && strings.TrimSpace(p.path) != "", p.start)
 }

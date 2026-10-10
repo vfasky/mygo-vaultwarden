@@ -2,6 +2,7 @@
 package organization
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -16,6 +17,8 @@ type ResourceRow struct {
 // of a possibly dispatched request.
 type ResourcePreparationError struct{ Cause error }
 
-func (e *ResourcePreparationError) Error() string { return "尚未提交：" + e.Cause.Error() }
+func (e *ResourcePreparationError) Error() string {
+	return i18n.Tf("尚未提交：%s", e.Cause.Error())
+}
 
 func (e *ResourcePreparationError) Unwrap() error { return e.Cause }

@@ -3,9 +3,9 @@ package organization
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -81,7 +81,7 @@ func (p *OperationsPanel) Start() {
 		p.Busy(true)
 	}
 	p.Confirmation = false
-	p.status = "正在处理组织条目…"
+	p.status = i18n.T("正在处理组织条目…")
 	generation := p.generation
 	orgID, operation, execute, dispatch := p.orgID, p.action, p.execute, p.dispatch
 	go func() {
@@ -99,13 +99,13 @@ func (p *OperationsPanel) Start() {
 			p.cancel = nil
 			switch {
 			case result.ReconcileRequired:
-				p.status = "服务器可能已处理部分条目。请同步逐项核对，勿直接重试。"
+				p.status = i18n.T("服务器可能已处理部分条目。请同步逐项核对，勿直接重试。")
 			case err != nil:
-				p.status = "请求未完成：" + err.Error() + "。请重新同步核对。"
+				p.status = i18n.Tf("请求未完成：%s。请重新同步核对。", err.Error())
 			case result.Applied:
-				p.status = fmt.Sprintf("服务器已确认 %d 项操作，请同步更新列表。", len(result.IDs))
+				p.status = i18n.Tf("服务器已确认 %d 项操作，请同步更新列表。", len(result.IDs))
 			default:
-				p.status = "未获得可靠结果，请同步核对。"
+				p.status = i18n.T("未获得可靠结果，请同步核对。")
 			}
 		})
 	}()
@@ -114,8 +114,8 @@ func (p *OperationsPanel) View(c *ui.Context) {
 	if p.Closed {
 		return
 	}
-	ui.Text(c, "组织条目操作").FontSize(22)
-	ui.Text(c, "批量操作可能部分完成；发生错误或取消后必须同步核对。需要主密码的条目请从单项授权入口处理。")
+	ui.Text(c, i18n.T("组织条目操作")).FontSize(22)
+	ui.Text(c, i18n.T("批量操作可能部分完成；发生错误或取消后必须同步核对。需要主密码的条目请从单项授权入口处理。"))
 	for _, entry := range p.entries {
 		blocked := p.running || p.terminal || !entry.Editable || !entry.Readable || entry.RequiresPassword
 		if kit.Action(c, entry.Title, "", p.Selected[entry.ID], blocked).Key("org-operation-item-" + entry.ID).Clicked() {
@@ -125,28 +125,28 @@ func (p *OperationsPanel) View(c *ui.Context) {
 	for _, option := range []struct {
 		label  string
 		action vaultwarden.CipherAction
-	}{{"移到回收站", vaultwarden.CipherTrash}, {"恢复", vaultwarden.CipherRestore}, {"归档", vaultwarden.CipherArchive}, {"取消归档", vaultwarden.CipherUnarchive}, {"永久删除", vaultwarden.CipherDeletePermanently}} {
+	}{{i18n.T("移到回收站"), vaultwarden.CipherTrash}, {i18n.T("恢复"), vaultwarden.CipherRestore}, {i18n.T("归档"), vaultwarden.CipherArchive}, {i18n.T("取消归档"), vaultwarden.CipherUnarchive}, {i18n.T("永久删除"), vaultwarden.CipherDeletePermanently}} {
 		if kit.Action(c, option.label, "", p.action == option.action, p.running || p.terminal).Key("org-operation-" + string(option.action)).Clicked() {
 			p.action = option.action
 			p.Confirmation = false
 		}
 	}
 	if p.Confirmation {
-		ui.Text(c, fmt.Sprintf("确认对 %d 个组织条目执行所选操作？永久删除无法撤销。", len(p.ids())))
-		if kit.Action(c, "确认执行", "", true, p.running).Key("org-operation-confirm").Clicked() {
+		ui.Text(c, i18n.Tf("确认对 %d 个组织条目执行所选操作？永久删除无法撤销。", len(p.ids())))
+		if kit.Action(c, i18n.T("确认执行"), "", true, p.running).Key("org-operation-confirm").Clicked() {
 			p.Start()
 		}
-		if kit.Action(c, "返回选择", "", false, p.running).Key("org-operation-back").Clicked() {
+		if kit.Action(c, i18n.T("返回选择"), "", false, p.running).Key("org-operation-back").Clicked() {
 			p.Confirmation = false
 		}
-	} else if kit.Action(c, "核对所选操作", "", true, p.running || p.terminal || len(p.ids()) == 0 || p.execute == nil || p.dispatch == nil).Key("org-operation-review").Clicked() {
+	} else if kit.Action(c, i18n.T("核对所选操作"), "", true, p.running || p.terminal || len(p.ids()) == 0 || p.execute == nil || p.dispatch == nil).Key("org-operation-review").Clicked() {
 		p.Confirmation = true
 	}
-	if p.running && kit.Action(c, "取消请求并核对结果", "", false, false).Key("org-operation-cancel").Clicked() {
+	if p.running && kit.Action(c, i18n.T("取消请求并核对结果"), "", false, false).Key("org-operation-cancel").Clicked() {
 		if p.cancel != nil {
 			p.cancel()
 		}
-		p.status = "正在取消；已发送请求可能已部分执行。"
+		p.status = i18n.T("正在取消；已发送请求可能已部分执行。")
 	}
 	if p.status != "" {
 		ui.Text(c, p.status)
