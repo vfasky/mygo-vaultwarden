@@ -12,3 +12,4 @@ xcuserdata/
 
 # Local notes and signing configuration (never commit)
 /.local/
+macos/Authentication/.build
