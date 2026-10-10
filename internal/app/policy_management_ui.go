@@ -55,9 +55,9 @@ func (a *app) pendingPolicyRecoveryView(c *ui.Context, e *organizationEditor, di
 	if !a.hasPendingPolicy(e.id) {
 		return
 	}
-	ui.Text(c, i18n.T("此组织策略修改待核验。受限类型修改期间暂停个人条目读取与填充；个人所有权修改仅暂停个人保存；默认 URI 修改暂停所有继承默认的 URI 填充，明确设置的规则保留。其他组织仍按自身权限访问。普通同步不会解除待核验状态。")).MaxLines(5)
+	ui.Text(c, i18n.T("org.policy.pending_recovery_hint")).MaxLines(5)
 	if e.policyRecovery == nil {
-		if kit.Action(c, i18n.T("读取服务器当前策略以核验"), "sync", false, disabled).Key("policy-review").Clicked() {
+		if kit.Action(c, i18n.T("org.policy.review_server_policy"), "sync", false, disabled).Key("policy-review").Clicked() {
 			a.runOrganizationManagement("policy-review")
 		}
 		return
@@ -65,13 +65,13 @@ func (a *app) pendingPolicyRecoveryView(c *ui.Context, e *organizationEditor, di
 	for _, line := range e.policyRecovery.Summary() {
 		ui.Text(c, line).MaxLines(3)
 	}
-	ui.Text(c, collectionPermissionLabel(i18n.T("当前服务器策略启用"), e.policyRecovery.Enabled()))
-	ui.Text(c, i18n.T("请核对以上当前状态。确认将再次连接服务器比对策略和成员身份后恢复本机访问；不会重试原修改，也不会自动恢复已撤销成员。先前未知请求仍可能迟到执行，恢复不能保证消除服务器并发窗口。")).MaxLines(6)
-	if kit.Action(c, i18n.T("确认当前策略并重新核验访问"), "", true, disabled).Key("policy-restore").Clicked() {
+	ui.Text(c, collectionPermissionLabel(i18n.T("org.policy.server_policy_enabled"), e.policyRecovery.Enabled()))
+	ui.Text(c, i18n.T("org.policy.confirm_recovery_hint")).MaxLines(6)
+	if kit.Action(c, i18n.T("org.policy.confirm_restore_access"), "", true, disabled).Key("policy-restore").Clicked() {
 		e.confirmation = "policy-restore"
 		a.runOrganizationManagement("policy-restore")
 	}
-	if kit.Action(c, i18n.T("取消策略恢复"), "", false, disabled).Clicked() {
+	if kit.Action(c, i18n.T("org.policy.cancel_recovery"), "", false, disabled).Clicked() {
 		e.policyRecovery.Close()
 		e.policyRecovery = nil
 		e.confirmation = ""
@@ -87,10 +87,10 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 	if !allowed {
 		return
 	}
-	ui.Text(c, i18n.T("组织策略")).FontSize(18)
+	ui.Text(c, i18n.T("org.policy.title")).FontSize(18)
 	defs := vaultwarden.OrganizationPolicyDefinitions()
 	if e.policyDraft == nil {
-		if kit.Action(c, i18n.T("加载组织策略"), "", false, disabled).Key("policy-list").Clicked() {
+		if kit.Action(c, i18n.T("org.policy.load_policies"), "", false, disabled).Key("policy-list").Clicked() {
 			a.runOrganizationManagement("policy-list")
 		}
 		for _, entry := range e.policies {
@@ -114,32 +114,32 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 			ui.Text(c, def.Consumption).MaxLines(5)
 		}
 	}
-	ui.Text(c, i18n.T("未编辑字段和未知扩展数据按原值保留。字段选“默认”会明确写入空值；启用状态仅表示服务器配置，实际执行范围见上方说明。")).MaxLines(4)
-	if kit.Action(c, collectionPermissionLabel(i18n.T("启用策略"), d.Enabled), "", false, disabled || confirming).Key("policy-enabled").Clicked() {
+	ui.Text(c, i18n.T("org.policy.fields_hint")).MaxLines(4)
+	if kit.Action(c, collectionPermissionLabel(i18n.T("org.policy.enable_policy"), d.Enabled), "", false, disabled || confirming).Key("policy-enabled").Clicked() {
 		d.Enabled = !d.Enabled
 	}
 	for i := range d.Fields {
 		f := &d.Fields[i]
 		ui.Text(c, f.Label)
 		if f.Kind == "uri" && (f.Value == "2" || f.Value == "4") {
-			label := i18n.T("以此开头")
+			label := i18n.T("org.policy.uri_starts_with")
 			if f.Value == "4" {
-				label = i18n.T("正则表达式")
+				label = i18n.T("org.policy.uri_regex")
 			}
-			ui.Text(c, i18n.Tf("服务器当前规则：%s。未选择新规则时保留原值；固定客户端新表单不提供此选项。", label)).MaxLines(3)
+			ui.Text(c, i18n.Tf("org.policy.current_uri_rule_hint", label)).MaxLines(3)
 		}
 		if f.Kind == "number" {
-			ui.TextInput(c, &f.Value).Label(i18n.Tf("整数 %d–%d；空白表示默认", f.Min, f.Max)).Disabled(disabled || confirming)
+			ui.TextInput(c, &f.Value).Label(i18n.Tf("org.policy.number_range_hint", f.Min, f.Max)).Disabled(disabled || confirming)
 			continue
 		}
-		options := []struct{ value, label string }{{"", i18n.T("默认")}}
+		options := []struct{ value, label string }{{"", i18n.T("org.policy.default_value")}}
 		switch f.Kind {
 		case "bool":
-			options = append(options, struct{ value, label string }{"true", i18n.T("是")}, struct{ value, label string }{"false", i18n.T("否")})
+			options = append(options, struct{ value, label string }{"true", i18n.T("org.policy.yes")}, struct{ value, label string }{"false", i18n.T("org.policy.no")})
 		case "generator":
-			options = append(options, struct{ value, label string }{"password", i18n.T("密码")}, struct{ value, label string }{"passphrase", i18n.T("密码短语")})
+			options = append(options, struct{ value, label string }{"password", i18n.T("common.password")}, struct{ value, label string }{"passphrase", i18n.T("org.policy.passphrase")})
 		case "uri":
-			for n, label := range []string{i18n.T("基础域名"), i18n.T("主机"), i18n.T("以此开头"), i18n.T("完全匹配"), i18n.T("正则表达式"), i18n.T("从不匹配")} {
+			for n, label := range []string{i18n.T("org.policy.uri_base_domain"), i18n.T("org.policy.uri_host"), i18n.T("org.policy.uri_starts_with"), i18n.T("org.policy.uri_exact"), i18n.T("org.policy.uri_regex"), i18n.T("org.policy.uri_never")} {
 				if n == 2 || n == 4 {
 					continue
 				}
@@ -153,28 +153,28 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 		}
 	}
 	if !confirming {
-		if kit.Action(c, i18n.T("保存策略"), "", true, disabled).Key("policy-save").Clicked() {
+		if kit.Action(c, i18n.T("org.policy.save_policy"), "", true, disabled).Key("policy-save").Clicked() {
 			e.policyConsent.Close()
 			e.policyConsent = d.Confirm()
 			if e.policyConsent == nil {
-				a.status = i18n.T("策略字段无效，请核对数字范围与选项")
+				a.status = i18n.T("org.policy.err_invalid_fields")
 			} else {
 				e.confirmation = "policy-save"
 			}
 		}
 	} else {
-		ui.Text(c, i18n.T("确认上述策略及影响：保存前重新读取策略与成员身份，但服务器没有版本比较，仍存在并发窗口。所有策略保存前会持久隔离本机此组织；普通同步不会恢复访问，需要显式重新核验。")).MaxLines(6)
-		ui.Text(c, i18n.T("启用双因素或单一组织策略可能先撤销不符合条件的成员，再保存策略；即使返回错误，也可能已撤销部分成员。未知结果不重试，请核对成员和策略，关闭策略不会自动恢复成员。")).MaxLines(6)
-		if kit.Action(c, i18n.T("确认保存组织策略"), "", true, disabled).Key("policy-confirm").Clicked() {
+		ui.Text(c, i18n.T("org.policy.confirm_save_hint")).MaxLines(6)
+		ui.Text(c, i18n.T("org.policy.member_revocation_hint")).MaxLines(6)
+		if kit.Action(c, i18n.T("org.policy.confirm_save"), "", true, disabled).Key("policy-confirm").Clicked() {
 			a.runOrganizationManagement("policy-save")
 		}
-		if kit.Action(c, i18n.T("取消策略确认"), "", false, disabled).Clicked() {
+		if kit.Action(c, i18n.T("org.policy.cancel_confirmation"), "", false, disabled).Clicked() {
 			e.policyConsent.Close()
 			e.policyConsent = nil
 			e.confirmation = ""
 		}
 	}
-	if kit.Action(c, i18n.T("返回策略列表"), "", false, disabled).Clicked() {
+	if kit.Action(c, i18n.T("org.policy.back_to_list"), "", false, disabled).Clicked() {
 		e.policyDraft.Close()
 		e.policyDraft = nil
 		e.policyConsent.Close()

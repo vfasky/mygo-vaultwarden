@@ -6,6 +6,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+	"strconv"
 	"time"
 )
 
@@ -15,7 +16,7 @@ func (a *app) organizationTypePicker(c *ui.Context, e *cipherEditor) {
 	for row := 0; row < 2; row++ {
 		ui.Row(c).Gap(4).Children(func() {
 			for kind := 1 + row*4; kind <= 4+row*4; kind++ {
-				if kit.Action(c, i18n.Tf("类型：%s", i18n.T(cipherTypeNames[kind])), "", kind == e.fields.Type, a.pending != 0 || e.uncertain).Key("organization-type-" + cipherTypeNames[kind]).Clicked() {
+				if kit.Action(c, i18n.Tf("org.share.item_type", i18n.T(cipherTypeNames[kind])), "", kind == e.fields.Type, a.pending != 0 || e.uncertain).Key("organization-type-" + strconv.Itoa(kind)).Clicked() {
 					e.applyInputs()
 					e.fields.Type = kind
 					populateCipherEditor(e)
@@ -31,16 +32,16 @@ func (a *app) organizationShareView(c *ui.Context, e *cipherEditor) {
 		return
 	}
 	if e.shareCollectionID != "" {
-		ui.Text(c, i18n.T("共享后项目归组织所有，组织中具备权限的成员将能访问。请确认目标集合；此操作不会保留个人副本。"))
+		ui.Text(c, i18n.T("org.share.ownership_hint"))
 		for _, collection := range a.collections {
 			if collection.ID == e.shareCollectionID {
-				ui.Text(c, i18n.Tf("目标集合：%s", collection.Name))
+				ui.Text(c, i18n.Tf("org.share.target_collection", collection.Name))
 			}
 		}
-		if kit.Action(c, i18n.T("确认共享到组织"), "", true, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-confirm").Clicked() {
+		if kit.Action(c, i18n.T("org.share.confirm_share"), "", true, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-confirm").Clicked() {
 			a.mutateCipher(shareOrganizationAction)
 		}
-		if kit.Action(c, i18n.T("取消共享"), "", false, a.pending != 0).Key("organization-share-cancel").Clicked() {
+		if kit.Action(c, i18n.T("org.share.cancel_share"), "", false, a.pending != 0).Key("organization-share-cancel").Clicked() {
 			e.shareOrganizationID, e.shareCollectionID = "", ""
 		}
 		return
@@ -48,7 +49,7 @@ func (a *app) organizationShareView(c *ui.Context, e *cipherEditor) {
 	for _, org := range a.organizations {
 		for _, collection := range a.collections {
 			if collection.OrganizationID == org.ID && !collection.ReadOnly && !collection.HidePasswords {
-				if kit.Action(c, i18n.Tf("共享到 %s / %s", org.Name, collection.Name), "", false, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-select-" + collection.ID).Clicked() {
+				if kit.Action(c, i18n.Tf("org.share.share_to", org.Name, collection.Name), "", false, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-select-" + collection.ID).Clicked() {
 					e.shareOrganizationID, e.shareCollectionID = org.ID, collection.ID
 				}
 			}
@@ -85,7 +86,7 @@ func (a *app) readOnlyOrganizationCipherView(c *ui.Context, e *cipherEditor) {
 	}
 	ui.Column(c).Gap(12).Padding(18).Children(func() {
 		ui.Text(c, e.fields.Name).FontSize(23)
-		ui.Text(c, i18n.T("组织授予此项目查看权限。修改需要组织管理员调整集合权限。"))
+		ui.Text(c, i18n.T("org.share.read_only_hint"))
 		for _, input := range e.inputs {
 			if !input.secret {
 				ui.Text(c, input.label+"："+input.value)
@@ -100,21 +101,21 @@ func (a *app) readOnlyOrganizationCipherView(c *ui.Context, e *cipherEditor) {
 			}
 		}
 		if e.fields.Type == 1 {
-			if kit.Action(c, i18n.T("显示密码（30 秒）"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("org.share.show_password"), "", false, a.pending != 0).Clicked() {
 				a.showPersonalSecret("password", callStorage)
 			}
-			if kit.Action(c, i18n.T("复制密码"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("org.share.copy_password"), "", false, a.pending != 0).Clicked() {
 				a.copyPersonalSecret("password", callStorage)
 			}
-			if kit.Action(c, i18n.T("显示验证码"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("org.share.show_totp"), "", false, a.pending != 0).Clicked() {
 				a.showPersonalSecret("totp", callStorage)
 			}
-			if kit.Action(c, i18n.T("复制验证码"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("org.share.copy_totp"), "", false, a.pending != 0).Clicked() {
 				a.copyPersonalSecret("totp", callStorage)
 			}
 		}
 		a.attachmentView(c, e)
-		if kit.Action(c, i18n.T("关闭"), "", false, false).Clicked() {
+		if kit.Action(c, i18n.T("common.close"), "", false, false).Clicked() {
 			*e = cipherEditor{}
 			a.editor = nil
 		}
