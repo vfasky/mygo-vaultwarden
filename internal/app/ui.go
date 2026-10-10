@@ -720,7 +720,7 @@ func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential)
 				kit.Icon(c, "chevron", 12).TextColor(kit.Muted)
 				kind := i18n.T("登录")
 				if item.Type > 0 && item.Type < len(cipherTypeNames) {
-					kind = cipherTypeNames[item.Type]
+					kind = i18n.T(cipherTypeNames[item.Type])
 				}
 				ui.Text(c, kind).FontSize(12).TextColor(kit.Muted)
 				ui.Spacer(c)

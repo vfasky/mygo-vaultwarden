@@ -164,9 +164,6 @@ func TestCatalogCoverage(t *testing.T) {
 	dirs, full := sourceRoots, true
 	if scope := os.Getenv("I18N_SCOPE"); scope != "" {
 		dirs, full = strings.Split(scope, ","), false
-	} else if os.Getenv("I18N_FULL") != "1" {
-		// TODO(i18n): drop this skip once every package is translated.
-		t.Skip("set I18N_SCOPE=<dirs> or I18N_FULL=1 while the migration is in progress")
 	}
 	keys, bare := scan(t, root, dirs)
 	if len(bare) > 0 {

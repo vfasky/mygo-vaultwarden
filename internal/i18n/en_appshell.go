@@ -91,7 +91,7 @@ var enAppShell = map[string]string{
 	"原本机账号：%s / %s\n新账号：%s / %s":         "Previous account on this Mac: %s / %s\nNew account: %s / %s",
 	"需要系统认证原缓存；原账号仍有策略、组织隔离或恢复事项时将先拒绝。写入确认前保留旧密文与密钥，未知结果只检查同一次切换，不自动重试。": "System authentication is required for the original cache. The change is blocked if the original account has outstanding policy, organization quarantine, or recovery issues. The old encrypted data and keys are retained until the write is confirmed. If the result is unknown, only this same switch is checked; it is not retried automatically.",
 	"明确同意替换以上本机账号": "I agree to replace the local account above",
-	"已同意替换（点击撤回）":  "Replacement agreed (click to withdraw)",
+	"已同意替换（点击撤回）":  "Replacement approved (click to withdraw)",
 	"显式绑定当前账号主密码":  "Explicitly bind this account's master password",
 	"绑定主密码并重新同步":   "Bind master password and sync again",
 	"核验目标账号恢复记录":   "Verify target account recovery record",

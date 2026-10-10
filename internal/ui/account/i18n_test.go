@@ -20,7 +20,7 @@ func TestAccountEnglishRegistrationPreservesStatusValue(t *testing.T) {
 		t.Fatal("registration status value changed with language")
 	}
 	tt := ui.NewTester(func(c *ui.Context) { FormView(c, f) }, 1200, 2400)
-	for _, text := range []string{"Account and security", "Complete registration", "Check password strength", "Verification email requested. Enter the registration token from the email"} {
+	for _, text := range []string{"Account & security", "Complete registration", "Check password strength", "Verification email requested. Enter the registration token from the email"} {
 		if !tt.HasText(text) {
 			t.Errorf("English form missing %q", text)
 		}
@@ -44,7 +44,7 @@ func TestAccountEnglishAPIKeyConfirmationPreservesProtocol(t *testing.T) {
 	if calls != 0 || !f.confirming || !tt.HasText("Your personal API key is a sensitive credential. Rotating it invalidates the old key. Confirm before continuing.") {
 		t.Fatal("English API key action bypassed confirmation or omitted warning")
 	}
-	if err := tt.Click("Confirm and execute"); err != nil {
+	if err := tt.Click("Confirm and run"); err != nil {
 		t.Fatal(err)
 	}
 	if calls != 1 || request.Operation != "rotate-api-key" || request.Confirmation != "rotate-api-key" {
