@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -22,7 +23,7 @@ func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEdi
 
 func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *cipherEditor, dispatch func(func()), storage func(localstore.Request) localstore.Reply, refresh func()) {
 	if err := attachmentDraftSaved(session, a.vault, e); err != nil {
-		a.status = "复制含附件项目之前，请先保存草稿；完整复制使用已保存版本。"
+		a.status = i18n.T("复制含附件项目之前，请先保存草稿；完整复制使用已保存版本。")
 		return
 	}
 	a.advanceEpoch()
@@ -110,11 +111,11 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 			json.Unmarshal(created.JSON, &metadata)
 			if metadata.ID != "" {
 				resources.targets[id] = metadata.ID
-				editor.results = []vaultwarden.ImportEntry{{Kind: "项目", Name: e.fields.Name, ID: metadata.ID, SourceID: id, State: "副本元数据已创建，附件待恢复核验"}}
+				editor.results = []vaultwarden.ImportEntry{{Kind: i18n.Key("项目"), Name: e.fields.Name, ID: metadata.ID, SourceID: id, State: i18n.Key("副本元数据已创建，附件待恢复核验")}}
 			}
 			a.editor = nil
 			a.backupEditor = editor
-			a.status = "副本尚未完成：请逐文件恢复并核验。源项目及其附件保留；创建结果未知时先同步核对目标编号，勿再次创建。"
+			a.status = i18n.T("副本尚未完成：请逐文件恢复并核验。源项目及其附件保留；创建结果未知时先同步核对目标编号，勿再次创建。")
 			if err != nil {
 				a.status = err.Error() + " " + a.status
 			}
