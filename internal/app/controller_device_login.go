@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
@@ -79,7 +80,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 		accountID = a.snapshot.Scope.Account
 	}
 	if accountID == "" {
-		a.status = "请输入此已登记设备对应的已知账号编号，或使用已有本机账号的邮箱。服务器不会通过邮箱为新设备发现账号身份。"
+		a.status = i18n.T("请输入此已登记设备对应的已知账号编号，或使用已有本机账号的邮箱。服务器不会通过邮箱为新设备发现账号身份。")
 		return
 	}
 	scope := vaultwarden.Scope{Server: server, Account: accountID}
@@ -111,7 +112,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 	}
 	a.deviceLifecycle = lifetime
 	a.pending++
-	a.status = "正在核验原本机保护状态；如系统要求认证，请完成认证。"
+	a.status = i18n.T("正在核验原本机保护状态；如系统要求认证，请完成认证。")
 	go func() {
 		var protection *vaultwarden.VaultData
 		err := lifetime.check(scope, epoch)
@@ -147,7 +148,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 			}
 			platform := sysauth.NewAuthenticationPlatform(a.window)
 			var panel *account.DeviceLoginPanel
-			host := account.DeviceLoginHost{Check: lifetime.check, Platform: platform.MFA(server, epoch), AcceptingMessage: "设备凭据已验证，正在核对本机策略与恢复屏障…"}
+			host := account.DeviceLoginHost{Check: lifetime.check, Platform: platform.MFA(server, epoch), AcceptingMessage: i18n.T("设备凭据已验证，正在核对本机策略与恢复屏障…")}
 			host.Dispatch = func(f func()) { dispatch(func() { f(); a.retainDeviceWarnings(panel) }) }
 			host.Accept = func(flow *vaultwarden.DeviceLogin, result vaultwarden.DeviceLoginResult) error {
 				if a.epoch != epoch || a.deviceLifecycle != lifetime || !lifetime.active.Load() || result.Session == nil || result.Sync.Scope != scope || result.Sync.Vault == nil {
@@ -219,12 +220,12 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 						panel.Close()
 						a.retainDeviceWarnings(panel)
 						a.deviceLoginPanel = nil
-						a.status = "临时在线密码库已打开；原磁盘快照保留，不注册自动填充。访问令牌到期或锁定后需重新认证。"
+						a.status = i18n.T("临时在线密码库已打开；原磁盘快照保留，不注册自动填充。访问令牌到期或锁定后需重新认证。")
 						a.runtimeExpiry = time.AfterFunc(time.Until(cap.Expires()), func() {
 							dispatch(func() {
 								if a.runtimeVault == runtime {
 									a.stopNetwork()
-									a.status = "临时在线会话已到期，原本机快照保持不变。"
+									a.status = i18n.T("临时在线会话已到期，原本机快照保持不变。")
 								}
 							})
 						})
@@ -243,15 +244,15 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 
 func (a *app) deviceLoginSetupView(c *ui.Context) {
 	busy := a.pending != 0
-	ui.Text(c, "通过另一台设备登录").FontSize(20)
-	ui.TextInput(c, &a.serverURL).Label("服务器地址").Disabled(busy)
-	ui.TextInput(c, &a.email).Label("账号邮箱").Disabled(busy)
-	ui.TextInput(c, &a.deviceAccountID).Label("已知账号编号（已有同账号本机快照时可留空）").Disabled(busy)
-	ui.Text(c, "只支持服务器已登记的当前设备。另一台设备必须通过可信独立渠道核对完整公钥指纹。临时会话保留原磁盘快照，不保存密码库密钥或注册自动填充。").MaxLines(7)
-	if authPrimary(c, "发起设备审批", busy).Clicked() {
+	ui.Text(c, i18n.T("通过另一台设备登录")).FontSize(20)
+	ui.TextInput(c, &a.serverURL).Label(i18n.T("服务器地址")).Disabled(busy)
+	ui.TextInput(c, &a.email).Label(i18n.T("账号邮箱")).Disabled(busy)
+	ui.TextInput(c, &a.deviceAccountID).Label(i18n.T("已知账号编号（已有同账号本机快照时可留空）")).Disabled(busy)
+	ui.Text(c, i18n.T("只支持服务器已登记的当前设备。另一台设备必须通过可信独立渠道核对完整公钥指纹。临时会话保留原磁盘快照，不保存密码库密钥或注册自动填充。")).MaxLines(7)
+	if authPrimary(c, i18n.T("发起设备审批"), busy).Clicked() {
 		a.openDeviceLogin()
 	}
-	if authLink(c, "返回密码登录", false).Clicked() {
+	if authLink(c, i18n.T("返回密码登录"), false).Clicked() {
 		a.stopNetwork()
 		a.showLogin = true
 	}
@@ -267,7 +268,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(locals
 	var switchBinding *localstore.AccountSwitchBinding
 	if source.Scope != nil && *source.Scope != *a.liveScope {
 		if !a.runtimeReplaceConfirmed {
-			a.status = "请先明确确认替换当前磁盘账号；原账号保护未处理时不会提交。"
+			a.status = i18n.T("请先明确确认替换当前磁盘账号；原账号保护未处理时不会提交。")
 			return
 		}
 		binding, err := localstore.NewAccountSwitchBinding(&source, *a.liveScope)
@@ -334,7 +335,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(locals
 				if reply.State != nil {
 					a.snapshot = reply.State
 				}
-				a.status = err.Error() + " 未采用迟到或未知回执；请认证检查当前本机状态，不会自动重发切换。"
+				a.status = i18n.Tf("%s 未采用迟到或未知回执；请认证检查当前本机状态，不会自动重发切换。", err.Error())
 				return
 			}
 			runtime.close()
@@ -352,7 +353,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(locals
 				return
 			}
 			a.itemsRevision = reply.State.Revision
-			a.status = "主密码已显式绑定，重新同步并保存完整会话。"
+			a.status = i18n.T("主密码已显式绑定，重新同步并保存完整会话。")
 			a.startNotifications(dispatch, storage)
 		})
 	}()

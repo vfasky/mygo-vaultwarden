@@ -3,12 +3,12 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -81,67 +81,67 @@ func (a *app) backupEditorView(c *ui.Context) {
 	busy := a.pending != 0
 	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, "导入与导出").FontSize(23)
-			if organizationUIEnabled && !e.submitted && kit.Action(c, "打开加密共享迁移恢复文件…", "", false, busy).Clicked() {
+			ui.Text(c, i18n.T("导入与导出")).FontSize(23)
+			if organizationUIEnabled && !e.submitted && kit.Action(c, i18n.T("打开加密共享迁移恢复文件…"), "", false, busy).Clicked() {
 				a.chooseCipherShareRecovery()
 			}
-			ui.Text(c, "文件包含未加密的密码、通行密钥及其他秘密，请仅保存在可信本地位置。完整资源格式另含附件，不是 Bitwarden 官方格式；普通 JSON 不含附件。未知扩展仍整体拒绝。本页导入导出个人密码库。").MaxLines(5).FontSize(12)
+			ui.Text(c, i18n.T("文件包含未加密的密码、通行密钥及其他秘密，请仅保存在可信本地位置。完整资源格式另含附件，不是 Bitwarden 官方格式；普通 JSON 不含附件。未知扩展仍整体拒绝。本页导入导出个人密码库。")).MaxLines(5).FontSize(12)
 			if e.format == vaultwarden.MyGoResources {
-				ui.Text(c, "完整资源格式上限：文件合计 1 GiB、单文件 512 MiB、10,000 个文件、32 MiB 清单。操作不会自动重试或覆盖现有文件。").FontSize(12).MaxLines(3)
+				ui.Text(c, i18n.T("完整资源格式上限：文件合计 1 GiB、单文件 512 MiB、10,000 个文件、32 MiB 清单。操作不会自动重试或覆盖现有文件。")).FontSize(12).MaxLines(3)
 			}
 			if !e.submitted {
 				if !e.confirm && e.plan == nil {
 					for _, format := range []struct {
 						id    vaultwarden.BackupFormat
 						label string
-					}{{vaultwarden.BitwardenJSON, "Bitwarden 兼容 JSON（1–7 类）"}, {vaultwarden.MyGoBackup, "MyGo 备份（八类，.mygovault）"}, {vaultwarden.MyGoResources, "MyGo 完整资源备份（含附件，.mygoresources）"}} {
+					}{{vaultwarden.BitwardenJSON, i18n.T("Bitwarden 兼容 JSON（1–7 类）")}, {vaultwarden.MyGoBackup, i18n.T("MyGo 备份（八类，.mygovault）")}, {vaultwarden.MyGoResources, i18n.T("MyGo 完整资源备份（含附件，.mygoresources）")}} {
 						if kit.NavItem(c, format.label, "vault", "", e.format == format.id, busy).Clicked() {
 							e.format = format.id
 						}
 					}
-					if kit.Action(c, "切换到导入文件", "", false, busy || e.importing).Clicked() {
+					if kit.Action(c, i18n.T("切换到导入文件"), "", false, busy || e.importing).Clicked() {
 						e.importing = true
 					}
-					if kit.Action(c, "切换到导出所选", "", false, busy || !e.importing).Clicked() {
+					if kit.Action(c, i18n.T("切换到导出所选"), "", false, busy || !e.importing).Clicked() {
 						e.importing = false
 					}
 				}
 				if e.importing {
 					if e.plan == nil {
-						ui.Text(c, "只接受所选格式的明文文件；加密导出、其他应用备份及不支持的数据会拒绝。").MaxLines(3)
-						if kit.Action(c, "选择导入文件…", "", true, busy).Clicked() {
+						ui.Text(c, i18n.T("只接受所选格式的明文文件；加密导出、其他应用备份及不支持的数据会拒绝。")).MaxLines(3)
+						if kit.Action(c, i18n.T("选择导入文件…"), "", true, busy).Clicked() {
 							a.chooseImportFile()
 						}
 					} else {
-						ui.Text(c, fmt.Sprintf("已检查：%d 个项目、%d 个文件夹；其中归档 %d、回收站 %d。", e.plan.Items, e.plan.Folders, e.plan.Archived, e.plan.Deleted)).MaxLines(3)
-						ui.Text(c, "确认后创建独立副本及新的文件夹，不覆盖现有项目。历史内容保留；服务器创建、修订及删除时间重新生成。回收站项目先创建再移入回收站。中途失败可能只完成部分，不会自动重试。").MaxLines(6)
+						ui.Text(c, i18n.Tf("已检查：%d 个项目、%d 个文件夹；其中归档 %d、回收站 %d。", e.plan.Items, e.plan.Folders, e.plan.Archived, e.plan.Deleted)).MaxLines(3)
+						ui.Text(c, i18n.T("确认后创建独立副本及新的文件夹，不覆盖现有项目。历史内容保留；服务器创建、修订及删除时间重新生成。回收站项目先创建再移入回收站。中途失败可能只完成部分，不会自动重试。")).MaxLines(6)
 						for _, item := range e.plan.PreviewItems() {
-							label := []string{"", "登录", "安全笔记", "支付卡", "身份", "SSH 密钥", "银行账户", "驾驶证", "护照"}[item.Type] + " · " + item.Name
+							label := []string{"", i18n.T("登录"), i18n.T("安全笔记"), i18n.T("支付卡"), i18n.T("身份"), i18n.T("SSH 密钥"), i18n.T("银行账户"), i18n.T("驾驶证"), i18n.T("护照")}[item.Type] + " · " + item.Name
 							if item.Archived {
-								label += "（归档）"
+								label = i18n.Tf("%s（归档）", label)
 							}
 							if item.Deleted {
-								label += "（回收站）"
+								label = i18n.Tf("%s（回收站）", label)
 							}
 							ui.Text(c, label).MaxLines(2).FontSize(12)
 						}
 						a.backupResourcePreview(c, e)
-						if kit.Action(c, "确认创建这些项目", "", true, busy).Clicked() {
+						if kit.Action(c, i18n.T("确认创建这些项目"), "", true, busy).Clicked() {
 							a.importBackup()
 						}
 					}
 				} else {
-					ui.Text(c, "默认勾选当前列表；可逐项选择整个个人库，包括归档和回收站，同时导出全部个人文件夹（含空文件夹）。兼容 JSON 不支持护照、回收站、超过五条历史及额外登录设置，请改用 MyGo 备份。").MaxLines(5)
+					ui.Text(c, i18n.T("默认勾选当前列表；可逐项选择整个个人库，包括归档和回收站，同时导出全部个人文件夹（含空文件夹）。兼容 JSON 不支持护照、回收站、超过五条历史及额外登录设置，请改用 MyGo 备份。")).MaxLines(5)
 					for _, item := range e.candidates {
 						label := "□ " + item.Title
 						if e.selected[item.ID] {
 							label = "✓ " + item.Title
 						}
 						if item.Archived {
-							label += "（归档）"
+							label = i18n.Tf("%s（归档）", label)
 						}
 						if item.Deleted {
-							label += "（回收站）"
+							label = i18n.Tf("%s（回收站）", label)
 						}
 						if kit.Action(c, label, "", false, busy || e.confirm).Clicked() {
 							e.selected[item.ID] = !e.selected[item.ID]
@@ -149,35 +149,35 @@ func (a *app) backupEditorView(c *ui.Context) {
 					}
 					if e.confirm {
 						if backupSelectionRequiresPassword(e) {
-							ui.Text(c, "所选项目要求主密码确认。授权逐项绑定，30 秒后失效；保存窗口停留过久需重新确认。")
-							ui.TextInput(c, &e.exportPassword).Label("导出所选受保护项目的主密码").Password().Disabled(busy)
+							ui.Text(c, i18n.T("所选项目要求主密码确认。授权逐项绑定，30 秒后失效；保存窗口停留过久需重新确认。"))
+							ui.TextInput(c, &e.exportPassword).Label(i18n.T("导出所选受保护项目的主密码")).Password().Disabled(busy)
 						}
-						ui.Text(c, "确认将勾选项目中的密码、TOTP 秘钥、备注及历史以明文导出？请使用新的文件名；为保护原文件，本应用不会覆盖已有文件。").MaxLines(4)
-						if kit.Action(c, "确认并选择保存位置…", "", true, busy).Clicked() {
+						ui.Text(c, i18n.T("确认将勾选项目中的密码、TOTP 秘钥、备注及历史以明文导出？请使用新的文件名；为保护原文件，本应用不会覆盖已有文件。")).MaxLines(4)
+						if kit.Action(c, i18n.T("确认并选择保存位置…"), "", true, busy).Clicked() {
 							a.chooseExportFile()
 						}
-					} else if kit.Action(c, "继续导出…", "", true, busy).Clicked() {
+					} else if kit.Action(c, i18n.T("继续导出…"), "", true, busy).Clicked() {
 						e.confirm = true
 					}
 				}
 			} else {
-				ui.Text(c, "本次导入已提交，不可再次提交。请按下面的结果核对密码库；结果未知的项目需人工核对，勿重复导入。").MaxLines(4)
+				ui.Text(c, i18n.T("本次导入已提交，不可再次提交。请按下面的结果核对密码库；结果未知的项目需人工核对，勿重复导入。")).MaxLines(4)
 				for _, r := range e.results {
-					ui.Text(c, r.Kind+" · "+r.Name+"："+r.State).MaxLines(3).FontSize(12)
+					ui.Text(c, i18n.T(r.Kind)+" · "+r.Name+"："+i18n.T(r.State)).MaxLines(3).FontSize(12)
 				}
 				a.backupResourceRestoreView(c, e)
-				if kit.Action(c, "同步核对导入结果", "sync", false, busy).Clicked() {
+				if kit.Action(c, i18n.T("同步核对导入结果"), "sync", false, busy).Clicked() {
 					a.syncVault(false)
 				}
 			}
-			if kit.Action(c, "取消并关闭导入导出", "", false, false).Clicked() {
+			if kit.Action(c, i18n.T("取消并关闭导入导出"), "", false, false).Clicked() {
 				if a.cancel != nil {
 					a.cancel()
 					a.cancel = nil
 				}
 				a.advanceEpoch()
 				a.clearBackupEditor()
-				a.status = "已取消；如导入已发出，请同步核对部分结果。"
+				a.status = i18n.T("已取消；如导入已发出，请同步核对部分结果。")
 			}
 		})
 	})
@@ -190,10 +190,10 @@ func backupLease(state *localstore.SnapshotStatus, scope vaultwarden.Scope, revi
 }
 func backupDialogFilter(format vaultwarden.BackupFormat) mygo.FileFilter {
 	if format == vaultwarden.MyGoResources {
-		return mygo.FileFilter{Name: "MyGo 完整资源备份", Extensions: []string{"mygoresources"}}
+		return mygo.FileFilter{Name: i18n.T("MyGo 完整资源备份"), Extensions: []string{"mygoresources"}}
 	}
 	if format == vaultwarden.MyGoBackup {
-		return mygo.FileFilter{Name: "MyGo 备份", Extensions: []string{"mygovault"}}
+		return mygo.FileFilter{Name: i18n.T("MyGo 备份"), Extensions: []string{"mygovault"}}
 	}
 	return mygo.FileFilter{Name: "Bitwarden JSON", Extensions: []string{"json"}}
 }
@@ -245,7 +245,7 @@ func (a *app) chooseImportFile() {
 			}
 			e.plan = plan
 			if plan != nil {
-				a.status = "文件预检通过，请核对导入范围后确认。"
+				a.status = i18n.T("文件预检通过，请核对导入范围后确认。")
 			}
 		})
 	}()
@@ -270,13 +270,13 @@ func (a *app) chooseExportFile() {
 		}
 	}
 	if len(ids) == 0 {
-		a.status = "请先勾选导出的项目。"
+		a.status = i18n.T("请先勾选导出的项目。")
 		return
 	}
 	password := []byte(e.exportPassword)
 	e.exportPassword = ""
 	if backupSelectionRequiresPassword(e) && len(password) == 0 {
-		a.status = "请提供主密码以授权所选受保护项目。"
+		a.status = i18n.T("请提供主密码以授权所选受保护项目。")
 		return
 	}
 	e.exportIDs = append([]string(nil), ids...)
@@ -353,7 +353,7 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 		return
 	}
 	if stage == nil {
-		a.status = "已取消保存。"
+		a.status = i18n.T("已取消保存。")
 		return
 	}
 	// Publication stays on the UI thread so a processed lock/cancel cannot race
@@ -374,7 +374,7 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 	}
 	e.exportGrants = nil
 	e.confirm = false
-	a.status = "明文备份已安全写入新文件，请妥善保管并在不再需要时删除。"
+	a.status = i18n.T("明文备份已安全写入新文件，请妥善保管并在不再需要时删除。")
 }
 func (a *app) importBackup() {
 	a.importBackupWith(a.window.Update, localstore.Call, func() { a.syncVault(false) })
@@ -441,11 +441,11 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(localstore.Re
 				}
 			}
 			if err != nil {
-				e.results = append(e.results, vaultwarden.ImportEntry{Kind: "导入已停止", State: err.Error()})
+				e.results = append(e.results, vaultwarden.ImportEntry{Kind: i18n.T("导入已停止"), State: err.Error()})
 				a.syncFailed(reply, err)
 			}
 			if a.backupEditor == e && a.sessionOwnsSnapshot() {
-				a.status = "导入操作已结束，正在同步核对已知项目；结果未知时请人工核对。"
+				a.status = i18n.T("导入操作已结束，正在同步核对已知项目；结果未知时请人工核对。")
 				refresh()
 			}
 		})
@@ -477,13 +477,13 @@ func (a *app) reconcileImport(continuations ...*backupContinuation) {
 			continue
 		}
 		found := ids[r.ID]
-		if r.Kind == "文件夹" {
+		if r.Kind == i18n.Key("文件夹") {
 			found = folders[r.ID]
 		}
 		if found {
-			r.State = "同步已找到新建项目；请核对内容及归档、回收站状态"
+			r.State = i18n.T("同步已找到新建项目；请核对内容及归档、回收站状态")
 		} else {
-			r.State = "同步未找到此标识，请人工核对；不要重复导入"
+			r.State = i18n.T("同步未找到此标识，请人工核对；不要重复导入")
 		}
 	}
 }

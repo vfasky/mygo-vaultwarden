@@ -4,11 +4,11 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
@@ -17,7 +17,7 @@ import (
 
 func authenticationSummary(raw json.RawMessage) (string, error) {
 	if len(raw) == 0 {
-		return "请求已完成，请重新读取设置核验。", nil
+		return i18n.T("请求已完成，请重新读取设置核验。"), nil
 	}
 	var data struct {
 		Enabled      *bool  `json:"enabled"`
@@ -41,21 +41,21 @@ func authenticationSummary(raw json.RawMessage) (string, error) {
 	}
 	var lines []string
 	if data.Enabled != nil {
-		lines = append(lines, fmt.Sprintf("已启用：%t", *data.Enabled))
+		lines = append(lines, i18n.Tf("已启用：%t", *data.Enabled))
 	}
-	for _, field := range []struct{ label, value string }{{"验证器密钥", data.Key}, {"邮箱", data.Email}, {"恢复码", data.RecoveryCode}, {"Duo 主机", data.Host}, {"Duo 客户端 ID", data.ClientID}, {"Duo 客户端秘密", data.ClientSecret}} {
+	for _, field := range []struct{ label, value string }{{i18n.T("验证器密钥"), data.Key}, {i18n.T("邮箱"), data.Email}, {i18n.T("恢复码"), data.RecoveryCode}, {i18n.T("Duo 主机"), data.Host}, {i18n.T("Duo 客户端 ID"), data.ClientID}, {i18n.T("Duo 客户端秘密"), data.ClientSecret}} {
 		if field.value != "" {
 			lines = append(lines, field.label+"："+field.value)
 		}
 	}
 	for _, key := range data.Keys {
-		lines = append(lines, fmt.Sprintf("安全密钥 %d：%s", key.ID, key.Name))
+		lines = append(lines, i18n.Tf("安全密钥 %d：%s", key.ID, key.Name))
 	}
 	for _, provider := range data.Data {
-		lines = append(lines, fmt.Sprintf("验证方式 %d，已启用：%t", provider.Type, provider.Enabled))
+		lines = append(lines, i18n.Tf("验证方式 %d，已启用：%t", provider.Type, provider.Enabled))
 	}
 	if len(lines) == 0 {
-		return "服务器已返回；没有已启用的验证方式或额外设置。", nil
+		return i18n.T("服务器已返回；没有已启用的验证方式或额外设置。"), nil
 	}
 	return strings.Join(lines, "\n"), nil
 }
