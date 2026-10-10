@@ -51,7 +51,7 @@ func NewPanel(session *vaultwarden.Session, client *vaultwarden.Client, vault *v
 	p := &Panel{session: session, Client: client, vault: vault, scope: scope, Host: host, ctx: ctx, cancel: cancel}
 	if host.Dispatch == nil || host.Check == nil {
 		p.Closed = true
-		p.Status = i18n.T("Send 生命周期回调未配置")
+		p.Status = i18n.T("send.panel.err_callbacks_missing")
 		cancel()
 	}
 	return p
@@ -207,7 +207,7 @@ func (p *Panel) Offline() {
 	}
 	p.clearViews()
 	p.Rows = rows
-	p.Status = i18n.T("离线受信快照；访问次数可能已变化")
+	p.Status = i18n.T("send.panel.status_offline")
 }
 func (p *Panel) New(kind int) {
 	if p.Closed || p.Busy || p.session == nil {
@@ -285,7 +285,7 @@ func (p *Panel) Save() {
 		return
 	}
 	if e := p.form(); e != nil {
-		p.Status = i18n.T("请检查日期与访问次数。日期使用 RFC3339（含时区）。")
+		p.Status = i18n.T("send.editor.err_invalid_dates")
 		return
 	}
 	d := p.Draft
@@ -326,7 +326,7 @@ func (p *Panel) Save() {
 			return Result{Err: e}
 		}
 		next, e := p.session.SaveSend(ctx, d, source, size, p.Host.Checkpoint)
-		return Result{Draft: next, Err: e, changed: e == nil, message: i18n.T("Send 已保存，请同步后重新打开以复制分享链接。")}
+		return Result{Draft: next, Err: e, changed: e == nil, message: i18n.T("send.editor.status_saved")}
 	})
 }
 func (p *Panel) change(remove bool) {
@@ -358,7 +358,7 @@ func (p *Panel) change(remove bool) {
 		} else {
 			e = p.session.RemoveSendPassword(ctx, d, p.Host.Checkpoint)
 		}
-		return Result{Err: e, changed: e == nil, message: i18n.T("修改已提交，请同步核对。")}
+		return Result{Err: e, changed: e == nil, message: i18n.T("send.editor.status_submitted")}
 	})
 }
 func (p *Panel) Receive() {
@@ -394,15 +394,15 @@ func (p *Panel) saveReceived() {
 				e = r.SaveFile(ctx, path)
 			}
 		}
-		return Result{Err: e, message: i18n.T("文件已验证并保存。")}
+		return Result{Err: e, message: i18n.T("send.file.status_saved")}
 	})
 }
 func (p *Panel) View(c *ui.Context) {
 	ui.Scroll(c).Children(func() {
 		ui.Column(c.Key("send-panel")).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("Send 安全分享")).FontSize(23)
+			ui.Text(c, i18n.T("send.panel.title")).FontSize(23)
 			if p.Closed {
-				ui.Text(c, i18n.T("Send 已关闭"))
+				ui.Text(c, i18n.T("send.panel.status_closed"))
 				return
 			}
 			disabled := p.Busy || p.Uncertain
@@ -412,47 +412,47 @@ func (p *Panel) View(c *ui.Context) {
 				}
 			}
 			ui.Row(c).Gap(8).Children(func() {
-				button(i18n.T("刷新 Send"), p.Busy || p.session == nil, p.Refresh)
-				button(i18n.T("离线列表"), p.Busy || p.session == nil, p.Offline)
-				button(i18n.T("新建文本"), p.Busy || p.session == nil, func() { p.New(0) })
-				button(i18n.T("新建文件"), p.Busy || p.session == nil, func() { p.New(1) })
+				button(i18n.T("send.panel.refresh"), p.Busy || p.session == nil, p.Refresh)
+				button(i18n.T("send.panel.offline_list"), p.Busy || p.session == nil, p.Offline)
+				button(i18n.T("send.editor.new_text"), p.Busy || p.session == nil, func() { p.New(0) })
+				button(i18n.T("send.editor.new_file"), p.Busy || p.session == nil, func() { p.New(1) })
 			})
 			if p.Status != "" {
 				ui.Text(c, p.Status).MaxLines(4)
 			}
 			if p.Busy {
-				ui.Text(c, i18n.T("正在处理…关闭面板可取消。"))
+				ui.Text(c, i18n.T("send.panel.status_processing"))
 			}
 			if p.Uncertain {
-				ui.Text(c, i18n.T("结果未确认，请刷新或同步核对。不会自动重试。"))
+				ui.Text(c, i18n.T("send.panel.status_uncertain"))
 			}
 			for i, d := range p.Rows {
 				index := i
-				button(i18n.Tf("%s · 访问 %d", d.Fields.Name, d.AccessCount()), p.Busy, func() { p.openRow(index) })
+				button(i18n.Tf("send.panel.row_access_count", d.Fields.Name, d.AccessCount()), p.Busy, func() { p.openRow(index) })
 			}
 			if p.Draft != nil {
-				ui.TextInput(c, &p.Fields.Name).Label(i18n.T("名称")).Disabled(disabled)
+				ui.TextInput(c, &p.Fields.Name).Label(i18n.T("common.name")).Disabled(disabled)
 				if p.Fields.Type == 0 {
-					ui.TextArea(c, &p.Fields.Text).Label(i18n.T("分享文本")).MinHeight(110).Disabled(disabled)
-					button(i18n.Tf("隐藏接收文本：%t", p.Fields.Hidden), disabled, func() { p.Fields.Hidden = !p.Fields.Hidden })
+					ui.TextArea(c, &p.Fields.Text).Label(i18n.T("send.editor.shared_text")).MinHeight(110).Disabled(disabled)
+					button(i18n.Tf("send.editor.hidden_text", p.Fields.Hidden), disabled, func() { p.Fields.Hidden = !p.Fields.Hidden })
 				} else {
-					ui.Text(c, i18n.T("文件内容不可编辑；新建时选择本地文件。"))
+					ui.Text(c, i18n.T("send.file.edit_hint"))
 					if p.Fields.FileName != "" {
 						ui.Text(c, p.Fields.FileName)
 					}
 				}
-				ui.TextArea(c, &p.Fields.Notes).Label(i18n.T("私人备注")).MinHeight(70).Disabled(disabled)
-				ui.TextInput(c, &p.Deletion).Label(i18n.T("删除日期（最多31天，RFC3339）")).Disabled(disabled)
-				ui.TextInput(c, &p.expiration).Label(i18n.T("过期日期（可留空，RFC3339）")).Disabled(disabled)
-				ui.TextInput(c, &p.maxCount).Label(i18n.T("最大访问次数（空为不限）")).Disabled(disabled)
-				ui.TextInput(c, &p.Password).Label(i18n.T("设置访问口令（留空保留）")).Password().Disabled(disabled)
-				button(i18n.Tf("禁用：%t", p.Fields.Disabled), disabled, func() { p.Fields.Disabled = !p.Fields.Disabled })
-				button(i18n.Tf("隐藏邮箱：%t", p.Fields.HideEmail), disabled, func() { p.Fields.HideEmail = !p.Fields.HideEmail })
-				ui.Text(c, i18n.T("此服务器版本不支持邮件验证型 Send。"))
-				button(i18n.T("保存 Send"), disabled, p.Save)
+				ui.TextArea(c, &p.Fields.Notes).Label(i18n.T("send.editor.private_notes")).MinHeight(70).Disabled(disabled)
+				ui.TextInput(c, &p.Deletion).Label(i18n.T("send.editor.deletion_date")).Disabled(disabled)
+				ui.TextInput(c, &p.expiration).Label(i18n.T("send.editor.expiration_date")).Disabled(disabled)
+				ui.TextInput(c, &p.maxCount).Label(i18n.T("send.editor.max_access_count")).Disabled(disabled)
+				ui.TextInput(c, &p.Password).Label(i18n.T("send.editor.password")).Password().Disabled(disabled)
+				button(i18n.Tf("send.editor.disabled", p.Fields.Disabled), disabled, func() { p.Fields.Disabled = !p.Fields.Disabled })
+				button(i18n.Tf("send.editor.hide_email", p.Fields.HideEmail), disabled, func() { p.Fields.HideEmail = !p.Fields.HideEmail })
+				ui.Text(c, i18n.T("send.editor.email_verification_hint"))
+				button(i18n.T("send.editor.save"), disabled, p.Save)
 				if p.Draft.ID() != "" {
-					ui.Text(c, i18n.Tf("已访问：%d", p.Draft.AccessCount()))
-					button(i18n.T("复制分享链接"), disabled || p.Host.Copy == nil, func() {
+					ui.Text(c, i18n.Tf("send.editor.access_count", p.Draft.AccessCount()))
+					button(i18n.T("send.editor.copy_link"), disabled || p.Host.Copy == nil, func() {
 						if e := p.Host.Check(); e != nil {
 							p.Status = e.Error()
 							return
@@ -464,41 +464,41 @@ func (p *Panel) View(c *ui.Context) {
 						if e != nil {
 							p.Status = e.Error()
 						} else {
-							p.Status = i18n.T("分享链接已复制（包含解密密钥）。")
+							p.Status = i18n.T("send.editor.status_link_copied")
 						}
 					})
 					if p.Draft.HasPassword() {
-						button(i18n.T("移除访问口令"), disabled, func() { p.change(false) })
+						button(i18n.T("send.editor.remove_password"), disabled, func() { p.change(false) })
 					}
 					if !p.confirmDelete {
-						button(i18n.T("删除 Send"), disabled, func() { p.confirmDelete = true })
+						button(i18n.T("send.editor.delete"), disabled, func() { p.confirmDelete = true })
 					} else {
-						ui.Text(c, i18n.T("删除后分享链接将失效，确认删除？"))
-						button(i18n.T("确认删除 Send"), disabled, func() { p.change(true) })
-						button(i18n.T("取消删除"), p.Busy, func() { p.confirmDelete = false })
+						ui.Text(c, i18n.T("send.editor.confirm_delete_hint"))
+						button(i18n.T("send.editor.confirm_delete"), disabled, func() { p.change(true) })
+						button(i18n.T("send.editor.cancel_delete"), p.Busy, func() { p.confirmDelete = false })
 					}
 				}
 			}
-			ui.TextInput(c, &p.Link).Label(i18n.T("接收分享链接")).Password().Disabled(p.Busy)
-			ui.TextInput(c, &p.ReceivePassword).Label(i18n.T("接收访问口令")).Password().Disabled(p.Busy)
-			button(i18n.T("打开分享链接"), p.Busy || p.Link == "", p.Receive)
+			ui.TextInput(c, &p.Link).Label(i18n.T("send.receive.link")).Password().Disabled(p.Busy)
+			ui.TextInput(c, &p.ReceivePassword).Label(i18n.T("send.receive.password")).Password().Disabled(p.Busy)
+			button(i18n.T("send.receive.open_link"), p.Busy || p.Link == "", p.Receive)
 			if p.Receiver != nil {
 				ui.Text(c, p.Fields.Name)
 				if p.Fields.CreatorIdentifier != "" {
-					ui.Text(c, i18n.Tf("发送者：%s", p.Fields.CreatorIdentifier))
+					ui.Text(c, i18n.Tf("send.receive.sender", p.Fields.CreatorIdentifier))
 				}
 				if p.Fields.Type == 0 {
 					if p.Fields.Hidden && !p.showText {
-						button(i18n.T("显示分享文本"), false, func() { p.showText = true })
+						button(i18n.T("send.receive.show_text"), false, func() { p.showText = true })
 					} else {
 						ui.Text(c, p.Fields.Text).MaxLines(30)
 					}
 				} else {
 					ui.Text(c, p.Fields.FileName)
-					button(i18n.T("保存接收文件"), p.Busy, p.saveReceived)
+					button(i18n.T("send.receive.save_file"), p.Busy, p.saveReceived)
 				}
 			}
-			button(i18n.T("关闭 Send"), false, p.Close)
+			button(i18n.T("send.panel.close"), false, p.Close)
 		})
 	})
 }

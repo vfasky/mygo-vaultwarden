@@ -38,11 +38,11 @@ func (a *app) backupResourcePreview(c *ui.Context, e *backupEditor) {
 	if e.resources == nil {
 		return
 	}
-	ui.Text(c, i18n.T("此自有资源格式保留每个文件的来源编号、文件名及校验值。先创建元数据，再按明确目标编号逐文件上传、同步和下载核验；这是多请求操作。含附件的回收站项目先保持活动，文件全部核验后再明确移入回收站。中途停止不会自动删除或重试。")).MaxLines(7)
+	ui.Text(c, i18n.T("backup.resource.restore_hint")).MaxLines(7)
 	for _, row := range e.resources.rows {
-		ui.Text(c, i18n.Tf("%s · %s/%s · %d 字节", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, row.Resource.Size)).FontSize(12)
+		ui.Text(c, i18n.Tf("backup.resource.file_summary", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, row.Resource.Size)).FontSize(12)
 	}
-	if kit.Action(c, i18n.T("仅继续附件恢复，使用已存在的明确目标编号（不创建项目）"), "", false, a.pending != 0).Clicked() {
+	if kit.Action(c, i18n.T("backup.resource.continue_attachments"), "", false, a.pending != 0).Clicked() {
 		e.plan.Clear()
 		e.plan = nil
 		e.submitted = true
@@ -94,7 +94,7 @@ func (a *app) chooseResourceImportFile() {
 			if resources != nil {
 				e.resources = resourceEditor(resources)
 				e.plan = metadata
-				a.status = i18n.T("资源与全部文件哈希已预检，请核对创建或继续恢复范围。")
+				a.status = i18n.T("backup.resource.status_preflight_passed")
 			}
 		})
 	}()
@@ -115,13 +115,13 @@ func (a *app) chooseResourceExportFile() {
 		}
 	}
 	if len(ids) == 0 {
-		a.status = i18n.T("请先勾选导出的项目。")
+		a.status = i18n.T("backup.export.err_no_selection")
 		return
 	}
 	password := []byte(e.exportPassword)
 	e.exportPassword = ""
 	if backupSelectionRequiresPassword(e) && len(password) == 0 {
-		a.status = i18n.T("请提供主密码以授权所选受保护项目。")
+		a.status = i18n.T("backup.export.err_password_required")
 		return
 	}
 	a.advanceEpoch()
@@ -191,7 +191,7 @@ func (a *app) chooseResourceExportFile() {
 				return
 			}
 			if stage == nil {
-				a.status = i18n.T("已取消保存。")
+				a.status = i18n.T("backup.export.status_cancelled")
 				return
 			}
 			state := callStorage(localstore.Request{Operation: "status"})
@@ -204,7 +204,7 @@ func (a *app) chooseResourceExportFile() {
 				return
 			}
 			e.confirm = false
-			a.status = i18n.T("完整资源备份已写入新文件；其中元数据和附件均为明文，请妥善保管。")
+			a.status = i18n.T("backup.resource.status_saved")
 		})
 	}()
 }
@@ -214,33 +214,33 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 		return
 	}
 	if m.copyOnly {
-		ui.Text(c, i18n.T("此复制保留源项目，临时计划在关闭后清理。中断后请从源项目导出完整资源备份，再选“仅继续附件恢复”并填写本次已创建的目标编号；不要重新创建副本。")).MaxLines(5)
+		ui.Text(c, i18n.T("backup.resource.copy_resume_hint")).MaxLines(5)
 	}
 	busy := a.pending != 0
-	ui.Text(c, i18n.T("附件恢复：目标编号来自已确认创建回执，也可为继续恢复明确填写。上传仅发一次；结果未知时同步检查真实附件编号后点击核验。文件名不能作为身份。文件导入关闭后可重新打开原资源文件并选择仅继续附件恢复；复制的中断恢复见上方说明。")).MaxLines(5)
-	ui.TextInput(c, &m.password).Label(i18n.T("目标要求再次验证时输入主密码（每次操作后清除）")).Password().Disabled(busy)
+	ui.Text(c, i18n.T("backup.resource.attachment_restore_hint")).MaxLines(5)
+	ui.TextInput(c, &m.password).Label(i18n.T("backup.resource.master_password")).Password().Disabled(busy)
 	for i := range m.rows {
 		row := &m.rows[i]
 		if row.Target == "" {
 			row.Target = m.targets[row.Resource.CipherID]
 		}
-		ui.Text(c, i18n.Tf("%s · 来源 %s/%s · %s", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, organization.ResourceStateText(row.State))).MaxLines(3)
+		ui.Text(c, i18n.Tf("backup.resource.source_status", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, organization.ResourceStateText(row.State))).MaxLines(3)
 		if row.Problem != "" {
 			ui.Text(c, row.Problem).MaxLines(3)
 		}
-		ui.TextInput(c, &row.Target).Label(i18n.T("明确选择的目标项目编号")).Disabled(busy || row.State == organization.ResourceVerified)
-		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("核对的目标附件编号（上传回执或同步后填写）")).Disabled(busy || row.State == organization.ResourceVerified)
-		if kit.Action(c, i18n.T("确认向此目标上传一次"), "", false, busy || row.Target == "" || row.State != organization.ResourceNotStarted).Clicked() {
+		ui.TextInput(c, &row.Target).Label(i18n.T("backup.resource.target_item_id")).Disabled(busy || row.State == organization.ResourceVerified)
+		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("backup.resource.target_attachment_id")).Disabled(busy || row.State == organization.ResourceVerified)
+		if kit.Action(c, i18n.T("backup.resource.confirm_upload"), "", false, busy || row.Target == "" || row.State != organization.ResourceNotStarted).Clicked() {
 			a.runResourceRestore(i, false, "")
 		}
-		if kit.Action(c, i18n.T("下载并核验此附件的文件名、长度和完整内容"), "", false, busy || row.Target == "" || row.AttachmentID == "" || row.State == organization.ResourceVerified).Clicked() {
+		if kit.Action(c, i18n.T("backup.resource.verify_attachment"), "", false, busy || row.Target == "" || row.AttachmentID == "" || row.State == organization.ResourceVerified).Clicked() {
 			a.runResourceRestore(i, true, "")
 		}
 	}
 	for _, source := range m.trash {
 		target, ready := resourceTrashTarget(m, source)
 		if m.finalized[source] {
-			ui.Text(c, i18n.Tf("已确认移入回收站：%s", target))
+			ui.Text(c, i18n.Tf("backup.resource.status_trashed", target))
 			continue
 		}
 		if m.trashPending[source] {
@@ -251,10 +251,10 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 					}
 				}
 			}
-			ui.Text(c, i18n.Tf("回收站状态待同步核对，不自动再次提交：%s", target))
+			ui.Text(c, i18n.Tf("backup.resource.status_trash_pending", target))
 			continue
 		}
-		if kit.Action(c, i18n.Tf("全部文件核验后，确认将目标移入原计划的回收站：%s", target), "", false, busy || !ready).Clicked() {
+		if kit.Action(c, i18n.Tf("backup.resource.confirm_trash", target), "", false, busy || !ready).Clicked() {
 			a.runResourceRestore(0, false, source)
 		}
 	}
@@ -299,11 +299,11 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 		}
 	}
 	if target == "" || (verify && attachment == "") {
-		a.status = i18n.T("请先明确目标项目及待核验的附件编号；不会自动重发上传。")
+		a.status = i18n.T("backup.resource.err_target_required")
 		return
 	}
 	if trashSource == "" && ((!verify && m.rows[index].State != organization.ResourceNotStarted) || m.rows[index].State == organization.ResourceVerified) {
-		a.status = i18n.T("此文件已执行过操作，请同步后按明确附件编号核验；不会重复上传。")
+		a.status = i18n.T("backup.resource.err_already_attempted")
 		return
 	}
 	if trashSource != "" && (m.trashPending[trashSource] || m.finalized[trashSource]) {
@@ -406,9 +406,9 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 				m.rows[index].State = organization.ResourcePendingSync
 				m.rows[index].AttachmentID = result.AttachmentID
 			}
-			a.status = i18n.T("附件操作结束；请同步核对，未知结果不会自动重发。")
+			a.status = i18n.T("backup.resource.status_operation_finished")
 			if trashSource != "" && !trashResult.Dispatched {
-				a.status = i18n.T("尚未提交回收站变更；修正问题后请重新明确确认。")
+				a.status = i18n.T("backup.resource.status_trash_not_submitted")
 			}
 			m.rows[index].Problem = ""
 			if err != nil {
