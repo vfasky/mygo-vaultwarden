@@ -3,6 +3,7 @@ package fileio
 
 import (
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"path/filepath"
 	"strings"
 
@@ -25,7 +26,7 @@ func BackupOutputPath(path string, format vaultwarden.BackupFormat) (string, err
 		return path + extension, nil
 	}
 	if strings.ToLower(filepath.Ext(path)) != extension {
-		return "", fmt.Errorf("此格式请使用 %s 文件扩展名，未写入文件。", extension)
+		return "", fmt.Errorf(i18n.T("此格式请使用 %s 文件扩展名，未写入文件。"), extension)
 	}
 	return path, nil
 }

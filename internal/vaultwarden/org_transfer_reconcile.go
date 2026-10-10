@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"net/http"
 	"reflect"
 	"sort"
@@ -69,7 +70,7 @@ func organizationCipherIDs(raws []json.RawMessage, orgID string) []string {
 func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID string, before []string, expected []json.RawMessage, plan *OrganizationImportPlan, mappings map[string]string, persist func(SessionCheckpoint) error) OrganizationImportReconciliation {
 	r := OrganizationImportReconciliation{BeforeIDs: before}
 	for _, item := range plan.file.Items {
-		r.Items = append(r.Items, OrganizationImportObservation{SourceID: item["id"].(string), Reason: "未取得完整的新读取结果"})
+		r.Items = append(r.Items, OrganizationImportObservation{SourceID: item["id"].(string), Reason: i18n.T("未取得完整的新读取结果")})
 	}
 	// This policy read does not accept a snapshot, issue an offline receipt, clear
 	// isolation or discard pending policies.
@@ -105,9 +106,9 @@ func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID s
 	}
 	for i, raw := range expected {
 		row := &r.Items[i]
-		row.Reason = "新读取中没有唯一且字段一致的新增条目"
+		row.Reason = i18n.T("新读取中没有唯一且字段一致的新增条目")
 		if fingerprints[sourceFingerprint(plan.file.Items[i])] != 1 {
-			row.Reason = "源文件存在重复内容，无法唯一归属"
+			row.Reason = i18n.T("源文件存在重复内容，无法唯一归属")
 			continue
 		}
 		want, err := documentObject(CipherDocument{JSON: raw})
@@ -134,7 +135,7 @@ func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID s
 			expectedCollections = append(expectedCollections, target)
 		}
 		if !complete {
-			row.Reason = "新建集合没有服务器映射回执，请核对集合与条目"
+			row.Reason = i18n.T("新建集合没有服务器映射回执，请核对集合与条目")
 			continue
 		}
 		sort.Strings(expectedCollections)
@@ -175,7 +176,7 @@ func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID s
 		if len(matches) == 1 {
 			row.Verified = true
 			row.ServerID = matches[0]
-			row.Reason = "新读取确认新增ID、密钥、完整内容及集合一致"
+			row.Reason = i18n.T("新读取确认新增ID、密钥、完整内容及集合一致")
 		}
 	}
 	return r

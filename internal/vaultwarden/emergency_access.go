@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
 )
@@ -214,7 +215,7 @@ func (s *Session) PrepareEmergencyTakeover(ctx context.Context, vault *VaultData
 		NewMasterPasswordHash string `json:"newMasterPasswordHash"`
 		Key                   string `json:"key"`
 	}{hash, wrapped}
-	impact := "接管将更改目标账号主密码，删除全部 MFA，并移除其所有非所有者组织成员关系。旧会话和 AutoFill 必须失效；重新登录和完整同步核验前不能恢复。失败可能部分执行，不能重复提交。"
+	impact := i18n.T("接管将更改目标账号主密码，删除全部 MFA，并移除其所有非所有者组织成员关系。旧会话和 AutoFill 必须失效；重新登录和完整同步核验前不能恢复。失败可能部分执行，不能重复提交。")
 	p, err := s.recoveryPlanLocked("emergency-takeover", "POST", "/api/emergency-access/"+id+"/password", id, target.GrantorID, impact, payload)
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"net/http"
 )
 
@@ -60,10 +61,10 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 	}
 	mapping := map[string]string{}
 	fail := func(kind, name, id string, err error) (ImportResult, error) {
-		state := "已停止，请同步核对"
+		state := i18n.Key("已停止，请同步核对")
 		var uncertain *MutationUncertainError
 		if errors.As(err, &uncertain) {
-			state = "结果未知，请同步核对；禁止重试"
+			state = i18n.Key("结果未知，请同步核对；禁止重试")
 		}
 		result.Entries = append(result.Entries, ImportEntry{Kind: kind, Name: name, ID: id, State: state})
 		return result, err
@@ -74,10 +75,10 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 		}
 		created, err := s.saveFolderLocked(ctx, "", folder.Name, persist)
 		if err != nil {
-			return fail("文件夹", folder.Name, "", err)
+			return fail(i18n.Key("文件夹"), folder.Name, "", err)
 		}
 		mapping[folder.ID] = created.ID
-		result.Entries = append(result.Entries, ImportEntry{Kind: "文件夹", Name: folder.Name, ID: created.ID, State: "已创建"})
+		result.Entries = append(result.Entries, ImportEntry{Kind: i18n.Key("文件夹"), Name: folder.Name, ID: created.ID, State: i18n.Key("已创建")})
 	}
 	for i, document := range documents {
 		if ctx.Err() != nil {
@@ -92,11 +93,11 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 		encoded, _ := json.Marshal(object)
 		created, err := s.createCipherDocumentLocked(ctx, CipherDocument{JSON: encoded}, persist)
 		if err != nil {
-			return fail("项目", name, "", err)
+			return fail(i18n.Key("项目"), name, "", err)
 		}
 		fields, err := DecryptCipherDocument(created, s.key)
 		if err != nil {
-			return fail("项目", name, "", &MutationUncertainError{Cause: err})
+			return fail(i18n.Key("项目"), name, "", &MutationUncertainError{Cause: err})
 		}
 		if item["deletedDate"] != nil {
 			// POST creates active records. Preserve trash membership with the actual
@@ -106,10 +107,10 @@ func (s *Session) ImportPersonalBackup(ctx context.Context, scope Scope, plan *I
 				err = mutationStatusError(status)
 			}
 			if err != nil {
-				return fail("项目（已创建，回收站状态待核对）", name, fields.ID, err)
+				return fail(i18n.Key("项目（已创建，回收站状态待核对）"), name, fields.ID, err)
 			}
 		}
-		result.Entries = append(result.Entries, ImportEntry{Kind: "项目", Name: name, ID: fields.ID, State: "已创建，待同步核对", SourceID: item["id"].(string)})
+		result.Entries = append(result.Entries, ImportEntry{Kind: i18n.Key("项目"), Name: name, ID: fields.ID, State: i18n.Key("已创建，待同步核对"), SourceID: item["id"].(string)})
 	}
 	if ctx.Err() != nil {
 		return result, &MutationUncertainError{Cause: ErrCancelled}

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package vaultwarden
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+)
 
 // VaultData is the complete server-encrypted sync document inside the locally
 // authenticated snapshot. It never belongs in status or AutoFill metadata. The
@@ -112,7 +115,7 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 		if metadata.OrganizationID != nil || policies.restricts(nil, metadata.Type) {
 			continue
 		}
-		entry := VaultEntry{ID: metadata.ID, Type: metadata.Type, Title: "受保护或暂不支持的项目", Favorite: metadata.Favorite, Archived: metadata.ArchivedDate != nil, Deleted: metadata.DeletedDate != nil}
+		entry := VaultEntry{ID: metadata.ID, Type: metadata.Type, Title: i18n.T("受保护或暂不支持的项目"), Favorite: metadata.Favorite, Archived: metadata.ArchivedDate != nil, Deleted: metadata.DeletedDate != nil}
 		if metadata.FolderID != nil {
 			entry.FolderID = *metadata.FolderID
 		}

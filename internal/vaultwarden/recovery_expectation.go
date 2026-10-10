@@ -8,9 +8,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 )
 
-var ErrRecoveryCompatibility = errors.New("无法确认支持恢复核验的 Vaultwarden 1.37.4 实现，未解除恢复屏障")
+var ErrRecoveryCompatibility = errors.New(i18n.T("无法确认支持恢复核验的 Vaultwarden 1.37.4 实现，未解除恢复屏障"))
 
 func (c *Client) requireRecoveryCompatibility(ctx context.Context) error {
 	_, _, err := c.rotationCompatibility(ctx)

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"net/http"
 	"reflect"
 	"sort"
@@ -30,18 +31,18 @@ func OrganizationPolicyDefinitions() []PolicyDefinition {
 		return PolicyFieldDefinition{k, l, "number", min, max}
 	}
 	return []PolicyDefinition{
-		{0, "要求双因素认证", "服务器执行成员撤销；本应用完整 MFA 登录与管理待接。", nil},
-		{1, "主密码要求", "主密码变更及登录时执行待接，保存策略不代表本机执行。", []PolicyFieldDefinition{n("minComplexity", "最低强度评分（0–4）", 0, 4), n("minLength", "最短主密码长度", 12, 128), b("requireUpper", "要求大写字母"), b("requireLower", "要求小写字母"), b("requireNumbers", "要求数字"), b("requireSpecial", "要求特殊字符"), b("enforceOnLogin", "登录时执行")}},
-		{2, "密码生成器", "本应用受策略约束的生成器待接。", []PolicyFieldDefinition{{Key: "overridePasswordType", Label: "生成方式", Kind: "generator"}, n("minLength", "最短密码长度", 5, 128), b("useUpper", "使用大写字母"), b("useLower", "使用小写字母"), b("useNumbers", "使用数字"), b("useSpecial", "使用特殊字符"), n("minNumbers", "最少数字", 0, 9), n("minSpecial", "最少特殊字符", 0, 9), n("minNumberWords", "最少单词", 3, 20), b("capitalize", "单词首字母大写"), b("includeNumber", "包含数字")}},
-		{3, "单一组织", "服务器执行加入限制与成员撤销；本机组织生命周期前置检查待补。", nil},
-		{5, "限制个人所有权", "已约束个人保存；已有个人条目仍可读取。", nil},
-		{6, "禁用 Send", "服务器执行限制；本应用 Send 产品流程待接。", nil},
-		{7, "Send 选项", "服务器执行隐藏邮箱限制；本应用 Send 产品流程待接。", []PolicyFieldDefinition{b("disableHideEmail", "禁止隐藏发送者邮箱")}},
-		{8, "账号恢复", "邀请自动登记已接；完整管理员恢复待接。服务器配置可能要求先启用单一组织。", []PolicyFieldDefinition{b("autoEnrollEnabled", "自动登记账号恢复")}},
-		{14, "移除 PIN 解锁", "本应用没有 PIN 解锁入口；未来 PIN 功能须消费此策略。", nil},
-		{15, "受限条目类型", "已约束写入、读取与 AutoFill。固定客户端默认限制卡片，保留服务器扩展数据。", nil},
-		{16, "默认 URI 匹配", "默认规则已用于个人与组织 URI 投影；显式规则保持原值。前缀与正则当前不参与系统自动填充，待完整实现。", []PolicyFieldDefinition{{Key: "uriMatchDetection", Label: "默认匹配方式", Kind: "uri", Min: 0, Max: 5}}},
-		{20, "组织用户通知", "固定服务器支持保存此类型，未发现其通知执行逻辑；保留原始扩展数据。", nil},
+		{0, i18n.T("要求双因素认证"), i18n.T("服务器执行成员撤销；本应用完整 MFA 登录与管理待接。"), nil},
+		{1, i18n.T("主密码要求"), i18n.T("主密码变更及登录时执行待接，保存策略不代表本机执行。"), []PolicyFieldDefinition{n("minComplexity", i18n.T("最低强度评分（0–4）"), 0, 4), n("minLength", i18n.T("最短主密码长度"), 12, 128), b("requireUpper", i18n.T("要求大写字母")), b("requireLower", i18n.T("要求小写字母")), b("requireNumbers", i18n.T("要求数字")), b("requireSpecial", i18n.T("要求特殊字符")), b("enforceOnLogin", i18n.T("登录时执行"))}},
+		{2, i18n.T("密码生成器"), i18n.T("本应用受策略约束的生成器待接。"), []PolicyFieldDefinition{{Key: "overridePasswordType", Label: i18n.T("生成方式"), Kind: "generator"}, n("minLength", i18n.T("最短密码长度"), 5, 128), b("useUpper", i18n.T("使用大写字母")), b("useLower", i18n.T("使用小写字母")), b("useNumbers", i18n.T("使用数字")), b("useSpecial", i18n.T("使用特殊字符")), n("minNumbers", i18n.T("最少数字"), 0, 9), n("minSpecial", i18n.T("最少特殊字符"), 0, 9), n("minNumberWords", i18n.T("最少单词"), 3, 20), b("capitalize", i18n.T("单词首字母大写")), b("includeNumber", i18n.T("包含数字"))}},
+		{3, i18n.T("单一组织"), i18n.T("服务器执行加入限制与成员撤销；本机组织生命周期前置检查待补。"), nil},
+		{5, i18n.T("限制个人所有权"), i18n.T("已约束个人保存；已有个人条目仍可读取。"), nil},
+		{6, i18n.T("禁用 Send"), i18n.T("服务器执行限制；本应用 Send 产品流程待接。"), nil},
+		{7, i18n.T("Send 选项"), i18n.T("服务器执行隐藏邮箱限制；本应用 Send 产品流程待接。"), []PolicyFieldDefinition{b("disableHideEmail", i18n.T("禁止隐藏发送者邮箱"))}},
+		{8, i18n.T("账号恢复"), i18n.T("邀请自动登记已接；完整管理员恢复待接。服务器配置可能要求先启用单一组织。"), []PolicyFieldDefinition{b("autoEnrollEnabled", i18n.T("自动登记账号恢复"))}},
+		{14, i18n.T("移除 PIN 解锁"), i18n.T("本应用没有 PIN 解锁入口；未来 PIN 功能须消费此策略。"), nil},
+		{15, i18n.T("受限条目类型"), i18n.T("已约束写入、读取与 AutoFill。固定客户端默认限制卡片，保留服务器扩展数据。"), nil},
+		{16, i18n.T("默认 URI 匹配"), i18n.T("默认规则已用于个人与组织 URI 投影；显式规则保持原值。前缀与正则当前不参与系统自动填充，待完整实现。"), []PolicyFieldDefinition{{Key: "uriMatchDetection", Label: i18n.T("默认匹配方式"), Kind: "uri", Min: 0, Max: 5}}},
+		{20, i18n.T("组织用户通知"), i18n.T("固定服务器支持保存此类型，未发现其通知执行逻辑；保留原始扩展数据。"), nil},
 	}
 }
 func policyDefinition(t int) (PolicyDefinition, bool) {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -13,7 +14,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-var ErrRuntimeSecretUnavailable = errors.New("原生临时秘密许可不可用或已撤销")
+var ErrRuntimeSecretUnavailable = errors.New(i18n.T("原生临时秘密许可不可用或已撤销"))
 var runtimeSecretGeneration atomic.Uint64
 
 func nextRuntimeSecretGeneration() uint64 {

@@ -3,6 +3,7 @@ package vaultwarden
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"reflect"
 	"sort"
 	"strings"
@@ -113,7 +114,7 @@ func (s *Session) organizationDirectorySnapshotLocked(ctx context.Context, org O
 func reconcileOrganizationDirectory(input OrganizationDirectoryImport, before, after *OrganizationDirectorySnapshot) *OrganizationDirectoryReconciliation {
 	r := &OrganizationDirectoryReconciliation{Before: before, After: after}
 	for _, want := range input.Members {
-		row := OrganizationDirectoryRowResult{Kind: "member", ExternalID: want.ExternalID, Reason: "新读取未能确认期望状态"}
+		row := OrganizationDirectoryRowResult{Kind: "member", ExternalID: want.ExternalID, Reason: i18n.T("新读取未能确认期望状态")}
 		matches := []OrganizationDirectoryMemberObservation{}
 		if after != nil {
 			for _, m := range after.Members {
@@ -124,12 +125,12 @@ func reconcileOrganizationDirectory(input OrganizationDirectoryImport, before, a
 		}
 		if len(matches) == 1 && strings.EqualFold(matches[0].Email, want.Email) && ((want.Deleted && matches[0].Status == -1) || (!want.Deleted && matches[0].Status >= 0)) {
 			row.Verified = true
-			row.Reason = "新读取确认邮箱、外部ID及成员状态"
+			row.Reason = i18n.T("新读取确认邮箱、外部ID及成员状态")
 		}
 		r.Rows = append(r.Rows, row)
 	}
 	for _, want := range input.Groups {
-		row := OrganizationDirectoryRowResult{Kind: "group", ExternalID: want.ExternalID, Reason: "新读取未能确认群组及全部成员关系"}
+		row := OrganizationDirectoryRowResult{Kind: "group", ExternalID: want.ExternalID, Reason: i18n.T("新读取未能确认群组及全部成员关系")}
 		if after != nil {
 			ids := []string{}
 			complete := true
@@ -153,13 +154,13 @@ func reconcileOrganizationDirectory(input OrganizationDirectoryImport, before, a
 					count++
 					if complete && g.Name == want.Name && reflect.DeepEqual(ids, g.MemberIDs) {
 						row.Verified = true
-						row.Reason = "新读取确认群组名称、外部ID及全部成员关系"
+						row.Reason = i18n.T("新读取确认群组名称、外部ID及全部成员关系")
 					}
 				}
 			}
 			if count != 1 {
 				row.Verified = false
-				row.Reason = "群组外部ID无法唯一匹配"
+				row.Reason = i18n.T("群组外部ID无法唯一匹配")
 			}
 		}
 		r.Rows = append(r.Rows, row)
@@ -174,12 +175,12 @@ func reconcileOrganizationDirectory(input OrganizationDirectoryImport, before, a
 			if old.ExternalID == nil || included[*old.ExternalID] {
 				continue
 			}
-			row := OrganizationDirectoryRowResult{Kind: "overwrite", ExternalID: *old.ExternalID, Reason: "未确认缺席成员已撤权（owner受服务器保护）"}
+			row := OrganizationDirectoryRowResult{Kind: "overwrite", ExternalID: *old.ExternalID, Reason: i18n.T("未确认缺席成员已撤权（owner受服务器保护）")}
 			if after != nil {
 				for _, m := range after.Members {
 					if m.ID == old.ID && m.Status == -1 {
 						row.Verified = true
-						row.Reason = "新读取确认缺席成员已撤权"
+						row.Reason = i18n.T("新读取确认缺席成员已撤权")
 					}
 				}
 			}

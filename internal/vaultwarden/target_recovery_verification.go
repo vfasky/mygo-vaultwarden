@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"sort"
 	"time"
@@ -267,7 +268,7 @@ func (s *Session) VerifyTargetRecovery(p *TargetRecoveryInspection, dispatch Rec
 	notes := []string{"fresh password/MFA login and actual full Sync; authority wrapper, RSA key relationship, current personal cipher/folder/Send cryptography and organization identity/policy/key chain checked", "binary files and hidden server remember-device credentials were not independently read back"}
 	if noDispatch {
 		kind = TargetEvidenceNoDispatch
-		notes = append(notes, "原操作确定未派发，仅解除本机预隔离；当前MFA和成员关系未被声明已删除")
+		notes = append(notes, i18n.T("原操作确定未派发，仅解除本机预隔离；当前MFA和成员关系未被声明已删除"))
 	} else {
 		if expected.ResetPassword && expected.ExpectedMasterWrapperSHA256 != p.wrapperDigest {
 			return reject()
@@ -277,7 +278,7 @@ func (s *Session) VerifyTargetRecovery(p *TargetRecoveryInspection, dispatch Rec
 				return reject()
 			}
 			kind = TargetEvidenceAdminEmail
-			notes = append(notes, "已确认管理员MFA reset；本人新读取确认Email回退仍启用，并非所有MFA关闭")
+			notes = append(notes, i18n.T("已确认管理员MFA reset；本人新读取确认Email回退仍启用，并非所有MFA关闭"))
 		}
 		if expected.RemoveNonOwnerMemberships {
 			for _, org := range p.organizations {
@@ -306,7 +307,7 @@ func (s *Session) VerifyTargetRecovery(p *TargetRecoveryInspection, dispatch Rec
 			if !present {
 				p.Fresh.Vault.QuarantinedOrganizations = append(p.Fresh.Vault.QuarantinedOrganizations, dispatch.OrganizationID)
 			}
-			notes = append(notes, "管理员组织的成员资格/授权当前已不存在或不可用；保留额外组织隔离")
+			notes = append(notes, i18n.T("管理员组织的成员资格/授权当前已不存在或不可用；保留额外组织隔离"))
 		}
 	}
 	p.vaultDigest = targetEvidenceHash(p.Fresh.Vault)

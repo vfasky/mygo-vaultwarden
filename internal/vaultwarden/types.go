@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package vaultwarden
 
-import "github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaulterr"
+import (
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaulterr"
+)
 
 // Error messages deliberately exclude response bodies, URLs, tokens and secrets.
 var (
@@ -30,7 +33,7 @@ var (
 type MutationUncertainError struct{ Cause error }
 
 func (e *MutationUncertainError) Error() string {
-	return "无法确认服务器是否已保存修改，请同步核对后再操作"
+	return i18n.T("无法确认服务器是否已保存修改，请同步核对后再操作")
 }
 func (e *MutationUncertainError) Unwrap() error { return e.Cause }
 
