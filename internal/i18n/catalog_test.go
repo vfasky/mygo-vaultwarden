@@ -55,7 +55,7 @@ type use struct{ value, where string }
 
 type scanResult struct {
 	keys     []use           // literal keys passed to T or Tf
-	legacy   []use           // Chinese passed to T, Tf, Key or Tc
+	chinese  []use           // Chinese passed to T or Tf instead of a key
 	bare     []string        // Chinese literals outside them
 	literals map[string]bool // every string literal, to find used keys
 }
@@ -112,14 +112,11 @@ func scan(t *testing.T, root string, paths []string) scanResult {
 				if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != local {
 					return true
 				}
-				i := 0
-				if sel.Sel.Name == "Tc" {
-					i = 1
+				if sel.Sel.Name != "T" && sel.Sel.Name != "Tf" {
+					return true
 				}
-				if i < len(call.Args) {
-					if lit, ok := call.Args[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-						arg[lit] = sel.Sel.Name
-					}
+				if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+					arg[lit] = sel.Sel.Name
 				}
 				return true
 			})
@@ -135,14 +132,12 @@ func scan(t *testing.T, root string, paths []string) scanResult {
 				r.literals[s] = true
 				pos := fset.Position(lit.Pos())
 				where := filepath.ToSlash(rel) + ":" + strconv.Itoa(pos.Line)
-				fn, wrapped := arg[lit]
+				_, wrapped := arg[lit]
 				switch {
-				case wrapped && (fn == "T" || fn == "Tf") && !hasHan(s):
+				case wrapped && !hasHan(s):
 					r.keys = append(r.keys, use{s, where})
-				case wrapped && hasHan(s):
-					r.legacy = append(r.legacy, use{s, where})
-				case wrapped && (fn == "Key" || fn == "Tc"):
-					r.legacy = append(r.legacy, use{s, where})
+				case wrapped:
+					r.chinese = append(r.chinese, use{s, where})
 				case hasHan(s) && !ignored[pos.Line]:
 					r.bare = append(r.bare, where+" "+strconv.Quote(s))
 				}
@@ -179,20 +174,12 @@ func TestCatalogCoverage(t *testing.T) {
 		}
 	}
 	report(t, "keys passed to i18n.T/Tf are not defined", unknown)
-	var legacy, untranslated []string
-	for _, l := range r.legacy {
-		legacy = append(legacy, l.where+" "+strconv.Quote(l.value))
-		if _, ok := legacyEnglish[l.value]; !ok && hasHan(l.value) && !legacyContext(l.value) {
-			untranslated = append(untranslated, l.where+" "+strconv.Quote(l.value))
-		}
+	var chinese []string
+	for _, c := range r.chinese {
+		chinese = append(chinese, c.where+" "+strconv.Quote(c.value))
 	}
-	if !full || len(legacyCatalogs) == 0 {
-		report(t, "Chinese source strings, i18n.Key or i18n.Tc still used instead of semantic keys", legacy)
-	} else {
-		report(t, "legacy source strings have no English translation", untranslated)
-	}
-	// TODO(i18n): the unused check starts once the legacy catalogs are gone.
-	if full && len(legacyCatalogs) == 0 {
+	report(t, "Chinese text passed to i18n.T/Tf instead of a key", chinese)
+	if full {
 		var unused []string
 		for key := range messages {
 			if !r.literals[key] {
@@ -201,15 +188,6 @@ func TestCatalogCoverage(t *testing.T) {
 		}
 		report(t, "keys are not used by the code", unused)
 	}
-}
-
-func legacyContext(source string) bool {
-	for k := range legacyEnglish {
-		if strings.HasSuffix(k, "\x04"+source) {
-			return true
-		}
-	}
-	return false
 }
 
 var verb = regexp.MustCompile(`%(\[\d+\])?[-+# 0]*(\d+|\*)?(\.(\d+|\*))?[a-zA-Z%]`)
@@ -247,7 +225,6 @@ func TestCatalogEntries(t *testing.T) {
 		}
 	}
 	report(t, "catalog entries are invalid", problems)
-	report(t, "legacy source strings translated differently by two catalogs", legacyConflicts)
 }
 
 func TestMatch(t *testing.T) {

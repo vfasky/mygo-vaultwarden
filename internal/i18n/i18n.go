@@ -96,7 +96,7 @@ func T(key string) string {
 		}
 		return m.zh
 	}
-	return legacyT(key)
+	return key
 }
 
 // Tf formats the text of key with args as fmt.Sprintf does. Use %[n]v
