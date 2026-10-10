@@ -65,6 +65,10 @@ bash scripts/build-macos.sh release --notarize
 
 Xcode 管理主应用和扩展两个 target；Go build phase 生成主可执行文件，原生扩展嵌入 `Contents/PlugIns`，共享 Swift 桥位于 `Contents/Frameworks/libSnapshotBridge.dylib`。应用图标与资源说明见 [docs/app-icon.md](docs/app-icon.md)。
 
+## 自动更新
+
+配置更新源与公钥的 Release 构建支持 MyGo 原生自动更新，可在“设置 › 更新”或应用菜单“检查更新…”控制。Debug 和未配置的构建不会自动更新。签名、公证后的应用可用 `bash scripts/release-update.sh` 生成更新包与 manifest，不会自动上传；密钥配置、发布顺序与验收步骤见 [自动更新与发布](docs/updates.md)。
+
 ## 使用与安全边界
 
 1. 输入服务器、邮箱和主密码，按服务器实际要求完成 MFA。使用 HTTPS，仅本机回环允许 HTTP。
