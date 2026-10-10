@@ -9,6 +9,7 @@ import (
 	"errors"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -88,15 +89,15 @@ func (p *DevicePanel) Run(work func(context.Context) error, done func()) {
 				return
 			}
 			if err != nil {
-				p.Status = "操作失败，请刷新核对后再试。"
+				p.Status = i18n.T("操作失败，请刷新核对后再试。")
 				var uncertain *vaultwarden.MutationUncertainError
 				p.Uncertain = errors.As(err, &uncertain)
 				if p.Uncertain {
-					p.Status = "操作结果未确认，请刷新核对；不会自动重试。"
+					p.Status = i18n.T("操作结果未确认，请刷新核对；不会自动重试。")
 				}
 				return
 			}
-			p.Status = "操作完成"
+			p.Status = i18n.T("操作完成")
 			if done != nil {
 				done()
 			}
@@ -146,12 +147,12 @@ func (p *DevicePanel) clearPush() {
 	p.Confirm = ""
 	p.Run(func(ctx context.Context) error {
 		return p.session.ClearDevicePushToken(ctx, p.vault.Scope, true, p.host.Checkpoint)
-	}, func() { p.Status = "已请求清除推送登记；登录会话仍有效。" })
+	}, func() { p.Status = i18n.T("已请求清除推送登记；登录会话仍有效。") })
 }
 func authPublicFingerprint(public string) string {
 	der, err := base64.StdEncoding.DecodeString(public)
 	if err != nil {
-		return "无效公钥"
+		return i18n.T("无效公钥")
 	}
 	sum := sha256.Sum256(der)
 	return hex.EncodeToString(sum[:])
@@ -159,9 +160,9 @@ func authPublicFingerprint(public string) string {
 func (p *DevicePanel) View(c *ui.Context) {
 	ui.Scroll(c).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, "设备与登录审批").FontSize(23)
+			ui.Text(c, i18n.T("设备与登录审批")).FontSize(23)
 			if p.closed {
-				ui.Text(c, "面板已关闭")
+				ui.Text(c, i18n.T("面板已关闭"))
 				return
 			}
 			button := func(label string, disabled bool, f func()) {
@@ -169,33 +170,33 @@ func (p *DevicePanel) View(c *ui.Context) {
 					f()
 				}
 			}
-			button("刷新设备与待审批请求", p.Busy, p.Refresh)
+			button(i18n.T("刷新设备与待审批请求"), p.Busy, p.Refresh)
 			ui.Text(c, p.Status).MaxLines(4)
 			for _, d := range p.Devices {
 				ui.Text(c, d.Name+" · "+d.Identifier).MaxLines(2)
 			}
 			if p.Confirm != "push" {
-				button("清除当前设备推送登记", p.Busy || p.Uncertain, func() { p.Confirm = "push" })
+				button(i18n.T("清除当前设备推送登记"), p.Busy || p.Uncertain, func() { p.Confirm = "push" })
 			} else {
-				ui.Text(c, "仅清除推送登记，不会退出登录或撤销会话。同一设备标识的其他账号也可能受影响。").MaxLines(4)
-				button("确认清除推送登记", p.Busy, p.clearPush)
-				button("取消", p.Busy, func() { p.Confirm = "" })
+				ui.Text(c, i18n.T("仅清除推送登记，不会退出登录或撤销会话。同一设备标识的其他账号也可能受影响。")).MaxLines(4)
+				button(i18n.T("确认清除推送登记"), p.Busy, p.clearPush)
+				button(i18n.T("取消"), p.Busy, func() { p.Confirm = "" })
 			}
 			for _, r := range p.Requests {
 				row := r
-				button("查看登录请求 · "+r.RequestDeviceType+" · "+r.RequestIPAddress, p.Busy, func() { p.Selected = &row; p.Verified = false; p.Confirm = "auth" })
+				button(i18n.Tf("查看登录请求 · %s · %s", r.RequestDeviceType, r.RequestIPAddress), p.Busy, func() { p.Selected = &row; p.Verified = false; p.Confirm = "auth" })
 			}
 			if r := p.Selected; r != nil {
-				ui.Text(c, "请求来源："+r.Origin).MaxLines(2)
-				ui.Text(c, "请求时间："+r.CreationDate)
-				ui.Text(c, "公钥 SHA-256："+authPublicFingerprint(r.PublicKey)).MaxLines(4)
-				ui.Text(c, "请与请求设备上显示的公钥指纹逐字核对。批准将向该设备提供保险库解密密钥。").MaxLines(4)
-				button("我已在请求设备核对完整指纹", p.Busy || p.Uncertain, func() { p.Verified = true })
-				button("确认批准此登录", p.Busy || p.Uncertain || !p.Verified, func() { p.Respond(true) })
-				button("确认拒绝此登录", p.Busy || p.Uncertain, func() { p.Respond(false) })
-				button("取消审批", p.Busy, func() { p.Selected = nil; p.Verified = false; p.Confirm = "" })
+				ui.Text(c, i18n.Tf("请求来源：%s", r.Origin)).MaxLines(2)
+				ui.Text(c, i18n.Tf("请求时间：%s", r.CreationDate))
+				ui.Text(c, i18n.Tf("公钥 SHA-256：%s", authPublicFingerprint(r.PublicKey))).MaxLines(4)
+				ui.Text(c, i18n.T("请与请求设备上显示的公钥指纹逐字核对。批准将向该设备提供保险库解密密钥。")).MaxLines(4)
+				button(i18n.T("我已在请求设备核对完整指纹"), p.Busy || p.Uncertain, func() { p.Verified = true })
+				button(i18n.T("确认批准此登录"), p.Busy || p.Uncertain || !p.Verified, func() { p.Respond(true) })
+				button(i18n.T("确认拒绝此登录"), p.Busy || p.Uncertain, func() { p.Respond(false) })
+				button(i18n.T("取消审批"), p.Busy, func() { p.Selected = nil; p.Verified = false; p.Confirm = "" })
 			}
-			button("关闭", false, p.Close)
+			button(i18n.T("关闭"), false, p.Close)
 		})
 	})
 }
