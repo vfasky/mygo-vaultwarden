@@ -41,10 +41,10 @@ func (a *app) openFolderEditor(id string) {
 }
 
 func (a *app) folderPicker(c *ui.Context, selected **string, disabled bool) {
-	ui.Text(c, i18n.T("文件夹")).FontSize(12)
+	ui.Text(c, i18n.T("common.folder")).FontSize(12)
 	ui.Scroll(c).Height(110).Children(func() {
 		ui.Column(c).Gap(4).Children(func() {
-			if kit.NavItem(c, i18n.T("无文件夹"), "vault", "", *selected == nil, disabled).Clicked() {
+			if kit.NavItem(c, i18n.T("common.no_folder"), "vault", "", *selected == nil, disabled).Clicked() {
 				*selected = nil
 			}
 			for _, f := range a.folders {
@@ -60,35 +60,35 @@ func (a *app) folderPicker(c *ui.Context, selected **string, disabled bool) {
 func (a *app) folderEditorView(c *ui.Context) {
 	e := a.folderEditor
 	ui.Column(c.Key("folder-editor")).Padding(18).Gap(12).Children(func() {
-		title := i18n.T("新建文件夹")
+		title := i18n.T("vault.folder.add_title")
 		if e.id != "" {
-			title = i18n.T("管理文件夹")
+			title = i18n.T("vault.folder.manage_title")
 		}
 		ui.Text(c, title).FontSize(23)
-		ui.TextInput(c, &e.name).Label(i18n.T("文件夹名称")).Disabled(a.pending != 0 || e.uncertain)
+		ui.TextInput(c, &e.name).Label(i18n.T("vault.folder.name")).Disabled(a.pending != 0 || e.uncertain)
 		if e.confirm {
-			ui.Text(c, i18n.T("删除文件夹后，项目会变为无文件夹，项目本身不会删除。确认继续？")).MaxLines(3)
-			if kit.Action(c, i18n.T("确认删除文件夹"), "", true, a.pending != 0 || e.uncertain).Clicked() {
+			ui.Text(c, i18n.T("vault.folder.confirm_delete_hint")).MaxLines(3)
+			if kit.Action(c, i18n.T("vault.folder.confirm_delete"), "", true, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateFolder(true)
 			}
-			if kit.Action(c, i18n.T("取消删除"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("vault.folder.cancel_delete"), "", false, a.pending != 0).Clicked() {
 				e.confirm = false
 			}
 		} else {
-			if kit.Action(c, i18n.T("保存文件夹"), "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
+			if kit.Action(c, i18n.T("vault.folder.save"), "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
 				a.mutateFolder(false)
 			}
-			if e.id != "" && kit.Action(c, i18n.T("删除文件夹"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if e.id != "" && kit.Action(c, i18n.T("vault.folder.delete"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = true
 			}
 		}
 		if e.uncertain {
-			ui.Text(c, i18n.T("请先同步核对结果。此表单不会再次提交。")).FontSize(12)
-			if kit.Action(c, i18n.T("同步核对"), "sync", false, a.pending != 0).Clicked() {
+			ui.Text(c, i18n.T("vault.folder.uncertain_hint")).FontSize(12)
+			if kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
 				a.syncVault(false)
 			}
 		}
-		if kit.Action(c, i18n.T("关闭文件夹编辑"), "", false, a.pending != 0).Clicked() {
+		if kit.Action(c, i18n.T("vault.folder.close"), "", false, a.pending != 0).Clicked() {
 			a.folderEditor = nil
 		}
 	})
@@ -100,7 +100,7 @@ func (a *app) mutateFolder(remove bool) {
 		return
 	}
 	if e.revision != a.sessionRevision {
-		a.status = i18n.T("密码库版本已变化，文件夹表单已保留。请核对最新状态后重新编辑。")
+		a.status = i18n.T("vault.folder.err_revision_changed")
 		return
 	}
 	if remove && (!e.confirm || e.id == "") {
@@ -117,7 +117,7 @@ func (a *app) mutateFolder(remove bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++
-	a.status = i18n.T("正在保存文件夹…")
+	a.status = i18n.T("vault.folder.status_saving")
 	go func() {
 		var reply localstore.Reply
 		var checkpoint *localstore.SnapshotStatus
@@ -163,6 +163,6 @@ func (a *app) completeFolderMutation(epoch uint64, e *folderEditor, checkpoint *
 		return
 	}
 	e.uncertain, e.saved = true, true
-	a.status = i18n.T("文件夹修改已提交，正在同步核对…")
+	a.status = i18n.T("vault.folder.status_submitted")
 	a.syncVault(false)
 }

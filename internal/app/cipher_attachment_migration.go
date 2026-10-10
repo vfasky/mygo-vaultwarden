@@ -28,7 +28,7 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 	}
 	busy := a.pending != 0
 	if e.attachmentMigration == nil {
-		if kit.Action(c, i18n.T("准备旧附件的安全共享迁移"), "", false, busy || e.uncertain).Clicked() {
+		if kit.Action(c, i18n.T("vault.attachment.migration.prepare"), "", false, busy || e.uncertain).Clicked() {
 			rows, err := session.CipherAttachmentMigrationInfo(a.vault, e.fields.ID, e.authorization)
 			if err != nil {
 				a.status = err.Error()
@@ -39,11 +39,11 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 		return
 	}
 	m := e.attachmentMigration
-	ui.Text(c, i18n.T("旧附件迁移：先创建独立加密副本，同步后重新打开此处；明确选中旧、新两个编号，服务器下载校验内容一致后才删除旧件。项目编号保留，附件编号改变。全部完成后再共享。取消、失败及重开后请先同步核对，不要重复创建。临时文件受权限保护，磁盘不承诺安全擦除。")).MaxLines(8)
+	ui.Text(c, i18n.T("vault.attachment.migration.description")).MaxLines(8)
 	for _, row := range m.rows {
 		label := row.FileName + " · " + row.ID
 		if row.Legacy {
-			label = i18n.Tf("原附件 · %s", label)
+			label = i18n.Tf("vault.attachment.migration.original", label)
 			if m.original == row.ID {
 				label = "✓ " + label
 			}
@@ -51,7 +51,7 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 				m.original = row.ID
 			}
 		} else {
-			label = i18n.Tf("独立加密附件 · %s", label)
+			label = i18n.Tf("vault.attachment.migration.replacement", label)
 			if m.replacement == row.ID {
 				label = "✓ " + label
 			}
@@ -60,19 +60,19 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 			}
 		}
 	}
-	if kit.Action(c, i18n.T("确认创建所选旧附件的独立加密副本（保留原件）"), "", false, busy || e.uncertain || m.original == "").Clicked() {
+	if kit.Action(c, i18n.T("vault.attachment.migration.confirm_copy"), "", false, busy || e.uncertain || m.original == "").Clicked() {
 		a.runCipherAttachmentMigration(false)
 	}
-	if kit.Action(c, i18n.T("确认核验所选两个编号并永久删除旧附件"), "", false, busy || e.uncertain || m.original == "" || m.replacement == "").Clicked() {
+	if kit.Action(c, i18n.T("vault.attachment.migration.confirm_delete_original"), "", false, busy || e.uncertain || m.original == "" || m.replacement == "").Clicked() {
 		a.runCipherAttachmentMigration(true)
 	}
 	if m.result != "" {
 		ui.Text(c, m.result).MaxLines(8)
 	}
-	if e.uncertain && kit.Action(c, i18n.T("同步核对，然后重新打开项目"), "sync", false, busy).Clicked() {
+	if e.uncertain && kit.Action(c, i18n.T("vault.attachment.migration.sync_reopen"), "sync", false, busy).Clicked() {
 		a.syncVault(false)
 	}
-	if busy && kit.Action(c, i18n.T("取消附件迁移"), "", false, false).Clicked() {
+	if busy && kit.Action(c, i18n.T("vault.attachment.migration.cancel"), "", false, false).Clicked() {
 		if a.cancel != nil {
 			a.cancel()
 		}
@@ -89,7 +89,7 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 		return
 	}
 	if err := attachmentDraftSaved(session, a.vault, e); err != nil {
-		a.status = i18n.T("请先保存项目更改，再迁移附件。")
+		a.status = i18n.T("vault.attachment.migration.err_unsaved_draft")
 		return
 	}
 	m := e.attachmentMigration
@@ -137,7 +137,7 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 			}
 			// Freeze even unknown outcomes; a new authenticated sync is required.
 			e.uncertain = true
-			m.result = i18n.Tf("原编号 %s；替代编号 %s；已确认元数据=%t、上传=%t、核对=%t、内容一致=%t、删除回执=%t。请同步核对后再继续。", result.OriginalID, result.ReplacementID, result.MetadataCreated, result.Uploaded, result.Reconciled, result.ContentVerified, result.OriginalDeleted)
+			m.result = i18n.Tf("vault.attachment.migration.result", result.OriginalID, result.ReplacementID, result.MetadataCreated, result.Uploaded, result.Reconciled, result.ContentVerified, result.OriginalDeleted)
 			a.status = m.result
 			if err != nil {
 				a.status = err.Error() + " " + m.result

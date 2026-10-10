@@ -16,9 +16,9 @@ var linkedFields = map[int][]struct {
 	id    json.Number
 	label string
 }{
-	1: {{"100", i18n.T("用户名")}, {"101", i18n.T("密码")}},
-	3: {{"300", i18n.T("持卡人")}, {"301", i18n.T("到期月")}, {"302", i18n.T("到期年")}, {"303", i18n.T("安全码")}, {"304", i18n.T("卡组织")}, {"305", i18n.T("卡号")}},
-	4: {{"400", i18n.T("称谓")}, {"401", i18n.T("中间名")}, {"402", i18n.T("地址一")}, {"403", i18n.T("地址二")}, {"404", i18n.T("地址三")}, {"405", i18n.T("城市")}, {"406", i18n.T("省/州")}, {"407", i18n.T("邮编")}, {"408", i18n.T("国家")}, {"409", i18n.T("公司")}, {"410", i18n.T("邮箱")}, {"411", i18n.T("电话")}, {"412", i18n.T("社会保障号码")}, {"413", i18n.T("用户名")}, {"414", i18n.T("护照号码")}, {"415", i18n.T("驾驶证号码")}, {"416", i18n.T("名")}, {"417", i18n.T("姓")}, {"418", i18n.T("全名")}},
+	1: {{"100", "common.username"}, {"101", "common.password"}},
+	3: {{"300", "vault.field.card.holder"}, {"301", "vault.field.card.expiration_month"}, {"302", "vault.field.card.expiration_year"}, {"303", "vault.field.card.security_code"}, {"304", "vault.field.card.brand"}, {"305", "vault.field.card.number"}},
+	4: {{"400", "vault.field.identity.title"}, {"401", "vault.field.middle_name"}, {"402", "vault.field.identity.address_one"}, {"403", "vault.field.identity.address_two"}, {"404", "vault.field.identity.address_three"}, {"405", "vault.field.identity.city"}, {"406", "vault.field.identity.state"}, {"407", "vault.field.identity.postal_code"}, {"408", "vault.field.identity.country"}, {"409", "vault.field.identity.company"}, {"410", "common.email"}, {"411", "vault.field.identity.phone"}, {"412", "vault.field.identity.social_security_number"}, {"413", "common.username"}, {"414", "vault.field.passport.number"}, {"415", "vault.field.license.number"}, {"416", "vault.field.first_name"}, {"417", "vault.field.last_name"}, {"418", "vault.field.identity.full_name"}},
 }
 
 // The match numbers are from the same commit's
@@ -27,29 +27,29 @@ var uriMatches = []struct {
 	value any
 	label string
 }{
-	{nil, i18n.T("默认")}, {json.Number("0"), i18n.T("基本域名")}, {json.Number("1"), i18n.T("主机")}, {json.Number("2"), i18n.T("起始部分")}, {json.Number("3"), i18n.T("完全匹配")}, {json.Number("4"), i18n.T("正则表达式")}, {json.Number("5"), i18n.T("从不填充")},
+	{nil, "vault.uri.default"}, {json.Number("0"), "vault.uri.base_domain"}, {json.Number("1"), "vault.uri.host"}, {json.Number("2"), "vault.uri.starts_with"}, {json.Number("3"), "vault.uri.exact"}, {json.Number("4"), "vault.uri.regular_expression"}, {json.Number("5"), "vault.uri.never"},
 }
 
 func (a *app) uriMatchPicker(c *ui.Context, u *editorURI, disabled bool) {
-	label := i18n.T("未知策略（保留）")
+	label := i18n.T("vault.uri.unknown")
 	for _, m := range uriMatches {
 		if u.source["match"] == m.value {
-			label = m.label
+			label = i18n.T(m.label)
 		}
 	}
 	if u.source["match"] == nil && a.editor != nil {
 		for _, m := range uriMatches[1:] {
 			if m.value == json.Number(fmt.Sprint(a.editor.defaultURIMatch)) {
-				ui.Text(c, i18n.Tf("当前默认：%s；保留默认会随组织策略更新。显式规则保持不变。", m.label)).FontSize(11).MaxLines(3)
+				ui.Text(c, i18n.Tf("vault.uri.default_policy_hint", i18n.T(m.label))).FontSize(11).MaxLines(3)
 			}
 		}
 	}
-	if kit.Action(c, i18n.Tf("匹配方式：%s", label), "", false, disabled).Clicked() {
+	if kit.Action(c, i18n.Tf("vault.uri.match_label", label), "", false, disabled).Clicked() {
 		u.showMatch = !u.showMatch
 	}
 	if u.showMatch {
 		for _, m := range uriMatches {
-			if kit.NavItem(c, m.label, "globe", "", u.source["match"] == m.value, disabled).Clicked() {
+			if kit.NavItem(c, i18n.T(m.label), "globe", "", u.source["match"] == m.value, disabled).Clicked() {
 				copy := map[string]any{}
 				for key, value := range u.source {
 					copy[key] = value
@@ -59,18 +59,18 @@ func (a *app) uriMatchPicker(c *ui.Context, u *editorURI, disabled bool) {
 				u.showMatch = false
 			}
 		}
-		ui.Text(c, i18n.T("起始部分仅在系统提供完整网址时按原字符串匹配，不进入快捷建议；正则表达式会保留，但不用于当前系统填充。")).FontSize(11).MaxLines(3)
+		ui.Text(c, i18n.T("vault.uri.autofill_hint")).FontSize(11).MaxLines(3)
 	}
 }
 func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom) {
 	disabled := a.pending != 0 || e.uncertain || !f.editable
 	switch f.kind {
 	case "2":
-		label := i18n.T("布尔值：否")
+		label := i18n.T("vault.field.boolean_false")
 		if f.value == "true" {
-			label = i18n.T("布尔值：是")
+			label = i18n.T("vault.field.boolean_true")
 		} else if f.value != "false" {
-			label = i18n.T("布尔值：未知（保留）")
+			label = i18n.T("vault.field.boolean_unknown")
 		}
 		if kit.Action(c, label, "", false, disabled).Clicked() {
 			if f.value == "true" {
@@ -80,25 +80,25 @@ func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom)
 			}
 		}
 	case "3":
-		label := i18n.T("未知关联（保留）")
+		label := i18n.T("vault.field.linked_unknown")
 		for _, linked := range linkedFields[e.fields.Type] {
 			if linked.id == f.linkedID {
-				label = linked.label
+				label = i18n.T(linked.label)
 			}
 		}
-		if kit.Action(c, i18n.Tf("关联到：%s", label), "", false, disabled).Clicked() {
+		if kit.Action(c, i18n.Tf("vault.field.linked_target", label), "", false, disabled).Clicked() {
 			f.showLinks = !f.showLinks
 		}
 		if f.showLinks {
 			for _, linked := range linkedFields[e.fields.Type] {
-				if kit.NavItem(c, linked.label, "key", "", linked.id == f.linkedID, disabled).Clicked() {
+				if kit.NavItem(c, i18n.T(linked.label), "key", "", linked.id == f.linkedID, disabled).Clicked() {
 					f.linkedID = linked.id
 					f.showLinks = false
 				}
 			}
 		}
 	default:
-		value := ui.TextInput(c, &f.value).Label(i18n.T("字段内容")).Disabled(disabled)
+		value := ui.TextInput(c, &f.value).Label(i18n.T("vault.field.custom_value")).Disabled(disabled)
 		if f.hidden {
 			value.Password()
 		}
@@ -117,26 +117,26 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 		return
 	}
 	if e.confirmHistoryDelete {
-		ui.Text(c, i18n.T("确认清除全部密码历史？仅在保存项目后提交；同时修改密码仍会记录本次替换的旧密码。")).FontSize(12)
+		ui.Text(c, i18n.T("vault.history.confirm_clear_hint")).FontSize(12)
 		ui.Row(c).Gap(8).Children(func() {
-			if kit.Action(c, i18n.T("确认清除历史"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, i18n.T("vault.history.confirm_clear"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.fields.PasswordHistory = nil
 				e.confirmHistoryDelete, e.showHistory = false, false
 				clear(e.shownHistory)
 				e.shownHistory = nil
 			}
-			if kit.Action(c, i18n.T("保留历史"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("vault.history.keep"), "", false, a.pending != 0).Clicked() {
 				e.confirmHistoryDelete = false
 			}
 		})
 		return
 	}
-	if kit.Action(c, i18n.T("清除密码历史"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+	if kit.Action(c, i18n.T("vault.history.clear"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 		e.confirmHistoryDelete = true
 	}
-	label := i18n.Tf("显示已保存密码历史明文（%d）", len(e.fields.PasswordHistory))
+	label := i18n.Tf("vault.history.show_saved", len(e.fields.PasswordHistory))
 	if e.showHistory {
-		label = i18n.T("隐藏密码历史")
+		label = i18n.T("vault.history.hide")
 	}
 	if kit.Action(c, label, "key", false, a.pending != 0 || e.uncertain).Clicked() {
 		if e.showHistory {
