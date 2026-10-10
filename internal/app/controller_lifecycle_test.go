@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -89,11 +90,11 @@ func TestControllerSendNavigationAndClose(t *testing.T) {
 		t.Fatal("main Send body missing")
 	}
 	p.New(0)
-	p.fields.Text = "private send"
+	p.Fields.Text = "private send"
 	// A queued worker result after leaving the page must still be cleaned.
-	draft := p.draft
-	p.draft = nil
-	p.run(func(context.Context) sendPanelResult { return sendPanelResult{draft: draft} })
+	draft := p.Draft
+	p.Draft = nil
+	p.Run(func(context.Context) send.Result { return send.Result{Draft: draft} })
 	a.category = "personal"
 	tt.Frame()
 	select {
@@ -102,7 +103,7 @@ func TestControllerSendNavigationAndClose(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("dispatch")
 	}
-	if a.sendPanel != nil || !p.closed || p.fields.Text != "" || draft.CanEdit() {
+	if a.sendPanel != nil || !p.Closed || p.Fields.Text != "" || draft.CanEdit() {
 		t.Fatal("late Send result revived")
 	}
 }
