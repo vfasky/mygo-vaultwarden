@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin
 
-package app
+package localstore
 
 import (
 	"encoding/json"
@@ -96,23 +96,23 @@ func TestNativeRuntimeActorForeignTargetLocalAuthentication(t *testing.T) {
 	old.Vault.Version = 2
 	old.Vault.PendingPolicyMutations = []vaultwarden.PendingPolicyMutation{{OrganizationID: "org-1", PolicyType: 15, MutationID: "mutation-1"}}
 	old.Vault.QuarantinedOrganizations = []string{"org-2"}
-	initial := call(storageRequest{Operation: "publishVault", Scope: &target, ExpectedRevision: "empty-v1", PasswordUnlock: old.PasswordUnlock, Session: old.Session, Vault: old.Vault})
+	initial := call(Request{Operation: "publishVault", Scope: &target, ExpectedRevision: "empty-v1", PasswordUnlock: old.PasswordUnlock, Session: old.Session, Vault: old.Vault})
 	if !initial.OK {
 		t.Fatal(initial.Code)
 	}
 	d := vaultwarden.RecoveryDispatch{OperationID: "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee", Actor: actor, Target: target, Kind: "administrator-recovery", Verification: targetFixtureExpectation(), AuthorizationEpoch: 11, PreviousRevision: "runtime-session", RequireTargetLogin: true}
 	raw, _ := json.Marshal(d)
-	hash := targetRecoveryHash(raw)
+	hash := TargetRecoveryHash(raw)
 	deadline := time.Now().Add(25 * time.Second).UnixMilli()
 	generation := uint64(time.Now().UnixNano())
 	active := runtimeCall(map[string]any{"operation": "activate", "purpose": "recovery", "scope": actor, "generation": generation, "deadlineUnixMS": deadline, "operationID": d.OperationID, "summaryHash": hash})
 	if active["ok"] != true {
 		t.Fatal(active["code"])
 	}
-	authority := targetRecoveryRuntimeAuthority{actor, generation, deadline, active["leaseID"].(string), d.OperationID, hash}
+	authority := TargetRecoveryRuntimeAuthority{actor, generation, deadline, active["leaseID"].(string), d.OperationID, hash}
 	var epoch atomic.Uint64
 	epoch.Store(2)
-	adapter, err := newTargetRecoveryRuntimeStorage(initial.State, 2, epoch.Load, authority, call)
+	adapter, err := NewTargetRecoveryRuntimeStorage(initial.State, 2, epoch.Load, authority, call)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -124,7 +124,7 @@ func TestNativeRuntimeActorForeignTargetLocalAuthentication(t *testing.T) {
 	if state == nil || *state.Scope != target {
 		t.Fatal("receipt confused actor with local target")
 	}
-	blocked := call(storageRequest{Operation: "listPassword", Scope: &target, ExpectedRevision: state.Revision, UnlockKey: old.PasswordUnlock.Key})
+	blocked := call(Request{Operation: "listPassword", Scope: &target, ExpectedRevision: state.Revision, UnlockKey: old.PasswordUnlock.Key})
 	if blocked.OK {
 		t.Fatal("old target accessible")
 	}

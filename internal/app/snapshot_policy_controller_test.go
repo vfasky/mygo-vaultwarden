@@ -3,6 +3,7 @@ package app
 
 import (
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"testing"
 )
@@ -18,7 +19,7 @@ func TestControllerAuthenticatedUnlockRequiresCompletePolicyReceipt(t *testing.T
 			v := *source.vault
 			v.Sync = append([]byte(nil), v.Sync...)
 			state := *a.snapshot
-			req := storageRequest{Operation: "listPassword", ExpectedRevision: state.Revision, Scope: state.Scope}
+			req := localstore.Request{Operation: "listPassword", ExpectedRevision: state.Revision, Scope: state.Scope}
 			epoch := a.epoch
 			switch scenario {
 			case "legacy", "modified-identity":
@@ -37,7 +38,7 @@ func TestControllerAuthenticatedUnlockRequiresCompletePolicyReceipt(t *testing.T
 			case "status":
 				req.Operation = "status"
 			}
-			a.completeStorage(req, epoch, storageReply{OK: true, State: &state, Session: savedUIFixture(t, a), Vault: &v, Items: []displayCredential{{ID: "unfiltered", Title: "must not appear"}}})
+			a.completeStorage(req, epoch, localstore.Reply{OK: true, State: &state, Session: savedUIFixture(t, a), Vault: &v, Items: []localstore.DisplayCredential{{ID: "unfiltered", Title: "must not appear"}}})
 			if scenario == "authenticated" {
 				if a.vault == nil || len(a.items) != 1 || a.items[0].ID != "card-1" {
 					t.Fatal("authenticated vault not adopted", a.status)

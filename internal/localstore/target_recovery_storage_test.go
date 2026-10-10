@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package localstore
 
 import (
 	"bytes"
@@ -11,23 +11,23 @@ import (
 
 func TestTargetRecoveryAdapterRejectsInvalidReceiptsAndEpoch(t *testing.T) {
 	scope := vaultwarden.Scope{Server: "https://adapter.example.invalid", Account: "actor"}
-	state := &snapshotStatus{Available: true, Scope: &scope, Revision: "old"}
+	state := &SnapshotStatus{Available: true, Scope: &scope, Revision: "old"}
 	d := vaultwarden.RecoveryDispatch{OperationID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Actor: scope, Target: scope, Kind: "reset", PreviousRevision: "session-revision", AuthorizationEpoch: 7, RequireTargetLogin: true}
 	for _, bad := range []string{"missing", "scope", "revision", "hash", "target", "epoch", "local-target", "phase", "late"} {
 		t.Run(bad, func(t *testing.T) {
 			var epoch atomic.Uint64
 			epoch.Store(1)
 			calls := 0
-			adapter, err := newTargetRecoveryStorage(state, 1, epoch.Load, bytes.Repeat([]byte{1}, 32), func(req storageRequest) storageReply {
+			adapter, err := NewTargetRecoveryStorage(state, 1, epoch.Load, bytes.Repeat([]byte{1}, 32), func(req Request) Reply {
 				calls++
-				record := targetRecoveryRecord{Binding: *req.TargetBinding, Summary: bytes.Clone(req.TargetSummary), Phase: "prepared", RequireTargetLogin: true}
+				record := TargetRecoveryRecord{Binding: *req.TargetBinding, Summary: bytes.Clone(req.TargetSummary), Phase: "prepared", RequireTargetLogin: true}
 				next := *state
 				next.Revision = "new"
 				next.SnapshotID = "new-id"
 				next.TargetRecoveryPresent = true
 				switch bad {
 				case "missing":
-					return storageReply{OK: true, State: &next}
+					return Reply{OK: true, State: &next}
 				case "scope":
 					other := scope
 					other.Account = "foreign"
@@ -47,7 +47,7 @@ func TestTargetRecoveryAdapterRejectsInvalidReceiptsAndEpoch(t *testing.T) {
 				case "late":
 					epoch.Add(1)
 				}
-				return storageReply{OK: true, State: &next, TargetRecords: []targetRecoveryRecord{record}}
+				return Reply{OK: true, State: &next, TargetRecords: []TargetRecoveryRecord{record}}
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -67,7 +67,7 @@ func TestTargetRecoveryAdapterCloseRace(t *testing.T) {
 	scope := vaultwarden.Scope{Server: "https://adapter.example.invalid", Account: "actor"}
 	var epoch atomic.Uint64
 	epoch.Store(1)
-	adapter, err := newTargetRecoveryStorage(&snapshotStatus{Available: true, Scope: &scope, Revision: "revision"}, 1, epoch.Load, bytes.Repeat([]byte{1}, 32), func(storageRequest) storageReply { return storageReply{Code: "test-failure"} })
+	adapter, err := NewTargetRecoveryStorage(&SnapshotStatus{Available: true, Scope: &scope, Revision: "revision"}, 1, epoch.Load, bytes.Repeat([]byte{1}, 32), func(Request) Reply { return Reply{Code: "test-failure"} })
 	if err != nil {
 		t.Fatal(err)
 	}

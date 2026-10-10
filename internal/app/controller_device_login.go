@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -61,9 +62,9 @@ func (a *app) closeDeviceLogin() {
 	}
 }
 func (a *app) openDeviceLogin() {
-	a.openDeviceLoginWith(a.dispatchUI, a.storageCall, newRuntimeSecrets)
+	a.openDeviceLoginWith(a.dispatchUI, a.storageCall, localstore.NewRuntimeSecrets)
 }
-func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageRequest) storageReply, nativeFactory func() *nativeRuntimeSecrets) {
+func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply, nativeFactory func() *localstore.NativeRuntimeSecrets) {
 	if a.pending != 0 || a.snapshot == nil {
 		return
 	}
@@ -99,11 +100,11 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 	lifetime := &deviceLoginLifecycle{epoch: epoch, clock: &a.workerEpoch, scope: scope}
 	lifetime.active.Store(true)
 	lifetime.checkSource = func() error {
-		reply := storage(storageRequest{Operation: "status"})
+		reply := storage(localstore.Request{Operation: "status"})
 		if !reply.OK {
-			return reply.failure()
+			return reply.Failure()
 		}
-		if !sameStorageSource(&source, reply.State) {
+		if !localstore.SameStorageSource(&source, reply.State) {
 			return vaultwarden.ErrIdentity
 		}
 		return nil
@@ -116,15 +117,15 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 		err := lifetime.check(scope, epoch)
 		if err == nil && source.Scope != nil && *source.Scope == scope && source.Available {
 			if source.RecoveryPending {
-				err = errRuntimeTargetBlocked
+				err = localstore.ErrRuntimeTargetBlocked
 			} else {
-				reply := storage(storageRequest{Operation: "list", Scope: &scope, ExpectedRevision: source.Revision})
+				reply := storage(localstore.Request{Operation: "list", Scope: &scope, ExpectedRevision: source.Revision})
 				clear(reply.Session)
 				reply.Session = nil
 				reply.Items = nil
 				if !reply.OK {
-					err = reply.failure()
-				} else if !sameStorageSource(&source, reply.State) || reply.Vault == nil || reply.Vault.Scope != scope {
+					err = reply.Failure()
+				} else if !localstore.SameStorageSource(&source, reply.State) || reply.Vault == nil || reply.Vault.Scope != scope {
 					err = vaultwarden.ErrIdentity
 				} else {
 					protection = &vaultwarden.VaultData{Version: reply.Vault.Version, Scope: scope, PendingPolicyMutations: append([]vaultwarden.PendingPolicyMutation(nil), reply.Vault.PendingPolicyMutations...), QuarantinedOrganizations: append([]string(nil), reply.Vault.QuarantinedOrganizations...)}
@@ -160,7 +161,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 					cap, vault, err := result.Session.AcceptRuntimeSnapshotWithProtection(result.Sync.Vault, protection)
 					var targetProtection *vaultwarden.VaultData
 					if err == nil {
-						err = checkRuntimeTargetProtection(cap, vault, &source, epoch, &a.workerEpoch, storage, nativeFactory(), &targetProtection)
+						err = localstore.CheckRuntimeTargetProtection(cap, vault, &source, epoch, &a.workerEpoch, storage, nativeFactory(), &targetProtection)
 					}
 					if err == nil {
 						// A same-scope authenticated current cache includes any later
@@ -177,7 +178,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 					var runtime *runtimeVault
 					if err == nil {
 						constraints := &vaultwarden.VaultData{Version: vault.Version, Scope: scope, PendingPolicyMutations: append([]vaultwarden.PendingPolicyMutation(nil), vault.PendingPolicyMutations...), QuarantinedOrganizations: append([]string(nil), vault.QuarantinedOrganizations...)}
-						runtime = &runtimeVault{active: true, clock: &a.workerEpoch, session: result.Session, authority: cap, vault: vault, source: source, protection: constraints, native: nativeFactory(), sourceCheck: func(state snapshotStatus, expected vaultwarden.Scope) error {
+						runtime = &runtimeVault{active: true, clock: &a.workerEpoch, session: result.Session, authority: cap, vault: vault, source: source, protection: constraints, native: nativeFactory(), sourceCheck: func(state localstore.SnapshotStatus, expected vaultwarden.Scope) error {
 							if expected != scope {
 								return vaultwarden.ErrIdentity
 							}
@@ -257,19 +258,19 @@ func (a *app) deviceLoginSetupView(c *ui.Context) {
 	a.authStatus(c)
 }
 
-func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if a.pending != 0 || a.runtimeVault == nil || a.deviceFlow == nil || a.diskSnapshot == nil || a.masterPassword == "" {
 		return
 	}
 	runtime, flow := a.runtimeVault, a.deviceFlow
 	source := *a.diskSnapshot
-	var switchBinding *accountSwitchBinding
+	var switchBinding *localstore.AccountSwitchBinding
 	if source.Scope != nil && *source.Scope != *a.liveScope {
 		if !a.runtimeReplaceConfirmed {
 			a.status = "请先明确确认替换当前磁盘账号；原账号保护未处理时不会提交。"
 			return
 		}
-		binding, err := newAccountSwitchBinding(&source, *a.liveScope)
+		binding, err := localstore.NewAccountSwitchBinding(&source, *a.liveScope)
 		if err != nil {
 			a.status = err.Error()
 			return
@@ -289,7 +290,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(storag
 		err := flow.BindPassword(ctx, password)
 		clear(password)
 		var fresh vaultwarden.SyncResult
-		var reply storageReply
+		var reply localstore.Reply
 		if err == nil {
 			fresh, err = runtime.session.SyncWithCheckpoint(ctx, nil)
 		}
@@ -304,11 +305,11 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(storag
 		}
 		if err == nil {
 			if switchBinding != nil {
-				reply, err = publishBoundAccount(ctx, &source, fresh, *switchBinding, storage)
+				reply, err = localstore.PublishBoundAccount(ctx, &source, fresh, *switchBinding, storage)
 			} else {
-				reply = storage(storageRequest{Operation: "publishVault", ExpectedRevision: source.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
+				reply = storage(localstore.Request{Operation: "publishVault", ExpectedRevision: source.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
 				if !reply.OK {
-					err = reply.failure()
+					err = reply.Failure()
 				}
 			}
 			if err == nil && (reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != fresh.Scope || reply.State.Revision == source.Revision || reply.Vault == nil || !reply.Vault.PreservesPendingPolicies(runtime.vault)) {

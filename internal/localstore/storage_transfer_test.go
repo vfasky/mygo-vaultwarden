@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package localstore
 
 import (
 	"crypto/sha256"
@@ -71,7 +71,7 @@ func TestStorageTransferLargeAndFailures(t *testing.T) {
 				}
 				return json.Marshal(reply)
 			}
-			got, err := boundedStorageCall(input, call)
+			got, err := BoundedStorageCall(input, call)
 			if mode == "ok" {
 				if err != nil || string(got) != string(output) {
 					t.Fatalf("round trip: %v", err)
@@ -91,7 +91,7 @@ func TestStorageTransferControlBypassesBusyTransport(t *testing.T) {
 	defer storageTransferMutex.Unlock()
 	for _, op := range []string{"lock", "logout", "status", "copySecret"} {
 		input := []byte(`{"operation":"` + op + `"}`)
-		_, err := boundedStorageCall(input, func(raw []byte) ([]byte, error) {
+		_, err := BoundedStorageCall(input, func(raw []byte) ([]byte, error) {
 			if string(raw) != string(input) {
 				t.Fatal("changed control")
 			}

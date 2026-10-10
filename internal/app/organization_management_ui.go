@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -55,11 +56,11 @@ func (a *app) clearOrganizationEditor() {
 	}
 }
 
-func (a *app) adoptOrganizationIsolation(state *snapshotStatus, vault *vaultwarden.VaultData, orgID string) bool {
+func (a *app) adoptOrganizationIsolation(state *localstore.SnapshotStatus, vault *vaultwarden.VaultData, orgID string) bool {
 	return a.adoptOrganizationSnapshot(state, vault, orgID, true)
 }
 
-func (a *app) adoptOrganizationSnapshot(state *snapshotStatus, vault *vaultwarden.VaultData, orgID string, isolated bool, cleared ...vaultwarden.PendingPolicyMutation) bool {
+func (a *app) adoptOrganizationSnapshot(state *localstore.SnapshotStatus, vault *vaultwarden.VaultData, orgID string, isolated bool, cleared ...vaultwarden.PendingPolicyMutation) bool {
 	if !a.sessionOwnsSnapshot() || state == nil || !state.Available || state.Scope == nil || *state.Scope != *a.liveScope || state.Revision == "" || state.Revision == a.sessionRevision || state.SnapshotID == "" || state.SnapshotID == a.snapshot.SnapshotID || vault == nil || vault.Scope != *a.liveScope {
 		return false
 	}
@@ -355,8 +356,8 @@ func (a *app) runOrganizationManagement(operation string) {
 		var loadedMembers *vaultwarden.MemberDirectory
 		var loadedProof *vaultwarden.MemberConfirmation
 		var loadedCollection *vaultwarden.CollectionDraft
-		var reply storageReply
-		var checkpoint *snapshotStatus
+		var reply localstore.Reply
+		var checkpoint *localstore.SnapshotStatus
 		var isolatedVault *vaultwarden.VaultData
 		var restoredVault *vaultwarden.VaultData
 		isolate := func(cp vaultwarden.SessionCheckpoint) error {
@@ -365,7 +366,7 @@ func (a *app) runOrganizationManagement(operation string) {
 				record := policyDraft.PendingMutation()
 				pendingPolicy = &record
 			}
-			reply = callStorage(storageRequest{Operation: "quarantineOrganization", PendingPolicy: pendingPolicy, ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: id, UnlockKey: cp.UnlockKey, Session: cp.Session})
+			reply = callStorage(localstore.Request{Operation: "quarantineOrganization", PendingPolicy: pendingPolicy, ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: id, UnlockKey: cp.UnlockKey, Session: cp.Session})
 			if !reply.OK || reply.State == nil || reply.Vault == nil {
 				return vaultwarden.ErrCheckpoint
 			}
@@ -389,14 +390,14 @@ func (a *app) runOrganizationManagement(operation string) {
 		}
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			reply, err = saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err = localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior = reply.State
 				checkpoint = reply.State
 			}
 			return err
 		}
-		current := callStorage(storageRequest{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: "status"})
 		var result vaultwarden.OrganizationProfile
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
@@ -481,9 +482,9 @@ func (a *app) runOrganizationManagement(operation string) {
 						record := policyRecovery.Record()
 						clearingPolicy = &record
 					}
-					reply = callStorage(storageRequest{Operation: storageOperation, ClearingPolicy: clearingPolicy, OrganizationID: restoreOrgID, ExpectedRevision: prior.Revision, Scope: &synced.Scope, Credentials: synced.Credentials, PasswordUnlock: synced.PasswordUnlock, Session: synced.Session, Vault: synced.Vault})
+					reply = callStorage(localstore.Request{Operation: storageOperation, ClearingPolicy: clearingPolicy, OrganizationID: restoreOrgID, ExpectedRevision: prior.Revision, Scope: &synced.Scope, Credentials: synced.Credentials, PasswordUnlock: synced.PasswordUnlock, Session: synced.Session, Vault: synced.Vault})
 					if !reply.OK {
-						err = reply.failure()
+						err = reply.Failure()
 					} else if reply.State == nil || reply.Vault == nil {
 						err = vaultwarden.ErrIdentity
 					} else {
@@ -635,7 +636,7 @@ func (a *app) runOrganizationManagement(operation string) {
 	}()
 }
 
-func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor, operation string, result vaultwarden.OrganizationProfile, checkpoint *snapshotStatus, reply storageReply, err error, cancel context.CancelFunc) {
+func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor, operation string, result vaultwarden.OrganizationProfile, checkpoint *localstore.SnapshotStatus, reply localstore.Reply, err error, cancel context.CancelFunc) {
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {

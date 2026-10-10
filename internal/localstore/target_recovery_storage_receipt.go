@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package localstore
 
 import "encoding/json"
 
@@ -8,14 +8,14 @@ import "encoding/json"
 // callback before returning nil. It never calls Session methods or reads UI fields.
 // A failed/unknown native call clears the receipt; callers query the same operation
 // with a fresh authenticated adapter instead of issuing a mutation again.
-func (s *targetRecoveryStorage) Receipt() *snapshotStatus {
+func (s *TargetRecoveryStorage) Receipt() *SnapshotStatus {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if !s.active() || s.receipt == nil {
 		return nil
 	}
 	raw, _ := json.Marshal(s.receipt)
-	var state snapshotStatus
+	var state SnapshotStatus
 	if json.Unmarshal(raw, &state) != nil {
 		return nil
 	}

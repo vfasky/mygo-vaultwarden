@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -26,13 +27,13 @@ type orgServiceSnapshot struct {
 	lease   *controllerLease
 	epoch   uint64
 	runtime bool
-	storage func(storageRequest) storageReply
+	storage func(localstore.Request) localstore.Reply
 }
 type orgServicesController struct {
 	mu                                                      sync.Mutex
 	snapshot                                                orgServiceSnapshot
 	closed                                                  bool
-	isolation                                               *storageReply
+	isolation                                               *localstore.Reply
 	isolationOrg                                            string
 	resourceTarget                                          string
 	grantContext                                            context.Context
@@ -41,7 +42,7 @@ type orgServicesController struct {
 	ctx                                                     context.Context
 	cancel                                                  context.CancelFunc
 	dispatch                                                func(func())
-	baseStorage                                             func(storageRequest) storageReply
+	baseStorage                                             func(localstore.Request) localstore.Reply
 	busy                                                    func(bool)
 	panel                                                   connectedPanel
 	organizations                                           []vaultwarden.Organization
@@ -141,9 +142,9 @@ func (c *orgServicesController) isolate(env orgServiceSnapshot, orgID string) fu
 		if !active || cp.Scope != *prior.Scope {
 			return vaultwarden.ErrCancelled
 		}
-		reply := env.storage(storageRequest{Operation: "quarantineOrganization", ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: orgID, UnlockKey: cp.UnlockKey, Session: cp.Session})
+		reply := env.storage(localstore.Request{Operation: "quarantineOrganization", ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: orgID, UnlockKey: cp.UnlockKey, Session: cp.Session})
 		if !reply.OK {
-			return reply.failure()
+			return reply.Failure()
 		}
 		if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != cp.Scope || !reply.State.Available || reply.State.Revision == prior.Revision || reply.State.Revision == "" || reply.State.SnapshotID == prior.SnapshotID || reply.State.SnapshotID == "" || reply.Vault == nil || reply.Vault.Scope != cp.Scope || !reply.Vault.PreservesPendingPolicies(env.vault) {
 			return vaultwarden.ErrIdentity
@@ -264,7 +265,7 @@ func (c *orgServicesController) allGrants(ctx context.Context, env orgServiceSna
 }
 func (a *app) openOrgServices()       { a.openOrgServicesWith(a.dispatchUI, a.storageCall) }
 func (a *app) openEmergencyServices() { a.openOrgServicesWith(a.dispatchUI, a.storageCall, true) }
-func (a *app) openOrgServicesWith(dispatch func(func()), storage func(storageRequest) storageReply, emergencyMode ...bool) {
+func (a *app) openOrgServicesWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply, emergencyMode ...bool) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
 	}

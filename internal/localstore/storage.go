@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+
+// Package localstore implements native snapshot storage and recovery protocols.
+package localstore
 
 import (
 	"encoding/json"
@@ -10,7 +12,7 @@ import (
 
 var errSnapshotTooLarge = errors.New("snapshot bridge size limit")
 
-type snapshotStatus struct {
+type SnapshotStatus struct {
 	AccountSwitchPending  bool                              `json:"accountSwitchPending"`
 	TargetRecoveryPresent bool                              `json:"targetRecoveryPresent"`
 	RecoveryPending       bool                              `json:"recoveryPending"`
@@ -25,12 +27,12 @@ type snapshotStatus struct {
 	PasswordUnlock        *vaultwarden.PasswordUnlockConfig `json:"passwordUnlock,omitempty"`
 }
 
-type storageRequest struct {
-	SwitchBinding      *accountSwitchBinding              `json:"switchBinding,omitempty"`
+type Request struct {
+	SwitchBinding      *AccountSwitchBinding              `json:"switchBinding,omitempty"`
 	SwitchOperationID  string                             `json:"switchOperationID,omitempty"`
-	TargetRuntime      *targetRecoveryRuntimeAuthority    `json:"targetRuntime,omitempty"`
+	TargetRuntime      *TargetRecoveryRuntimeAuthority    `json:"targetRuntime,omitempty"`
 	TargetLogin        *targetRecoveryResolution          `json:"targetLogin,omitempty"`
-	TargetBinding      *targetRecoveryBinding             `json:"targetBinding,omitempty"`
+	TargetBinding      *TargetRecoveryBinding             `json:"targetBinding,omitempty"`
 	TargetSummary      []byte                             `json:"targetSummary,omitempty"`
 	TargetPhase        string                             `json:"targetPhase,omitempty"`
 	TargetResolution   *targetRecoveryResolution          `json:"targetResolution,omitempty"`
@@ -55,20 +57,20 @@ type storageRequest struct {
 }
 
 // A zero-result sync is an explicit replacement, never an absent field.
-func (r storageRequest) MarshalJSON() ([]byte, error) {
-	type wireRequest storageRequest
+func (r Request) MarshalJSON() ([]byte, error) {
+	type wireRequest Request
 	if (r.Operation == "publishBoundAccount" || r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess" || r.Operation == "restorePolicyAccess" || r.Operation == "accountRecoveryResolve" || r.Operation == "targetRecoveryResolve" || r.Operation == "targetRecoveryResolveLocal") && r.Credentials == nil {
 		r.Credentials = []vaultwarden.Credential{}
 	}
 	return json.Marshal(wireRequest(r))
 }
 
-type storageFailure struct{ Code, Message string }
+type Failure struct{ Code, Message string }
 
-func (e *storageFailure) Error() string { return e.Message }
-func (r storageReply) failure() error   { return &storageFailure{Code: r.Code, Message: r.Message} }
+func (e *Failure) Error() string { return e.Message }
+func (r Reply) Failure() error   { return &Failure{Code: r.Code, Message: r.Message} }
 
-type displayCredential struct {
+type DisplayCredential struct {
 	OrganizationID   string   `json:"-"`
 	CollectionIDs    []string `json:"-"`
 	Readable         bool     `json:"-"`
@@ -85,42 +87,42 @@ type displayCredential struct {
 	FolderID         string   `json:"folderId,omitempty"`
 }
 
-type storageReply struct {
-	AccountSwitch    *accountSwitchReceipt     `json:"accountSwitch,omitempty"`
-	TargetProtection *targetRecoveryProtection `json:"targetProtection,omitempty"`
-	TargetRecords    []targetRecoveryRecord    `json:"targetRecords,omitempty"`
+type Reply struct {
+	AccountSwitch    *AccountSwitchReceipt     `json:"accountSwitch,omitempty"`
+	TargetProtection *TargetRecoveryProtection `json:"targetProtection,omitempty"`
+	TargetRecords    []TargetRecoveryRecord    `json:"targetRecords,omitempty"`
 	Recovery         *accountRecoveryJournal   `json:"recovery,omitempty"`
 	OK               bool                      `json:"ok"`
 	Code             string                    `json:"code"`
 	Message          string                    `json:"message"`
-	State            *snapshotStatus           `json:"state,omitempty"`
-	Items            []displayCredential       `json:"items,omitempty"`
+	State            *SnapshotStatus           `json:"state,omitempty"`
+	Items            []DisplayCredential       `json:"items,omitempty"`
 	Truncated        bool                      `json:"truncated,omitempty"`
 	DeviceID         string                    `json:"deviceID,omitempty"`
 	Session          []byte                    `json:"session,omitempty"`
 	Vault            *vaultwarden.VaultData    `json:"vault,omitempty"`
 }
 
-func callStorage(request storageRequest) storageReply {
+func Call(request Request) Reply {
 	input, err := json.Marshal(request)
 	if err != nil {
-		return storageReply{Code: "invalid_input", Message: "无法编码快照请求。"}
+		return Reply{Code: "invalid_input", Message: "无法编码快照请求。"}
 	}
 	defer clear(input)
 	output, err := nativeStorageCall(input)
 	if err != nil {
 		if errors.Is(err, errSnapshotTooLarge) {
-			return storageReply{Code: "snapshot_too_large", Message: "密码库超过本版有界传输上限，无法保存。"}
+			return Reply{Code: "snapshot_too_large", Message: "密码库超过本版有界传输上限，无法保存。"}
 		}
 		// Loader/ABI failures contain paths and codes only, never the request body.
 		log.Printf("snapshot bridge unavailable: %v", err)
-		return storageReply{Code: "bridge_unavailable", Message: "安全存储组件不可用，请运行完整签名安装版。"}
+		return Reply{Code: "bridge_unavailable", Message: "安全存储组件不可用，请运行完整签名安装版。"}
 	}
 	defer clear(output)
-	var reply storageReply
+	var reply Reply
 	if err := json.Unmarshal(output, &reply); err != nil {
 		clear(reply.Session)
-		return storageReply{Code: "invalid_reply", Message: "安全存储返回了无效响应。"}
+		return Reply{Code: "invalid_reply", Message: "安全存储返回了无效响应。"}
 	}
 	return reply
 }

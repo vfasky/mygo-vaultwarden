@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -56,7 +57,7 @@ func TestAuthenticationRoutesAndNavigation(t *testing.T) {
 		t.Fatal("changed account while authentication was pending")
 	}
 	a.pending = 0
-	a.observeSnapshot(&snapshotStatus{Revision: "revoked"})
+	a.observeSnapshot(&localstore.SnapshotStatus{Revision: "revoked"})
 	tt.Frame()
 	if !tt.HasText("登录服务器") || tt.HasText("解锁密码库") {
 		t.Fatal("revoked snapshot did not return to login")
@@ -81,7 +82,7 @@ func TestServerLoginCanReturnWithoutSwitchingAccount(t *testing.T) {
 func TestServerLoginValidationAndAvailability(t *testing.T) {
 	// Invalid email guarantees these UI tests cannot reach native storage or
 	// contact a server even if a disabled-control regression occurs.
-	a := &app{snapshot: &snapshotStatus{Revision: "empty"}, deviceID: "fixture",
+	a := &app{snapshot: &localstore.SnapshotStatus{Revision: "empty"}, deviceID: "fixture",
 		serverURL: "https://vault.example.com", email: "invalid"}
 	tt := ui.NewTester(a.view, 1060, 700)
 	uitest.Click(t, tt, "登录并同步")

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 )
@@ -101,7 +102,7 @@ func (a *app) releaseItemCount() int {
 }
 
 // itemInCategory applies a sidebar destination's filter, without the search query.
-func itemInCategory(item displayCredential, category string) bool {
+func itemInCategory(item localstore.DisplayCredential, category string) bool {
 	if (!organizationUIEnabled || category == "personal") && item.OrganizationID != "" {
 		return false
 	}
@@ -146,12 +147,12 @@ func (a *app) sidebarCounts() map[string]int {
 	return counts
 }
 
-func (a *app) filteredItems() []displayCredential {
+func (a *app) filteredItems() []localstore.DisplayCredential {
 	if !a.currentCategory().supported || !a.unlocked() {
 		return nil
 	}
 	query := strings.ToLower(strings.TrimSpace(a.query))
-	items := make([]displayCredential, 0, len(a.items))
+	items := make([]localstore.DisplayCredential, 0, len(a.items))
 	for _, item := range a.items {
 		if !itemInCategory(item, a.category) {
 			continue
@@ -172,7 +173,7 @@ func (a *app) filteredItems() []displayCredential {
 
 // Selection is always resolved against the current filtered metadata, never a
 // retained credential. Locking, replacement and searches cannot leave stale details.
-func (a *app) reconcileSelection(items []displayCredential) {
+func (a *app) reconcileSelection(items []localstore.DisplayCredential) {
 	a.selectedRow = -1
 	for i, item := range items {
 		if item.ID == a.selectedID {
@@ -562,7 +563,7 @@ func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disa
 	return kit.SidebarItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
 }
 
-func (a *app) credentialList(c *ui.Context, items []displayCredential) {
+func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential) {
 	w, _ := c.Size()
 	width := float32(304)
 	if w >= 1240 {
@@ -666,7 +667,7 @@ func (a *app) emptyListMessage() (string, string) {
 	return "密码库中暂无登录条目", "同步后，项目会显示在这里"
 }
 
-func displayTitle(item displayCredential) string {
+func displayTitle(item localstore.DisplayCredential) string {
 	if strings.TrimSpace(item.Title) == "" {
 		return "未命名登录"
 	}
@@ -684,7 +685,7 @@ func safeWebsite(raw string) bool {
 	return err == nil && u.Hostname() != "" && (u.Scheme == "https" || u.Scheme == "http")
 }
 
-func credentialAvatar(c *ui.Context, item displayCredential, size float32) {
+func credentialAvatar(c *ui.Context, item localstore.DisplayCredential, size float32) {
 	colors := []ui.Color{ui.Hex("#E9E2F7"), ui.Hex("#E0EAE9"), ui.Hex("#F2E7DE"), ui.Hex("#DFE7F2")}
 	r, _ := utf8.DecodeRuneInString(displayTitle(item))
 	index := int(r) % len(colors)
@@ -693,7 +694,7 @@ func credentialAvatar(c *ui.Context, item displayCredential, size float32) {
 	})
 }
 
-func (a *app) credentialDetail(c *ui.Context, item displayCredential) {
+func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential) {
 	ui.Scroll(c).Key(item.ID).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(14).Padding(10, 8, 8, 8).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
@@ -800,7 +801,7 @@ func (a *app) settings(c *ui.Context) {
 						}
 						ui.TextInput(c, &a.masterPassword).Label("显式绑定当前账号主密码").Password().Disabled(a.pending != 0)
 						if kit.Action(c, "绑定主密码并重新同步", "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
-							a.bindRuntimePasswordWith(a.window.Update, callStorage)
+							a.bindRuntimePasswordWith(a.window.Update, localstore.Call)
 						}
 					})
 				}

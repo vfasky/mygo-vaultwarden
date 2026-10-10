@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"strings"
 	"testing"
@@ -11,7 +12,7 @@ import (
 func TestEmptyTrashSelectsOnlyDeletedAndRequiresConfirmation(t *testing.T) {
 	a := writableUIFixture(t)
 	defer a.stopNetwork()
-	a.items = append(a.items, displayCredential{ID: "deleted", Title: "trash", Deleted: true}, displayCredential{ID: "archive", Archived: true})
+	a.items = append(a.items, localstore.DisplayCredential{ID: "deleted", Title: "trash", Deleted: true}, localstore.DisplayCredential{ID: "archive", Archived: true})
 	a.openBulkEditor(true)
 	e := a.bulkEditor
 	if len(e.candidates) != 1 || !e.selected["deleted"] || e.action != vaultwarden.CipherDeletePermanently || e.confirm {
@@ -31,7 +32,7 @@ func TestEmptyTrashSelectsOnlyDeletedAndRequiresConfirmation(t *testing.T) {
 func TestBulkReconciliationReportsPartialStateWithoutRetry(t *testing.T) {
 	a := writableUIFixture(t)
 	defer a.stopNetwork()
-	a.items = []displayCredential{{ID: "a", Title: "first"}, {ID: "b", Title: "second"}}
+	a.items = []localstore.DisplayCredential{{ID: "a", Title: "first"}, {ID: "b", Title: "second"}}
 	a.openBulkEditor(false)
 	e := a.bulkEditor
 	e.selected["a"], e.selected["b"] = true, true
@@ -62,7 +63,7 @@ func TestLateBulkCompletionCannotReviveLockedState(t *testing.T) {
 	epoch := a.epoch
 	a.lockInterface()
 	ctx, cancel := context.WithCancel(context.Background())
-	a.completeBulkMutation(epoch, e, nil, storageReply{}, nil, cancel)
+	a.completeBulkMutation(epoch, e, nil, localstore.Reply{}, nil, cancel)
 	if a.bulkEditor != nil || e.candidates != nil || ctx.Err() == nil || a.session != nil {
 		t.Fatal("late bulk resurrected")
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -25,8 +26,8 @@ func onlineTestApp() (*app, *testVaultSession) {
 	scope := vaultwarden.Scope{Server: "https://vault.example.com", Account: "account-a"}
 	session := &testVaultSession{closed: make(chan struct{})}
 	return &app{session: session, liveScope: &scope, sessionRevision: "authorized-r1",
-		snapshot: &snapshotStatus{Revision: "authorized-r1", Available: true, Scope: &scope},
-		items:    []displayCredential{{ID: "old-entry"}}, itemsRevision: "authorized-r1"}, session
+		snapshot: &localstore.SnapshotStatus{Revision: "authorized-r1", Available: true, Scope: &scope},
+		items:    []localstore.DisplayCredential{{ID: "old-entry"}}, itemsRevision: "authorized-r1"}, session
 }
 func assertSessionRevoked(t *testing.T, a *app, s *testVaultSession) {
 	t.Helper()
@@ -47,7 +48,7 @@ func assertSessionRevoked(t *testing.T, a *app, s *testVaultSession) {
 }
 func TestEmptyVaultPublicationEncodesExplicitArray(t *testing.T) {
 	for _, credentials := range [][]vaultwarden.Credential{nil, {}} {
-		request := storageRequest{Operation: "publishVault", ExpectedRevision: "r", Credentials: credentials,
+		request := localstore.Request{Operation: "publishVault", ExpectedRevision: "r", Credentials: credentials,
 			Scope: &vaultwarden.Scope{Server: "https://vault.example.com", Account: "account-a"}}
 		encoded, err := json.Marshal(request)
 		if err != nil {
@@ -66,7 +67,7 @@ func TestStalePublicationCannotRebaseRevokedSession(t *testing.T) {
 	for _, reason := range []string{"logout", "lock", "account_switch", "same_account_replacement", "missing_state"} {
 		t.Run(reason, func(t *testing.T) {
 			a, s := onlineTestApp()
-			state := &snapshotStatus{Revision: "external-r2", Available: true, Scope: a.liveScope}
+			state := &localstore.SnapshotStatus{Revision: "external-r2", Available: true, Scope: a.liveScope}
 			switch reason {
 			case "logout":
 				state.Available = false
@@ -76,9 +77,9 @@ func TestStalePublicationCannotRebaseRevokedSession(t *testing.T) {
 			case "missing_state":
 				state = nil
 			}
-			reply := storageReply{Code: "stale_revision", Message: "状态已变化", State: state}
-			err := reply.failure()
-			var failure *storageFailure
+			reply := localstore.Reply{Code: "stale_revision", Message: "状态已变化", State: state}
+			err := reply.Failure()
+			var failure *localstore.Failure
 			if !errors.As(err, &failure) || failure.Code != "stale_revision" {
 				t.Fatal("bridge error code lost")
 			}
@@ -89,20 +90,20 @@ func TestStalePublicationCannotRebaseRevokedSession(t *testing.T) {
 }
 func TestStateRefreshCannotRenewOnlineWriteAuthority(t *testing.T) {
 	a, s := onlineTestApp()
-	a.observeSnapshot(&snapshotStatus{Revision: "external-r2", Available: true, Scope: a.liveScope})
+	a.observeSnapshot(&localstore.SnapshotStatus{Revision: "external-r2", Available: true, Scope: a.liveScope})
 	assertSessionRevoked(t, a, s)
 }
 func TestDirectRevisionAdoptionIsRejectedBeforeNetwork(t *testing.T) {
 	a, s := onlineTestApp()
-	a.snapshot = &snapshotStatus{Revision: "external-r2", Available: true, Scope: a.liveScope}
+	a.snapshot = &localstore.SnapshotStatus{Revision: "external-r2", Available: true, Scope: a.liveScope}
 	a.syncVault(false)
 	assertSessionRevoked(t, a, s)
 }
 func TestUnchangedStatusAndNetworkFailureKeepSession(t *testing.T) {
 	a, s := onlineTestApp()
 	defer s.Close()
-	a.observeSnapshot(&snapshotStatus{Revision: "authorized-r1", Available: true, Scope: a.liveScope, IndexPending: false})
-	a.syncFailed(storageReply{}, vaultwarden.ErrNetwork)
+	a.observeSnapshot(&localstore.SnapshotStatus{Revision: "authorized-r1", Available: true, Scope: a.liveScope, IndexPending: false})
+	a.syncFailed(localstore.Reply{}, vaultwarden.ErrNetwork)
 	if !a.sessionOwnsSnapshot() || len(a.items) != 1 {
 		t.Fatal("ordinary network failure discarded unchanged offline state")
 	}

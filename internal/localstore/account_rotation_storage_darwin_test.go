@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin
 
-package app
+package localstore
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-func recoveryNativeCall(t *testing.T) func(storageRequest) storageReply {
+func recoveryNativeCall(t *testing.T) func(Request) Reply {
 	t.Helper()
 	library := os.Getenv("SNAPSHOT_TEST_HARNESS")
 	if library == "" {
@@ -33,14 +33,14 @@ func recoveryNativeCall(t *testing.T) func(storageRequest) storageReply {
 	}
 	var native func([]byte, int, []byte, int) int32
 	purego.RegisterFunc(&native, symbol)
-	return func(request storageRequest) storageReply {
+	return func(request Request) Reply {
 		t.Helper()
 		input, err := json.Marshal(request)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer clear(input)
-		output, err := boundedStorageCall(input, func(frame []byte) ([]byte, error) {
+		output, err := BoundedStorageCall(input, func(frame []byte) ([]byte, error) {
 			buffer := make([]byte, 512*1024)
 			n := native(frame, len(frame), buffer, len(buffer))
 			runtime.KeepAlive(frame)
@@ -54,7 +54,7 @@ func recoveryNativeCall(t *testing.T) func(storageRequest) storageReply {
 			t.Fatal(err)
 		}
 		defer clear(output)
-		var reply storageReply
+		var reply Reply
 		if json.Unmarshal(output, &reply) != nil {
 			t.Fatal("invalid bridge JSON")
 		}
@@ -68,13 +68,13 @@ func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 	unlock := &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "rotation@example.invalid", KDF: vaultcrypto.KDF{Iterations: 5000}}, Key: key}
 	vault := &vaultwarden.VaultData{Version: 1, Scope: scope, Sync: []byte(`{"profile":{"id":"rotation-account","organizations":[]},"policies":[],"policiesNew":[],"ciphers":[],"opaque":9007199254740993}`)}
 	session := []byte("old-session-secret")
-	first := call(storageRequest{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: unlock, Session: session, Vault: vault})
+	first := call(Request{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: unlock, Session: session, Vault: vault})
 	if !first.OK {
 		t.Fatal(first.Code)
 	}
 	var epoch atomic.Uint64
 	epoch.Store(19)
-	adapter, err := newAccountRecoveryStorage(first.State, 19, epoch.Load, key, call)
+	adapter, err := NewAccountRecoveryStorage(first.State, 19, epoch.Load, key, call)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 		t.Fatal("recovery receipt mismatch")
 	}
 	pending.Recovery.Close()
-	blocked := call(storageRequest{Operation: "saveSession", ExpectedRevision: pending.State.Revision, Scope: &scope, UnlockKey: key, Session: []byte("interleaved")})
+	blocked := call(Request{Operation: "saveSession", ExpectedRevision: pending.State.Revision, Scope: &scope, UnlockKey: key, Session: []byte("interleaved")})
 	if blocked.OK {
 		t.Fatal("ordinary checkpoint bypassed barrier")
 	}
@@ -118,7 +118,7 @@ func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 		t.Fatal("unknown materials lost")
 	}
 	saved.Recovery.Close()
-	locked := call(storageRequest{Operation: "lock"})
+	locked := call(Request{Operation: "lock"})
 	if !locked.OK {
 		t.Fatal(locked.Code)
 	}
@@ -128,7 +128,7 @@ func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 	}
 	// Re-open with an explicitly authenticated recovery UI lifecycle. Binding epoch
 	// stays the original operation's; current UI epoch is independently checked.
-	reopened, err := newAccountRecoveryStorage(locked.State, epoch.Load(), epoch.Load, key, call)
+	reopened, err := NewAccountRecoveryStorage(locked.State, epoch.Load(), epoch.Load, key, call)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,11 +149,11 @@ func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 	if complete.Recovery != nil || complete.Vault == nil || !bytes.Equal(complete.Vault.Sync, vault.Sync) {
 		t.Fatal("invalid completed snapshot receipt")
 	}
-	wrong := call(storageRequest{Operation: "listPassword", ExpectedRevision: complete.State.Revision, Scope: &scope, UnlockKey: key})
+	wrong := call(Request{Operation: "listPassword", ExpectedRevision: complete.State.Revision, Scope: &scope, UnlockKey: key})
 	if wrong.OK {
 		t.Fatal("old unlock survived")
 	}
-	restored := call(storageRequest{Operation: "listPassword", ExpectedRevision: complete.State.Revision, Scope: &scope, UnlockKey: fresh.PasswordUnlock.Key})
+	restored := call(Request{Operation: "listPassword", ExpectedRevision: complete.State.Revision, Scope: &scope, UnlockKey: fresh.PasswordUnlock.Key})
 	if !restored.OK || string(restored.Session) != "new-session-secret" {
 		t.Fatal("fresh snapshot unavailable")
 	}
@@ -164,15 +164,15 @@ func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 
 func TestAccountRecoveryAdapterRejectsMissingReceiptAndLateEpoch(t *testing.T) {
 	scope := vaultwarden.Scope{Server: "https://rotation.example.invalid", Account: "rotation-account"}
-	state := &snapshotStatus{Available: true, Scope: &scope, Revision: "old", SnapshotID: "old-id"}
+	state := &SnapshotStatus{Available: true, Scope: &scope, Revision: "old", SnapshotID: "old-id"}
 	unlock := &vaultwarden.PasswordUnlock{Key: bytes.Repeat([]byte{11}, 32)}
 	record := vaultwarden.AccountRecovery{Version: 1, Scope: scope, OldRevision: "old", OldUnlock: unlock}
 	var epoch atomic.Uint64
 	epoch.Store(1)
 	calls := 0
-	adapter, err := newAccountRecoveryStorage(state, 1, epoch.Load, unlock.Key, func(storageRequest) storageReply {
+	adapter, err := NewAccountRecoveryStorage(state, 1, epoch.Load, unlock.Key, func(Request) Reply {
 		calls++
-		return storageReply{OK: true, State: &snapshotStatus{Available: true, Scope: &scope, Revision: "next", SnapshotID: "new-id"}}
+		return Reply{OK: true, State: &SnapshotStatus{Available: true, Scope: &scope, Revision: "next", SnapshotID: "new-id"}}
 	})
 	if err != nil {
 		t.Fatal(err)

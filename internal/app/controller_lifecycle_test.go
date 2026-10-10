@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -27,10 +28,10 @@ func TestControllerLeaseRevokeDuringStorage(t *testing.T) {
 	entered, release := make(chan struct{}), make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- l.check(func(storageRequest) storageReply {
+		done <- l.check(func(localstore.Request) localstore.Reply {
 			close(entered)
 			<-release
-			return storageReply{OK: true, State: &prior}
+			return localstore.Reply{OK: true, State: &prior}
 		})
 	}()
 	<-entered
@@ -46,7 +47,7 @@ func TestControllerLeaseConcurrentChecksAndLock(t *testing.T) {
 	a.advanceEpoch()
 	l := a.newControllerLease()
 	prior, _ := l.state()
-	storage := func(storageRequest) storageReply { return storageReply{OK: true, State: &prior} }
+	storage := func(localstore.Request) localstore.Reply { return localstore.Reply{OK: true, State: &prior} }
 	var wg sync.WaitGroup
 	for range 8 {
 		wg.Add(1)
@@ -78,7 +79,7 @@ func TestControllerSendNavigationAndClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := *a.snapshot
-	storage := func(storageRequest) storageReply { return storageReply{OK: true, State: &state} }
+	storage := func(localstore.Request) localstore.Reply { return localstore.Reply{OK: true, State: &state} }
 	queue := make(chan func(), 8)
 	a.openSendWith(func(f func()) { queue <- f }, storage, false)
 	if a.sendPanel == nil || a.category != "send" {

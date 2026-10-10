@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -61,7 +62,7 @@ func authenticationSummary(raw json.RawMessage) (string, error) {
 func (a *app) openAuthenticationManagement() {
 	a.openAuthenticationManagementWith(a.dispatchUI, a.storageCall)
 }
-func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
 	}

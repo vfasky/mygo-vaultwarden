@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -32,7 +33,7 @@ func writableUIFixture(t *testing.T) *app {
 	vault := &vaultwarden.VaultData{Version: 1, Scope: *a.snapshot.Scope, Sync: raw}
 	prepareUIReceipt(t, a, vault)
 	a.pending, a.epoch = 1, 1
-	a.completeStorage(storageRequest{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1, storageReply{OK: true, State: a.snapshot, Session: savedUIFixture(t, a), Vault: vault})
+	a.completeStorage(localstore.Request{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1, localstore.Reply{OK: true, State: a.snapshot, Session: savedUIFixture(t, a), Vault: vault})
 	if a.vault == nil || len(a.items) != 1 {
 		t.Fatal("complete vault not restored")
 	}
@@ -87,7 +88,7 @@ func TestStaleEditorAndLateMutationCannotReuseAuthority(t *testing.T) {
 	epoch := a.epoch
 	a.lockInterface()
 	ctx, cancel := context.WithCancel(context.Background())
-	a.completeCipherMutation(epoch, draft, &next, storageReply{OK: true, State: &next}, nil, cancel)
+	a.completeCipherMutation(epoch, draft, &next, localstore.Reply{OK: true, State: &next}, nil, cancel)
 	if a.editor != nil || a.vault != nil || a.session != nil || a.itemsRevision != "" || draft.fields.Name != "" || len(draft.fields.PasswordHistory) != 0 || ctx.Err() == nil {
 		t.Fatal("late mutation revived locked data")
 	}
@@ -101,7 +102,7 @@ func TestConflictAndUncertainMutationKeepLocalDraft(t *testing.T) {
 		draft.fields.Name = "unsaved local name"
 		a.pending = 1
 		_, cancel := context.WithCancel(context.Background())
-		a.completeCipherMutation(a.epoch, draft, nil, storageReply{}, err, cancel)
+		a.completeCipherMutation(a.epoch, draft, nil, localstore.Reply{}, err, cancel)
 		if a.editor != draft || draft.fields.Name != "unsaved local name" || a.pending != 0 {
 			t.Fatal("error discarded draft")
 		}
@@ -128,7 +129,7 @@ func TestNativeEightTypeCreationAndArchiveCategories(t *testing.T) {
 		}
 	}
 	a.editor = nil
-	a.items = []displayCredential{{ID: "active", Type: 1}, {ID: "archived", Type: 1, Archived: true}, {ID: "deleted", Type: 1, Deleted: true}, {ID: "favorite", Type: 1, Favorite: true}}
+	a.items = []localstore.DisplayCredential{{ID: "active", Type: 1}, {ID: "archived", Type: 1, Archived: true}, {ID: "deleted", Type: 1, Deleted: true}, {ID: "favorite", Type: 1, Favorite: true}}
 	for _, tc := range []struct {
 		category string
 		count    int
@@ -138,7 +139,7 @@ func TestNativeEightTypeCreationAndArchiveCategories(t *testing.T) {
 			t.Fatal("category mismatch", tc.category)
 		}
 	}
-	a.observeSnapshot(&snapshotStatus{Revision: "revoked", Available: true})
+	a.observeSnapshot(&localstore.SnapshotStatus{Revision: "revoked", Available: true})
 	if a.vault != nil || a.editor != nil {
 		t.Fatal("revocation retained documents")
 	}

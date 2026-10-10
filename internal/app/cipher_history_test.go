@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 )
 
 func historyUIFixture(t *testing.T) *app {
@@ -37,7 +38,7 @@ func TestHistoryDisplayUsesSameNativeLeaseAndDeadline(t *testing.T) {
 	a := historyUIFixture(t)
 	e := a.editor
 	calls := 0
-	a.showCipherHistory(func(request storageRequest) storageReply {
+	a.showCipherHistory(func(request localstore.Request) localstore.Reply {
 		calls++
 		if request.Operation != "authorizeSecretDisplay" || request.Secret != "" || len(request.UnlockKey) != 32 || request.SecretProtocol != 1 || request.ExpectedRevision != a.sessionRevision {
 			t.Fatal("history bypassed native lease")
@@ -45,7 +46,7 @@ func TestHistoryDisplayUsesSameNativeLeaseAndDeadline(t *testing.T) {
 		if left := time.Until(time.UnixMilli(request.SecretNotAfter)); left <= 0 || left > 30*time.Second {
 			t.Fatal("history deadline")
 		}
-		return storageReply{OK: true}
+		return localstore.Reply{OK: true}
 	})
 	if calls != 1 || !e.showHistory || len(e.shownHistory) != 1 || e.shownHistory[0].Password != "saved-history-secret" || strings.Contains(a.status, "saved-history-secret") {
 		t.Fatal("authorized history display")
@@ -59,11 +60,11 @@ func TestHistoryDisplayUsesSameNativeLeaseAndDeadline(t *testing.T) {
 	if tester.HasText("saved-history-secret") || len(e.shownHistory) != 0 {
 		t.Fatal("expired history visible")
 	}
-	a.showCipherHistory(func(storageRequest) storageReply { return storageReply{Code: "stale", Message: "expired"} })
+	a.showCipherHistory(func(localstore.Request) localstore.Reply { return localstore.Reply{Code: "stale", Message: "expired"} })
 	if e.showHistory || len(e.shownHistory) != 0 {
 		t.Fatal("failed native receipt exposed history")
 	}
-	a.showCipherHistory(func(storageRequest) storageReply { return storageReply{OK: true} })
+	a.showCipherHistory(func(localstore.Request) localstore.Reply { return localstore.Reply{OK: true} })
 	a.lockInterface()
 	if a.editor != nil || len(e.shownHistory) != 0 {
 		t.Fatal("lock retained displayed history")

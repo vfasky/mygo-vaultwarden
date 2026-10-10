@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
@@ -43,7 +44,7 @@ func (a *app) closeConnectedPanels() {
 }
 
 func (a *app) openSend() { a.openSendWith(a.dispatchUI, a.storageCall, true) }
-func (a *app) openSendWith(dispatch func(func()), storage func(storageRequest) storageReply, dialogs bool) {
+func (a *app) openSendWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply, dialogs bool) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
 	}
@@ -96,9 +97,9 @@ func (a *app) openSendWith(dispatch func(func()), storage func(storageRequest) s
 			return err
 		}
 		return session.WithSnapshotProtection(vault, a.sessionRevision, func(key []byte, deadline time.Time) error {
-			reply := storage(storageRequest{Operation: "copySecret", SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: &scope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+			reply := storage(localstore.Request{Operation: "copySecret", SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: &scope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 			if !reply.OK {
-				return reply.failure()
+				return reply.Failure()
 			}
 			a.secretClipboardOwned = true
 			return nil

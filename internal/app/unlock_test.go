@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -101,9 +102,9 @@ func TestUnlockReceiptsCannotRevealStaleOrWrongAccountMetadata(t *testing.T) {
 			t.Run(operation+"/"+scenario, func(t *testing.T) {
 				a := passwordLockedApp()
 				a.epoch, a.pending = 2, 1
-				request := storageRequest{Operation: operation, ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}
+				request := localstore.Request{Operation: operation, ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}
 				state := *a.snapshot
-				reply := storageReply{OK: true, State: &state, Items: []displayCredential{{ID: "secret", Title: "Secret title"}}}
+				reply := localstore.Reply{OK: true, State: &state, Items: []localstore.DisplayCredential{{ID: "secret", Title: "Secret title"}}}
 				epoch := a.epoch
 				switch scenario {
 				case "wrong-password", "cancelled":
@@ -112,7 +113,7 @@ func TestUnlockReceiptsCannotRevealStaleOrWrongAccountMetadata(t *testing.T) {
 					a.lockInterface()
 					a.epoch++
 				case "late-logout":
-					a.observeSnapshot(&snapshotStatus{Revision: "signed-out"})
+					a.observeSnapshot(&localstore.SnapshotStatus{Revision: "signed-out"})
 					a.epoch++
 				case "wrong-revision":
 					state.Revision = "replacement"

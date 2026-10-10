@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build !darwin
 
-package app
+package localstore
 
 import "errors"
 

@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -64,7 +65,7 @@ func (a *app) chooseResourceImportFile() {
 		var resources *vaultwarden.ResourceImportPlan
 		var metadata *vaultwarden.ImportPlan
 		if err == nil && len(paths) == 1 && ctx.Err() == nil {
-			state := callStorage(storageRequest{Operation: "status"})
+			state := callStorage(localstore.Request{Operation: "status"})
 			if !state.OK || !backupLease(state.State, scope, revision) {
 				err = vaultwarden.ErrConflict
 			} else {
@@ -132,9 +133,9 @@ func (a *app) chooseResourceExportFile() {
 	scope, revision, vault, parent, prior := *a.liveScope, e.revision, a.vault, a.window, a.snapshot
 	go func() {
 		defer clear(password)
-		var checkpoint *snapshotStatus
+		var checkpoint *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
-			reply, err := saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err := localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior, checkpoint = reply.State, reply.State
 			}
@@ -146,7 +147,7 @@ func (a *app) chooseResourceExportFile() {
 		grants := map[string]*vaultwarden.ItemAuthorization{}
 		if err == nil && path != "" && ctx.Err() == nil {
 			path, err = fileio.BackupOutputPath(path, vaultwarden.MyGoResources)
-			state := callStorage(storageRequest{Operation: "status"})
+			state := callStorage(localstore.Request{Operation: "status"})
 			if err == nil && (!state.OK || !backupLease(state.State, scope, revision)) {
 				err = vaultwarden.ErrConflict
 			}
@@ -193,7 +194,7 @@ func (a *app) chooseResourceExportFile() {
 				a.status = "已取消保存。"
 				return
 			}
-			state := callStorage(storageRequest{Operation: "status"})
+			state := callStorage(localstore.Request{Operation: "status"})
 			if !state.OK || !backupLease(state.State, scope, revision) {
 				a.status = vaultwarden.ErrConflict.Error()
 				return
@@ -271,12 +272,12 @@ func resourceTrashTarget(m *backupResourceEditor, source string) (string, bool) 
 	return target, target != ""
 }
 func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
-	a.runResourceRestoreWith(index, verify, trashSource, a.window.Update, callStorage, func() { a.syncVault(false) })
+	a.runResourceRestoreWith(index, verify, trashSource, a.window.Update, localstore.Call, func() { a.syncVault(false) })
 }
 
 // Explicit side effects keep the native form controller testable with a queued
 // UI dispatcher and an in-memory bridge, while retaining real Session checks.
-func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string, dispatch func(func()), storage func(storageRequest) storageReply, refresh func()) {
+func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string, dispatch func(func()), storage func(localstore.Request) localstore.Reply, refresh func()) {
 	e := a.backupEditor
 	if e == nil || e.resources == nil || a.pending != 0 || !a.backupCurrent(e, a.epoch) {
 		return
@@ -335,9 +336,9 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 	vault, scope, revision, prior := a.vault, *a.liveScope, e.revision, a.snapshot
 	go func() {
 		defer clear(password)
-		var checkpoint *snapshotStatus
+		var checkpoint *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
-			reply, err := saveSessionCheckpoint(prior, cp, storage)
+			reply, err := localstore.SaveSessionCheckpoint(prior, cp, storage)
 			if err == nil {
 				prior, checkpoint = reply.State, reply.State
 			}
@@ -347,7 +348,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 		var result vaultwarden.AttachmentUploadResult
 		var trashResult vaultwarden.CipherStateResult
 		var err error
-		state := storage(storageRequest{Operation: "status"})
+		state := storage(localstore.Request{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			err = vaultwarden.ErrConflict
 		}

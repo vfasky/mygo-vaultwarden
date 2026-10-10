@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -39,7 +40,7 @@ func TestCopyUnknownResultBlocksAnotherCreate(t *testing.T) {
 	e := a.editor
 	e.confirm = copyCipherAction
 	a.pending = 1
-	a.completeCipherMutation(a.epoch, e, nil, storageReply{}, &vaultwarden.MutationUncertainError{Cause: vaultwarden.ErrCancelled}, context.CancelFunc(func() {}))
+	a.completeCipherMutation(a.epoch, e, nil, localstore.Reply{}, &vaultwarden.MutationUncertainError{Cause: vaultwarden.ErrCancelled}, context.CancelFunc(func() {}))
 	if !e.uncertain || a.editor != e {
 		t.Fatal("unknown result lost draft")
 	}
@@ -57,7 +58,7 @@ func TestCopyLateResultCannotRestoreLockedDraft(t *testing.T) {
 	epoch := a.epoch
 	a.pending = 1
 	a.stopNetwork()
-	a.completeCipherMutation(epoch, e, nil, storageReply{}, &vaultwarden.MutationUncertainError{Cause: vaultwarden.ErrCancelled}, context.CancelFunc(func() {}))
+	a.completeCipherMutation(epoch, e, nil, localstore.Reply{}, &vaultwarden.MutationUncertainError{Cause: vaultwarden.ErrCancelled}, context.CancelFunc(func() {}))
 	if a.editor != nil || e.fields.Name != "" || len(e.document.JSON) != 0 {
 		t.Fatal("late copy restored secrets")
 	}

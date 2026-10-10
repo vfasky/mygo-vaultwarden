@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -83,7 +84,7 @@ func TestLoginChallengeCancelSubmitRace(t *testing.T) {
 func TestInlineVerificationSubmissionAndRetry(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	a := &app{snapshot: &snapshotStatus{Revision: "signed-out"}, showLogin: true, pending: 1,
+	a := &app{snapshot: &localstore.SnapshotStatus{Revision: "signed-out"}, showLogin: true, pending: 1,
 		epoch: 7, cancel: cancel, masterPassword: "fixture-password",
 		serverURL: "https://vault.example.com", email: "person@example.invalid"}
 	updates := make(chan func(), 1)
@@ -150,7 +151,7 @@ func TestStaleLoginChallengeCannotReplaceNewForm(t *testing.T) {
 }
 
 func TestPasswordFieldMasksCopyAndResetsUndo(t *testing.T) {
-	a := &app{snapshot: &snapshotStatus{Revision: "empty"}, deviceID: "fixture",
+	a := &app{snapshot: &localstore.SnapshotStatus{Revision: "empty"}, deviceID: "fixture",
 		serverURL: "https://vault.example.com", email: "invalid"}
 	tt := ui.NewTester(a.view, 1060, 700)
 	uitest.Click(t, tt, "主密码")

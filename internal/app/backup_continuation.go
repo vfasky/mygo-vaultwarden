@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package app
 
-import "github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+import (
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+)
 
 // A continuation belongs to one existing resource form and one sync attempt.
 // Capture is not authorization: network.go checks current before accepting the
@@ -16,7 +19,7 @@ type backupContinuation struct {
 	epoch                uint64
 }
 
-func (a *app) adoptBackupCheckpoint(e *backupEditor, state *snapshotStatus) bool {
+func (a *app) adoptBackupCheckpoint(e *backupEditor, state *localstore.SnapshotStatus) bool {
 	current := e != nil && a.backupEditor == e && e.resources != nil && e.submitted && a.backupCurrent(e, a.epoch)
 	if !a.adoptSessionCheckpoint(state) {
 		return false

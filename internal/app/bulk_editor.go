@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
@@ -12,7 +13,7 @@ import (
 
 type bulkEditor struct {
 	revision           string
-	candidates         []displayCredential
+	candidates         []localstore.DisplayCredential
 	selected           map[string]bool
 	folderID           *string
 	action             vaultwarden.CipherAction
@@ -149,18 +150,18 @@ func (a *app) mutateBulk() {
 	e.submitted = true
 	a.status = "正在执行批量操作…"
 	go func() {
-		var reply storageReply
-		var checkpoint *snapshotStatus
+		var reply localstore.Reply
+		var checkpoint *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
 			var err error
-			reply, err = saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err = localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior = reply.State
 				checkpoint = reply.State
 			}
 			return err
 		}
-		current := callStorage(storageRequest{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: "status"})
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
 			err = vaultwarden.ErrConflict
@@ -171,7 +172,7 @@ func (a *app) mutateBulk() {
 	}()
 }
 
-func (a *app) completeBulkMutation(epoch uint64, e *bulkEditor, checkpoint *snapshotStatus, reply storageReply, err error, cancel context.CancelFunc) {
+func (a *app) completeBulkMutation(epoch uint64, e *bulkEditor, checkpoint *localstore.SnapshotStatus, reply localstore.Reply, err error, cancel context.CancelFunc) {
 	defer cancel()
 	a.pending--
 	if a.epoch != epoch {
@@ -207,7 +208,7 @@ func (a *app) reconcileBulk() {
 	if e == nil || !e.submitted {
 		return
 	}
-	current := map[string]displayCredential{}
+	current := map[string]localstore.DisplayCredential{}
 	for _, item := range a.items {
 		current[item.ID] = item
 	}

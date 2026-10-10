@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -104,15 +105,15 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 	a.pending++
 	vault, id, grant, prior, scope, revision := a.vault, e.fields.ID, e.authorization, a.snapshot, *a.liveScope, e.revision
 	go func() {
-		var checkpoint *snapshotStatus
+		var checkpoint *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
-			reply, err := saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err := localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior, checkpoint = reply.State, reply.State
 			}
 			return err
 		}
-		state := callStorage(storageRequest{Operation: "status"})
+		state := callStorage(localstore.Request{Operation: "status"})
 		var result vaultwarden.CipherAttachmentMigrationResult
 		var err error
 		if !state.OK || !backupLease(state.State, scope, revision) {

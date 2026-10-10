@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -21,11 +22,11 @@ type app struct {
 	listState                                 ui.ListState
 	selectedRow                               int
 	window                                    *mygo.Window
-	uiDispatcher                              func(func())                      // immutable after controller construction
-	storageBackend                            func(storageRequest) storageReply // immutable after construction
+	uiDispatcher                              func(func())                              // immutable after controller construction
+	storageBackend                            func(localstore.Request) localstore.Reply // immutable after construction
 	serverURL, email, query, status, deviceID string
-	snapshot                                  *snapshotStatus
-	items                                     []displayCredential
+	snapshot                                  *localstore.SnapshotStatus
+	items                                     []localstore.DisplayCredential
 	vault                                     *vaultwarden.VaultData
 	editor                                    *cipherEditor
 	isolatedOrganizations                     []vaultwarden.Organization
@@ -50,7 +51,7 @@ type app struct {
 	authManagement                            *account.AuthManagementForm
 	componentCancel                           context.CancelFunc
 	runtimeVault                              *runtimeVault
-	diskSnapshot                              *snapshotStatus
+	diskSnapshot                              *localstore.SnapshotStatus
 	deviceLoginPanel                          *account.DeviceLoginPanel
 	deviceLifecycle                           *deviceLoginLifecycle
 	deviceFlow                                *vaultwarden.DeviceLogin
@@ -58,7 +59,7 @@ type app struct {
 	deviceAccountID                           string
 	deviceLoginSetup                          bool
 	runtimeReplaceConfirmed                   bool
-	switchReceipt                             *accountSwitchReceipt
+	switchReceipt                             *localstore.AccountSwitchReceipt
 	mfaLogin                                  *controllerMFA
 	mfaWarnings                               mfaRecoveryWarnings
 	targetOutcomeWarnings                     map[vaultwarden.Scope]string
@@ -90,8 +91,8 @@ func (a *app) runStorage(operation string) {
 		}
 		if operation == "status" {
 			epoch := a.epoch + 1
-			request := storageRequest{Operation: "status"}
-			a.startStorage(request, func() storageReply { return runtime.call(epoch, request) })
+			request := localstore.Request{Operation: "status"}
+			a.startStorage(request, func() localstore.Reply { return runtime.call(epoch, request) })
 			return
 		}
 		if operation == "reindex" || operation == "list" {
@@ -108,7 +109,7 @@ func (a *app) runStorage(operation string) {
 		}
 		a.clearLoginInputs()
 	}
-	request := storageRequest{Operation: operation}
+	request := localstore.Request{Operation: operation}
 	if operation == "confirmAccountSwitch" {
 		if a.switchReceipt == nil {
 			a.status = "请先系统认证检查这次账号切换。"
@@ -121,10 +122,10 @@ func (a *app) runStorage(operation string) {
 		request.Scope = a.snapshot.Scope
 	}
 	storage := a.storageCall
-	a.startStorage(request, func() storageReply {
+	a.startStorage(request, func() localstore.Reply {
 		if operation == "logout" {
 			// An unconditional lock is the cancellation barrier for pending logins.
-			locked := storage(storageRequest{Operation: "lock"})
+			locked := storage(localstore.Request{Operation: "lock"})
 			if locked.State != nil {
 				request.ExpectedRevision = locked.State.Revision
 			}
@@ -133,7 +134,7 @@ func (a *app) runStorage(operation string) {
 	})
 }
 
-func (a *app) startStorage(request storageRequest, work func() storageReply) {
+func (a *app) startStorage(request localstore.Request, work func() localstore.Reply) {
 	a.advanceEpoch()
 	epoch := a.epoch
 	a.pending++
@@ -146,7 +147,7 @@ func (a *app) startStorage(request storageRequest, work func() storageReply) {
 	}()
 }
 
-func (a *app) completeStorage(request storageRequest, epoch uint64, reply storageReply) {
+func (a *app) completeStorage(request localstore.Request, epoch uint64, reply localstore.Reply) {
 	defer clear(reply.Session)
 	a.pending--
 	if a.epoch != epoch {
@@ -180,7 +181,7 @@ func (a *app) completeStorage(request storageRequest, epoch uint64, reply storag
 		}
 		a.itemsRevision = reply.State.Revision
 		a.showSettings, a.showLogin = false, false
-		a.startNotifications(a.window.Update, callStorage)
+		a.startNotifications(a.window.Update, localstore.Call)
 		return
 	}
 	switch request.Operation {

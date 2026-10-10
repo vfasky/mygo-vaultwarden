@@ -3,6 +3,7 @@ package app
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"strconv"
@@ -15,7 +16,7 @@ func policyManagementOperation(op string) bool {
 // adoptPolicyRecoveryPreview is the UI-thread half of the two-stage recovery.
 // It installs the authenticated publish receipt before binding its network proof;
 // neither an unadopted preview nor a late editor may authorize the next sync.
-func (a *app) adoptPolicyRecoveryPreview(epoch uint64, e *organizationEditor, state *snapshotStatus, vault *vaultwarden.VaultData, review *vaultwarden.PolicyRecoveryReview) bool {
+func (a *app) adoptPolicyRecoveryPreview(epoch uint64, e *organizationEditor, state *localstore.SnapshotStatus, vault *vaultwarden.VaultData, review *vaultwarden.PolicyRecoveryReview) bool {
 	if a.epoch != epoch || e == nil || a.organizationEditor != e || review == nil || review.Record().OrganizationID != e.id {
 		return false
 	}

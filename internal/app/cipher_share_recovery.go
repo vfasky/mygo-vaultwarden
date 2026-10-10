@@ -11,12 +11,13 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *vaultwarden.Session, vault *vaultwarden.VaultData, e *cipherEditor, scope vaultwarden.Scope, revision string, persist func(vaultwarden.SessionCheckpoint) error, stores ...func(storageRequest) storageReply) (vaultwarden.CipherDocument, error) {
-	storage := callStorage
+func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *vaultwarden.Session, vault *vaultwarden.VaultData, e *cipherEditor, scope vaultwarden.Scope, revision string, persist func(vaultwarden.SessionCheckpoint) error, stores ...func(localstore.Request) localstore.Reply) (vaultwarden.CipherDocument, error) {
+	storage := localstore.Call
 	if len(stores) > 0 {
 		storage = stores[0]
 	}
@@ -36,7 +37,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 		return vaultwarden.CipherDocument{}, vaultwarden.ErrValidation
 	}
 	return session.SharePersonalCipherWithRecovery(ctx, vault, e.shareOrganizationID, e.shareCollectionID, e.document, e.fields, e.authorization, persist, func(data []byte) error {
-		state := storage(storageRequest{Operation: "status"})
+		state := storage(localstore.Request{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			return vaultwarden.ErrConflict
 		}
@@ -51,7 +52,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 		if err = stage.Commit(); err != nil {
 			return err
 		}
-		state = storage(storageRequest{Operation: "status"})
+		state = storage(localstore.Request{Operation: "status"})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			return vaultwarden.ErrConflict
 		}
@@ -184,9 +185,9 @@ func (a *app) runCipherShareRecovery(repair bool) {
 	go func() {
 		defer clear(password)
 		defer clear(raw)
-		var checkpoint *snapshotStatus
+		var checkpoint *localstore.SnapshotStatus
 		persist := func(cp vaultwarden.SessionCheckpoint) error {
-			reply, err := saveSessionCheckpoint(prior, cp, callStorage)
+			reply, err := localstore.SaveSessionCheckpoint(prior, cp, callStorage)
 			if err == nil {
 				prior, checkpoint = reply.State, reply.State
 			}

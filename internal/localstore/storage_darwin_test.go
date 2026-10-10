@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin
 
-package app
+package localstore
 
 import (
 	"bytes"
@@ -36,7 +36,7 @@ func TestNativeStorageTransferABI(t *testing.T) {
 	// Unsupported operation is rejected before sharedContainer/Keychain access.
 	// More than 4 MiB still traverses the real C ABI in bounded pages.
 	input := []byte(`{"operation":"unsupported-test-operation","padding":"` + strings.Repeat("x", 5*1024*1024) + `"}`)
-	_, err = boundedStorageCall(input, func(raw []byte) ([]byte, error) {
+	_, err = BoundedStorageCall(input, func(raw []byte) ([]byte, error) {
 		frames++
 		output := make([]byte, 512*1024)
 		n := call(raw, len(raw), output, len(output))
@@ -68,14 +68,14 @@ func TestNativeLargeAuthenticatedSnapshot(t *testing.T) {
 	}
 	var native func([]byte, int, []byte, int) int32
 	purego.RegisterFunc(&native, symbol)
-	call := func(request storageRequest) storageReply {
+	call := func(request Request) Reply {
 		t.Helper()
 		input, err := json.Marshal(request)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer clear(input)
-		output, err := boundedStorageCall(input, func(frame []byte) ([]byte, error) {
+		output, err := BoundedStorageCall(input, func(frame []byte) ([]byte, error) {
 			buffer := make([]byte, 512*1024)
 			n := native(frame, len(frame), buffer, len(buffer))
 			runtime.KeepAlive(frame)
@@ -89,7 +89,7 @@ func TestNativeLargeAuthenticatedSnapshot(t *testing.T) {
 			t.Fatal(err)
 		}
 		defer clear(output)
-		var reply storageReply
+		var reply Reply
 		if err := json.Unmarshal(output, &reply); err != nil {
 			t.Fatal(err)
 		}
@@ -100,27 +100,27 @@ func TestNativeLargeAuthenticatedSnapshot(t *testing.T) {
 	material := &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "large@example.invalid", KDF: vaultcrypto.KDF{Iterations: 5000}}, Key: key}
 	raw := []byte(`{"profile":{"id":"large-account","organizations":[]},"policies":[],"policiesNew":[],"ciphers":[],"largeUnknownField":"` + strings.Repeat("x", 5*1024*1024) + `"}`)
 	vault := &vaultwarden.VaultData{Version: 1, Scope: scope, Sync: raw}
-	first := call(storageRequest{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: material, Session: []byte("test-session"), Vault: vault})
+	first := call(Request{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: material, Session: []byte("test-session"), Vault: vault})
 	if !first.OK || first.State == nil || first.Vault == nil || !bytes.Equal(first.Vault.Sync, raw) {
 		t.Fatalf("large publish failed: %s", first.Code)
 	}
-	unlocked := call(storageRequest{Operation: "listPassword", ExpectedRevision: first.State.Revision, Scope: &scope, UnlockKey: key})
+	unlocked := call(Request{Operation: "listPassword", ExpectedRevision: first.State.Revision, Scope: &scope, UnlockKey: key})
 	if !unlocked.OK || unlocked.Vault == nil || !bytes.Equal(unlocked.Vault.Sync, raw) || string(unlocked.Session) != "test-session" {
 		t.Fatalf("large authenticated restore failed: %s", unlocked.Code)
 	}
-	wrong := call(storageRequest{Operation: "listPassword", ExpectedRevision: first.State.Revision, Scope: &scope, UnlockKey: bytes.Repeat([]byte{99}, 32)})
+	wrong := call(Request{Operation: "listPassword", ExpectedRevision: first.State.Revision, Scope: &scope, UnlockKey: bytes.Repeat([]byte{99}, 32)})
 	if wrong.OK || wrong.Code != "invalid_password" || wrong.Vault != nil || len(wrong.Session) != 0 {
 		t.Fatal("wrong key released payload")
 	}
-	checkpoint := call(storageRequest{Operation: "saveSession", ExpectedRevision: first.State.Revision, Scope: &scope, UnlockKey: key, Session: []byte("new-token")})
+	checkpoint := call(Request{Operation: "saveSession", ExpectedRevision: first.State.Revision, Scope: &scope, UnlockKey: key, Session: []byte("new-token")})
 	if !checkpoint.OK || checkpoint.Vault == nil || !bytes.Equal(checkpoint.Vault.Sync, raw) {
 		t.Fatalf("large checkpoint failed: %s", checkpoint.Code)
 	}
-	locked := call(storageRequest{Operation: "lock"})
+	locked := call(Request{Operation: "lock"})
 	if !locked.OK {
 		t.Fatal("lock failed")
 	}
-	stale := call(storageRequest{Operation: "listPassword", ExpectedRevision: checkpoint.State.Revision, Scope: &scope, UnlockKey: key})
+	stale := call(Request{Operation: "listPassword", ExpectedRevision: checkpoint.State.Revision, Scope: &scope, UnlockKey: key})
 	if stale.OK || stale.Code != "stale_revision" || stale.Vault != nil {
 		t.Fatal("stale request released payload")
 	}

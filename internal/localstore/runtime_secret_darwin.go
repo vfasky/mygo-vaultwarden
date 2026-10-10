@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin && !headless
 
-package app
+package localstore
 
 import (
 	"github.com/ebitengine/purego"
@@ -22,18 +22,18 @@ func nativeRuntimeSecretCall(input []byte) ([]byte, error) {
 	runtimeSecretLibrary.once.Do(func() {
 		executable, err := nativelib.ExecutablePath()
 		if err != nil {
-			runtimeSecretLibrary.err = errRuntimeSecretUnavailable
+			runtimeSecretLibrary.err = ErrRuntimeSecretUnavailable
 			return
 		}
 		handle, err := purego.Dlopen(filepath.Join(filepath.Dir(executable), "..", "Frameworks", "libSnapshotBridge.dylib"), purego.RTLD_NOW|purego.RTLD_LOCAL)
 		if err != nil {
-			runtimeSecretLibrary.err = errRuntimeSecretUnavailable
+			runtimeSecretLibrary.err = ErrRuntimeSecretUnavailable
 			return
 		}
 		symbol, err := purego.Dlsym(handle, "mygo_runtime_secret_execute")
 		if err != nil {
 			_ = purego.Dlclose(handle)
-			runtimeSecretLibrary.err = errRuntimeSecretUnavailable
+			runtimeSecretLibrary.err = ErrRuntimeSecretUnavailable
 			return
 		}
 		purego.RegisterFunc(&runtimeSecretLibrary.call, symbol)
@@ -42,7 +42,7 @@ func nativeRuntimeSecretCall(input []byte) ([]byte, error) {
 		return nil, runtimeSecretLibrary.err
 	}
 	if len(input) == 0 || len(input) > 96*1024 {
-		return nil, errRuntimeSecretUnavailable
+		return nil, ErrRuntimeSecretUnavailable
 	}
 	output := make([]byte, 96*1024)
 	defer clear(output)
@@ -51,7 +51,7 @@ func nativeRuntimeSecretCall(input []byte) ([]byte, error) {
 	runtime.KeepAlive(input)
 	runtime.KeepAlive(output)
 	if n <= 0 || int(n) > len(output) {
-		return nil, errRuntimeSecretUnavailable
+		return nil, ErrRuntimeSecretUnavailable
 	}
 	return append([]byte(nil), output[:int(n)]...), nil
 }

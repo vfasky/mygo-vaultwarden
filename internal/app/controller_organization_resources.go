@@ -5,6 +5,7 @@ import (
 	"context"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -180,15 +181,15 @@ func (c *orgServicesController) refreshResources(ctx context.Context) error {
 	}
 	fresh, err := env.session.SyncWithCheckpoint(ctx, c.checkpoint(env))
 	defer clearSyncSecrets(&fresh)
-	var reply storageReply
+	var reply localstore.Reply
 	if err == nil {
 		prior, valid := env.lease.state()
 		if !valid {
 			err = vaultwarden.ErrCancelled
 		} else {
-			reply = env.storage(storageRequest{Operation: "publishVault", ExpectedRevision: prior.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
+			reply = env.storage(localstore.Request{Operation: "publishVault", ExpectedRevision: prior.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
 			if !reply.OK {
-				err = reply.failure()
+				err = reply.Failure()
 			} else if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != fresh.Scope || fresh.Scope != *original.Scope || !reply.State.Available || reply.State.Revision == "" || reply.State.Revision == prior.Revision || reply.State.SnapshotID == "" || reply.Vault == nil || !reply.Vault.PreservesPendingPolicies(env.vault) {
 				err = vaultwarden.ErrIdentity
 			}

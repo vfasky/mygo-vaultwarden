@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -25,7 +26,7 @@ func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerL
 	}
 }
 func (a *app) openDevices() { a.openDevicesWith(a.dispatchUI, a.storageCall) }
-func (a *app) openDevicesWith(dispatch func(func()), storage func(storageRequest) storageReply) {
+func (a *app) openDevicesWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() {
 		return
 	}

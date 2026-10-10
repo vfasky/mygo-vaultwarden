@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 )
 
 func TestCipherRowNativePreviewAndExplicitCorrespondence(t *testing.T) {
@@ -36,11 +37,11 @@ func TestCipherRowNativePreviewAndExplicitCorrespondence(t *testing.T) {
 	if tester.HasText("local-row-secret") || tester.HasText("remote-row-secret") {
 		t.Fatal("row preview bypassed authorization")
 	}
-	a.revealCipherRows("fields", func(request storageRequest) storageReply {
+	a.revealCipherRows("fields", func(request localstore.Request) localstore.Reply {
 		if request.Operation != "authorizeSecretDisplay" || request.Secret != "" || len(request.UnlockKey) != 32 {
 			t.Fatal("native row authorization")
 		}
-		return storageReply{OK: true}
+		return localstore.Reply{OK: true}
 	})
 	tester.Frame()
 	if !tester.HasText("local-row-secret") || !tester.HasText("remote-row-secret") {
