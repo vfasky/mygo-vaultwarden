@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
@@ -66,8 +65,8 @@ func (c *Client) uploadSend(ctx context.Context, id, fileID, name, token string,
 	return resp.StatusCode, nil
 }
 
-var ErrSendPasswordRequired = errors.New(i18n.T("server.send.err_password_required"))
-var ErrSendPasswordInvalid = errors.New(i18n.T("server.send.err_password_invalid"))
+var ErrSendPasswordRequired = i18n.Error("server.send.err_password_required")
+var ErrSendPasswordInvalid = i18n.Error("server.send.err_password_invalid")
 
 // SendReceiver is independent of the owner session. Close cancels transfers and
 // revokes publication. Do not log link, token, fields or key; Fields returns a

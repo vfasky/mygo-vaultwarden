@@ -11,7 +11,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 )
 
-var ErrRecoveryCompatibility = errors.New(i18n.T("server.recovery.err_compatibility"))
+var ErrRecoveryCompatibility = i18n.Error("server.recovery.err_compatibility")
 
 func (c *Client) requireRecoveryCompatibility(ctx context.Context) error {
 	_, _, err := c.rotationCompatibility(ctx)

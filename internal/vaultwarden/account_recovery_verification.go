@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
@@ -18,7 +17,7 @@ import (
 	"strings"
 )
 
-var ErrRecoveryUnverified = errors.New(i18n.T("server.recovery.err_unverified"))
+var ErrRecoveryUnverified = i18n.Error("server.recovery.err_unverified")
 
 type AccountRecoveryEvidenceKind string
 

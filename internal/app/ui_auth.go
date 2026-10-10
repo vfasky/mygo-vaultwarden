@@ -36,8 +36,10 @@ func (a *app) authentication(c *ui.Context) {
 		Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
 		ui.Box(c).Height(max(c.TitleBar().Height, 52)).Shrink(0).DragWindow()
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).MinHeight(max(float32(0), authContentHeight(c))).Padding(24, 24, 60, 24).
-				Justify(ui.Center).AlignItems(ui.Center).Children(func() {
+			// The form stays centered in the window; the footer sits at its bottom.
+			ui.Column(c).MinHeight(max(float32(0), authContentHeight(c))).Padding(24, 24, 14, 24).
+				AlignItems(ui.Center).Children(func() {
+				ui.Box(c).Grow(1)
 				ui.Column(c).Width(min(float32(360), max(float32(0), width-48))).Gap(28).Children(func() {
 					ui.Column(c).AlignItems(ui.Center).Gap(12).Children(func() {
 						if kit.AppLogo != nil {
@@ -90,14 +92,25 @@ func (a *app) authentication(c *ui.Context) {
 					} else {
 						a.vaultUnlock(c)
 					}
-					if a.targetRecovery == nil && (a.snapshot == nil || !a.snapshot.AccountSwitchPending) {
-						if authLink(c, i18n.T("login.recovery.verify_as_owner"), a.pending != 0).Clicked() {
-							a.openTargetRecovery()
-						}
-					}
 				})
+				ui.Box(c).Grow(1).MinHeight(32)
+				a.authFooter(c)
 			})
 		})
+	})
+}
+
+// authFooter holds what applies to every authentication page rather than
+// to the form: the language and the rarely used cross-account recovery.
+func (a *app) authFooter(c *ui.Context) {
+	ui.Row(c).Justify(ui.Center).AlignItems(ui.Center).Wrap().Children(func() {
+		languageMenu(c)
+		if a.targetRecovery == nil && (a.snapshot == nil || !a.snapshot.AccountSwitchPending) {
+			ui.Text(c, "·").FontSize(12).TextColor(kit.Muted)
+			if authLink(c, i18n.T("login.recovery.verify_as_owner"), a.pending != 0).TextColor(kit.Muted).Clicked() {
+				a.openTargetRecovery()
+			}
+		}
 	})
 }
 
@@ -273,25 +286,27 @@ func (a *app) vaultUnlock(c *ui.Context) {
 		if !busy && passwordReady && (clicked || submitted) {
 			a.unlockWithPassword()
 		}
-		if ui.Button(c, i18n.T("login.unlock.touch_id")).Height(40).Radius(20).Background(kit.White).
-			Disabled(a.pending != 0).Clicked() {
-			a.runStorage("list")
-		}
-		ui.Text(c, i18n.T("login.unlock.touch_id_hint")).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
-		if authLink(c, i18n.T("account.device_login.title"), busy).Clicked() {
-			a.openUnlockLogin()
-			a.deviceLoginSetup = true
-		}
+		// The hint explains the button, so it stays right beneath it.
+		ui.Column(c).Gap(8).Children(func() {
+			if ui.Button(c, i18n.T("login.unlock.touch_id")).Height(40).Radius(20).Background(kit.White).
+				Disabled(a.pending != 0).Clicked() {
+				a.runStorage("list")
+			}
+			ui.Text(c, i18n.T("login.unlock.touch_id_hint")).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
+		})
 		if !passwordReady {
 			ui.Text(c, i18n.T("login.unlock.login_required_hint")).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
-			ui.Row(c).Justify(ui.Center).Children(func() {
-				if authLink(c, i18n.T("login.log_in_again"), busy).Clicked() {
-					a.openUnlockLogin()
-				}
-			})
 		}
 		a.authStatus(c)
-		ui.Row(c).Justify(ui.Center).Children(func() {
+		// Other ways in share one row, as on the login page.
+		ui.Row(c).Justify(ui.Center).Wrap().Children(func() {
+			if !passwordReady && authLink(c, i18n.T("login.log_in_again"), busy).Clicked() {
+				a.openUnlockLogin()
+			}
+			if authLink(c, i18n.T("account.device_login.title"), busy).Clicked() {
+				a.openUnlockLogin()
+				a.deviceLoginSetup = true
+			}
 			if authLink(c, i18n.T("login.use_another_account"), busy).Clicked() {
 				a.openUnlockLogin()
 			}

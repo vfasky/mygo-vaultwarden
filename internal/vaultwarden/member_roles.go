@@ -4,7 +4,6 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 	"sort"
 )
 
-var ErrMemberRoleGroupsDisabled = errors.New(i18n.T("server.member.err_role_groups_disabled"))
+var ErrMemberRoleGroupsDisabled = i18n.Error("server.member.err_role_groups_disabled")
 
 // MemberRoleDraft captures direct assignments from collection/user endpoints.
 // Admin member details alone omit them when a group grants full access.
