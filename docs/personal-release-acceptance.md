@@ -35,7 +35,7 @@
 
 ## 与钉住主线的最终同步验证
 
-本阶段将候选 `1c5b3b2d28e9ec3f5c43ba6580f7bbbcb525b282` 与主线 `97716146784950eba85a6c079499e968c09872d2` 合并，仅在隔离 integration worktree 操作。保留主线即时语言切换、解锁页底部布局、分步注册与主密码提示流程、密码验证及语义 key 整理；原审计修复、Swift 16–1024 MiB 边界与三个领域接缝继续保留。第二轮审查的两个 OK 仅针对合并前候选；合并后独立 Review 由父任务安排。
+本阶段将候选 `1c5b3b2d28e9ec3f5c43ba6580f7bbbcb525b282` 与主线 `97716146784950eba85a6c079499e968c09872d2` 合并。保留主线即时语言切换、解锁页底部布局、分步注册与主密码提示流程、密码验证及语义 key 整理；原审计修复、Swift 16–1024 MiB 边界与三个领域接缝继续保留。第二轮安全和维护审查均通过；最终合并提交 `44aa17421d13899be63ee0396ecb2352e6783cba` 又经独立只读审查，未发现有源码或复现证据的合并阻塞。该提交已快进合入本地 `main`，未推送远端。签名平台与 live 验证边界仍以下述实际执行记录为准。
 
 - **全仓 Go**：重新构建 MemoryKeys harness 后，`SNAPSHOT_TEST_HARNESS=… go test -tags headless ./...`、`go test -race -tags headless ./...`、`go vet -tags headless ./...` 全部通过。未指定 `-skip`；opt-in live 条件未开启，不能将其跳过算为通过。
 - **Swift**：`swift test --package-path macos` **105项**、`swift test --package-path macos/Authentication` **9项**通过。保留跨语言 Argon2id 15/16/256/257/1024/1025 边界回归，未执行真实 1 GiB 派生。
