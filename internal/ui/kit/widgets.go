@@ -191,3 +191,28 @@ func DetailField(c *ui.Context, label, value, empty string) {
 		}
 	})
 }
+
+// FormInput styles a text input of a single-column form, such as the login
+// and registration pages.
+func FormInput(e ui.Element) ui.Element {
+	return e.Height(38).Padding(0, 14).Radius(19).Background(White)
+}
+
+// WidePrimary is a form's main action: it spans the form width so it lines
+// up with the inputs above it.
+func WidePrimary(c *ui.Context, label string, disabled bool) ui.Element {
+	return ui.PrimaryButton(c, "").Label(label).Height(40).Margin(8, 0, 0, 0).Padding(0, 16).Gap(6).
+		Radius(20).Border(0, ui.Transparent).Shadow(0, 4, 12, 0, ui.RGBA(41, 41, 47, .18)).
+		Justify(ui.Center).AlignItems(ui.Center).Disabled(disabled).Children(func() {
+		ui.Text(c, label).FontSize(14).FontWeight(600)
+		if !disabled {
+			Icon(c, "chevron", 15)
+		}
+	})
+}
+
+// TextLink is a secondary action shown as a link, such as "Forgot password?".
+func TextLink(c *ui.Context, label string, disabled bool) ui.Element {
+	return ui.Button(c, label).Height(30).FontSize(12).Padding(0, 12).Radius(15).
+		Border(0, ui.Transparent).Background(ui.Transparent).TextColor(Purple).Disabled(disabled)
+}

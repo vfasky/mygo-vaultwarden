@@ -211,7 +211,7 @@ func (a *app) view(c *ui.Context) {
 	if a.authManagement != nil && (a.category != "mfa" || a.showSettings) {
 		a.advanceEpoch()
 	}
-	if a.accountForm != nil && a.accountForm.Mode != "register" && (a.category != "account" || a.showSettings) {
+	if a.accountForm != nil && !a.accountForm.SignedOut() && (a.category != "account" || a.showSettings) {
 		a.advanceEpoch()
 	}
 	if a.devicePanel != nil && (a.category != "devices" || a.showSettings) {
