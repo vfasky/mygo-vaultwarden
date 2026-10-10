@@ -13,7 +13,7 @@ import (
 
 func assertVaultHidden(t *testing.T, tt *ui.Tester) {
 	t.Helper()
-	for _, text := range []string{"所有项目", "搜索密码库", "GitHub", "alex@example.com", "复制用户名", "账号与设置"} {
+	for _, text := range []string{"所有项目", "搜索密码库", "GitHub", "alex@example.com", "复制用户名", "账号中心"} {
 		if slices.Contains(tt.Texts(), text) {
 			t.Fatalf("authentication page exposed vault UI: %s", text)
 		}
@@ -67,7 +67,7 @@ func TestAuthenticationRoutesAndNavigation(t *testing.T) {
 func TestServerLoginCanReturnWithoutSwitchingAccount(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1280, 820)
-	uitest.Click(t, tt, "账号与设置")
+	uitest.Click(t, tt, "设置")
 	settings := ui.NewTester(a.settingsWindowView, 720, 560)
 	uitest.Click(t, settings, "登录服务器")
 	tt.Frame()
@@ -76,7 +76,7 @@ func TestServerLoginCanReturnWithoutSwitchingAccount(t *testing.T) {
 		t.Fatal("opening login changed the current account before submission")
 	}
 	uitest.Click(t, tt, "返回密码库")
-	if a.showLogin || !a.unlocked() || !tt.HasText("账号与设置") {
+	if a.showLogin || !a.unlocked() || !tt.HasText("账号中心") {
 		t.Fatal("cancelled navigation lost existing vault")
 	}
 }

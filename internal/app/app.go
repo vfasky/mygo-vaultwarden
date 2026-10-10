@@ -227,14 +227,26 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 
 // Run starts the MyGo Vaultwarden application and blocks until it quits.
 func Run() {
+	if !mygo.App.RequestSingleInstanceLock() {
+		return
+	}
 	a := &app{status: i18n.T("app.sync.status_reading_storage"), notificationsEnabled: true}
 	useUpdater(func() { a.invalidateWindows(nil) })
 	mygo.App.WhenReady(func() {
 		a.windows.native = true
 		a.openMainWindow()
+		mygo.App.SetMenu(a.menu())
 		a.runStorage("settings")
 		mygo.Power.OnLockScreen(func() { a.postUI(func() { a.runStorage("lock") }) })
 		mygo.Power.OnSuspend(func() { a.postUI(func() { a.runStorage("lock") }) })
+	})
+	mygo.App.OnSecondInstance(func(_ []string, _ string) { a.showMainWindow() })
+	mygo.App.OnBeforeQuit(func(_ *mygo.QuitEvent) { a.windows.quitting = true })
+	mygo.App.OnWindowAllClosed(func() {})
+	mygo.App.OnActivate(func(hasVisibleWindows bool) {
+		if !hasVisibleWindows && !a.windows.quitting {
+			a.showMainWindow()
+		}
 	})
 	mygo.App.OnWillQuit(func(_ *mygo.QuitEvent) { a.stopNetwork() })
 	if err := mygo.App.Run(); err != nil {

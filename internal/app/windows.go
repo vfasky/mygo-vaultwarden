@@ -184,6 +184,16 @@ func (a *app) openMainWindow() {
 		StateKey: "main", TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 18, Y: 18},
 		Content: ui.View(a.frame(func() *mygo.Window { return win }, a.view))})
 	a.mainWindow = win
+	win.OnClose(func(e *mygo.CloseEvent) {
+		if a.hideMainWindowOnClose() {
+			e.PreventDefault()
+			win.Hide()
+		}
+	})
+}
+
+func (a *app) hideMainWindowOnClose() bool {
+	return !a.windows.quitting
 }
 
 // showMainWindow brings the main window forward, as after a Dock click or
