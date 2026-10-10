@@ -11,6 +11,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -161,7 +162,7 @@ func TestLiveMFA(t *testing.T) {
 	if verification.EmailSent {
 		t.Fatal("registration needs token fixture")
 	}
-	if e = c.AccountRegister(ctx, email, password, KDF{Type: 0, Iterations: 100000}, "", verification.Token); e != nil {
+	if e = c.AccountRegister(ctx, email, password, vaultcrypto.KDF{Type: 0, Iterations: 100000}, "", verification.Token); e != nil {
 		t.Fatal(e)
 	}
 	s, e := c.Login(ctx, email, password, nil)

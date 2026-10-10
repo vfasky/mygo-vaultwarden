@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"os"
 	"strings"
@@ -20,7 +21,7 @@ type AttachmentInfo struct {
 }
 
 func attachmentDisplayName(encrypted string, cipherKey []byte) (string, error) {
-	plain, err := DecryptString(encrypted, cipherKey)
+	plain, err := vaultcrypto.DecryptString(encrypted, cipherKey)
 	if err != nil {
 		return "", err
 	}
@@ -185,7 +186,7 @@ func (s *Session) downloadAttachmentForPurpose(ctx context.Context, vault *Vault
 	// including ciphers that later acquired an independent item key.
 	key := a.ownerKey
 	if record.Key != "" {
-		key, err = DecryptString(record.Key, cipherKey)
+		key, err = vaultcrypto.DecryptString(record.Key, cipherKey)
 		if err != nil {
 			return nil, err
 		}
@@ -201,11 +202,11 @@ func (s *Session) downloadAttachmentForPurpose(ctx context.Context, vault *Vault
 	if err != nil {
 		return nil, err
 	}
-	defer plain.close()
+	defer plain.Close()
 	if err := a.guard(); err != nil {
 		return nil, err
 	}
-	if err := consume(plain.file, plain.size); err != nil {
+	if err := consume(plain.File, plain.Size); err != nil {
 		return nil, err
 	}
 	// Staging may take time. Recheck server policy and exact cipher after staging,

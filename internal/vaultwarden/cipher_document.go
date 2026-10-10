@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"reflect"
 	"strings"
@@ -81,7 +82,7 @@ func cipherItemKey(object map[string]any, userKey []byte) ([]byte, error) {
 		if !ok {
 			return nil, ErrEncryption
 		}
-		key, err := DecryptString(value, userKey)
+		key, err := vaultcrypto.DecryptString(value, userKey)
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +107,7 @@ func transformField(object map[string]any, name string, key []byte, encrypt bool
 		return ErrProtocol
 	}
 	if encrypt {
-		encoded, err := EncryptString([]byte(text), key)
+		encoded, err := vaultcrypto.EncryptString([]byte(text), key)
 		if err != nil {
 			return err
 		}
@@ -115,7 +116,7 @@ func transformField(object map[string]any, name string, key []byte, encrypt bool
 	}
 	// Only absent/null represents an optional missing field. An empty encrypted
 	// string cannot silently turn an unsupported/corrupt field into success.
-	plain, err := decryptText(&text, key)
+	plain, err := vaultcrypto.DecryptText(&text, key)
 	if err != nil {
 		return err
 	}
@@ -400,7 +401,7 @@ func NewPersonalCipher(fields CipherFields, ownerKey []byte, account string) (Ci
 		return CipherDocument{}, ErrEncryption
 	}
 	defer clear(key)
-	wrapped, err := EncryptString(key, ownerKey)
+	wrapped, err := vaultcrypto.EncryptString(key, ownerKey)
 	if err != nil {
 		return CipherDocument{}, err
 	}

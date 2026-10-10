@@ -13,6 +13,7 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"os"
 	"path/filepath"
 	"strings"
@@ -44,12 +45,12 @@ func TestLiveVaultwarden(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		name string
-		kdf  KDF
+		kdf  vaultcrypto.KDF
 		mfa  bool
 	}{
-		{"pbkdf2", KDF{Type: 0, Iterations: 600000}, false},
-		{"argon2id", KDF{Type: 1, Iterations: 3, Memory: 64, Parallelism: 4}, false},
-		{"totp", KDF{Type: 0, Iterations: 600000}, true},
+		{"pbkdf2", vaultcrypto.KDF{Type: 0, Iterations: 600000}, false},
+		{"argon2id", vaultcrypto.KDF{Type: 1, Iterations: 3, Memory: 64, Parallelism: 4}, false},
+		{"totp", vaultcrypto.KDF{Type: 0, Iterations: 600000}, true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			client, err := NewClient(server, fixtureUUID())
@@ -60,17 +61,17 @@ func TestLiveVaultwarden(t *testing.T) {
 			defer cancel()
 			email := "mygo-" + tc.name + "-" + strings.ReplaceAll(fixtureUUID(), "-", "") + "@example.invalid"
 			password := []byte("Public-phase3-fixture-password!")
-			master, err := DeriveMaster(password, email, tc.kdf)
+			master, err := vaultcrypto.DeriveMaster(password, email, tc.kdf)
 			if err != nil {
 				t.Fatal(err)
 			}
-			stretched, _ := StretchMaster(master)
+			stretched, _ := vaultcrypto.StretchMaster(master)
 			defer clear(master)
 			defer clear(stretched)
 			key := make([]byte, 64)
 			_, _ = rand.Read(key)
 			defer clear(key)
-			hash := AuthorizationHash(master, password)
+			hash := vaultcrypto.AuthorizationHash(master, password)
 			private, err := rsa.GenerateKey(rand.Reader, 2048)
 			if err != nil {
 				t.Fatal(err)

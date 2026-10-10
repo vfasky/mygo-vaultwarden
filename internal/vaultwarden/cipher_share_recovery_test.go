@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -103,8 +104,8 @@ func TestLegacyShareRecoveryNontransactionalAttachments(t *testing.T) {
 			current["id"], current["edit"], current["viewPassword"], current["revisionDate"] = "share-me", true, true, "2026-06-01T00:00:00Z"
 			attachments := []any{}
 			for _, id := range []string{"file-a", "file-b"} {
-				name, _ := EncryptString([]byte("same-name.txt"), s.key)
-				key, _ := EncryptString(bytes.Repeat([]byte{7}, 64), s.key)
+				name, _ := vaultcrypto.EncryptString([]byte("same-name.txt"), s.key)
+				key, _ := vaultcrypto.EncryptString(bytes.Repeat([]byte{7}, 64), s.key)
 				attachments = append(attachments, map[string]any{"id": id, "fileName": name, "key": key, "size": 81})
 			}
 			current["attachments"] = attachments
@@ -161,7 +162,7 @@ func TestLegacyShareRecoveryNontransactionalAttachments(t *testing.T) {
 			defer s.Close()
 			if scenario == "external-edit" {
 				mu.Lock()
-				current["name"], _ = EncryptString([]byte("external change"), s.key)
+				current["name"], _ = vaultcrypto.EncryptString([]byte("external change"), s.key)
 				mu.Unlock()
 			}
 			if scenario == "missing-attachment" {

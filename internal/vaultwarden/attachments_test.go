@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -71,11 +72,11 @@ func TestAttachmentSessionUpload(t *testing.T) {
 						if json.NewDecoder(r.Body).Decode(&body) != nil || body.AdminRequest {
 							t.Error("metadata body")
 						}
-						key, err := DecryptString(body.Key, cipherKey)
+						key, err := vaultcrypto.DecryptString(body.Key, cipherKey)
 						if err != nil || len(key) != 64 {
 							t.Error("wrapped attachment key", err)
 						}
-						name, err := DecryptString(body.FileName, cipherKey)
+						name, err := vaultcrypto.DecryptString(body.FileName, cipherKey)
 						if err != nil || string(name) != "test.txt" {
 							t.Error("encrypted filename", err)
 						}
@@ -110,7 +111,7 @@ func TestAttachmentSessionUpload(t *testing.T) {
 							return
 						}
 						a := cipher["attachments"].([]any)[0].(map[string]any)
-						key, err := DecryptString(a["key"].(string), cipherKey)
+						key, err := vaultcrypto.DecryptString(a["key"].(string), cipherKey)
 						if err != nil {
 							t.Error(err)
 						}
@@ -127,13 +128,13 @@ func TestAttachmentSessionUpload(t *testing.T) {
 						if part.FormName() != "data" {
 							t.Error("field")
 						}
-						plain, err := decryptAttachment(r.Context(), part, a["size"].(int64), key)
+						plain, err := vaultcrypto.DecryptAttachment(r.Context(), part, a["size"].(int64), key)
 						if err != nil {
 							t.Error("uploaded ciphertext", err)
 							return
 						}
-						defer plain.close()
-						actual, err := io.ReadAll(plain.file)
+						defer plain.Close()
+						actual, err := io.ReadAll(plain.File)
 						if err != nil || !bytes.Equal(actual, input) {
 							t.Error("uploaded data mismatch")
 						}

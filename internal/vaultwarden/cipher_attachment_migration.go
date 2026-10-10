@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"os"
 	"strings"
@@ -88,7 +89,7 @@ func (s *Session) CipherAttachmentMigrationInfo(vault *VaultData, id string, gra
 			return nil, ErrProtocol
 		}
 		if wrapped != "" {
-			attachmentKey, err := DecryptString(wrapped, key)
+			attachmentKey, err := vaultcrypto.DecryptString(wrapped, key)
 			if err != nil {
 				return nil, err
 			}

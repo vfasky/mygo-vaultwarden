@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -74,19 +75,19 @@ func TestAttachmentDownloadAuthorizationAndPublication(t *testing.T) {
 			cipherKey, _ := cipherItemKey(cipher, ownerKey)
 			defer clear(cipherKey)
 			fileKey := bytes.Repeat([]byte{42}, 64)
-			wrapped, _ := EncryptString(fileKey, cipherKey)
+			wrapped, _ := vaultcrypto.EncryptString(fileKey, cipherKey)
 			if scenario == "legacy-key" {
 				fileKey = ownerKey
 				wrapped = ""
 			}
-			name, _ := EncryptString([]byte("../../unsafe\\report.txt"), cipherKey)
+			name, _ := vaultcrypto.EncryptString([]byte("../../unsafe\\report.txt"), cipherKey)
 			plain := []byte("authenticated file content")
-			spool, err := encryptAttachment(context.Background(), bytes.NewReader(plain), int64(len(plain)), fileKey)
+			spool, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(plain), int64(len(plain)), fileKey)
 			if err != nil {
 				t.Fatal(err)
 			}
-			encoded, _ = io.ReadAll(spool.file)
-			spool.close()
+			encoded, _ = io.ReadAll(spool.File)
+			spool.Close()
 			record = map[string]any{"id": "attachment-1", "fileName": name, "key": wrapped, "size": len(encoded), "url": server.URL + "/file?token=fixture"}
 			cipher["attachments"] = []any{record}
 			if scenario == "readonly" {

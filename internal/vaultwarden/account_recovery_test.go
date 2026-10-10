@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -61,13 +62,13 @@ func TestAdministratorRecoveryRolesCryptoAndChangedDetails(t *testing.T) {
 						ResetMasterPassword, ResetTwoFactor bool
 					}
 					_ = json.NewDecoder(r.Body).Decode(&request)
-					master, _ := DeriveMaster([]byte("New-recovered-password-92!"), "member@example.invalid", KDF{Type: 0, Iterations: 100000})
+					master, _ := vaultcrypto.DeriveMaster([]byte("New-recovered-password-92!"), "member@example.invalid", vaultcrypto.KDF{Type: 0, Iterations: 100000})
 					defer clear(master)
-					stretched, _ := StretchMaster(master)
+					stretched, _ := vaultcrypto.StretchMaster(master)
 					defer clear(stretched)
-					key, err := DecryptString(request.Key, stretched)
+					key, err := vaultcrypto.DecryptString(request.Key, stretched)
 					defer clear(key)
-					if err != nil || !bytes.Equal(key, targetKey) || request.NewMasterPasswordHash != AuthorizationHash(master, []byte("New-recovered-password-92!")) || !request.ResetMasterPassword || !request.ResetTwoFactor {
+					if err != nil || !bytes.Equal(key, targetKey) || request.NewMasterPasswordHash != vaultcrypto.AuthorizationHash(master, []byte("New-recovered-password-92!")) || !request.ResetMasterPassword || !request.ResetTwoFactor {
 						t.Error("wrong password/user key/KDF flags", err)
 					}
 					if mode == "partial" {
@@ -150,24 +151,24 @@ func TestAdministratorRecoveryRolesCryptoAndChangedDetails(t *testing.T) {
 	}
 }
 func TestRecoveryPasswordKDFAndPolicy(t *testing.T) {
-	for _, kdf := range []KDF{{Type: 0, Iterations: 100000}, {Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}} {
+	for _, kdf := range []vaultcrypto.KDF{{Type: 0, Iterations: 100000}, {Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}} {
 		key := bytes.Repeat([]byte{18}, 64)
 		password := []byte("Valid-new-password-572!")
 		hash, wrapped, err := recoveryPasswordPayload(context.Background(), password, "target@example.invalid", kdf, key, AccountPasswordPolicy{RequireNumbers: true, RequireSpecial: true})
 		if err != nil || hash == "" {
 			t.Fatal(err)
 		}
-		master, _ := DeriveMaster(password, "target@example.invalid", kdf)
+		master, _ := vaultcrypto.DeriveMaster(password, "target@example.invalid", kdf)
 		defer clear(master)
-		stretched, _ := StretchMaster(master)
+		stretched, _ := vaultcrypto.StretchMaster(master)
 		defer clear(stretched)
-		decoded, err := DecryptString(wrapped, stretched)
+		decoded, err := vaultcrypto.DecryptString(wrapped, stretched)
 		defer clear(decoded)
 		if err != nil || !bytes.Equal(decoded, key) {
 			t.Fatal("wrong rewrap", err)
 		}
 	}
-	if _, _, err := recoveryPasswordPayload(context.Background(), []byte("short"), "target@example.invalid", KDF{Type: 0, Iterations: 100000}, make([]byte, 64), AccountPasswordPolicy{}); err == nil {
+	if _, _, err := recoveryPasswordPayload(context.Background(), []byte("short"), "target@example.invalid", vaultcrypto.KDF{Type: 0, Iterations: 100000}, make([]byte, 64), AccountPasswordPolicy{}); err == nil {
 		t.Fatal("short password")
 	}
 }

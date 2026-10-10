@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"testing"
 )
@@ -21,7 +22,7 @@ func TestAccountNontransactionalFolderWriteKeepsBothDecryptPaths(t *testing.T) {
 		serverFolder = req.Data.Folders[0]
 		w.WriteHeader(400)
 	})
-	name, _ := EncryptString([]byte("Folder before partial rotation"), s.key)
+	name, _ := vaultcrypto.EncryptString([]byte("Folder before partial rotation"), s.key)
 	var original map[string]json.RawMessage
 	_ = json.Unmarshal(v.Sync, &original)
 	original["folders"] = mustAccountJSON(t, []AccountRotationFolder{{ID: "folder-a", Name: name}})
@@ -57,10 +58,10 @@ func TestAccountNontransactionalFolderWriteKeepsBothDecryptPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer old.Close()
-	if _, err = DecryptString(serverFolder.Name, old.key); err == nil {
+	if _, err = vaultcrypto.DecryptString(serverFolder.Name, old.key); err == nil {
 		t.Fatal("fixture did not rotate remote folder")
 	}
-	remote, err := DecryptString(serverFolder.Name, recovery.NewUserKey)
+	remote, err := vaultcrypto.DecryptString(serverFolder.Name, recovery.NewUserKey)
 	if err != nil || string(remote) != "Folder before partial rotation" {
 		t.Fatal("new decrypt path lost")
 	}
@@ -69,7 +70,7 @@ func TestAccountNontransactionalFolderWriteKeepsBothDecryptPaths(t *testing.T) {
 	_ = json.Unmarshal(recovery.OldVault, &savedVault)
 	var oldSync struct{ Folders []AccountRotationFolder }
 	_ = json.Unmarshal(savedVault.Sync, &oldSync)
-	local, err := DecryptString(oldSync.Folders[0].Name, old.key)
+	local, err := vaultcrypto.DecryptString(oldSync.Folders[0].Name, old.key)
 	if err != nil || string(local) != "Folder before partial rotation" {
 		t.Fatal("old decrypt path lost")
 	}

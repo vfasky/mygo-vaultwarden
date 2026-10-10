@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"reflect"
@@ -39,8 +40,8 @@ func backupFixture(t *testing.T, format BackupFormat, kinds ...int) (*Session, *
 	}
 	s, _ := resumableFixture(t, scope.Server)
 	s.key = key
-	folderName, _ := EncryptString([]byte("备份文件夹"), key)
-	emptyName, _ := EncryptString([]byte("空文件夹"), key)
+	folderName, _ := vaultcrypto.EncryptString([]byte("备份文件夹"), key)
+	emptyName, _ := vaultcrypto.EncryptString([]byte("空文件夹"), key)
 	sync, _ := json.Marshal(map[string]any{"profile": map[string]any{"id": scope.Account}, "ciphers": docs, "folders": []Folder{{"00000000-0000-4000-8000-000000000001", folderName}, {"00000000-0000-4000-8000-000000000002", emptyName}}})
 	v := &VaultData{Version: 1, Scope: scope, Sync: sync}
 	installFixtureSnapshot(t, s, v, "backup-revision")
@@ -146,10 +147,10 @@ func TestBackupOfficialSelectionAndUnsupported(t *testing.T) {
 			case "organization":
 				obj["organizationId"] = "org"
 			case "checksum":
-				encoded, _ := EncryptString([]byte("not-derived"), session.key)
+				encoded, _ := vaultcrypto.EncryptString([]byte("not-derived"), session.key)
 				obj["login"].(map[string]any)["uris"].([]any)[0].(map[string]any)["uriChecksum"] = encoded
 			case "alias":
-				encoded, _ := EncryptString([]byte("different"), session.key)
+				encoded, _ := vaultcrypto.EncryptString([]byte("different"), session.key)
 				obj["login"].(map[string]any)["uri"] = encoded
 			case "settings":
 				obj["login"].(map[string]any)["autofillOnPageLoad"] = false

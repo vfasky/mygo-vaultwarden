@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"bytes"
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -50,8 +51,8 @@ func TestAttachmentSignedDownloadNoCredentialsOrRedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer plain.close()
-	actual, _ := io.ReadAll(plain.file)
+	defer plain.Close()
+	actual, _ := io.ReadAll(plain.File)
 	if !bytes.Equal(actual, expected) {
 		t.Fatal("download mismatch")
 	}
@@ -112,11 +113,11 @@ func TestAttachmentDownloadResponseBounds(t *testing.T) {
 func TestAttachmentMultipartDirectUpload(t *testing.T) {
 	key, _, _ := officialAttachmentVector(t)
 	input := bytes.Repeat([]byte{0x80, 0xff, 0, 1}, 2*1024*1024)
-	encrypted, err := encryptAttachment(context.Background(), bytes.NewReader(input), int64(len(input)), key)
+	encrypted, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(input), int64(len(input)), key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer encrypted.close()
+	defer encrypted.Close()
 	var hits atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
@@ -137,13 +138,13 @@ func TestAttachmentMultipartDirectUpload(t *testing.T) {
 		if part.FormName() != "data" || part.FileName() != "attachment.bin" {
 			t.Error("metadata leaked or wrong form")
 		}
-		plain, err := decryptAttachment(r.Context(), part, encrypted.size, key)
+		plain, err := vaultcrypto.DecryptAttachment(r.Context(), part, encrypted.Size, key)
 		if err != nil {
 			t.Error(err)
 			return
 		}
-		defer plain.close()
-		actual, _ := io.ReadAll(plain.file)
+		defer plain.Close()
+		actual, _ := io.ReadAll(plain.File)
 		if !bytes.Equal(actual, input) {
 			t.Error("multipart content mismatch")
 		}
@@ -169,11 +170,11 @@ func TestAttachmentMultipartDirectUpload(t *testing.T) {
 }
 func TestAttachmentUploadRedirectNotRetried(t *testing.T) {
 	key, _, _ := officialAttachmentVector(t)
-	encrypted, err := encryptAttachment(context.Background(), bytes.NewReader(nil), 0, key)
+	encrypted, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(nil), 0, key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer encrypted.close()
+	defer encrypted.Close()
 	var hits atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { hits.Add(1); http.Redirect(w, r, "/other", 307) }))
 	defer server.Close()

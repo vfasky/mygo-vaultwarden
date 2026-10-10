@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"golang.org/x/sys/unix"
 )
 
@@ -62,7 +63,7 @@ func OpenSendSource(path string) (io.ReadCloser, int64, string, error) {
 	}
 	f := os.NewFile(uintptr(fd), "send-source")
 	info, e := f.Stat()
-	if e != nil || !info.Mode().IsRegular() || info.Size() > attachmentPlaintextLimit {
+	if e != nil || !info.Mode().IsRegular() || info.Size() > vaultcrypto.AttachmentPlaintextLimit {
 		f.Close()
 		return nil, 0, "", ErrValidation
 	}
@@ -102,19 +103,19 @@ func (d *sendDestination) publish(ctx context.Context, source io.Reader, size in
 	}
 	f := os.NewFile(uintptr(fd), "send-download")
 	defer f.Close()
-	b := make([]byte, attachmentBufferSize)
+	b := make([]byte, vaultcrypto.AttachmentBufferSize)
 	defer clear(b)
 	for remaining := size; remaining > 0; {
 		n := min(int64(len(b)), remaining)
-		if e = attachmentRead(ctx, source, b[:n]); e != nil {
+		if e = vaultcrypto.AttachmentRead(ctx, source, b[:n]); e != nil {
 			return e
 		}
-		if e = attachmentWrite(ctx, f, b[:n]); e != nil {
+		if e = vaultcrypto.AttachmentWrite(ctx, f, b[:n]); e != nil {
 			return e
 		}
 		remaining -= n
 	}
-	if e = attachmentEOF(ctx, source); e != nil {
+	if e = vaultcrypto.AttachmentEOF(ctx, source); e != nil {
 		return e
 	}
 	if f.Sync() != nil {

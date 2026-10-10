@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strings"
 	"time"
 
@@ -121,7 +122,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 	}
 	useSSO := a.loginSSO
 	a.loginSSO = false
-	server, email := a.serverURL, vaultwarden.NormalizeEmail(a.email)
+	server, email := a.serverURL, vaultcrypto.NormalizeEmail(a.email)
 	var password []byte
 	if login {
 		canonical, err := vaultwarden.CanonicalServer(server)

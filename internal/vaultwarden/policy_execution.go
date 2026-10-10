@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 )
 
@@ -62,7 +63,7 @@ func parseOperationPolicies(body []byte, scope Scope, email, wrapped string) (*o
 	if len(body) == 0 || len(body) > maxResponse || json.Unmarshal(body, &data) != nil || data.Ciphers == nil || data.Policies == nil || data.PoliciesNew == nil || data.Profile.Organizations == nil {
 		return nil, ErrProtocol
 	}
-	if data.Profile.ID != scope.Account || NormalizeEmail(data.Profile.Email) != email {
+	if data.Profile.ID != scope.Account || vaultcrypto.NormalizeEmail(data.Profile.Email) != email {
 		return nil, ErrIdentity
 	}
 	if data.Profile.Key != wrapped || wrapped == "" {

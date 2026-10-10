@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/url"
 	"sync"
 	"time"
@@ -74,7 +75,7 @@ func validAuthID(id string) bool {
 // band by the approving user, not merely trusted because the server returns it.
 func (c *Client) BeginAuthRequest(ctx context.Context, email string) (*PendingAuthRequest, AuthRequest, error) {
 	var empty AuthRequest
-	if email = NormalizeEmail(email); email == "" || len(email) > 1024 {
+	if email = vaultcrypto.NormalizeEmail(email); email == "" || len(email) > 1024 {
 		return nil, empty, ErrValidation
 	}
 	private, err := rsa.GenerateKey(rand.Reader, 2048)

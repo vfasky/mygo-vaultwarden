@@ -4,12 +4,12 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 func historyUIFixture(t *testing.T) *app {
@@ -18,12 +18,12 @@ func historyUIFixture(t *testing.T) *app {
 	var sync map[string]any
 	json.Unmarshal(a.vault.Sync, &sync)
 	object := sync["ciphers"].([]any)[0].(map[string]any)
-	key, err := vaultwarden.DecryptString(object["key"].(string), bytes.Repeat([]byte{4}, 64))
+	key, err := vaultcrypto.DecryptString(object["key"].(string), bytes.Repeat([]byte{4}, 64))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clear(key)
-	password, err := vaultwarden.EncryptString([]byte("saved-history-secret"), key)
+	password, err := vaultcrypto.EncryptString([]byte("saved-history-secret"), key)
 	if err != nil {
 		t.Fatal(err)
 	}

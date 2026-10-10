@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strconv"
 	"sync"
 
@@ -23,13 +24,13 @@ func (w *mfaRecoveryWarnings) record(server, email string, confirmed bool) {
 	if w.entries == nil {
 		w.entries = map[string]bool{}
 	}
-	key := server + "\n" + vaultwarden.NormalizeEmail(email)
+	key := server + "\n" + vaultcrypto.NormalizeEmail(email)
 	w.entries[key] = w.entries[key] || confirmed
 }
 func (w *mfaRecoveryWarnings) warning(server, email string) string {
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	confirmed, ok := w.entries[server+"\n"+vaultwarden.NormalizeEmail(email)]
+	confirmed, ok := w.entries[server+"\n"+vaultcrypto.NormalizeEmail(email)]
 	if !ok {
 		return ""
 	}

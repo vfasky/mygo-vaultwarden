@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"sync/atomic"
 	"time"
 )
@@ -19,21 +20,21 @@ func runtimePasswordKey(ctx context.Context, client *Client, email, wrapped stri
 	if status != 200 {
 		return nil, statusError(status)
 	}
-	var kdf KDF
+	var kdf vaultcrypto.KDF
 	if strictJSON(data) != nil || json.Unmarshal(data, &kdf) != nil {
 		return nil, ErrProtocol
 	}
-	master, err := DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(stretched)
-	return DecryptString(wrapped, stretched)
+	return vaultcrypto.DecryptString(wrapped, stretched)
 }
 
 // RuntimeAuthority is a capability minted only from this Session's actual

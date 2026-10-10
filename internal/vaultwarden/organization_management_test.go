@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -50,7 +51,7 @@ func TestOrganizationManagementCreatesIndependentKeyAndPlainMetadata(t *testing.
 			t.Error("org key", err)
 		}
 		createdKeys = append(createdKeys, key)
-		collection, err := DecryptString(body.CollectionName, key)
+		collection, err := vaultcrypto.DecryptString(body.CollectionName, key)
 		if err != nil || string(collection) != "默认私密集合" {
 			t.Error("collection encryption", err)
 		}
@@ -156,12 +157,12 @@ func TestOrganizationManagementOwnerUpdateIdentityAndPasswordDelete(t *testing.T
 	if _, err := s.SaveOrganization(context.Background(), vault, "org-1", OrganizationSettings{Name: "new name", BillingEmail: "owner@example.invalid"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	master, err := DeriveMaster([]byte("master"), s.passwordUnlock.Config.Email, s.passwordUnlock.Config.KDF)
+	master, err := vaultcrypto.DeriveMaster([]byte("master"), s.passwordUnlock.Config.Email, s.passwordUnlock.Config.KDF)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clear(master)
-	expectedHash = AuthorizationHash(master, []byte("master"))
+	expectedHash = vaultcrypto.AuthorizationHash(master, []byte("master"))
 	if err := s.DeleteOrganization(context.Background(), vault, "org-1", []byte("master"), func(SessionCheckpoint) error { isolated = true; return nil }, nil); err != nil {
 		t.Fatal(err)
 	}

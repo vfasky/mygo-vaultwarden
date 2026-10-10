@@ -5,11 +5,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"testing"
 	"time"
 
 	"github.com/egoist/mygo/ui"
-	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 func TestCipherRowNativePreviewAndExplicitCorrespondence(t *testing.T) {
@@ -18,14 +18,14 @@ func TestCipherRowNativePreviewAndExplicitCorrespondence(t *testing.T) {
 	e := a.editor
 	e.custom = []editorCustom{{source: map[string]any{"type": json.Number("1")}, name: "local-name", value: "local-row-secret", kind: "1", hidden: true, editable: true}}
 	publishComparisonFixture(t, a, func(object map[string]any) {
-		key, err := vaultwarden.DecryptString(object["key"].(string), bytes.Repeat([]byte{4}, 64))
+		key, err := vaultcrypto.DecryptString(object["key"].(string), bytes.Repeat([]byte{4}, 64))
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer clear(key)
-		name, _ := vaultwarden.EncryptString([]byte("remote-name"), key)
-		value, _ := vaultwarden.EncryptString([]byte("remote-row-secret"), key)
-		added, _ := vaultwarden.EncryptString([]byte("remote-added"), key)
+		name, _ := vaultcrypto.EncryptString([]byte("remote-name"), key)
+		value, _ := vaultcrypto.EncryptString([]byte("remote-row-secret"), key)
+		added, _ := vaultcrypto.EncryptString([]byte("remote-added"), key)
 		object["fields"] = []any{map[string]any{"name": name, "value": value, "type": 1, "newOpaque": "preserved"}, map[string]any{"name": added, "value": value, "type": 1}}
 	})
 	a.compareCipher(nil)

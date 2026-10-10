@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 	"testing"
@@ -167,7 +168,7 @@ func TestCipherRebaseRejectsUnsafeTransitionsAndStalePlans(t *testing.T) {
 				case "viewPassword":
 					o["viewPassword"] = false
 				case "key":
-					o["key"], _ = EncryptString(make([]byte, 64), key)
+					o["key"], _ = vaultcrypto.EncryptString(make([]byte, 64), key)
 				}
 			})
 			vault := rebaseVault(t, s, remote)

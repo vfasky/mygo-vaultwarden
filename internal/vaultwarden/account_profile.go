@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"regexp"
 )
 
@@ -30,7 +31,7 @@ func (s *Session) accountProfileLocked(ctx context.Context, method, path string,
 		return AccountProfile{}, statusError(status)
 	}
 	var p AccountProfile
-	if strictJSON(data) != nil || json.Unmarshal(data, &p) != nil || p.ID != s.account || NormalizeEmail(p.Email) != s.email || p.Key != s.wrapped {
+	if strictJSON(data) != nil || json.Unmarshal(data, &p) != nil || p.ID != s.account || vaultcrypto.NormalizeEmail(p.Email) != s.email || p.Key != s.wrapped {
 		if method != "GET" {
 			return AccountProfile{}, &MutationUncertainError{Cause: ErrIdentity}
 		}

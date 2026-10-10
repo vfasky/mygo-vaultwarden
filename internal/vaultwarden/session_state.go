@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 )
 
 // This JSON is secret material, carried only inside the encrypted snapshot.
@@ -84,7 +85,7 @@ func RestoreSession(data []byte, scope Scope, config *PasswordUnlockConfig) (*Se
 	}()
 	if json.Unmarshal(data, &state) != nil || state.Version != 1 || state.Scope != scope ||
 		state.Scope.Account == "" || len(state.Scope.Account) > 256 ||
-		state.Email == "" || state.Email != NormalizeEmail(state.Email) || len(state.Email) > 1024 ||
+		state.Email == "" || state.Email != vaultcrypto.NormalizeEmail(state.Email) || len(state.Email) > 1024 ||
 		state.RefreshToken == "" || len(state.RefreshToken) > 16384 ||
 		state.WrappedKey == "" || len(state.WrappedKey) > 4096 || len(state.UserKey) != 64 ||
 		state.PasswordUnlock == nil || len(state.PasswordUnlock.Key) != 32 || state.PasswordUnlock.Config.Email != state.Email {

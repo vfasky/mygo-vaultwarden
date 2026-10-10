@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net"
 	"net/http"
@@ -179,7 +180,7 @@ func TestLiveRotationCipherResources(t *testing.T) {
 	if _, err = owner.CreatePersonalCipher(ctx, vault.Scope, CipherFields{Type: 2, Name: "modern item"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	folderName, _ := EncryptString([]byte("rotation folder"), owner.key)
+	folderName, _ := vaultcrypto.EncryptString([]byte("rotation folder"), owner.key)
 	folderBody, _ := json.Marshal(map[string]string{"name": folderName})
 	status, _, err := owner.client.request(ctx, "POST", "/api/folders", "application/json", string(folderBody), owner.access)
 	if err != nil || status != 200 {
@@ -287,7 +288,7 @@ func TestLiveRotationCipherResources(t *testing.T) {
 		t.Fatal("FIDO changed")
 	}
 	attachment := object["attachments"].([]any)[0].(map[string]any)
-	binaryKey, err := DecryptString(attachment["key"].(string), owner.key)
+	binaryKey, err := vaultcrypto.DecryptString(attachment["key"].(string), owner.key)
 	if err != nil || bytes.Equal(binaryKey, oldKey) || len(binaryKey) != 64 {
 		t.Fatal("owner key masquerading as independent key", err)
 	}

@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -300,7 +301,7 @@ func testLiveSMTPInvitations(t *testing.T, autoEnroll bool) {
 			t.Fatal(err)
 		}
 		defer data.close()
-		der, err := DecryptString(details.EncryptedPrivateKey, data.keys[org.ID])
+		der, err := vaultcrypto.DecryptString(details.EncryptedPrivateKey, data.keys[org.ID])
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"mime"
 	"net/http"
@@ -35,12 +36,12 @@ func TestSendReceiverFileIsolationAndPublication(t *testing.T) {
 			seed := bytes.Repeat([]byte{9}, 16)
 			key, _ := sendKey(seed)
 			content := bytes.Repeat([]byte("private bytes"), 12345)
-			encrypted, e := encryptAttachment(context.Background(), bytes.NewReader(content), int64(len(content)), key)
+			encrypted, e := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(content), int64(len(content)), key)
 			if e != nil {
 				t.Fatal(e)
 			}
-			defer encrypted.close()
-			ciphertext, _ := io.ReadAll(encrypted.file)
+			defer encrypted.Close()
+			ciphertext, _ := io.ReadAll(encrypted.File)
 			var signedRequests atomic.Int32
 			foreign := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				signedRequests.Add(1)

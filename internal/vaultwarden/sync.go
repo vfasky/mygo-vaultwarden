@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
 )
@@ -155,7 +156,7 @@ func decryptCipher(item encryptedCipher, userKey []byte, defaultMatch ...int) (C
 	key := userKey
 	if item.Key != nil && *item.Key != "" {
 		var err error
-		key, err = DecryptString(*item.Key, userKey)
+		key, err = vaultcrypto.DecryptString(*item.Key, userKey)
 		if err != nil {
 			return Credential{}, 0, err
 		}
@@ -164,15 +165,15 @@ func decryptCipher(item encryptedCipher, userKey []byte, defaultMatch ...int) (C
 			return Credential{}, 0, ErrEncryption
 		}
 	}
-	name, err := decryptText(item.Name, key)
+	name, err := vaultcrypto.DecryptText(item.Name, key)
 	if err != nil {
 		return Credential{}, 0, err
 	}
-	username, err := decryptText(item.Login.Username, key)
+	username, err := vaultcrypto.DecryptText(item.Login.Username, key)
 	if err != nil {
 		return Credential{}, 0, err
 	}
-	password, err := decryptText(item.Login.Password, key)
+	password, err := vaultcrypto.DecryptText(item.Login.Password, key)
 	if err != nil {
 		return Credential{}, 0, err
 	}
@@ -182,7 +183,7 @@ func decryptCipher(item encryptedCipher, userKey []byte, defaultMatch ...int) (C
 	}
 	skipped := 0
 	for index, entry := range item.Login.URIs {
-		value, err := decryptText(entry.URI, key)
+		value, err := vaultcrypto.DecryptText(entry.URI, key)
 		if err != nil {
 			return Credential{}, 0, err
 		}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 )
 
 // BindPassword explicitly equips a successful device login with a real password
@@ -42,21 +43,21 @@ func (f *DeviceLogin) BindPassword(ctx context.Context, password []byte) error {
 	if status != 200 {
 		return statusError(status)
 	}
-	var kdf KDF
+	var kdf vaultcrypto.KDF
 	if strictJSON(data) != nil || json.Unmarshal(data, &kdf) != nil {
 		return ErrProtocol
 	}
-	master, err := DeriveMaster(password, f.email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, f.email, kdf)
 	if err != nil {
 		return err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return err
 	}
 	defer clear(stretched)
-	unwrapped, err := DecryptString(wrapped, stretched)
+	unwrapped, err := vaultcrypto.DecryptString(wrapped, stretched)
 	if err != nil {
 		return err
 	}

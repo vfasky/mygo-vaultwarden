@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 )
 
@@ -177,7 +178,7 @@ func copyOrganizationDocument(source CipherDocument, sourceKey, targetKey []byte
 		return CipherDocument{}, err
 	}
 	defer clear(key)
-	wrapped, err := EncryptString(key, targetKey)
+	wrapped, err := vaultcrypto.EncryptString(key, targetKey)
 	if err != nil {
 		return CipherDocument{}, err
 	}

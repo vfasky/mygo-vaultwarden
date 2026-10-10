@@ -14,6 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"golang.org/x/crypto/hkdf"
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -187,25 +188,25 @@ func encryptSend(f SendFields, seed, userKey []byte) (sendWire, error) {
 		v := f.ExpirationDate.Truncate(time.Millisecond)
 		w.ExpirationDate = &v
 	}
-	if w.Key, err = EncryptString(seed, userKey); err != nil {
+	if w.Key, err = vaultcrypto.EncryptString(seed, userKey); err != nil {
 		return w, err
 	}
-	if w.Name, err = EncryptString([]byte(f.Name), key); err != nil {
+	if w.Name, err = vaultcrypto.EncryptString([]byte(f.Name), key); err != nil {
 		return w, err
 	}
-	notes, e := EncryptString([]byte(f.Notes), key)
+	notes, e := vaultcrypto.EncryptString([]byte(f.Notes), key)
 	if e != nil {
 		return w, e
 	}
 	w.Notes = &notes
 	if f.Type == 0 {
-		text, e := EncryptString([]byte(f.Text), key)
+		text, e := vaultcrypto.EncryptString([]byte(f.Text), key)
 		if e != nil {
 			return w, e
 		}
 		w.Text = &sendText{text, f.Hidden}
 	} else {
-		name, e := EncryptString([]byte(f.FileName), key)
+		name, e := vaultcrypto.EncryptString([]byte(f.FileName), key)
 		if e != nil {
 			return w, e
 		}
@@ -221,7 +222,7 @@ func decryptSend(w sendWire, userKey []byte) (*SendDraft, error) {
 	if !validObjectID(w.ID) || sendAccessID(w.ID) != w.AccessID || w.RevisionDate == "" || w.AuthType != 1 && w.AuthType != 2 || (w.Password == nil) != (w.AuthType == 2) {
 		return nil, ErrProtocol
 	}
-	seed, e := DecryptString(w.Key, userKey)
+	seed, e := vaultcrypto.DecryptString(w.Key, userKey)
 	if e != nil {
 		return nil, e
 	}
@@ -248,7 +249,7 @@ func decryptSendFields(w sendWire, seed []byte) (SendFields, error) {
 		f.MaxAccessCount = &v
 	}
 	text := func(s string) (string, error) {
-		b, e := DecryptString(s, key)
+		b, e := vaultcrypto.DecryptString(s, key)
 		defer clear(b)
 		if e != nil {
 			return "", e

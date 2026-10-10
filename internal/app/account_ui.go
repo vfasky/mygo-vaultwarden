@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/passwordstrength"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strconv"
 )
 
@@ -42,7 +43,7 @@ type accountFormRequest struct {
 	Operation                             string
 	Email, Name, Hint, Avatar, Token, OTP string
 	Password, NewPassword                 []byte
-	KDF                                   vaultwarden.KDF
+	KDF                                   vaultcrypto.KDF
 	Plan                                  *vaultwarden.AccountChangePlan
 	Confirmation                          string
 	RotationTrust                         vaultwarden.RecoveryRotationTrust
@@ -178,7 +179,7 @@ func (f *accountForm) dispatch(operation string) {
 	if (operation == "api-key" || operation == "rotate-api-key") && (!f.confirming || f.confirmAction != operation) {
 		return
 	}
-	kdf := vaultwarden.KDF{}
+	kdf := vaultcrypto.KDF{}
 	if operation == "prepare-kdf" || operation == "register-finish" {
 		var err error
 		kdf.Type, err = strconv.Atoi(f.kdfType)

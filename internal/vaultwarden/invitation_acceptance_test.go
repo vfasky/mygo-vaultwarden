@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -213,7 +214,7 @@ func TestOrganizationRecoveryInitializationAndKeySeparation(t *testing.T) {
 		if json.NewDecoder(r.Body).Decode(&pair) != nil {
 			t.Error("pair")
 		}
-		plain, err := DecryptString(pair.EncryptedPrivateKey, orgKey)
+		plain, err := vaultcrypto.DecryptString(pair.EncryptedPrivateKey, orgKey)
 		if err != nil {
 			t.Error(err)
 			return

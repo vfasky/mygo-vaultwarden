@@ -6,6 +6,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"os"
 	"runtime"
 	"strings"
@@ -96,7 +97,7 @@ func TestNativeLargeAuthenticatedSnapshot(t *testing.T) {
 	}
 	scope := vaultwarden.Scope{Server: "https://vault.example.invalid", Account: "large-account"}
 	key := bytes.Repeat([]byte{37}, 32)
-	material := &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "large@example.invalid", KDF: vaultwarden.KDF{Iterations: 5000}}, Key: key}
+	material := &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "large@example.invalid", KDF: vaultcrypto.KDF{Iterations: 5000}}, Key: key}
 	raw := []byte(`{"profile":{"id":"large-account","organizations":[]},"policies":[],"policiesNew":[],"ciphers":[],"largeUnknownField":"` + strings.Repeat("x", 5*1024*1024) + `"}`)
 	vault := &vaultwarden.VaultData{Version: 1, Scope: scope, Sync: raw}
 	first := call(storageRequest{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: material, Session: []byte("test-session"), Vault: vault})

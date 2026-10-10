@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -71,7 +72,7 @@ func TestMemberRolePreservesDirectRelationsAndRejectsIncompleteOrChangedSources(
 	}))
 	defer server.Close()
 	s, v, key, _ := organizationFixture(t, server.URL)
-	collectionName, _ = EncryptString([]byte("直接集合"), key)
+	collectionName, _ = vaultcrypto.EncryptString([]byte("直接集合"), key)
 	defer s.Close()
 	v = acceptedOwnerVault(t, s, v)
 	directory, err := s.OrganizationMembers(context.Background(), v, "org-1", nil)

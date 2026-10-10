@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/mail"
 	"strings"
@@ -150,7 +151,7 @@ func (s *Session) SaveOrganization(ctx context.Context, vault *VaultData, orgID 
 		if err != nil {
 			return OrganizationProfile{}, ErrEncryption
 		}
-		collection, err := EncryptString([]byte(settings.CollectionName), key)
+		collection, err := vaultcrypto.EncryptString([]byte(settings.CollectionName), key)
 		if err != nil {
 			return OrganizationProfile{}, err
 		}
@@ -234,12 +235,12 @@ func (s *Session) removeOrganization(ctx context.Context, vault *VaultData, orgI
 			return ErrPermission
 		}
 		config := s.passwordUnlock.Config
-		master, err := DeriveMaster(password, config.Email, config.KDF)
+		master, err := vaultcrypto.DeriveMaster(password, config.Email, config.KDF)
 		if err != nil {
 			return err
 		}
 		defer clear(master)
-		encoded, err := json.Marshal(map[string]string{"masterPasswordHash": AuthorizationHash(master, password)})
+		encoded, err := json.Marshal(map[string]string{"masterPasswordHash": vaultcrypto.AuthorizationHash(master, password)})
 		if err != nil {
 			return ErrProtocol
 		}

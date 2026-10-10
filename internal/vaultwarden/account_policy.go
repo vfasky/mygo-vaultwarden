@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"encoding/json"
 	"github.com/vfasky/mygo-vaultwarden/internal/passwordstrength"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"strings"
@@ -82,17 +83,17 @@ func (s *Session) accountProofLocked(input AccountSensitiveInput) (accountProof,
 	if s.passwordUnlock == nil {
 		return accountProof{}, ErrExpired
 	}
-	master, err := DeriveMaster(input.Password, s.email, s.passwordUnlock.Config.KDF)
+	master, err := vaultcrypto.DeriveMaster(input.Password, s.email, s.passwordUnlock.Config.KDF)
 	if err != nil {
 		return accountProof{}, err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return accountProof{}, err
 	}
 	defer clear(stretched)
-	key, err := DecryptString(s.wrapped, stretched)
+	key, err := vaultcrypto.DecryptString(s.wrapped, stretched)
 	if err != nil {
 		return accountProof{}, ErrCredentials
 	}
@@ -100,7 +101,7 @@ func (s *Session) accountProofLocked(input AccountSensitiveInput) (accountProof,
 	if !hmac.Equal(key, s.key) {
 		return accountProof{}, ErrCredentials
 	}
-	return accountProof{Hash: AuthorizationHash(master, input.Password)}, nil
+	return accountProof{Hash: vaultcrypto.AuthorizationHash(master, input.Password)}, nil
 }
 func (s *Session) accountPolicyLocked(ctx context.Context, password []byte, persist func(SessionCheckpoint) error) (AccountPasswordPolicy, error) {
 	proof, err := s.accountProofLocked(AccountSensitiveInput{Password: password})

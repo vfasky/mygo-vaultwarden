@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"time"
 )
 
@@ -19,7 +20,7 @@ func (c *Client) UnlockSSOVault(ctx context.Context, raw json.RawMessage, email 
 	if token.wrappedKey() == "" {
 		return nil, ErrEncryption
 	}
-	email = NormalizeEmail(email)
+	email = vaultcrypto.NormalizeEmail(email)
 	prelogin, _ := json.Marshal(map[string]string{"email": email})
 	status, data, err := c.request(ctx, "POST", "/identity/accounts/prelogin", "application/json", string(prelogin), "")
 	if err != nil {
@@ -28,21 +29,21 @@ func (c *Client) UnlockSSOVault(ctx context.Context, raw json.RawMessage, email 
 	if status != 200 {
 		return nil, statusError(status)
 	}
-	var kdf KDF
+	var kdf vaultcrypto.KDF
 	if json.Unmarshal(data, &kdf) != nil {
 		return nil, ErrProtocol
 	}
-	master, err := DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(stretched)
-	key, err := DecryptString(token.wrappedKey(), stretched)
+	key, err := vaultcrypto.DecryptString(token.wrappedKey(), stretched)
 	if err != nil {
 		return nil, err
 	}

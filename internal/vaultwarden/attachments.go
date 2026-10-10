@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"os"
 	"strconv"
@@ -39,8 +40,8 @@ func (a attachmentRecord) size() (int64, error) {
 		}
 	}
 	n, err := strconv.ParseInt(raw, 10, 64)
-	maxSize, _ := attachmentEncryptedSize(attachmentPlaintextLimit)
-	if err != nil || n < attachmentHeaderSize+16 || n > maxSize || (n-attachmentHeaderSize)%16 != 0 {
+	maxSize, _ := vaultcrypto.AttachmentEncryptedSize(vaultcrypto.AttachmentPlaintextLimit)
+	if err != nil || n < vaultcrypto.AttachmentHeaderSize+16 || n > maxSize || (n-vaultcrypto.AttachmentHeaderSize)%16 != 0 {
 		return 0, ErrProtocol
 	}
 	return n, nil
@@ -359,7 +360,7 @@ func (s *Session) UploadAttachment(ctx context.Context, vault *VaultData, id, fi
 		return result, ErrValidation
 	}
 	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > attachmentPlaintextLimit {
+	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > vaultcrypto.AttachmentPlaintextLimit {
 		return result, ErrValidation
 	}
 	if offset, err := file.Seek(0, 0); err != nil || offset != 0 {
@@ -393,20 +394,20 @@ func (s *Session) UploadAttachment(ctx context.Context, vault *VaultData, id, fi
 	if _, err := rand.Read(key); err != nil {
 		return result, ErrEncryption
 	}
-	encrypted, err := encryptAttachment(ctx, file, info.Size(), key)
+	encrypted, err := vaultcrypto.EncryptAttachment(ctx, file, info.Size(), key)
 	if err != nil {
 		return result, err
 	}
-	defer encrypted.close()
+	defer encrypted.Close()
 	after, err := file.Stat()
 	if err != nil || after.Size() != info.Size() || !after.ModTime().Equal(info.ModTime()) {
 		return result, ErrConflict
 	}
-	encryptedName, err := EncryptString([]byte(filename), cipherKey)
+	encryptedName, err := vaultcrypto.EncryptString([]byte(filename), cipherKey)
 	if err != nil {
 		return result, err
 	}
-	wrappedKey, err := EncryptString(key, cipherKey)
+	wrappedKey, err := vaultcrypto.EncryptString(key, cipherKey)
 	if err != nil {
 		return result, err
 	}
@@ -421,7 +422,7 @@ func (s *Session) UploadAttachment(ctx context.Context, vault *VaultData, id, fi
 		return result, err
 	}
 	authority.guard = fresh.guard
-	body, _ := json.Marshal(map[string]any{"fileName": encryptedName, "key": wrappedKey, "fileSize": encrypted.size, "adminRequest": false})
+	body, _ := json.Marshal(map[string]any{"fileName": encryptedName, "key": wrappedKey, "fileSize": encrypted.Size, "adminRequest": false})
 	status, response, err := s.authenticatedGuardedLocked(ctx, http.MethodPost, "/api/ciphers/"+id+"/attachment/v2", "application/json", string(body), persist, authority.guard)
 	if err != nil {
 		return result, err
@@ -430,7 +431,7 @@ func (s *Session) UploadAttachment(ctx context.Context, vault *VaultData, id, fi
 		return result, mutationStatusError(status)
 	}
 	result.MetadataCreated = true
-	attachmentID, receipt, err := validateAttachmentUploadReceipt(response, authority.document, encryptedName, wrappedKey, encrypted.size)
+	attachmentID, receipt, err := validateAttachmentUploadReceipt(response, authority.document, encryptedName, wrappedKey, encrypted.Size)
 	result.AttachmentID = attachmentID
 	if err != nil {
 		return result, &MutationUncertainError{Cause: err}

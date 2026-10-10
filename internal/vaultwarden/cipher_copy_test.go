@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"reflect"
@@ -23,7 +24,7 @@ func copyFixture(t *testing.T, kind int) (CipherDocument, []byte) {
 		login := object["login"].(map[string]any)
 		delete(login, "fido2Credentials")
 		uri := login["uris"].([]any)[0].(map[string]any)
-		checksum, err := EncryptString([]byte("fixture checksum"), key)
+		checksum, err := vaultcrypto.EncryptString([]byte("fixture checksum"), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -62,7 +63,7 @@ func TestCopyEightTypesRekeysEveryKnownSecret(t *testing.T) {
 			if bytes.Equal(oldKey, newKey) || bytes.Equal(newKey, key) {
 				t.Fatal("copy reused key")
 			}
-			if _, err := DecryptString(b["name"].(string), oldKey); err == nil {
+			if _, err := vaultcrypto.DecryptString(b["name"].(string), oldKey); err == nil {
 				t.Fatal("copy still decrypts under source key")
 			}
 			if b["encryptedFor"] != "account-a" || !bytes.Equal(before, source.JSON) {
@@ -160,7 +161,7 @@ func TestCopyDraftRekeysWrappedItemAndLegacyURI(t *testing.T) {
 	if err := transformCipher(object, itemKey, true); err != nil {
 		t.Fatal(err)
 	}
-	object["key"], _ = EncryptString(itemKey, ownerKey)
+	object["key"], _ = vaultcrypto.EncryptString(itemKey, ownerKey)
 	source.JSON, _ = json.Marshal(object)
 	before := append([]byte(nil), source.JSON...)
 	fields, err := DecryptCipherDocument(source, ownerKey)
@@ -201,7 +202,7 @@ func TestCopyDraftRekeysWrappedItemAndLegacyURI(t *testing.T) {
 	if bytes.Equal(newKey, itemKey) || bytes.Equal(newKey, ownerKey) {
 		t.Fatal("key reused")
 	}
-	if _, err := DecryptString(payload["login"].(map[string]any)["uri"].(string), itemKey); err == nil {
+	if _, err := vaultcrypto.DecryptString(payload["login"].(map[string]any)["uri"].(string), itemKey); err == nil {
 		t.Fatal("legacy URI still under source key")
 	}
 	if !bytes.Equal(before, source.JSON) {

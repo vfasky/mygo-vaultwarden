@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -123,14 +124,14 @@ func TestCipherLegacyAttachmentUpgradeRecovery(t *testing.T) {
 			cipher["id"], cipher["edit"], cipher["viewPassword"], cipher["revisionDate"] = "item", true, true, "2026-06-01T00:00:00Z"
 			cipherKey, _ := cipherItemKey(cipher, s.key)
 			defer clear(cipherKey)
-			name, _ := EncryptString([]byte("same-name.txt"), cipherKey)
+			name, _ := vaultcrypto.EncryptString([]byte("same-name.txt"), cipherKey)
 			plain := []byte("legacy verified contents")
-			encrypted, err := encryptAttachment(context.Background(), bytes.NewReader(plain), int64(len(plain)), s.key)
+			encrypted, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(plain), int64(len(plain)), s.key)
 			if err != nil {
 				t.Fatal(err)
 			}
-			blobs["old"], _ = io.ReadAll(encrypted.file)
-			encrypted.close()
+			blobs["old"], _ = io.ReadAll(encrypted.File)
+			encrypted.Close()
 			cipher["attachments"] = []any{map[string]any{"id": "old", "fileName": name, "key": "", "size": len(blobs["old"]), "url": server.URL + "/files/old"}}
 			snapshot := func(revision string) *VaultData {
 				mu.Lock()
@@ -162,15 +163,15 @@ func TestCipherLegacyAttachmentUpgradeRecovery(t *testing.T) {
 			// models restart: both copies remain independently readable on the server.
 			if scenario == "different-content" {
 				row := cipher["attachments"].([]any)[1].(map[string]any)
-				attachmentKey, _ := DecryptString(row["key"].(string), cipherKey)
+				attachmentKey, _ := vaultcrypto.DecryptString(row["key"].(string), cipherKey)
 				other := bytes.Repeat([]byte{'x'}, len(plain))
-				spool, err := encryptAttachment(context.Background(), bytes.NewReader(other), int64(len(other)), attachmentKey)
+				spool, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(other), int64(len(other)), attachmentKey)
 				clear(attachmentKey)
 				if err != nil {
 					t.Fatal(err)
 				}
-				blobs["new"], _ = io.ReadAll(spool.file)
-				spool.close()
+				blobs["new"], _ = io.ReadAll(spool.File)
+				spool.Close()
 			}
 			if scenario == "success" {
 				mu.Lock()

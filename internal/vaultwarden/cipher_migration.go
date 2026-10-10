@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"time"
 )
 
@@ -136,7 +137,7 @@ func rekeyLegacyShare(object map[string]any, oldKey, newKey []byte) error {
 			if !ok || wrapped == "" {
 				return ErrUnsupportedEdit
 			}
-			key, err := DecryptString(wrapped, oldKey)
+			key, err := vaultcrypto.DecryptString(wrapped, oldKey)
 			if err != nil {
 				return err
 			}
@@ -144,7 +145,7 @@ func rekeyLegacyShare(object map[string]any, oldKey, newKey []byte) error {
 				clear(key)
 				return ErrEncryption
 			}
-			entry["key"], err = EncryptString(key, newKey)
+			entry["key"], err = vaultcrypto.EncryptString(key, newKey)
 			clear(key)
 			if err != nil {
 				return err

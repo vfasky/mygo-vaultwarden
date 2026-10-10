@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"bytes"
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -49,9 +50,9 @@ func (c *Client) attachmentHTTPClient() *http.Client {
 		CheckRedirect: func(_ *http.Request, _ []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
-func (c *Client) downloadAttachment(ctx context.Context, rawURL string, size int64, key []byte) (*attachmentSpool, error) {
-	maxSize, _ := attachmentEncryptedSize(attachmentPlaintextLimit)
-	if size < attachmentHeaderSize+16 || size > maxSize || (size-attachmentHeaderSize)%16 != 0 || len(key) != 64 {
+func (c *Client) downloadAttachment(ctx context.Context, rawURL string, size int64, key []byte) (*vaultcrypto.AttachmentSpool, error) {
+	maxSize, _ := vaultcrypto.AttachmentEncryptedSize(vaultcrypto.AttachmentPlaintextLimit)
+	if size < vaultcrypto.AttachmentHeaderSize+16 || size > maxSize || (size-vaultcrypto.AttachmentHeaderSize)%16 != 0 || len(key) != 64 {
 		return nil, ErrEncryption
 	}
 	if ctx.Err() != nil {
@@ -83,25 +84,25 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL string, size int
 	}
 	// The extra byte detects oversized chunked responses without consuming the
 	// rest of an attacker-controlled stream. No error includes the signed URL.
-	return decryptAttachment(ctx, io.LimitReader(resp.Body, size+1), size, key)
+	return vaultcrypto.DecryptAttachment(ctx, io.LimitReader(resp.Body, size+1), size, key)
 }
 
 // uploadAttachment performs one direct v2 multipart request. The destination is
 // reconstructed from validated IDs, never accepted from an untrusted upload URL.
 // The session layer owns token refresh/checkpoint, policy/reprompt guards and
 // handling unknown outcomes; this function never retries or deletes metadata.
-func (c *Client) uploadAttachment(ctx context.Context, cipherID, attachmentID, token string, encrypted *attachmentSpool) (int, error) {
-	if !validObjectID(cipherID) || !validObjectID(attachmentID) || token == "" || encrypted == nil || encrypted.file == nil {
+func (c *Client) uploadAttachment(ctx context.Context, cipherID, attachmentID, token string, encrypted *vaultcrypto.AttachmentSpool) (int, error) {
+	if !validObjectID(cipherID) || !validObjectID(attachmentID) || token == "" || encrypted == nil || encrypted.File == nil {
 		return 0, ErrValidation
 	}
-	maxSize, _ := attachmentEncryptedSize(attachmentPlaintextLimit)
-	if encrypted.size < attachmentHeaderSize+16 || encrypted.size > maxSize || (encrypted.size-attachmentHeaderSize)%16 != 0 {
+	maxSize, _ := vaultcrypto.AttachmentEncryptedSize(vaultcrypto.AttachmentPlaintextLimit)
+	if encrypted.Size < vaultcrypto.AttachmentHeaderSize+16 || encrypted.Size > maxSize || (encrypted.Size-vaultcrypto.AttachmentHeaderSize)%16 != 0 {
 		return 0, ErrValidation
 	}
 	if ctx.Err() != nil {
 		return 0, ErrCancelled
 	}
-	if err := encrypted.rewind(); err != nil {
+	if err := encrypted.Rewind(); err != nil {
 		return 0, err
 	}
 	// Build only the small multipart envelope in memory, streaming the ciphertext
@@ -119,12 +120,12 @@ func (c *Client) uploadAttachment(ctx context.Context, cipherID, attachmentID, t
 	suffix := bytes.Clone(envelope.Bytes())
 	u := *c.base
 	u.Path += "/api/ciphers/" + cipherID + "/attachment/" + attachmentID
-	body := io.MultiReader(bytes.NewReader(prefix), io.LimitReader(encrypted.file, encrypted.size), bytes.NewReader(suffix))
+	body := io.MultiReader(bytes.NewReader(prefix), io.LimitReader(encrypted.File, encrypted.Size), bytes.NewReader(suffix))
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), body)
 	if err != nil {
 		return 0, ErrProtocol
 	}
-	req.ContentLength = int64(len(prefix)) + encrypted.size + int64(len(suffix))
+	req.ContentLength = int64(len(prefix)) + encrypted.Size + int64(len(suffix))
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Accept", "application/json")

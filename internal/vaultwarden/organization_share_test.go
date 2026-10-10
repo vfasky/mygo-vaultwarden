@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 	"sync/atomic"
@@ -64,8 +65,8 @@ func TestOrganizationShareRewrapsIndependentKeyAndPreservesOpaqueData(t *testing
 		t.Fatal(err)
 	}
 	defer clear(originalItemKey)
-	attachmentKey, _ := EncryptString(bytes.Repeat([]byte{17}, 64), originalItemKey)
-	filename, _ := EncryptString([]byte("fixture.txt"), originalItemKey)
+	attachmentKey, _ := vaultcrypto.EncryptString(bytes.Repeat([]byte{17}, 64), originalItemKey)
+	filename, _ := vaultcrypto.EncryptString([]byte("fixture.txt"), originalItemKey)
 	source["attachments"] = []any{map[string]any{"id": "attachment-1", "key": attachmentKey, "fileName": filename, "size": json.Number("96")}}
 	source["login"].(map[string]any)["fido2Credentials"] = []any{map[string]any{"opaque": "encrypted-future-format"}}
 	source["opaque"] = map[string]any{"large": json.Number("9007199254740993")}

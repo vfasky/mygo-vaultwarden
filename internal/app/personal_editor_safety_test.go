@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
-	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"testing"
 )
 
@@ -17,7 +17,7 @@ func TestFolderPublicationUpdatesNavigationButNotDraftAuthority(t *testing.T) {
 	if json.Unmarshal(a.vault.Sync, &raw) != nil {
 		t.Fatal("fixture")
 	}
-	encrypted, err := vaultwarden.EncryptString([]byte("renamed"), bytes.Repeat([]byte{4}, 64))
+	encrypted, err := vaultcrypto.EncryptString([]byte("renamed"), bytes.Repeat([]byte{4}, 64))
 	if err != nil {
 		t.Fatal(err)
 	}

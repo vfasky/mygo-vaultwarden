@@ -3,6 +3,7 @@ package vaultwarden
 
 import (
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/totp"
 	"time"
 )
 
@@ -66,7 +67,7 @@ func (s *Session) withItemSecret(vault *VaultData, revision, id, kind string, gr
 		secret, _ = fields.Login["password"].(string)
 	case "totp":
 		seed, _ := fields.Login["totp"].(string)
-		code, err := GenerateTOTP(seed, now)
+		code, err := totp.Generate(seed, now)
 		if err != nil {
 			return err
 		}

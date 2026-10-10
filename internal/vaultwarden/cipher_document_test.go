@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"testing"
 )
 
@@ -11,7 +12,7 @@ func cipherDocumentFixture(t *testing.T, kind int) (CipherDocument, []byte) {
 	t.Helper()
 	key := bytes.Repeat([]byte{19}, 64)
 	enc := func(s string) string {
-		v, e := EncryptString([]byte(s), key)
+		v, e := vaultcrypto.EncryptString([]byte(s), key)
 		if e != nil {
 			t.Fatal(e)
 		}

@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strings"
 	"sync"
 	"time"
@@ -96,7 +97,7 @@ func (p *targetRecoveryController) inspect() {
 		p.status = err.Error()
 		return
 	}
-	email, password := vaultwarden.NormalizeEmail(p.email), []byte(p.password)
+	email, password := vaultcrypto.NormalizeEmail(p.email), []byte(p.password)
 	p.password = ""
 	p.generation++
 	if !strings.Contains(email, "@") {

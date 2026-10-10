@@ -4,13 +4,14 @@ package vaultwarden
 import (
 	"crypto/hkdf"
 	"crypto/sha256"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 )
 
 // PasswordUnlockConfig is public KDF metadata, never a password verifier.
 // The snapshot header and this configuration are authenticated by the wrapper.
 type PasswordUnlockConfig struct {
-	Email string `json:"email"`
-	KDF   KDF    `json:"kdf"`
+	Email string          `json:"email"`
+	KDF   vaultcrypto.KDF `json:"kdf"`
 }
 
 // PasswordUnlock carries a domain-separated wrapping key only while publishing.
@@ -25,7 +26,7 @@ func snapshotUnlockKey(master []byte) ([]byte, error) {
 }
 
 func DeriveSnapshotUnlockKey(password []byte, config PasswordUnlockConfig) ([]byte, error) {
-	master, err := DeriveMaster(password, config.Email, config.KDF)
+	master, err := vaultcrypto.DeriveMaster(password, config.Email, config.KDF)
 	if err != nil {
 		return nil, err
 	}

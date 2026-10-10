@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/url"
@@ -152,7 +153,7 @@ func validToken(t tokenReply) bool {
 // Login owns KDF/master-key material until the challenge finishes. The caller
 // owns password and should clear it immediately when Login returns.
 func (c *Client) Login(ctx context.Context, email string, password []byte, promptTOTP func() ([]byte, error)) (*Session, error) {
-	email = NormalizeEmail(email)
+	email = vaultcrypto.NormalizeEmail(email)
 	prelogin, _ := json.Marshal(map[string]string{"email": email})
 	status, data, err := c.request(ctx, "POST", "/identity/accounts/prelogin", "application/json", string(prelogin), "")
 	if err != nil {
@@ -161,22 +162,22 @@ func (c *Client) Login(ctx context.Context, email string, password []byte, promp
 	if status != 200 {
 		return nil, ErrProtocol
 	}
-	var kdf KDF
+	var kdf vaultcrypto.KDF
 	if json.Unmarshal(data, &kdf) != nil {
 		return nil, ErrProtocol
 	}
-	master, err := DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(stretched)
 	form := url.Values{
-		"grant_type": {"password"}, "username": {email}, "password": {AuthorizationHash(master, password)},
+		"grant_type": {"password"}, "username": {email}, "password": {vaultcrypto.AuthorizationHash(master, password)},
 		"scope": {"api offline_access"}, "client_id": {"desktop"}, "deviceType": {"7"},
 		"deviceIdentifier": {c.deviceID}, "deviceName": {"MyGo Vaultwarden"},
 	}
@@ -195,7 +196,7 @@ func (c *Client) Login(ctx context.Context, email string, password []byte, promp
 			if json.Unmarshal(data, &token) != nil || !validToken(token) {
 				return nil, ErrProtocol
 			}
-			key, err := DecryptString(token.wrappedKey(), stretched)
+			key, err := vaultcrypto.DecryptString(token.wrappedKey(), stretched)
 			if err != nil {
 				return nil, err
 			}
@@ -390,7 +391,7 @@ func (s *Session) syncLocked(ctx context.Context, persist func(SessionCheckpoint
 	if json.Unmarshal(data, &syncData) != nil || syncData.Ciphers == nil {
 		return SyncResult{}, ErrProtocol
 	}
-	if syncData.Profile.ID == "" || NormalizeEmail(syncData.Profile.Email) != s.email || (s.account != "" && s.account != syncData.Profile.ID) {
+	if syncData.Profile.ID == "" || vaultcrypto.NormalizeEmail(syncData.Profile.Email) != s.email || (s.account != "" && s.account != syncData.Profile.ID) {
 		return SyncResult{}, ErrIdentity
 	}
 	if syncData.Profile.Key != s.wrapped {

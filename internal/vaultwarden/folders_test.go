@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,7 +33,7 @@ func TestFolderEncryptedCRUDAndScope(t *testing.T) {
 		if json.NewDecoder(r.Body).Decode(&body) != nil || len(body) != 1 {
 			t.Error("invalid body")
 		}
-		plain, err := DecryptString(body["name"], session.key)
+		plain, err := vaultcrypto.DecryptString(body["name"], session.key)
 		defer clear(plain)
 		if err != nil || string(plain) != "私人文件夹" {
 			t.Error("name not encrypted")
@@ -90,7 +91,7 @@ func TestFolderUncertainReplyNeverRetried(t *testing.T) {
 func TestFolderOfflineSnapshotIsolation(t *testing.T) {
 	session, _ := resumableFixture(t, "https://example.invalid")
 	defer session.Close()
-	encrypted, _ := EncryptString([]byte("私人文件夹"), session.key)
+	encrypted, _ := vaultcrypto.EncryptString([]byte("私人文件夹"), session.key)
 	scope := Scope{Server: "https://example.invalid", Account: "account-a"}
 	makeVault := func(folders []Folder) *VaultData {
 		raw, _ := json.Marshal(map[string]any{"profile": map[string]any{"id": "account-a"}, "ciphers": []any{}, "folders": folders})

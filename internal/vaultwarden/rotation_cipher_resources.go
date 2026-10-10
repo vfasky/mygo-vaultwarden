@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"time"
 )
 
@@ -194,7 +195,7 @@ func AnalyzeAccountRotationCipherResources(ctx context.Context, input AccountRot
 					continue
 				}
 				var attachmentKey []byte
-				attachmentKey, e = DecryptString(wrapped, key)
+				attachmentKey, e = vaultcrypto.DecryptString(wrapped, key)
 				if e == nil && (len(attachmentKey) != 64 || bytes.Equal(attachmentKey, input.OldUserKey)) {
 					e = ErrEncryption
 				}
@@ -217,7 +218,7 @@ func AnalyzeAccountRotationCipherResources(ctx context.Context, input AccountRot
 		if e != nil {
 			return result, e
 		}
-		plain, e := DecryptString(folder.Name, input.OldUserKey)
+		plain, e := vaultcrypto.DecryptString(folder.Name, input.OldUserKey)
 		clear(plain)
 		if e != nil {
 			return result, e
@@ -259,7 +260,7 @@ func ConvertAccountRotationCipherResources(ctx context.Context, input AccountRot
 			if e != nil {
 				return empty, e
 			}
-			object["key"], err = EncryptString(key, input.NewUserKey)
+			object["key"], err = vaultcrypto.EncryptString(key, input.NewUserKey)
 			clear(key)
 		} else {
 			err = rekeyLegacyShare(object, input.OldUserKey, input.NewUserKey)

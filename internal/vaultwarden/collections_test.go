@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -20,7 +21,7 @@ func collectionManagerVault(t *testing.T, vault *VaultData) *VaultData {
 
 func collectionDetailFixture(t *testing.T, key []byte) []byte {
 	t.Helper()
-	name, err := EncryptString([]byte("集合原名称"), key)
+	name, err := vaultcrypto.EncryptString([]byte("集合原名称"), key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +64,7 @@ func TestCollectionRenamePreservesAccessAndUnknownFields(t *testing.T) {
 		}
 		var encrypted string
 		_ = json.Unmarshal(got["name"], &encrypted)
-		plain, err := DecryptString(encrypted, key)
+		plain, err := vaultcrypto.DecryptString(encrypted, key)
 		if err != nil || string(plain) != "改名" {
 			t.Error("name encryption", err)
 		}
