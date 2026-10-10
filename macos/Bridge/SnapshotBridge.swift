@@ -157,19 +157,19 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             let lease = try vault.publishBoundAccount(credentials,binding:binding,expected:expected(),material:material,session:session,vault:data)
             scheduleBridgeIndex(store:vault,lease:nil)
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok:true,code:"switch_pending",message:L10n.t("新账号已提交；确认切换前保留原账号加密副本与密钥。"),state:BridgeStatus(try vault.files.read()),vault:lease.vault,
+                BridgeReply(ok:true,code:"switch_pending",message:L10n.t("bridge.account_switch.status_pending"),state:BridgeStatus(try vault.files.read()),vault:lease.vault,
                             accountSwitch:AccountSwitchReceipt(binding:binding,newSnapshotID:lease.header.id,phase:"pending"))
             }
         case "inspectAccountSwitch":
             let result = try vault.inspectAccountSwitch(expected:expected(),operationID:request.switchOperationID)
-            return BridgeReply(ok:true,code:"ok",message:L10n.t("已认证本机账号切换记录。"),state:BridgeStatus(result.0),accountSwitch:result.1)
+            return BridgeReply(ok:true,code:"ok",message:L10n.t("bridge.account_switch.status_authenticated"),state:BridgeStatus(result.0),accountSwitch:result.1)
         case "confirmAccountSwitch":
             guard let operationID = request.switchOperationID else { throw SnapshotError.invalidInput }
             let result = try vault.confirmAccountSwitch(expected:expected(),operationID:operationID,unlockKey:request.unlockKey)
             try? vault.retryCleanup()
             if !result.0.recoveryOnly { scheduleBridgeIndex(store:vault,lease:result.0) }
             return try vault.withCurrentLease(result.0) {
-                BridgeReply(ok:true,code:result.0.recoveryOnly ? "target_recovery_pending" : "ok",message:result.0.recoveryOnly ? L10n.t("切换已确认，目标账号仍需专用恢复核验。") : L10n.t("本机账号切换已确认。"),state:BridgeStatus(try vault.files.read()),items:result.0.credentials.map(DisplayCredential.init),session:result.0.session,vault:result.0.vault,accountSwitch:result.1)
+                BridgeReply(ok:true,code:result.0.recoveryOnly ? "target_recovery_pending" : "ok",message:result.0.recoveryOnly ? L10n.t("bridge.account_switch.status_recovery_pending") : L10n.t("bridge.account_switch.status_confirmed"),state:BridgeStatus(try vault.files.read()),items:result.0.credentials.map(DisplayCredential.init),session:result.0.session,vault:result.0.vault,accountSwitch:result.1)
             }
         case "targetRecoveryBegin", "targetRecoveryQuery", "targetRecoveryPending", "targetRecoveryRuntimePending", "targetRecoveryResult", "targetRecoveryVerify":
             guard let scope = request.scope, request.unlockKey != nil || request.targetRuntime != nil else { throw SnapshotError.invalidInput }
@@ -255,7 +255,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             scheduleBridgeIndex(store: vault, lease: lease)
             // Do not return a later writer's revision as this session's write authority.
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: L10n.t("快照已保存。"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
+                BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_snapshot_saved"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
         case "quarantineOrganization":
             guard let scope = request.scope, let id = request.organizationID, let key = request.unlockKey, let session = request.session else { throw SnapshotError.invalidInput }
@@ -263,13 +263,13 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             let lease = try vault.quarantineOrganization(id, scope: scope, expected: expected(), unlockKey: key, session: session, pendingPolicy: request.pendingPolicy)
             scheduleBridgeIndex(store: vault, lease: lease)
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: L10n.t("该组织的本机访问已隔离。"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
+                BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_organization_quarantined"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
         case "saveSession":
             guard let scope = request.scope, let session = request.session, let key = request.unlockKey else { throw SnapshotError.invalidInput }
             let lease = try vault.saveSession(session, scope: scope, expected: expected(), unlockKey: key)
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: L10n.t("登录凭据已安全更新。"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
+                BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_credentials_updated"), state: BridgeStatus(try vault.files.read()), vault: lease.vault)
             }
         case "lock":
             defer { clearSecretClipboard() }
@@ -288,7 +288,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             guard let scope = request.scope, let unlockKey = request.unlockKey else { throw SnapshotError.invalidInput }
             let lease = try vault.unlockWithPassword(scope: scope, expected: expected(), unlockKey: unlockKey)
             return try vault.withCurrentLease(lease) {
-                BridgeReply(ok: true, code: "ok", message: L10n.t("密码库已解锁。"), state: BridgeStatus(try vault.files.read()),
+                BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_vault_unlocked"), state: BridgeStatus(try vault.files.read()),
                             items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
             }
         case "reindex", "list":
@@ -299,7 +299,7 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             if request.operation == "list" {
                 guard lease.revision == request.expectedRevision else { throw SnapshotError.stale }
                 return try vault.withCurrentLease(lease) {
-                    BridgeReply(ok: true, code: "ok", message: L10n.t("离线快照已解锁。"), state: BridgeStatus(try vault.files.read()),
+                    BridgeReply(ok: true, code: "ok", message: L10n.t("bridge.status_snapshot_unlocked"), state: BridgeStatus(try vault.files.read()),
                                 items: lease.credentials.map(DisplayCredential.init), truncated: false, session: lease.session, vault: lease.vault)
                 }
             }
@@ -307,9 +307,9 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
         default: throw SnapshotError.invalidInput
         }
         let state = try vault.state()
-        var message = L10n.t("存储操作已完成。")
-        if state.indexPending { message += L10n.t("系统候选尚未确认同步。") }
-        if !state.retiredKeys.isEmpty { message += L10n.t("旧密钥清理待重试。") }
+        var message = L10n.t("bridge.status_storage_completed")
+        if state.indexPending { message += L10n.t("bridge.status_index_pending") }
+        if !state.retiredKeys.isEmpty { message += L10n.t("bridge.status_cleanup_pending") }
         return BridgeReply(ok: true, code: "ok", message: message, state: BridgeStatus(state))
     } catch {
         let issue = error as? SnapshotError ?? .configuration
@@ -403,7 +403,7 @@ public func mygoSnapshotExecute(_ request: UnsafePointer<UInt8>?, _ requestLengt
             }
             reply = execute(parsed)
         } catch {
-            reply = BridgeReply(ok: false, code: "invalid_input", message: L10n.t("无法识别请求。"), state: nil)
+            reply = BridgeReply(ok: false, code: "invalid_input", message: L10n.t("bridge.err_unrecognized_request"), state: nil)
         }
         guard let data = try? snapshotJSON(reply), data.count <= capacity else { return -2 }
         data.copyBytes(to: output, count: data.count)
