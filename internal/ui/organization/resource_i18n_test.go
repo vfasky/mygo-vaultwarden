@@ -18,7 +18,7 @@ func TestResourceRestoreEnglishKeepsChineseState(t *testing.T) {
 		t.Fatal("language changed the initial resource state or verification gate")
 	}
 	tester := ui.NewTester(panel.View, 1500, 1200)
-	for _, text := range []string{"Restore and Verify Organization Resources", "test.bin · Source source-item/source-file · Not started"} {
+	for _, text := range []string{"Restore and verify organization resources", "test.bin · Source source-item/source-file · Not started"} {
 		if !tester.HasText(text) {
 			t.Fatalf("missing English text %q; rendered: %v", text, tester.Texts())
 		}

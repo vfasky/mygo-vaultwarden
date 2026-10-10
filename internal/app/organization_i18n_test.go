@@ -16,7 +16,7 @@ func TestOrganizationInvitationEnglish(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
 		ui.Column(c).Children(func() { a.memberInvitationView(c, e, false) })
 	}, 1000, 800)
-	for _, text := range []string{"Accept Organization Invite", "Email invitation link", "Verify Invitation Policies", "View My Sharing Public Key"} {
+	for _, text := range []string{"Accept organization invite", "Email invitation link", "Verify invitation policies", "View my sharing public key"} {
 		if !tt.HasText(text) {
 			t.Errorf("English invitation view is missing %q", text)
 		}
