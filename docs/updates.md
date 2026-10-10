@@ -6,7 +6,9 @@ MyGo 原生更新窗口负责检查版本、展示发布说明、下载进度、
 
 ## 密钥与配置
 
-使用项目固定版本的 MyGo 生成密钥：
+本项目通过公开仓库 [vfasky/mygo-vaultwarden 的 GitHub Releases](https://github.com/vfasky/mygo-vaultwarden/releases) 发布更新，使用默认 `v` 前缀（例如 `v0.1.0`），无需单独设置 tag 前缀。
+
+请由发布者本人使用项目固定版本的 MyGo 生成密钥：
 
 ```sh
 GO=$(bash scripts/resolve-go.sh)
@@ -20,17 +22,15 @@ GO=$(bash scripts/resolve-go.sh)
 ```json
 {
   "updates": {
-    "publicKey": "替换为生成的32字节公钥的base64文本",
-    "github": "owner/repository",
-    "tagPrefix": "v",
-    "privateKey": ".local/update-keys/mygo-update.key"
+    "publicKey": "<mygo-update.pub 的内容>",
+    "github": "vfasky/mygo-vaultwarden"
   }
 }
 ```
 
-这是要合并到现有配置中的 `updates` 字段，保留原有 `name`、`identifier`、`version` 等字段。私钥路径相对 `mygo.json` 所在目录解析，也支持绝对路径和 `~/`。
+这是要合并到现有配置中的 `updates` 字段，保留原有 `name`、`identifier`、`version` 等字段。发布时可额外配置 `"privateKey": ".local/update-keys/mygo-update.key"`，或通过上面的 CI 秘密变量提供私钥。私钥路径相对 `mygo.json` 所在目录解析，也支持绝对路径和 `~/`。公钥必须由发布者生成后填入，仓库不预置公钥或私钥。
 
-自定义 HTTPS 服务器使用 `"url": "https://downloads.example.com/mygo-vaultwarden"` **替换** `github`。`url` 与 `github` 必须且只能提供一个。URL 为目录基地址，不含凭据、查询、片段、引号或空白；GitHub 仓库写作 `owner/name`。公钥必须是 base64 编码的 32 字节 Ed25519 公钥。配置存在但非法时构建/打包会失败，防止发布一个错误指向更新源的构建。
+备选部署可用 `"url": "https://downloads.example.com/mygo-vaultwarden"` 替换 `github`。两者必须且只能提供一个；URL 为不含凭据、查询、片段、引号或空白的 HTTPS 目录基地址。公钥必须是 base64 编码的 32 字节 Ed25519 公钥。非法配置会使构建/打包失败。
 
 构建和发布共用这些环境覆盖项：
 
@@ -72,9 +72,21 @@ bash scripts/release-update.sh \
 - `mygo-vaultwarden-0.1.0-<target>.tar.gz`：根目录恰好一个 `.app`，保留相对符号链接和权限、归一化所有者。绝对链接、越界链接、无法解析的链接及文件/目录/符号链接以外类型会被拒绝。使用 gzip 最佳压缩；不保留扩展属性，staple 与签名应通过解压后系统验收确认。
 - `update-<target>.json`：`version`、Markdown `notes`、RFC3339 UTC `date`、下载 `url`、归档字节 `size`、Ed25519 `signature`。签名的是压缩包 SHA-256 摘要，不是 JSON。本工具暂无 delta，也不下载或生成旧版本差分。
 
-GitHub 默认 `v` 前缀的 feed 是 `https://github.com/owner/repository/releases/latest/download/update-<target>.json`，归档来自 `releases/download/v0.1.0/<archive>`。其他前缀（例如 `desktop-v`）的 feed 为 `releases/download/desktop-v{version}/update-<target>.json`，MyGo 通过 GitHub API 选择该前缀的最新正式发布；不要手动替换构建时 feed 的 `{version}`。草稿及预发布不会成为该前缀的正式更新源，需注意 GitHub API 限流。
+默认 feed 是 `https://github.com/vfasky/mygo-vaultwarden/releases/latest/download/update-<target>.json`，归档来自 `https://github.com/vfasky/mygo-vaultwarden/releases/download/v0.1.0/<archive>`。正式发布应标记为 latest；本项目无需配置其他 tag 前缀。
 
-脚本末尾打印对应仓库和版本的 `gh release create --draft` / `gh release upload` 示例，**不会执行上传**。审核文件后创建草稿、上传各目标对应的归档及 manifest，再发布草稿；已有 release 使用 upload 示例。默认 latest feed 要确保此正式 release 被标记为 latest。多架构分别构建时，汇集各架构产物后再公开 release，避免 manifest 可见而对应归档缺失。
+脚本末尾按上述配置打印 `gh release create v<version> --repo vfasky/mygo-vaultwarden` 等示例，**不会执行上传**。推荐先创建草稿并上传归档，最后上传 manifest，审核全部目标产物后再公开草稿。例如：
+
+```sh
+gh release create v0.1.0 --repo vfasky/mygo-vaultwarden --draft \
+  build/updates/0.1.0/mygo-vaultwarden-0.1.0-darwin-universal.tar.gz
+# 归档上传完成后，最后上传 manifest
+gh release upload v0.1.0 --repo vfasky/mygo-vaultwarden \
+  build/updates/0.1.0/update-darwin-universal.json
+# 审核发布说明与所有目标产物后再公开
+gh release edit v0.1.0 --repo vfasky/mygo-vaultwarden --draft=false --latest
+```
+
+已有 release 使用脚本打印的 upload 命令，仍须先上传归档、最后上传 manifest。多架构分别构建时，汇集所有目标的归档和 manifest 后再公开草稿，避免 manifest 可见而对应归档缺失。
 
 自定义服务器的 feed 为 `<url>/update-<target>.json`，归档 URL 为 `<url>/<archive>`。先上传归档并验证可下载，再原子发布 manifest；为 manifest 设置适当的缓存策略，保留旧版本归档以照顾缓存中的 manifest。
 

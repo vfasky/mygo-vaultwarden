@@ -125,8 +125,12 @@ func run(args []string) error {
 	}
 	fmt.Println("Publish only after reviewing these files. No upload was performed.")
 	if u.GitHub != "" {
-		fmt.Printf("GitHub examples (create once, or upload to an existing release):\n  gh release create %s --repo %s --draft %s %s\n  gh release upload %s --repo %s %s %s\n", shellQuote(u.TagPrefix+*version), shellQuote(u.GitHub), shellQuote(files[0]), shellQuote(files[1]), shellQuote(u.TagPrefix+*version), shellQuote(u.GitHub), shellQuote(files[0]), shellQuote(files[1]))
-		fmt.Println("Review and publish the draft to make it visible to the updater.")
+		tag, repo := shellQuote(u.TagPrefix+*version), shellQuote(u.GitHub)
+		fmt.Printf("GitHub examples (upload archives first, manifests last):\n  gh release create %s --repo %s --draft %s\n  gh release upload %s --repo %s %s\n", tag, repo, shellQuote(files[0]), tag, repo, shellQuote(files[1]))
+		fmt.Println("Review the release notes and all targets before publishing the draft:")
+		fmt.Printf("  gh release edit %s --repo %s --draft=false --latest\n", tag, repo)
+		fmt.Println("For an existing release, upload the archive first, then the manifest:")
+		fmt.Printf("  gh release upload %s --repo %s %s\n  gh release upload %s --repo %s %s\n", tag, repo, shellQuote(files[0]), tag, repo, shellQuote(files[1]))
 	} else {
 		fmt.Println("Custom server: upload the archive first, then publish the manifest at", u.fileURL("update-"+*target+".json", *version, true))
 	}
