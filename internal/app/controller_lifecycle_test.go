@@ -85,7 +85,7 @@ func TestControllerSendNavigationAndClose(t *testing.T) {
 	if a.sendPanel == nil || !a.windows.accountOpen || a.windows.accountTab != accountTabSend {
 		t.Fatal("navigation")
 	}
-	p := a.sendPanel
+	p, lease := a.sendPanel, a.componentLease
 	tt := ui.NewTester(a.accountWindowView, 1280, 1800)
 	if !tt.HasText("新建文本") {
 		t.Fatal("account center Send page missing")
@@ -96,8 +96,11 @@ func TestControllerSendNavigationAndClose(t *testing.T) {
 	draft := p.Draft
 	p.Draft = nil
 	p.Run(func(context.Context) send.Result { return send.Result{Draft: draft} })
-	a.windows.accountTab = accountTabDevices
+	a.selectAccountTab(accountTabDevices)
 	tt.Frame()
+	if err := lease.check(storage); !errors.Is(err, vaultwarden.ErrCancelled) {
+		t.Fatal("navigation retained controller lease", err)
+	}
 	select {
 	case f := <-queue:
 		f()
