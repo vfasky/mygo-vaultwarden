@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"testing"
 )
 
@@ -19,13 +20,13 @@ func liveOrganizationMember(t *testing.T, ctx context.Context, server string) (*
 	}
 	email := "org-member-" + fixtureUUID() + "@example.invalid"
 	password := []byte("Public-member-fixture-password!")
-	kdf := KDF{Type: 0, Iterations: 600000}
-	master, err := DeriveMaster(password, email, kdf)
+	kdf := vaultcrypto.KDF{Type: 0, Iterations: 600000}
+	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer clear(master)
-	stretched, _ := StretchMaster(master)
+	stretched, _ := vaultcrypto.StretchMaster(master)
 	defer clear(stretched)
 	key := make([]byte, 64)
 	_, _ = rand.Read(key)
@@ -48,7 +49,7 @@ func liveOrganizationMember(t *testing.T, ctx context.Context, server string) (*
 	raw := post("/identity/accounts/register/send-verification-email", map[string]string{"email": email, "name": "Isolated member"})
 	var verification string
 	_ = json.Unmarshal(raw, &verification)
-	post("/identity/accounts/register/finish", map[string]any{"email": email, "name": "Isolated member", "emailVerificationToken": verification, "masterPasswordHash": AuthorizationHash(master, password), "key": encryptFixture(key, stretched), "kdf": 0, "kdfIterations": 600000, "keys": map[string]string{"publicKey": base64.StdEncoding.EncodeToString(publicDER), "encryptedPrivateKey": encryptFixture(privateDER, key)}})
+	post("/identity/accounts/register/finish", map[string]any{"email": email, "name": "Isolated member", "emailVerificationToken": verification, "masterPasswordHash": vaultcrypto.AuthorizationHash(master, password), "key": encryptFixture(key, stretched), "kdf": 0, "kdfIterations": 600000, "keys": map[string]string{"publicKey": base64.StdEncoding.EncodeToString(publicDER), "encryptedPrivateKey": encryptFixture(privateDER, key)}})
 	session, err := client.Login(ctx, email, password, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -306,7 +307,7 @@ func testLiveOrganizationMemberPermissions(t *testing.T, ctx context.Context, ow
 	}
 	// Multiple collection restrictions use AND, after resolving direct grants
 	// ahead of group grants for each collection.
-	secondName, _ := EncryptString([]byte("第二个测试集合"), orgKey)
+	secondName, _ := vaultcrypto.EncryptString([]byte("第二个测试集合"), orgKey)
 	secondRaw := request("POST", "/collections", map[string]any{"name": secondName, "groups": []any{}, "users": []any{map[string]any{"id": memberID, "readOnly": false, "hidePasswords": false, "manage": false}}})
 	var second struct{ ID string }
 	_ = json.Unmarshal(secondRaw, &second)

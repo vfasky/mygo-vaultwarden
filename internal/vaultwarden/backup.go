@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"strings"
 	"time"
@@ -504,7 +505,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		return nil, ErrProtocol
 	}
 	for _, folder := range folders.Folders {
-		plain, err := DecryptString(folder.Name, s.key)
+		plain, err := vaultcrypto.DecryptString(folder.Name, s.key)
 		if err != nil {
 			return nil, err
 		}
@@ -644,7 +645,7 @@ func encryptImportedItem(item map[string]any, userKey []byte, account string) (C
 		return CipherDocument{}, ErrEncryption
 	}
 	defer clear(key)
-	wrapped, err := EncryptString(key, userKey)
+	wrapped, err := vaultcrypto.EncryptString(key, userKey)
 	if err != nil {
 		return CipherDocument{}, err
 	}

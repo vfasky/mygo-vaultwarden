@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -27,7 +28,7 @@ func targetControllerFixture(t *testing.T, mode string) (*resourceControllerFixt
 	f := newRuntimeResourceControllerFixture(t)
 	scope := *f.a.liveScope
 	device := f.device
-	der, err := vaultwarden.DecryptString(device.private, device.key)
+	der, err := vaultcrypto.DecryptString(device.private, device.key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,14 +55,14 @@ func targetControllerFixture(t *testing.T, mode string) (*resourceControllerFixt
 			if r.Form.Get("authrequest") != "" {
 				return false
 			}
-			master, e := vaultwarden.DeriveMaster([]byte("fixture-master"), device.email, device.config.KDF)
+			master, e := vaultcrypto.DeriveMaster([]byte("fixture-master"), device.email, device.config.KDF)
 			if e != nil {
 				t.Error(e)
 				w.WriteHeader(500)
 				return true
 			}
 			defer clear(master)
-			if r.Form.Get("grant_type") != "password" || r.Form.Get("password") != vaultwarden.AuthorizationHash(master, []byte("fixture-master")) {
+			if r.Form.Get("grant_type") != "password" || r.Form.Get("password") != vaultcrypto.AuthorizationHash(master, []byte("fixture-master")) {
 				t.Error("not a fresh password grant")
 				w.WriteHeader(400)
 				return true

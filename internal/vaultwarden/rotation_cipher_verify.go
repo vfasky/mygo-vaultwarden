@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
 )
 
@@ -128,7 +129,7 @@ func rotationCipherPlain(object map[string]any, key []byte) (map[string]any, err
 		if !ok || wrapped == "" {
 			return nil, ErrEncryption
 		}
-		plain, e := DecryptString(wrapped, itemKey)
+		plain, e := vaultcrypto.DecryptString(wrapped, itemKey)
 		if e != nil {
 			return nil, e
 		}
@@ -379,11 +380,11 @@ func VerifyAccountRotationCipherResources(ctx context.Context, input RotationCip
 		if e != nil {
 			return result, e
 		}
-		oldPlain, e := DecryptString(folder.Name, input.OldUserKey)
+		oldPlain, e := vaultcrypto.DecryptString(folder.Name, input.OldUserKey)
 		if e != nil {
 			return result, e
 		}
-		newPlain, e := DecryptString(folderTargets[folder.ID].Name, input.NewUserKey)
+		newPlain, e := vaultcrypto.DecryptString(folderTargets[folder.ID].Name, input.NewUserKey)
 		same := reflect.DeepEqual(oldPlain, newPlain)
 		clear(oldPlain)
 		clear(newPlain)

@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"sync/atomic"
@@ -28,14 +29,14 @@ func organizationFixture(t *testing.T, endpoint string) (*Session, *VaultData, [
 	}
 	der, _ := x509.MarshalPKCS8PrivateKey(private)
 	public, _ := x509.MarshalPKIXPublicKey(&private.PublicKey)
-	wrapped, _ := EncryptString(der, session.key)
+	wrapped, _ := vaultcrypto.EncryptString(der, session.key)
 	key := bytes.Repeat([]byte{27}, 64)
 	rsaCipher, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, &private.PublicKey, key, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	org := Organization{ID: "org-1", OrganizationUserID: "member-1", UserID: "account-a", Name: "组织一", Key: "3." + base64.StdEncoding.EncodeToString(rsaCipher), Status: 2, Type: 2, Enabled: true}
-	name, _ := EncryptString([]byte("共享集合"), key)
+	name, _ := vaultcrypto.EncryptString([]byte("共享集合"), key)
 	document, err := NewPersonalCipher(CipherFields{Type: 1, Name: "组织项目", Login: map[string]any{"username": "user", "password": "secret"}}, key, session.account)
 	if err != nil {
 		t.Fatal(err)

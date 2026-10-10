@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"mime/multipart"
 	"net"
@@ -478,12 +479,12 @@ func TestLiveVaultFinishing(t *testing.T) {
 // still encrypted by the cipher's current key. Production uses Session streams.
 func liveLegacyAttachment(t *testing.T, ctx context.Context, s *Session, id string, binaryKey, filenameKey []byte, name string, plain []byte) {
 	t.Helper()
-	binary, err := encryptAttachment(ctx, bytes.NewReader(plain), int64(len(plain)), binaryKey)
+	binary, err := vaultcrypto.EncryptAttachment(ctx, bytes.NewReader(plain), int64(len(plain)), binaryKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer binary.close()
-	filename, err := EncryptString([]byte(name), filenameKey)
+	defer binary.Close()
+	filename, err := vaultcrypto.EncryptString([]byte(name), filenameKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -493,7 +494,7 @@ func liveLegacyAttachment(t *testing.T, ctx context.Context, s *Session, id stri
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err = io.Copy(part, binary.file); err != nil {
+	if _, err = io.Copy(part, binary.File); err != nil {
 		t.Fatal(err)
 	}
 	if err = writer.WriteField("key", ""); err != nil {

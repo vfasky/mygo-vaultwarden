@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strings"
 )
 
@@ -233,7 +234,7 @@ func AccountRewrapRotationObject(raw json.RawMessage, oldKey, newKey []byte, key
 	if json.Unmarshal(raw, &fields) != nil || json.Unmarshal(fields["key"], &wrapped) != nil || wrapped == "" {
 		return nil, ErrEncryption
 	}
-	key, err := DecryptString(wrapped, oldKey)
+	key, err := vaultcrypto.DecryptString(wrapped, oldKey)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +242,7 @@ func AccountRewrapRotationObject(raw json.RawMessage, oldKey, newKey []byte, key
 	if len(key) != keyBytes {
 		return nil, ErrEncryption
 	}
-	encrypted, err := EncryptString(key, newKey)
+	encrypted, err := vaultcrypto.EncryptString(key, newKey)
 	if err != nil {
 		return nil, err
 	}
@@ -252,12 +253,12 @@ func AccountRewrapRotationFolder(folder AccountRotationFolder, oldKey, newKey []
 	if !validObjectID(folder.ID) {
 		return AccountRotationFolder{}, ErrValidation
 	}
-	name, err := DecryptString(folder.Name, oldKey)
+	name, err := vaultcrypto.DecryptString(folder.Name, oldKey)
 	if err != nil {
 		return AccountRotationFolder{}, err
 	}
 	defer clear(name)
-	folder.Name, err = EncryptString(name, newKey)
+	folder.Name, err = vaultcrypto.EncryptString(name, newKey)
 	return folder, err
 }
 func (s *Session) PrepareAccountRotation(ctx context.Context, vault *VaultData, password []byte, adapter AccountRotationAdapter, persist func(SessionCheckpoint) error) (*AccountChangePlan, error) {
@@ -372,31 +373,31 @@ func (s *Session) PrepareAccountRotation(ctx context.Context, vault *VaultData, 
 	if keyErr != nil || decodeErr != nil || !bytes.Equal(publicDER, expectedDER) {
 		return nil, ErrIdentity
 	}
-	der, err := DecryptString(profile.PrivateKey, s.key)
+	der, err := vaultcrypto.DecryptString(profile.PrivateKey, s.key)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(der)
-	privateWrapped, err := EncryptString(der, newKey)
+	privateWrapped, err := vaultcrypto.EncryptString(der, newKey)
 	if err != nil {
 		return nil, err
 	}
 	kdf := s.passwordUnlock.Config.KDF
-	master, err := DeriveMaster(password, s.email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, s.email, kdf)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(stretched)
-	wrapped, err := EncryptString(newKey, stretched)
+	wrapped, err := vaultcrypto.EncryptString(newKey, stretched)
 	if err != nil {
 		return nil, err
 	}
-	hash := AuthorizationHash(master, password)
+	hash := vaultcrypto.AuthorizationHash(master, password)
 	unlock := AccountRotationMasterUnlock{KDFType: kdf.Type, KDFIterations: kdf.Iterations, Email: s.email, Hash: hash, Key: wrapped}
 	if kdf.Type == 1 {
 		unlock.KDFMemory = &kdf.Memory

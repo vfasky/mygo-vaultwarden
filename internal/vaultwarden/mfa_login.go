@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/url"
 	"strconv"
 	"time"
@@ -31,7 +32,7 @@ type MFALoginResult struct {
 func (c *Client) LoginMFA(ctx context.Context, email string, password []byte, remembered string, prompt func(context.Context, MFAChallenge) (MFAResponse, error)) (MFALoginResult, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
-	email = NormalizeEmail(email)
+	email = vaultcrypto.NormalizeEmail(email)
 	body, _ := json.Marshal(map[string]string{"email": email})
 	status, data, err := c.request(ctx, "POST", "/identity/accounts/prelogin", "application/json", string(body), "")
 	if err != nil {
@@ -40,21 +41,21 @@ func (c *Client) LoginMFA(ctx context.Context, email string, password []byte, re
 	if status != 200 {
 		return MFALoginResult{}, ErrProtocol
 	}
-	var kdf KDF
+	var kdf vaultcrypto.KDF
 	if json.Unmarshal(data, &kdf) != nil {
 		return MFALoginResult{}, ErrProtocol
 	}
-	master, err := DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 	if err != nil {
 		return MFALoginResult{}, err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return MFALoginResult{}, err
 	}
 	defer clear(stretched)
-	form := url.Values{"grant_type": {"password"}, "username": {email}, "password": {AuthorizationHash(master, password)}, "scope": {"api offline_access"}, "client_id": {"desktop"}, "deviceType": {"7"}, "deviceIdentifier": {c.deviceID}, "deviceName": {"MyGo Vaultwarden"}}
+	form := url.Values{"grant_type": {"password"}, "username": {email}, "password": {vaultcrypto.AuthorizationHash(master, password)}, "scope": {"api offline_access"}, "client_id": {"desktop"}, "deviceType": {"7"}, "deviceIdentifier": {c.deviceID}, "deviceName": {"MyGo Vaultwarden"}}
 	defer clear(form)
 	if remembered != "" {
 		form.Set("twoFactorProvider", "5")
@@ -81,7 +82,7 @@ func (c *Client) LoginMFA(ctx context.Context, email string, password []byte, re
 					return MFALoginResult{}, err
 				}
 			}
-			key, err := DecryptString(t.wrappedKey(), stretched)
+			key, err := vaultcrypto.DecryptString(t.wrappedKey(), stretched)
 			if err != nil {
 				return MFALoginResult{}, err
 			}

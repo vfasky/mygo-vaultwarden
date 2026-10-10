@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -42,9 +43,9 @@ type deviceLoginFixture struct {
 func newDeviceLoginFixture(t *testing.T) (*deviceLoginFixture, *Client, Scope) {
 	t.Helper()
 	key := bytes.Repeat([]byte{19}, 64)
-	master, _ := DeriveMaster([]byte("fixture-password"), "fixture@example.invalid", KDF{Iterations: 5000})
+	master, _ := vaultcrypto.DeriveMaster([]byte("fixture-password"), "fixture@example.invalid", vaultcrypto.KDF{Iterations: 5000})
 	defer clear(master)
-	stretched, _ := StretchMaster(master)
+	stretched, _ := vaultcrypto.StretchMaster(master)
 	defer clear(stretched)
 	wrapped := encryptFixture(key, stretched)
 	private, _ := rsa.GenerateKey(rand.Reader, 2048)

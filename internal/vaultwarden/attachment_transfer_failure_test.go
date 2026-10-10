@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -33,7 +34,7 @@ func TestAttachmentDownloadCancellationRemovesPrivateSpool(t *testing.T) {
 	go func() {
 		spool, err := client.downloadAttachment(ctx, server.URL+"/file", int64(len(encrypted)), key)
 		if spool != nil {
-			spool.close()
+			spool.Close()
 			result <- errors.New("cancelled download returned plaintext")
 			return
 		}
@@ -52,11 +53,11 @@ func TestAttachmentDownloadCancellationRemovesPrivateSpool(t *testing.T) {
 
 func TestAttachmentUploadFailureDoesNotRetryOrDelete(t *testing.T) {
 	key, _, _ := officialAttachmentVector(t)
-	encrypted, err := encryptAttachment(context.Background(), bytes.NewReader([]byte("test")), 4, key)
+	encrypted, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader([]byte("test")), 4, key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer encrypted.close()
+	defer encrypted.Close()
 	for _, mode := range []string{"unauthorized", "server-error", "oversized-response", "disconnect"} {
 		t.Run(mode, func(t *testing.T) {
 			var hits atomic.Int32

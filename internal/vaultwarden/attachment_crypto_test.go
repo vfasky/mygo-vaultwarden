@@ -11,6 +11,8 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaulterr"
 	"io"
 	"os"
 	"testing"
@@ -35,24 +37,24 @@ func officialAttachmentVector(t *testing.T) (key, encrypted, plaintext []byte) {
 }
 func TestAttachmentOfficialVector(t *testing.T) {
 	key, encrypted, expected := officialAttachmentVector(t)
-	spool, err := decryptAttachment(context.Background(), bytes.NewReader(encrypted), int64(len(encrypted)), key)
+	spool, err := vaultcrypto.DecryptAttachment(context.Background(), bytes.NewReader(encrypted), int64(len(encrypted)), key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	name := spool.file.Name()
-	stat, err := spool.file.Stat()
+	name := spool.File.Name()
+	stat, err := spool.File.Stat()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if stat.Mode().Perm() != 0600 {
 		t.Fatalf("mode: %v", stat.Mode())
 	}
-	actual, err := io.ReadAll(spool.file)
-	if err != nil || !bytes.Equal(actual, expected) || spool.size != int64(len(expected)) {
+	actual, err := io.ReadAll(spool.File)
+	if err != nil || !bytes.Equal(actual, expected) || spool.Size != int64(len(expected)) {
 		t.Fatalf("official vector mismatch: %v", err)
 	}
-	spool.close()
-	spool.close()
+	spool.Close()
+	spool.Close()
 	if _, err := os.Stat(name); !os.IsNotExist(err) {
 		t.Fatalf("spool not removed: %v", err)
 	}
@@ -62,34 +64,34 @@ func TestAttachmentSizesAndStringInteroperability(t *testing.T) {
 	for _, size := range []int{0, 1, 15, 16, 17, 65535, 65536, 65537, 8*1024*1024 + 3} {
 		t.Run(fmt.Sprint(size), func(t *testing.T) {
 			original := bytes.Repeat([]byte{0, 0xff, 2, 0x80, 3}, size/5+1)[:size]
-			encrypted, err := encryptAttachment(context.Background(), bytes.NewReader(original), int64(size), key)
+			encrypted, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(original), int64(size), key)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer encrypted.close()
-			actual, err := io.ReadAll(encrypted.file)
+			defer encrypted.Close()
+			actual, err := io.ReadAll(encrypted.File)
 			if err != nil {
 				t.Fatal(err)
 			}
-			expectedSize, _ := attachmentEncryptedSize(int64(size))
-			if int64(len(actual)) != expectedSize || encrypted.size != expectedSize {
+			expectedSize, _ := vaultcrypto.AttachmentEncryptedSize(int64(size))
+			if int64(len(actual)) != expectedSize || encrypted.Size != expectedSize {
 				t.Fatal("wrong ciphertext size")
 			}
 			if size < 65537 {
 				b64 := base64.StdEncoding.EncodeToString
 				encoded := "2." + b64(actual[1:17]) + "|" + b64(actual[49:]) + "|" + b64(actual[17:49])
-				decoded, err := DecryptString(encoded, key)
+				decoded, err := vaultcrypto.DecryptString(encoded, key)
 				if err != nil || !bytes.Equal(decoded, original) {
 					t.Fatalf("string format interop: %v", err)
 				}
 			}
 			// Read through a reader which deliberately fragments every read.
-			plain, err := decryptAttachment(context.Background(), &attachmentSmallReader{r: bytes.NewReader(actual)}, encrypted.size, key)
+			plain, err := vaultcrypto.DecryptAttachment(context.Background(), &attachmentSmallReader{r: bytes.NewReader(actual)}, encrypted.Size, key)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer plain.close()
-			decoded, err := io.ReadAll(plain.file)
+			defer plain.Close()
+			decoded, err := io.ReadAll(plain.File)
 			if err != nil || !bytes.Equal(decoded, original) {
 				t.Fatalf("roundtrip: %v", err)
 			}
@@ -107,10 +109,10 @@ func TestAttachmentRejectsCorruptionAndCleansSpools(t *testing.T) {
 	key, encrypted, _ := officialAttachmentVector(t)
 	check := func(data []byte, size int64, k []byte) {
 		t.Helper()
-		result, err := decryptAttachment(context.Background(), bytes.NewReader(data), size, k)
+		result, err := vaultcrypto.DecryptAttachment(context.Background(), bytes.NewReader(data), size, k)
 		if err == nil || result != nil {
 			if result != nil {
-				result.close()
+				result.Close()
 			}
 			t.Fatal("accepted corrupt input")
 		}
@@ -165,20 +167,20 @@ func TestAttachmentCancellationAndInputBounds(t *testing.T) {
 	for _, decrypt := range []bool{false, true} {
 		ctx, cancel := context.WithCancel(context.Background())
 		reader := &attachmentCancelReader{r: bytes.NewReader(encrypted), cancel: cancel}
-		var spool *attachmentSpool
+		var spool *vaultcrypto.AttachmentSpool
 		var err error
 		if decrypt {
-			spool, err = decryptAttachment(ctx, reader, int64(len(encrypted)), key)
+			spool, err = vaultcrypto.DecryptAttachment(ctx, reader, int64(len(encrypted)), key)
 		} else {
-			spool, err = encryptAttachment(ctx, reader, int64(len(encrypted)), key)
+			spool, err = vaultcrypto.EncryptAttachment(ctx, reader, int64(len(encrypted)), key)
 		}
 		cancel()
-		if !errors.Is(err, ErrCancelled) || spool != nil {
+		if !errors.Is(err, vaulterr.ErrCancelled) || spool != nil {
 			t.Fatalf("cancel: %v", err)
 		}
 	}
-	for _, size := range []int64{-1, 0, 1, 17, attachmentPlaintextLimit + 1, 1 << 62} {
-		spool, err := encryptAttachment(context.Background(), bytes.NewReader([]byte{1, 2}), size, key)
+	for _, size := range []int64{-1, 0, 1, 17, vaultcrypto.AttachmentPlaintextLimit + 1, 1 << 62} {
+		spool, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader([]byte{1, 2}), size, key)
 		if err == nil || spool != nil {
 			t.Fatal("accepted mismatched or unbounded input")
 		}

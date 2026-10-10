@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strings"
 	"testing"
 
@@ -14,7 +15,7 @@ import (
 func passwordLockedApp() *app {
 	a := previewApp()
 	a.snapshot.Scope = &vaultwarden.Scope{Server: "https://vault.example.com", Account: "account-a"}
-	a.snapshot.PasswordUnlock = &vaultwarden.PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultwarden.KDF{Type: 0, Iterations: 5000}}
+	a.snapshot.PasswordUnlock = &vaultwarden.PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultcrypto.KDF{Type: 0, Iterations: 5000}}
 	a.lockInterface()
 	return a
 }

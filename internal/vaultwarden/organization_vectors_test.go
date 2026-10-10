@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"os"
 	"testing"
 )
@@ -47,14 +48,14 @@ func TestOrganizationOpenSSLFixedVectors(t *testing.T) {
 		}
 	}
 	owner := bytes.Repeat([]byte{3}, 64)
-	wrapped, _ := EncryptString(der, owner)
+	wrapped, _ := vaultcrypto.EncryptString(der, owner)
 	public, _ := x509.MarshalPKIXPublicKey(&private.PublicKey)
 	profile, _ := json.Marshal(map[string]any{"privateKey": wrapped, "accountKeys": map[string]any{"publicKeyEncryptionKeyPair": map[string]string{"wrappedPrivateKey": wrapped, "publicKey": base64.StdEncoding.EncodeToString(public)}}})
 	if _, err := accountPrivateKey(profile, owner); err != nil {
 		t.Fatal("PKCS8/SPKI", err)
 	}
 	for _, badDER := range [][]byte{der[:len(der)-1], x509.MarshalPKCS1PrivateKey(private), append(append([]byte(nil), der...), 0), bytes.Repeat([]byte{0}, 8193)} {
-		wrapped, _ := EncryptString(badDER, owner)
+		wrapped, _ := vaultcrypto.EncryptString(badDER, owner)
 		profile, _ := json.Marshal(map[string]any{"privateKey": wrapped})
 		if _, err := accountPrivateKey(profile, owner); err == nil {
 			t.Fatal("invalid PKCS8 accepted")

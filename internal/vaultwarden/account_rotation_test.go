@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"testing"
 )
@@ -116,12 +117,12 @@ func TestAccountRotationContractAndPartialRecovery(t *testing.T) {
 			var vault VaultData
 			_ = json.Unmarshal(rec.OldVault, &vault)
 			_ = json.Unmarshal(vault.Sync, &sync)
-			oldDER, err := DecryptString(sync.Profile.PrivateKey, old.key)
+			oldDER, err := vaultcrypto.DecryptString(sync.Profile.PrivateKey, old.key)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer clear(oldDER)
-			newDER, err := DecryptString(req.Keys.PrivateKey, rec.NewUserKey)
+			newDER, err := vaultcrypto.DecryptString(req.Keys.PrivateKey, rec.NewUserKey)
 			if err != nil || !bytes.Equal(newDER, oldDER) {
 				t.Fatal("RSA pair not preserved")
 			}
@@ -134,7 +135,7 @@ func TestAccountRotationHelpersPreserveOpaqueAndValidateCoverage(t *testing.T) {
 	newKey := bytes.Repeat([]byte{2}, 64)
 	for _, size := range []int{16, 64} {
 		key := bytes.Repeat([]byte{3}, size)
-		wrapped, _ := EncryptString(key, oldKey)
+		wrapped, _ := vaultcrypto.EncryptString(key, oldKey)
 		raw := json.RawMessage(`{"id":"row","key":` + string(mustAccountJSON(t, wrapped)) + `,"unknown":{"huge":9007199254740993123,"nested":"opaque"}}`)
 		got, err := AccountRewrapRotationObject(raw, oldKey, newKey, size)
 		if err != nil {
@@ -147,7 +148,7 @@ func TestAccountRotationHelpersPreserveOpaqueAndValidateCoverage(t *testing.T) {
 		_ = json.Unmarshal(got, &object)
 		var keyString string
 		_ = json.Unmarshal(object["key"], &keyString)
-		decoded, err := DecryptString(keyString, newKey)
+		decoded, err := vaultcrypto.DecryptString(keyString, newKey)
 		if err != nil || !bytes.Equal(decoded, key) {
 			t.Fatal("bad key rewrap")
 		}
@@ -159,12 +160,12 @@ func TestAccountRotationHelpersPreserveOpaqueAndValidateCoverage(t *testing.T) {
 	if _, err := AccountRewrapRotationObject(json.RawMessage(`{"key":"x","key":"y"}`), oldKey, newKey, 64); err == nil {
 		t.Fatal("duplicate JSON accepted")
 	}
-	encrypted, _ := EncryptString([]byte("folder name"), oldKey)
+	encrypted, _ := vaultcrypto.EncryptString([]byte("folder name"), oldKey)
 	folder, err := AccountRewrapRotationFolder(AccountRotationFolder{ID: "folder", Name: encrypted}, oldKey, newKey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	plain, _ := DecryptString(folder.Name, newKey)
+	plain, _ := vaultcrypto.DecryptString(folder.Name, newKey)
 	defer clear(plain)
 	if string(plain) != "folder name" {
 		t.Fatal("bad folder")

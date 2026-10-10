@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package vaultwarden
+package totp
 
 import (
 	"encoding/base32"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaulterr"
 	"testing"
 	"time"
 )
@@ -20,7 +21,7 @@ func TestTOTPRFC6238(t *testing.T) {
 	} {
 		for i, timestamp := range times {
 			input := fmt.Sprintf("otpauth://totp/test?secret=%s&algorithm=%s&digits=8", base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString([]byte(test.secret)), test.algorithm)
-			result, err := GenerateTOTP(input, time.Unix(timestamp, 0))
+			result, err := Generate(input, time.Unix(timestamp, 0))
 			if err != nil || result.Code != test.codes[i] || result.ValidUntil.Unix() != (timestamp/30+1)*30 {
 				t.Fatalf("%s vector %d failed: %v", test.algorithm, i, err)
 			}
@@ -29,26 +30,26 @@ func TestTOTPRFC6238(t *testing.T) {
 }
 func TestTOTPSteamAndExpiry(t *testing.T) {
 	now := time.Date(2023, 1, 1, 0, 0, 0, 0, time.UTC)
-	code, err := GenerateTOTP("StEam://HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ", now)
+	code, err := Generate("StEam://HXDMVJECJJWSRB3HWIZR4IFUGFTMXBOZ", now)
 	if err != nil || code.Code != "7W6CJ" {
 		t.Fatal("fixed SDK Steam vector failed", err)
 	}
-	before, err := GenerateTOTP("WQIQ25BRKZYCJVYP", now.Add(30*time.Second-time.Nanosecond))
+	before, err := Generate("WQIQ25BRKZYCJVYP", now.Add(30*time.Second-time.Nanosecond))
 	if err != nil || before.Code != "194506" || !before.ValidUntil.Equal(now.Add(30*time.Second)) {
 		t.Fatal("period before boundary failed", err)
 	}
-	after, err := GenerateTOTP("wqiq25brkzycjvyp", before.ValidUntil)
+	after, err := Generate("wqiq25brkzycjvyp", before.ValidUntil)
 	if err != nil || after.Code == before.Code || !after.ValidUntil.Equal(now.Add(time.Minute)) {
 		t.Fatal("exclusive expiry failed", err)
 	}
 }
 func TestTOTPRejectsAmbiguousParameters(t *testing.T) {
 	for _, input := range []string{"", "ABCD123", "PIUD1IS!EQYA=", "WQIQ\n25BRKZYCJVYP", "otpauth://hotp/a?secret=WQIQ25BRKZYCJVYP", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&algorithm=MD5", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&digits=10", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&period=0", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&period=301", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&secret=PIUDISEQYA", "otpauth://user@totp/a?secret=WQIQ25BRKZYCJVYP", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP#fragment", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&counter=1"} {
-		if _, err := GenerateTOTP(input, time.Unix(100, 0)); err != ErrValidation {
+		if _, err := Generate(input, time.Unix(100, 0)); err != vaulterr.ErrValidation {
 			t.Fatal("malformed TOTP accepted")
 		}
 	}
-	if _, err := GenerateTOTP("WQIQ25BRKZYCJVYP", time.Unix(-1, 0)); err != ErrValidation {
+	if _, err := Generate("WQIQ25BRKZYCJVYP", time.Unix(-1, 0)); err != vaulterr.ErrValidation {
 		t.Fatal("negative time accepted")
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
 )
 
@@ -19,8 +20,8 @@ type accountRecoveryDetails struct {
 	EncryptedPrivateKey string `json:"encryptedPrivateKey"`
 }
 
-func (d accountRecoveryDetails) kdf() KDF {
-	return KDF{Type: d.KDF, Iterations: d.Iterations, Memory: d.Memory, Parallelism: d.Parallelism}
+func (d accountRecoveryDetails) kdf() vaultcrypto.KDF {
+	return vaultcrypto.KDF{Type: d.KDF, Iterations: d.Iterations, Memory: d.Memory, Parallelism: d.Parallelism}
 }
 func (s *Session) adminRecoveryDetailsLocked(ctx context.Context, org Organization, memberID string, persist func(SessionCheckpoint) error, guard func() error) (OrganizationMember, accountRecoveryDetails, error) {
 	var details accountRecoveryDetails
@@ -45,7 +46,7 @@ func (s *Session) adminRecoveryDetailsLocked(ctx context.Context, org Organizati
 	}
 	return target, details, nil
 }
-func recoveryPasswordPayload(ctx context.Context, password []byte, email string, kdf KDF, userKey []byte, policy AccountPasswordPolicy) (string, string, error) {
+func recoveryPasswordPayload(ctx context.Context, password []byte, email string, kdf vaultcrypto.KDF, userKey []byte, policy AccountPasswordPolicy) (string, string, error) {
 	normalized, err := accountEmail(email)
 	if err != nil || normalized != email {
 		return "", "", ErrIdentity
@@ -57,21 +58,21 @@ func recoveryPasswordPayload(ctx context.Context, password []byte, email string,
 	if err = policy.Check(ctx, password, email, false); err != nil {
 		return "", "", err
 	}
-	master, err := DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 	if err != nil {
 		return "", "", err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return "", "", err
 	}
 	defer clear(stretched)
-	wrapped, err := EncryptString(userKey, stretched)
+	wrapped, err := vaultcrypto.EncryptString(userKey, stretched)
 	if err != nil {
 		return "", "", err
 	}
-	return AuthorizationHash(master, password), wrapped, nil
+	return vaultcrypto.AuthorizationHash(master, password), wrapped, nil
 }
 func decodeRecoveryPasswordPolicy(body []byte, orgID string) (AccountPasswordPolicy, error) {
 	var row struct {

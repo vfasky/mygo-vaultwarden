@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -20,7 +21,7 @@ func resumableFixture(t *testing.T, server string) (*Session, PasswordUnlockConf
 	if err != nil {
 		t.Fatal(err)
 	}
-	config := PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: KDF{Type: 0, Iterations: 5000}}
+	config := PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultcrypto.KDF{Type: 0, Iterations: 5000}}
 	return &Session{client: client, email: config.Email, account: "account-a", key: bytes.Repeat([]byte{42}, 64),
 		wrapped: "fixture-wrapped-user-key", refresh: "refresh-old", access: "access-not-persisted", expires: time.Now().Add(time.Hour),
 		passwordUnlock: &PasswordUnlock{Config: config, Key: bytes.Repeat([]byte{7}, 32)}}, config

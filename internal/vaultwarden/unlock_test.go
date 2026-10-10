@@ -4,11 +4,12 @@ package vaultwarden
 import (
 	"bytes"
 	"encoding/hex"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"testing"
 )
 
 func TestSnapshotUnlockKeyVectorAndPasswordBinding(t *testing.T) {
-	config := PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: KDF{Type: 0, Iterations: 5000}}
+	config := PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultcrypto.KDF{Type: 0, Iterations: 5000}}
 	key, err := DeriveSnapshotUnlockKey([]byte("fixture-master-password"), config)
 	if err != nil {
 		t.Fatal(err)
@@ -30,7 +31,7 @@ func TestSnapshotUnlockKeyVectorAndPasswordBinding(t *testing.T) {
 }
 
 func TestArgonSnapshotUnlockKey(t *testing.T) {
-	config := PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: KDF{Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}}
+	config := PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultcrypto.KDF{Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}}
 	first, err := DeriveSnapshotUnlockKey([]byte("fixture-master-password"), config)
 	if err != nil {
 		t.Fatal(err)

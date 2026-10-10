@@ -11,6 +11,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
 	"sort"
 	"strings"
@@ -211,12 +212,12 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 	if e != nil || status != 200 || strictJSON(raw) != nil || json.Unmarshal(raw, &keys) != nil || keys.Key != s.wrapped || keys.PrivateKey != request.Keys.PrivateKey || keys.PublicKey != request.Keys.PublicKey {
 		return reject("权威账户密钥读回不匹配")
 	}
-	oldDER, e := DecryptString(oldProfile.PrivateKey, old.UserKey)
+	oldDER, e := vaultcrypto.DecryptString(oldProfile.PrivateKey, old.UserKey)
 	if e != nil {
 		return reject("原账户私钥不可解包")
 	}
 	defer clear(oldDER)
-	newDER, e := DecryptString(keys.PrivateKey, s.key)
+	newDER, e := vaultcrypto.DecryptString(keys.PrivateKey, s.key)
 	if e != nil {
 		return reject("新账户私钥不可解包")
 	}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Protocol and test-vector references: bitwarden/sdk-internal bitwarden-crypto.
-package vaultwarden
+package vaultcrypto
 
 import (
 	"crypto/aes"
@@ -10,6 +10,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaulterr"
 	"strings"
 	"unicode/utf8"
 
@@ -34,25 +35,25 @@ func NormalizeEmail(email string) string {
 func DeriveMaster(password []byte, email string, kdf KDF) ([]byte, error) {
 	email = NormalizeEmail(email)
 	if len(password) == 0 || len(password) > 8192 || len(email) == 0 || len(email) > 1024 || !utf8.Valid(password) {
-		return nil, ErrCredentials
+		return nil, vaulterr.ErrCredentials
 	}
 	if kdf.Salt != nil && *kdf.Salt != "" && *kdf.Salt != email {
-		return nil, ErrKDF
+		return nil, vaulterr.ErrKDF
 	}
 	switch kdf.Type {
 	case 0:
 		if kdf.Iterations < 5000 || kdf.Iterations > 2000000 {
-			return nil, ErrKDF
+			return nil, vaulterr.ErrKDF
 		}
 		return pbkdf2.Key(password, []byte(email), kdf.Iterations, 32, sha256.New), nil
 	case 1:
 		if kdf.Iterations < 2 || kdf.Iterations > 10 || kdf.Memory < 16 || kdf.Memory > 256 || kdf.Parallelism < 1 || kdf.Parallelism > 16 {
-			return nil, ErrKDF
+			return nil, vaulterr.ErrKDF
 		}
 		salt := sha256.Sum256([]byte(email))
 		return argon2.IDKey(password, salt[:], uint32(kdf.Iterations), uint32(kdf.Memory)*1024, uint8(kdf.Parallelism), 32), nil
 	default:
-		return nil, ErrKDF
+		return nil, vaulterr.ErrKDF
 	}
 }
 
@@ -64,16 +65,16 @@ func AuthorizationHash(master, password []byte) string {
 
 func StretchMaster(master []byte) ([]byte, error) {
 	if len(master) != 32 {
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	enc, err := hkdf.Expand(sha256.New, master, "enc", 32)
 	if err != nil {
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	mac, err := hkdf.Expand(sha256.New, master, "mac", 32)
 	if err != nil {
 		clear(enc)
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	defer clear(enc)
 	defer clear(mac)
@@ -84,39 +85,39 @@ func StretchMaster(master []byte) ([]byte, error) {
 // and newer COSE type 7 fail explicitly rather than being misinterpreted.
 func DecryptString(encoded string, key []byte) ([]byte, error) {
 	if len(key) != 64 || !strings.HasPrefix(encoded, "2.") || len(encoded) > 2*1024*1024 {
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	parts := strings.Split(encoded[2:], "|")
 	if len(parts) != 3 {
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	iv, e1 := base64.StdEncoding.Strict().DecodeString(parts[0])
 	data, e2 := base64.StdEncoding.Strict().DecodeString(parts[1])
 	mac, e3 := base64.StdEncoding.Strict().DecodeString(parts[2])
 	if e1 != nil || e2 != nil || e3 != nil || len(iv) != aes.BlockSize || len(mac) != sha256.Size || len(data) == 0 || len(data)%aes.BlockSize != 0 {
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	expected := hmac.New(sha256.New, key[32:])
 	expected.Write(iv)
 	expected.Write(data)
 	if !hmac.Equal(mac, expected.Sum(nil)) {
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	block, err := aes.NewCipher(key[:32])
 	if err != nil {
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	plaintext := make([]byte, len(data))
 	cipher.NewCBCDecrypter(block, iv).CryptBlocks(plaintext, data)
 	padding := int(plaintext[len(plaintext)-1])
 	if padding < 1 || padding > aes.BlockSize || padding > len(plaintext) {
 		clear(plaintext)
-		return nil, ErrEncryption
+		return nil, vaulterr.ErrEncryption
 	}
 	for _, value := range plaintext[len(plaintext)-padding:] {
 		if int(value) != padding {
 			clear(plaintext)
-			return nil, ErrEncryption
+			return nil, vaulterr.ErrEncryption
 		}
 	}
 	result := append([]byte(nil), plaintext[:len(plaintext)-padding]...)
@@ -128,11 +129,11 @@ func DecryptString(encoded string, key []byte) ([]byte, error) {
 // 1.37.4 clients. Every invocation gets an independent cryptographic random IV.
 func EncryptString(plaintext, key []byte) (string, error) {
 	if len(key) != 64 || len(plaintext) > 1024*1024 {
-		return "", ErrEncryption
+		return "", vaulterr.ErrEncryption
 	}
 	iv := make([]byte, aes.BlockSize)
 	if _, err := rand.Read(iv); err != nil {
-		return "", ErrEncryption
+		return "", vaulterr.ErrEncryption
 	}
 	padding := aes.BlockSize - len(plaintext)%aes.BlockSize
 	data := make([]byte, len(plaintext)+padding)
@@ -143,7 +144,7 @@ func EncryptString(plaintext, key []byte) (string, error) {
 	defer clear(data)
 	block, err := aes.NewCipher(key[:32])
 	if err != nil {
-		return "", ErrEncryption
+		return "", vaulterr.ErrEncryption
 	}
 	cipher.NewCBCEncrypter(block, iv).CryptBlocks(data, data)
 	mac := hmac.New(sha256.New, key[32:])
@@ -152,7 +153,7 @@ func EncryptString(plaintext, key []byte) (string, error) {
 	return "2." + base64.StdEncoding.EncodeToString(iv) + "|" + base64.StdEncoding.EncodeToString(data) + "|" + base64.StdEncoding.EncodeToString(mac.Sum(nil)), nil
 }
 
-func decryptText(encoded *string, key []byte) (string, error) {
+func DecryptText(encoded *string, key []byte) (string, error) {
 	if encoded == nil || *encoded == "" {
 		return "", nil
 	}
@@ -162,7 +163,7 @@ func decryptText(encoded *string, key []byte) (string, error) {
 	}
 	defer clear(plaintext)
 	if !utf8.Valid(plaintext) {
-		return "", ErrEncryption
+		return "", vaulterr.ErrEncryption
 	}
 	return string(plaintext), nil
 }

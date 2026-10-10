@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -25,10 +26,10 @@ func organizationUIFixture(t *testing.T, edit, view bool, reprompt int) *app {
 	}
 	der, _ := x509.MarshalPKCS8PrivateKey(private)
 	public, _ := x509.MarshalPKIXPublicKey(&private.PublicKey)
-	wrapped, _ := vaultwarden.EncryptString(der, bytes.Repeat([]byte{4}, 64))
+	wrapped, _ := vaultcrypto.EncryptString(der, bytes.Repeat([]byte{4}, 64))
 	key := bytes.Repeat([]byte{9}, 64)
 	encrypted, _ := rsa.EncryptOAEP(sha256.New(), rand.Reader, &private.PublicKey, key, nil)
-	name, _ := vaultwarden.EncryptString([]byte("团队集合"), key)
+	name, _ := vaultcrypto.EncryptString([]byte("团队集合"), key)
 	item, err := vaultwarden.NewPersonalCipher(vaultwarden.CipherFields{Type: 1, Name: "组织条目", Login: map[string]any{"username": "member", "password": "org secret"}, Reprompt: reprompt}, key, a.liveScope.Account)
 	if err != nil {
 		t.Fatal(err)

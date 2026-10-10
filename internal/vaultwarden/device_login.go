@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/url"
@@ -70,7 +71,7 @@ func (f *DeviceLogin) guard() error {
 
 // KnownDevice uses the 1.37.4 header contract. No credentials are placed in URLs.
 func (c *Client) KnownDevice(ctx context.Context, email string) (bool, error) {
-	email = NormalizeEmail(email)
+	email = vaultcrypto.NormalizeEmail(email)
 	if email == "" || len(email) > 1024 {
 		return false, ErrValidation
 	}
@@ -130,7 +131,7 @@ func (c *Client) BeginDeviceLogin(ctx context.Context, email string, scope Scope
 		cancel()
 		return nil, err
 	}
-	f := &DeviceLogin{client: c, pending: p, scope: scope, email: NormalizeEmail(email), epoch: epoch, check: check, ctx: ctx, cancel: cancel, timer: timer, metadata: row}
+	f := &DeviceLogin{client: c, pending: p, scope: scope, email: vaultcrypto.NormalizeEmail(email), epoch: epoch, check: check, ctx: ctx, cancel: cancel, timer: timer, metadata: row}
 	context.AfterFunc(ctx, func() { f.Close() })
 	if err = f.guard(); err != nil {
 		f.Close()

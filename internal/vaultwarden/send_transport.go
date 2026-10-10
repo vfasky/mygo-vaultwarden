@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -17,11 +18,11 @@ import (
 )
 
 func sendSize(n int64) string { return strconv.FormatInt(n, 10) }
-func (c *Client) uploadSend(ctx context.Context, id, fileID, name, token string, spool *attachmentSpool) (int, error) {
-	if !validObjectID(id) || !validObjectID(fileID) || token == "" || spool == nil || spool.file == nil || len(name) > 16384 || strings.ContainsAny(name, "\r\n") {
+func (c *Client) uploadSend(ctx context.Context, id, fileID, name, token string, spool *vaultcrypto.AttachmentSpool) (int, error) {
+	if !validObjectID(id) || !validObjectID(fileID) || token == "" || spool == nil || spool.File == nil || len(name) > 16384 || strings.ContainsAny(name, "\r\n") {
 		return 0, ErrValidation
 	}
-	if e := spool.rewind(); e != nil {
+	if e := spool.Rewind(); e != nil {
 		return 0, e
 	}
 	var envelope bytes.Buffer
@@ -37,11 +38,11 @@ func (c *Client) uploadSend(ctx context.Context, id, fileID, name, token string,
 	suffix := bytes.Clone(envelope.Bytes())
 	u := *c.base
 	u.Path += "/api/sends/" + id + "/file/" + fileID
-	req, e := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), io.MultiReader(bytes.NewReader(prefix), io.LimitReader(spool.file, spool.size), bytes.NewReader(suffix)))
+	req, e := http.NewRequestWithContext(ctx, http.MethodPost, u.String(), io.MultiReader(bytes.NewReader(prefix), io.LimitReader(spool.File, spool.Size), bytes.NewReader(suffix)))
 	if e != nil {
 		return 0, ErrProtocol
 	}
-	req.ContentLength = int64(len(prefix)+len(suffix)) + spool.size
+	req.ContentLength = int64(len(prefix)+len(suffix)) + spool.Size
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Device-Type", "7")
@@ -223,8 +224,8 @@ func (r *SendReceiver) SaveFile(ctx context.Context, path string) error {
 	if e != nil {
 		return e
 	}
-	defer spool.close()
-	return destination.publish(ctx, spool.file, spool.size, func() error {
+	defer spool.Close()
+	return destination.publish(ctx, spool.File, spool.Size, func() error {
 		if r.closed || r.ctx.Err() != nil {
 			return ErrExpired
 		}

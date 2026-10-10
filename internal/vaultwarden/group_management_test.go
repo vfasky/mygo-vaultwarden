@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -79,7 +80,7 @@ func TestGroupExplicitScopePreservesRelationsAndIsolation(t *testing.T) {
 	s, v, key, _ := organizationFixture(t, server.URL)
 	defer s.Close()
 	v = acceptedGroupsVault(t, s, ownerVault(t, v))
-	name, _ = EncryptString([]byte("集合"), key)
+	name, _ = vaultcrypto.EncryptString([]byte("集合"), key)
 	d, err := s.GroupDetails(context.Background(), v, "org-1", "group-1", nil)
 	if err != nil {
 		t.Fatal(err)

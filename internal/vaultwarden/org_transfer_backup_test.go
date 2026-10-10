@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -63,7 +64,7 @@ func TestOrgBackupOfficialRoutesRoundtripAndNoFalseImportSuccess(t *testing.T) {
 	defer s.Close()
 	doc = source
 	targetKey = key
-	encryptedCollection, _ = EncryptString([]byte("共享集合"), key)
+	encryptedCollection, _ = vaultcrypto.EncryptString([]byte("共享集合"), key)
 	v = changeOrganizationFixture(t, v, func(d map[string]any) {
 		p := d["profile"].(map[string]any)
 		for _, name := range []string{"organizations", "organizationsNew"} {

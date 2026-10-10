@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 )
@@ -146,7 +147,7 @@ func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData,
 					return CipherDocument{}, e
 				}
 				object["attachments2"] = wrappers
-				recoveryKey, err = EncryptString(key, s.key)
+				recoveryKey, err = vaultcrypto.EncryptString(key, s.key)
 				if err != nil {
 					return CipherDocument{}, err
 				}
@@ -163,7 +164,7 @@ func (s *Session) writeOrganizationCipher(ctx context.Context, vault *VaultData,
 		if bytes.Equal(key, s.key) {
 			return CipherDocument{}, ErrPermission
 		}
-		object["key"], err = EncryptString(key, data.keys[orgID])
+		object["key"], err = vaultcrypto.EncryptString(key, data.keys[orgID])
 		if err != nil {
 			return CipherDocument{}, err
 		}

@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"sync/atomic"
 	"time"
 
@@ -70,7 +71,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 		a.status = err.Error()
 		return
 	}
-	email := vaultwarden.NormalizeEmail(a.email)
+	email := vaultcrypto.NormalizeEmail(a.email)
 	account := a.deviceAccountID
 	if account == "" && a.snapshot.Scope != nil && a.snapshot.Scope.Server == server && a.snapshot.PasswordUnlock != nil && a.snapshot.PasswordUnlock.Email == email {
 		account = a.snapshot.Scope.Account

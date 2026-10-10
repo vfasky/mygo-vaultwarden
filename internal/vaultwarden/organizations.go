@@ -12,6 +12,7 @@ import (
 	"encoding/asn1"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"hash"
 	"net/http"
 	"reflect"
@@ -115,7 +116,7 @@ func accountPrivateKey(profile json.RawMessage, key []byte) (*rsa.PrivateKey, er
 	if len(wrapped) == 0 || len(wrapped) > 16384 || len(public) > 4096 {
 		return nil, ErrEncryption
 	}
-	der, err := DecryptString(wrapped, key)
+	der, err := vaultcrypto.DecryptString(wrapped, key)
 	if err != nil {
 		return nil, err
 	}
@@ -269,7 +270,7 @@ func (s *Session) decodeOrganizationVaultLocked(vault *VaultData) (*organization
 		if !ok {
 			continue
 		}
-		plain, err := DecryptString(collection.Name, key)
+		plain, err := vaultcrypto.DecryptString(collection.Name, key)
 		if err != nil {
 			return fail(err)
 		}

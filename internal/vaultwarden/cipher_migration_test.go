@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func migrationFIDOFixture(t *testing.T, key []byte) (map[string]any, map[string]
 			continue
 		}
 		var err error
-		encrypted[name], err = EncryptString([]byte(value.(string)), key)
+		encrypted[name], err = vaultcrypto.EncryptString([]byte(value.(string)), key)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,12 +56,12 @@ func TestMigrationFIDO2CopyAndBackup(t *testing.T) {
 			}
 			continue
 		}
-		text, err := DecryptString(credential[name].(string), newKey)
+		text, err := vaultcrypto.DecryptString(credential[name].(string), newKey)
 		if err != nil || string(text) != plain[name] {
 			t.Fatalf("field %s not rekeyed", name)
 		}
 		clear(text)
-		if _, err := DecryptString(credential[name].(string), oldKey); err == nil {
+		if _, err := vaultcrypto.DecryptString(credential[name].(string), oldKey); err == nil {
 			t.Fatalf("old key opens %s", name)
 		}
 	}
@@ -131,8 +132,8 @@ func TestMigrationLegacyShareKeyedAttachment(t *testing.T) {
 	delete(object, "key") // fixture is legacy and encrypted under ownerKey
 	newKey := bytes.Repeat([]byte{29}, 64)
 	attachmentKey := bytes.Repeat([]byte{71}, 64)
-	wrapped, _ := EncryptString(attachmentKey, ownerKey)
-	filename, _ := EncryptString([]byte("附件.txt"), ownerKey)
+	wrapped, _ := vaultcrypto.EncryptString(attachmentKey, ownerKey)
+	filename, _ := vaultcrypto.EncryptString([]byte("附件.txt"), ownerKey)
 	object["attachments"] = []any{map[string]any{"id": "file-1", "key": wrapped, "fileName": filename, "size": "42"}}
 	plain, encrypted := migrationFIDOFixture(t, ownerKey)
 	object["login"].(map[string]any)["fido2Credentials"] = []any{encrypted}
@@ -140,17 +141,17 @@ func TestMigrationLegacyShareKeyedAttachment(t *testing.T) {
 		t.Fatal(err)
 	}
 	attachment := object["attachments"].([]any)[0].(map[string]any)
-	key, err := DecryptString(attachment["key"].(string), newKey)
+	key, err := vaultcrypto.DecryptString(attachment["key"].(string), newKey)
 	if err != nil || !bytes.Equal(key, attachmentKey) {
 		t.Fatal("attachment key changed")
 	}
 	clear(key)
-	name, err := DecryptString(attachment["fileName"].(string), newKey)
+	name, err := vaultcrypto.DecryptString(attachment["fileName"].(string), newKey)
 	if err != nil || string(name) != "附件.txt" {
 		t.Fatal("attachment name lost")
 	}
 	clear(name)
-	if _, err = DecryptString(attachment["key"].(string), ownerKey); err == nil {
+	if _, err = vaultcrypto.DecryptString(attachment["key"].(string), ownerKey); err == nil {
 		t.Fatal("old owner key retained")
 	}
 	if err = transformCompleteCipher(object, newKey, false); err != nil {

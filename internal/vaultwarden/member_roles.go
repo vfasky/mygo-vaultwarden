@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 	"sort"
@@ -186,7 +187,7 @@ func (s *Session) memberRoleLocked(ctx context.Context, vault *VaultData, org Or
 					if mid == id {
 						user["id"], _ = json.Marshal(entry.ID)
 						draft.collections = append(draft.collections, user)
-						plain, err := DecryptString(entry.Name, data.keys[org.ID])
+						plain, err := vaultcrypto.DecryptString(entry.Name, data.keys[org.ID])
 						if err != nil {
 							return nil, err
 						}

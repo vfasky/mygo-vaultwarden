@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
 )
 
@@ -104,7 +105,7 @@ func (s *Session) WithEmergencyView(ctx context.Context, vault *VaultData, id st
 }
 
 type emergencyTakeoverDetails struct {
-	KDF
+	vaultcrypto.KDF
 	KeyEncrypted, Object string
 }
 

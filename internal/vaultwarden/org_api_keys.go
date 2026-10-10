@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"time"
 )
@@ -30,12 +31,12 @@ func (s *Session) WithOrganizationAPIKey(ctx context.Context, vault *VaultData, 
 		return ErrPermission
 	}
 	config := s.passwordUnlock.Config
-	master, err := DeriveMaster(password, config.Email, config.KDF)
+	master, err := vaultcrypto.DeriveMaster(password, config.Email, config.KDF)
 	if err != nil {
 		return err
 	}
 	defer clear(master)
-	body, err := json.Marshal(map[string]string{"masterPasswordHash": AuthorizationHash(master, password)})
+	body, err := json.Marshal(map[string]string{"masterPasswordHash": vaultcrypto.AuthorizationHash(master, password)})
 	if err != nil {
 		return ErrProtocol
 	}

@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"strings"
 )
@@ -132,7 +133,7 @@ func (s *Session) CollectionDetails(ctx context.Context, vault *VaultData, orgID
 			return nil, err
 		}
 	}
-	plain, err := DecryptString(identity.Name, data.keys[orgID])
+	plain, err := vaultcrypto.DecryptString(identity.Name, data.keys[orgID])
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +215,7 @@ func (s *Session) SaveCollection(ctx context.Context, vault *VaultData, draft *C
 			return ErrConflict
 		}
 	}
-	encrypted, err := EncryptString([]byte(draft.Name), data.keys[draft.organizationID])
+	encrypted, err := vaultcrypto.EncryptString([]byte(draft.Name), data.keys[draft.organizationID])
 	if err != nil {
 		return err
 	}

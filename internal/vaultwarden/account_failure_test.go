@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"strings"
@@ -19,7 +20,7 @@ func TestAccountRechecksPolicyAndIdentityBeforeCommit(t *testing.T) {
 		t.Run(scenario, func(t *testing.T) {
 			writes := 0
 			s, v := accountFixture(t, func(w http.ResponseWriter, r *http.Request, _ *Session, _ *VaultData) { writes++; w.WriteHeader(200) })
-			plan, err := s.PrepareAccountCredentials(context.Background(), v, AccountChangePassword, accountTestPassword, []byte("Brand-New-Fixture-872!"), "", KDF{}, "", "", nil)
+			plan, err := s.PrepareAccountCredentials(context.Background(), v, AccountChangePassword, accountTestPassword, []byte("Brand-New-Fixture-872!"), "", vaultcrypto.KDF{}, "", "", nil)
 			if err != nil {
 				t.Fatal(err)
 			}

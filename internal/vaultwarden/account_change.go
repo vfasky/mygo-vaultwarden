@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"sync"
 )
 
@@ -137,20 +138,20 @@ func (s *Session) accountPlanLocked(vault *VaultData, kind AccountChangeKind, pa
 }
 
 type accountAuthentication struct {
-	Salt string `json:"salt"`
-	KDF  KDF    `json:"kdf"`
-	Hash string `json:"masterPasswordAuthenticationHash"`
+	Salt string          `json:"salt"`
+	KDF  vaultcrypto.KDF `json:"kdf"`
+	Hash string          `json:"masterPasswordAuthenticationHash"`
 }
 type accountUnlock struct {
-	Salt string `json:"salt"`
-	KDF  KDF    `json:"kdf"`
-	Key  string `json:"masterKeyWrappedUserKey"`
+	Salt string          `json:"salt"`
+	KDF  vaultcrypto.KDF `json:"kdf"`
+	Key  string          `json:"masterKeyWrappedUserKey"`
 }
 
 // PrepareAccountCredentials verifies current password locally and with the
 // server, consumes the actual merged type-1 policy and rewraps the SAME user key.
 // Email changes preserve the password; KDF changes preserve email and password.
-func (s *Session) PrepareAccountCredentials(ctx context.Context, vault *VaultData, kind AccountChangeKind, oldPassword, newPassword []byte, newEmail string, kdf KDF, hint, emailToken string, persist func(SessionCheckpoint) error) (*AccountChangePlan, error) {
+func (s *Session) PrepareAccountCredentials(ctx context.Context, vault *VaultData, kind AccountChangeKind, oldPassword, newPassword []byte, newEmail string, kdf vaultcrypto.KDF, hint, emailToken string, persist func(SessionCheckpoint) error) (*AccountChangePlan, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	ctx, done, err := s.beginOperationLocked(ctx)
@@ -208,17 +209,17 @@ func (s *Session) PrepareAccountCredentials(ctx context.Context, vault *VaultDat
 	if _, err = s.accountProfileLocked(ctx, "GET", "/api/accounts/profile", nil, persist); err != nil {
 		return nil, err
 	}
-	master, err := DeriveMaster(newPassword, email, kdf)
+	master, err := vaultcrypto.DeriveMaster(newPassword, email, kdf)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return nil, err
 	}
 	defer clear(stretched)
-	wrapped, err := EncryptString(s.key, stretched)
+	wrapped, err := vaultcrypto.EncryptString(s.key, stretched)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +227,7 @@ func (s *Session) PrepareAccountCredentials(ctx context.Context, vault *VaultDat
 	if err != nil {
 		return nil, err
 	}
-	hash := AuthorizationHash(master, newPassword)
+	hash := vaultcrypto.AuthorizationHash(master, newPassword)
 	var payload any
 	if kind == AccountChangeEmail {
 		payload = map[string]string{"masterPasswordHash": proof.Hash, "newEmail": email, "key": wrapped, "newMasterPasswordHash": hash, "token": emailToken}

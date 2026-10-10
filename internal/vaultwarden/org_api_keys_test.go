@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -37,11 +38,11 @@ func TestOrgAPIKeyOwnerConsentAndSecretLifetime(t *testing.T) {
 	defer source.Close()
 	s.passwordUnlock = &PasswordUnlock{Config: source.passwordUnlock.Config, Key: append([]byte(nil), source.passwordUnlock.Key...)}
 	password := []byte("test-master")
-	master, err := DeriveMaster(password, s.passwordUnlock.Config.Email, s.passwordUnlock.Config.KDF)
+	master, err := vaultcrypto.DeriveMaster(password, s.passwordUnlock.Config.Email, s.passwordUnlock.Config.KDF)
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected = AuthorizationHash(master, password)
+	expected = vaultcrypto.AuthorizationHash(master, password)
 	clear(master)
 	consume := func(_ string, _ []byte, _ time.Time) error { t.Fatal("unauthorized key exposed"); return nil }
 	if err := s.WithOrganizationAPIKey(context.Background(), v, "org-1", password, false, true, consume, nil); err != ErrPermission {

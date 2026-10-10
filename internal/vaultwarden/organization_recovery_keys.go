@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 )
 
@@ -27,7 +28,7 @@ func makeOrganizationKeyPair(key []byte) (organizationKeyPair, error) {
 		return organizationKeyPair{}, ErrEncryption
 	}
 	defer clear(der)
-	encrypted, err := EncryptString(der, key)
+	encrypted, err := vaultcrypto.EncryptString(der, key)
 	if err != nil {
 		return organizationKeyPair{}, err
 	}

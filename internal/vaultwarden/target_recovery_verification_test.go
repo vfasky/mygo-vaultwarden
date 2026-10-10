@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"strings"
 	"testing"
@@ -22,14 +23,14 @@ func freshTargetFixture(t *testing.T, providers []int, remembered string) (*Sess
 			json.NewEncoder(w).Encode(owner.passwordUnlock.Config.KDF)
 		case "/identity/connect/token":
 			r.ParseForm()
-			master, err := DeriveMaster(accountTestPassword, owner.email, owner.passwordUnlock.Config.KDF)
+			master, err := vaultcrypto.DeriveMaster(accountTestPassword, owner.email, owner.passwordUnlock.Config.KDF)
 			if err != nil {
 				t.Error(err)
 				w.WriteHeader(500)
 				return
 			}
 			defer clear(master)
-			if r.Form.Get("grant_type") != "password" || r.Form.Get("username") != owner.email || r.Form.Get("password") != AuthorizationHash(master, accountTestPassword) {
+			if r.Form.Get("grant_type") != "password" || r.Form.Get("username") != owner.email || r.Form.Get("password") != vaultcrypto.AuthorizationHash(master, accountTestPassword) {
 				t.Error("not a fresh password grant")
 				w.WriteHeader(400)
 				return

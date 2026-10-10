@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"sort"
 	"strings"
@@ -44,7 +45,7 @@ func (s *Session) PersonalFolders(vault *VaultData) ([]Folder, error) {
 			return nil, ErrProtocol
 		}
 		seen[folder.ID] = true
-		plain, err := DecryptString(folder.Name, s.key)
+		plain, err := vaultcrypto.DecryptString(folder.Name, s.key)
 		if err != nil {
 			return nil, err
 		}
@@ -84,7 +85,7 @@ func (s *Session) SaveFolder(ctx context.Context, scope Scope, id, name string, 
 }
 
 func (s *Session) saveFolderLocked(ctx context.Context, id, name string, persist func(SessionCheckpoint) error) (Folder, error) {
-	encrypted, err := EncryptString([]byte(name), s.key)
+	encrypted, err := vaultcrypto.EncryptString([]byte(name), s.key)
 	if err != nil {
 		return Folder{}, err
 	}
@@ -106,7 +107,7 @@ func (s *Session) saveFolderLocked(ctx context.Context, id, name string, persist
 	if json.Unmarshal(data, &result) != nil || !validObjectID(result.ID) || (id != "" && result.ID != id) {
 		return Folder{}, &MutationUncertainError{Cause: ErrProtocol}
 	}
-	plain, err := DecryptString(result.Name, s.key)
+	plain, err := vaultcrypto.DecryptString(result.Name, s.key)
 	defer clear(plain)
 	if err != nil || string(plain) != name {
 		return Folder{}, &MutationUncertainError{Cause: ErrEncryption}

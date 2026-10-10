@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"testing"
 )
 
@@ -26,17 +27,17 @@ func rotationCipherFixture(t *testing.T, kind int, modern bool) AccountRotationI
 		if err := transformCompleteCipher(object, item, true); err != nil {
 			t.Fatal(err)
 		}
-		object["key"], _ = EncryptString(item, key)
+		object["key"], _ = vaultcrypto.EncryptString(item, key)
 		keyForFile := item
-		fileKey, _ := EncryptString(bytes.Repeat([]byte{29}, 64), keyForFile)
-		fileName, _ := EncryptString([]byte("payload.bin"), keyForFile)
+		fileKey, _ := vaultcrypto.EncryptString(bytes.Repeat([]byte{29}, 64), keyForFile)
+		fileName, _ := vaultcrypto.EncryptString([]byte("payload.bin"), keyForFile)
 		object["attachments"] = []any{map[string]any{"object": "attachment", "id": "file-1", "key": fileKey, "fileName": fileName, "size": "9007199254740993", "sizeName": "large", "url": "https://example.invalid/signed"}}
 	} else {
-		fileKey, _ := EncryptString(bytes.Repeat([]byte{29}, 64), key)
-		fileName, _ := EncryptString([]byte("payload.bin"), key)
+		fileKey, _ := vaultcrypto.EncryptString(bytes.Repeat([]byte{29}, 64), key)
+		fileName, _ := vaultcrypto.EncryptString([]byte("payload.bin"), key)
 		object["attachments"] = []any{map[string]any{"object": "attachment", "id": "file-1", "key": fileKey, "fileName": fileName, "size": "9007199254740993", "sizeName": "large", "url": "https://example.invalid/signed"}}
 	}
-	name, _ := EncryptString([]byte("folder name"), key)
+	name, _ := vaultcrypto.EncryptString([]byte("folder name"), key)
 	sync, _ := json.Marshal(map[string]any{"profile": map[string]any{"id": "account-a"}, "ciphers": []any{object}, "folders": []any{map[string]any{"id": "folder-1", "name": name, "object": "folder"}}})
 	return AccountRotationInput{Scope: Scope{Server: "https://example.invalid", Account: "account-a"}, Sync: sync, OldUserKey: key, NewUserKey: bytes.Repeat([]byte{82}, 64), Read: func(context.Context, string) (json.RawMessage, error) {
 		t.Fatal("unexpected transport")
@@ -106,7 +107,7 @@ func TestRotationCipherResourcesEightTypes(t *testing.T) {
 				}
 				defer clear(key)
 				attachment := o["attachments"].([]any)[0].(map[string]any)
-				fileKey, e := DecryptString(attachment["key"].(string), key)
+				fileKey, e := vaultcrypto.DecryptString(attachment["key"].(string), key)
 				if e != nil || !bytes.Equal(fileKey, bytes.Repeat([]byte{29}, 64)) || bytes.Equal(fileKey, in.OldUserKey) {
 					t.Fatal("attachment key changed or owner leaked", e)
 				}
@@ -128,9 +129,9 @@ func TestRotationCipherResourcesPreparationAndFailures(t *testing.T) {
 			case "keyless", "modern-keyless":
 				attachment["key"] = nil
 			case "owner-as-item-key":
-				object["key"], _ = EncryptString(in.OldUserKey, in.OldUserKey)
+				object["key"], _ = vaultcrypto.EncryptString(in.OldUserKey, in.OldUserKey)
 			case "owner-as-file-key":
-				attachment["key"], _ = EncryptString(in.OldUserKey, in.OldUserKey)
+				attachment["key"], _ = vaultcrypto.EncryptString(in.OldUserKey, in.OldUserKey)
 			case "unknown":
 				object["future"] = json.Number("9007199254740993")
 			case "unknown-null":
@@ -175,10 +176,10 @@ func TestRotationCipherResourcesPreparationAndFailures(t *testing.T) {
 					t.Fatal("missing actionable preparation", err)
 				}
 				// A fresh snapshot after explicit upgrade/delete is immediately usable.
-				attachment["key"], _ = EncryptString(bytes.Repeat([]byte{29}, 64), in.OldUserKey)
+				attachment["key"], _ = vaultcrypto.EncryptString(bytes.Repeat([]byte{29}, 64), in.OldUserKey)
 				if scenario == "modern-keyless" {
 					k, _ := cipherItemKey(object, in.OldUserKey)
-					attachment["key"], _ = EncryptString(bytes.Repeat([]byte{29}, 64), k)
+					attachment["key"], _ = vaultcrypto.EncryptString(bytes.Repeat([]byte{29}, 64), k)
 					clear(k)
 				}
 				in.Sync = mustRotationCipherJSON(sync)
@@ -214,7 +215,7 @@ func TestRotationCipherResourcesVerification(t *testing.T) {
 				object["attachments"].([]any)[0].(map[string]any)["key"] = old["attachments"].([]any)[0].(map[string]any)["key"]
 				want = RotationCipherMixed
 			case "external":
-				object["name"], _ = EncryptString([]byte("other edit"), in.NewUserKey)
+				object["name"], _ = vaultcrypto.EncryptString([]byte("other edit"), in.NewUserKey)
 			case "unknown-null":
 				object["future"] = nil
 			case "missing":
@@ -237,7 +238,7 @@ func TestRotationCipherResourcesVerification(t *testing.T) {
 				case "target-bad-mac":
 					dto["name"] = "2.invalid"
 				case "target-changed-content":
-					dto["name"], _ = EncryptString([]byte("changed"), in.NewUserKey)
+					dto["name"], _ = vaultcrypto.EncryptString([]byte("changed"), in.NewUserKey)
 				case "target-missing-wrapper":
 					dto["attachments2"] = map[string]any{}
 				case "target-unknown":

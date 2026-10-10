@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"os"
 	"strings"
 	"testing"
@@ -30,7 +31,7 @@ func TestLiveAccountLifecycle(t *testing.T) {
 	email := "account-" + fixtureUUID() + "@example.invalid"
 	password := []byte("Live-account-Primary-Passphrase-762!")
 	defer clear(password)
-	kdf := KDF{Type: 0, Iterations: 100000}
+	kdf := vaultcrypto.KDF{Type: 0, Iterations: 100000}
 	verification, err := client.AccountSendRegistrationEmail(ctx, email, "Account fixture")
 	if err != nil {
 		t.Fatal("registration verification", err)
@@ -112,7 +113,7 @@ func TestLiveAccountLifecycle(t *testing.T) {
 				t.Fatal("email token", err)
 			}
 		}
-		plan, err := session.PrepareAccountCredentials(ctx, vault, kind, password, next, nextEmail, KDF{Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}, "", "", checkpoint)
+		plan, err := session.PrepareAccountCredentials(ctx, vault, kind, password, next, nextEmail, vaultcrypto.KDF{Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}, "", "", checkpoint)
 		if err != nil {
 			t.Fatal("prepare", kind, err)
 		}

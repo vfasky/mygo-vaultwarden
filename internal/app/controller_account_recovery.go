@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strings"
 	"time"
 
@@ -93,7 +94,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 	source.Scope = &scope
 	source.PasswordUnlock = &config
 	oldPassword, password := []byte(f.oldPassword), []byte(f.currentPassword)
-	email, deviceID := vaultwarden.NormalizeEmail(f.email), a.deviceID
+	email, deviceID := vaultcrypto.NormalizeEmail(f.email), a.deviceID
 	f.oldPassword, f.currentPassword = "", ""
 	f.busy = true
 	a.pending++

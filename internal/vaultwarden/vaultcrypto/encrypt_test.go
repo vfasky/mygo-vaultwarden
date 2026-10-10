@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package vaultwarden
+package vaultcrypto
 
 import (
 	"bytes"
 	"encoding/base64"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaulterr"
 	"strings"
 	"testing"
 )
@@ -25,10 +26,10 @@ func TestEncryptStringRoundTripAndIndependentIV(t *testing.T) {
 		}
 		clear(decoded)
 	}
-	if _, err := EncryptString([]byte("secret"), key[:32]); err != ErrEncryption {
+	if _, err := EncryptString([]byte("secret"), key[:32]); err != vaulterr.ErrEncryption {
 		t.Fatal("invalid key accepted")
 	}
-	if _, err := EncryptString(make([]byte, 1024*1024+1), key); err != ErrEncryption {
+	if _, err := EncryptString(make([]byte, 1024*1024+1), key); err != vaulterr.ErrEncryption {
 		t.Fatal("unbounded input accepted")
 	}
 }
@@ -47,12 +48,12 @@ func TestEncryptStringRejectsTamperingEveryComponent(t *testing.T) {
 		}
 		component[0] ^= 1
 		parts[i] = base64.StdEncoding.EncodeToString(component)
-		if plain, err := DecryptString("2."+strings.Join(parts, "|"), key); err != ErrEncryption || plain != nil {
+		if plain, err := DecryptString("2."+strings.Join(parts, "|"), key); err != vaulterr.ErrEncryption || plain != nil {
 			t.Fatal("tampering accepted")
 		}
 	}
 	wrong := bytes.Repeat([]byte{4}, 64)
-	if plain, err := DecryptString(encrypted, wrong); err != ErrEncryption || plain != nil {
+	if plain, err := DecryptString(encrypted, wrong); err != vaulterr.ErrEncryption || plain != nil {
 		t.Fatal("wrong key accepted")
 	}
 }

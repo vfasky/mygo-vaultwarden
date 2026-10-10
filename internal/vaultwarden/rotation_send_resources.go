@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
 	"strconv"
 	"time"
@@ -78,7 +79,7 @@ func ConvertSendRotationResources(ctx context.Context, in AccountRotationInput) 
 		if err != nil {
 			return nil, err
 		}
-		wrapped, err := EncryptString(seed, in.NewUserKey)
+		wrapped, err := vaultcrypto.EncryptString(seed, in.NewUserKey)
 		clear(seed)
 		if err != nil {
 			return nil, err
@@ -209,7 +210,7 @@ func sendRotationOwner(raw json.RawMessage) (map[string]json.RawMessage, sendWir
 // Authenticate every supported encrypted metadata field without allocating
 // immutable plaintext strings. Seed and derived key buffers are always cleared.
 func sendRotationSeed(w sendWire, userKey []byte) ([]byte, error) {
-	seed, err := DecryptString(w.Key, userKey)
+	seed, err := vaultcrypto.DecryptString(w.Key, userKey)
 	if err != nil {
 		clear(seed)
 		return nil, err
@@ -231,7 +232,7 @@ func sendRotationSeed(w sendWire, userKey []byte) ([]byte, error) {
 		encrypted = append(encrypted, w.File.FileName)
 	}
 	for _, value := range encrypted {
-		plain, e := DecryptString(value, key)
+		plain, e := vaultcrypto.DecryptString(value, key)
 		valid := e == nil && utf8.Valid(plain)
 		clear(plain)
 		if !valid {
@@ -330,7 +331,7 @@ func sendRotationVerifyOne(old map[string]json.RawMessage, w sendWire, seed []by
 	if strictJSON(request) != nil || json.Unmarshal(request, &target) != nil || json.Unmarshal(target["key"], &wrapped) != nil {
 		return SendRotationIndeterminate, "", ErrProtocol
 	}
-	requestSeed, err := DecryptString(wrapped, in.NewUserKey)
+	requestSeed, err := vaultcrypto.DecryptString(wrapped, in.NewUserKey)
 	matches := err == nil && bytes.Equal(seed, requestSeed)
 	clear(requestSeed)
 	if !matches {

@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 )
 
@@ -123,7 +124,7 @@ func validateOrganizationResourceCopyPlan(plan *ResourceImportPlan, source Ciphe
 	}
 	for i, record := range records {
 		resource := plan.manifest.Resources[i]
-		name, err := DecryptString(record.FileName, key)
+		name, err := vaultcrypto.DecryptString(record.FileName, key)
 		if err != nil {
 			return err
 		}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net"
 	"net/http"
 	"os"
@@ -85,7 +86,7 @@ func TestSendRotationLive1374(t *testing.T) {
 	if err != nil || verification.EmailSent {
 		t.Fatal("registration verification", err)
 	}
-	if err = client.AccountRegister(ctx, email, password, KDF{Type: 0, Iterations: 100000}, "", verification.Token); err != nil {
+	if err = client.AccountRegister(ctx, email, password, vaultcrypto.KDF{Type: 0, Iterations: 100000}, "", verification.Token); err != nil {
 		t.Fatal("registration", err)
 	}
 	verification.Token = ""

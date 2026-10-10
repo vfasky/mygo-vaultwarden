@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -72,15 +73,15 @@ func TestAttachmentBackupTrashReadOnlyAuthority(t *testing.T) {
 			key, _ := cipherItemKey(cipher, ownerKey)
 			defer clear(key)
 			fileKey := bytes.Repeat([]byte{23}, 64)
-			wrapped, _ := EncryptString(fileKey, key)
-			name, _ := EncryptString([]byte("trash.bin"), key)
+			wrapped, _ := vaultcrypto.EncryptString(fileKey, key)
+			name, _ := vaultcrypto.EncryptString([]byte("trash.bin"), key)
 			content := []byte("trash content")
-			spool, err := encryptAttachment(context.Background(), bytes.NewReader(content), int64(len(content)), fileKey)
+			spool, err := vaultcrypto.EncryptAttachment(context.Background(), bytes.NewReader(content), int64(len(content)), fileKey)
 			if err != nil {
 				t.Fatal(err)
 			}
-			encoded, _ = io.ReadAll(spool.file)
-			spool.close()
+			encoded, _ = io.ReadAll(spool.File)
+			spool.Close()
 			record = map[string]any{"id": "file-a", "key": wrapped, "fileName": name, "size": len(encoded), "url": server.URL + "/file"}
 			cipher["attachments"] = []any{record}
 			document.JSON, _ = json.Marshal(cipher)

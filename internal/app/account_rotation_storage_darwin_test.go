@@ -6,6 +6,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"os"
 	"runtime"
 	"sync/atomic"
@@ -64,7 +65,7 @@ func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 	call := recoveryNativeCall(t)
 	scope := vaultwarden.Scope{Server: "https://rotation.example.invalid", Account: "rotation-account"}
 	key := bytes.Repeat([]byte{37}, 32)
-	unlock := &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "rotation@example.invalid", KDF: vaultwarden.KDF{Iterations: 5000}}, Key: key}
+	unlock := &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "rotation@example.invalid", KDF: vaultcrypto.KDF{Iterations: 5000}}, Key: key}
 	vault := &vaultwarden.VaultData{Version: 1, Scope: scope, Sync: []byte(`{"profile":{"id":"rotation-account","organizations":[]},"policies":[],"policiesNew":[],"ciphers":[],"opaque":9007199254740993}`)}
 	session := []byte("old-session-secret")
 	first := call(storageRequest{Operation: "publishVault", ExpectedRevision: "empty-v1", Scope: &scope, PasswordUnlock: unlock, Session: session, Vault: vault})

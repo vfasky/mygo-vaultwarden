@@ -5,19 +5,20 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/mail"
 	"strings"
 )
 
 func accountEmail(email string) (string, error) {
-	email = NormalizeEmail(email)
+	email = vaultcrypto.NormalizeEmail(email)
 	addr, err := mail.ParseAddress(email)
 	if err != nil || addr.Address != email || len(email) > 254 {
 		return "", ErrValidation
 	}
 	return email, nil
 }
-func accountNewKDF(k KDF) error {
+func accountNewKDF(k vaultcrypto.KDF) error {
 	if k.Type == 0 && (k.Iterations < 100000 || k.Iterations > 2000000 || k.Memory != 0 || k.Parallelism != 0) {
 		return ErrKDF
 	}
@@ -65,7 +66,7 @@ func (c *Client) AccountSendRegistrationEmail(ctx context.Context, email, name s
 
 // AccountRegister generates a fresh symmetric user key and RSA keypair locally.
 // It does not create a session; success is followed by the ordinary login flow.
-func (c *Client) AccountRegister(ctx context.Context, email string, password []byte, kdf KDF, hint, verificationToken string) error {
+func (c *Client) AccountRegister(ctx context.Context, email string, password []byte, kdf vaultcrypto.KDF, hint, verificationToken string) error {
 	email, err := accountEmail(email)
 	if err != nil {
 		return err
@@ -79,12 +80,12 @@ func (c *Client) AccountRegister(ctx context.Context, email string, password []b
 	if err = (AccountPasswordPolicy{MinLength: 12}).Check(ctx, password, email, false); err != nil {
 		return err
 	}
-	master, err := DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 	if err != nil {
 		return err
 	}
 	defer clear(master)
-	stretched, err := StretchMaster(master)
+	stretched, err := vaultcrypto.StretchMaster(master)
 	if err != nil {
 		return err
 	}
@@ -94,7 +95,7 @@ func (c *Client) AccountRegister(ctx context.Context, email string, password []b
 	if _, err = rand.Read(key); err != nil {
 		return ErrEncryption
 	}
-	wrapped, err := EncryptString(key, stretched)
+	wrapped, err := vaultcrypto.EncryptString(key, stretched)
 	if err != nil {
 		return err
 	}
@@ -104,13 +105,13 @@ func (c *Client) AccountRegister(ctx context.Context, email string, password []b
 	}
 	body, err := json.Marshal(struct {
 		Email string `json:"email"`
-		KDF
+		vaultcrypto.KDF
 		Hash  string              `json:"masterPasswordHash"`
 		Key   string              `json:"key"`
 		Keys  organizationKeyPair `json:"keys"`
 		Hint  string              `json:"masterPasswordHint"`
 		Token string              `json:"emailVerificationToken"`
-	}{email, kdf, AuthorizationHash(master, password), wrapped, keys, hint, verificationToken})
+	}{email, kdf, vaultcrypto.AuthorizationHash(master, password), wrapped, keys, hint, verificationToken})
 	if err != nil {
 		return ErrProtocol
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 	"strings"
@@ -218,7 +219,7 @@ func (s *Session) groupDraftLocked(ctx context.Context, vault *VaultData, org Or
 			return nil, ErrIdentity
 		}
 		seen[col.ID] = true
-		plain, err := DecryptString(col.Name, orgKey)
+		plain, err := vaultcrypto.DecryptString(col.Name, orgKey)
 		if err != nil {
 			return nil, err
 		}

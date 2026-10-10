@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 )
 
 // CopyPersonalCipher copies the edited draft without modifying the source. The
@@ -204,7 +205,7 @@ func copyAuthorizedPersonalCipherDocument(source CipherDocument, ownerKey []byte
 		return CipherDocument{}, ErrEncryption
 	}
 	defer clear(key)
-	wrapped, err := EncryptString(key, ownerKey)
+	wrapped, err := vaultcrypto.EncryptString(key, ownerKey)
 	if err != nil {
 		return CipherDocument{}, err
 	}

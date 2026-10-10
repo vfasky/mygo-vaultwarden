@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"sort"
 	"time"
 )
@@ -116,7 +117,7 @@ func (s *Session) InspectFreshTargetRecovery(ctx context.Context) (*TargetRecove
 		ID, Key, PrivateKey, Email string
 		OrganizationsNew           []json.RawMessage
 	}
-	if json.Unmarshal(fresh.Vault.Sync, &body) != nil || json.Unmarshal(body.Profile, &profile) != nil || profile.ID != fresh.Scope.Account || profile.Key != s.wrapped || NormalizeEmail(profile.Email) != s.email || profile.OrganizationsNew == nil {
+	if json.Unmarshal(fresh.Vault.Sync, &body) != nil || json.Unmarshal(body.Profile, &profile) != nil || profile.ID != fresh.Scope.Account || profile.Key != s.wrapped || vaultcrypto.NormalizeEmail(profile.Email) != s.email || profile.OrganizationsNew == nil {
 		return fail(ErrIdentity)
 	}
 	private, err := accountPrivateKey(body.Profile, s.key)

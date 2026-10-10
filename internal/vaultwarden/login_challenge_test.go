@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -29,18 +30,18 @@ func TestLoginChallengeProtocol(t *testing.T) {
 			email := "fixture@example.invalid"
 			password := []byte("fixture-master-password")
 			defer clear(password)
-			kdf := KDF{Type: 0, Iterations: 5000}
-			master, err := DeriveMaster(password, email, kdf)
+			kdf := vaultcrypto.KDF{Type: 0, Iterations: 5000}
+			master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer clear(master)
-			stretched, err := StretchMaster(master)
+			stretched, err := vaultcrypto.StretchMaster(master)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer clear(stretched)
-			authHash := AuthorizationHash(master, password)
+			authHash := vaultcrypto.AuthorizationHash(master, password)
 			wrapped := encryptFixture(bytes.Repeat([]byte{42}, 64), stretched)
 			var requests atomic.Int32
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

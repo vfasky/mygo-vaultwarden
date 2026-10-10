@@ -4,6 +4,7 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"net/http"
 	"reflect"
@@ -220,7 +221,7 @@ func (s *Session) SaveSend(ctx context.Context, d *SendDraft, source io.Reader, 
 	if e != nil {
 		return nil, e
 	}
-	var encrypted *attachmentSpool
+	var encrypted *vaultcrypto.AttachmentSpool
 	if d.Fields.Type == 1 && d.ID() == "" {
 		if source == nil {
 			return nil, ErrValidation
@@ -229,13 +230,13 @@ func (s *Session) SaveSend(ctx context.Context, d *SendDraft, source io.Reader, 
 		if e != nil {
 			return nil, e
 		}
-		encrypted, e = encryptAttachment(ctx, source, size, key)
+		encrypted, e = vaultcrypto.EncryptAttachment(ctx, source, size, key)
 		clear(key)
 		if e != nil {
 			return nil, e
 		}
-		defer encrypted.close()
-		w.FileLength = &encrypted.size
+		defer encrypted.Close()
+		w.FileLength = &encrypted.Size
 	} else if source != nil {
 		return nil, ErrValidation
 	}

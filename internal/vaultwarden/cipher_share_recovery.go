@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"reflect"
 )
@@ -62,7 +63,7 @@ func encodeCipherShareRecovery(scope Scope, original CipherDocument, target map[
 		return nil, ErrValidation
 	}
 	defer clear(plain)
-	ciphertext, err := EncryptString(plain, ownerKey)
+	ciphertext, err := vaultcrypto.EncryptString(plain, ownerKey)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func decodeCipherShareRecovery(raw []byte, scope Scope, key []byte) (cipherShare
 	if _, err := hex.DecodeString(envelope.OperationID); err != nil {
 		return payload, ErrProtocol
 	}
-	plain, err := DecryptString(envelope.Ciphertext, key)
+	plain, err := vaultcrypto.DecryptString(envelope.Ciphertext, key)
 	if err != nil {
 		return payload, err
 	}
@@ -118,7 +119,7 @@ func decodeCipherShareRecovery(raw []byte, scope Scope, key []byte) (cipherShare
 	if original["id"] != payload.CipherID || original["organizationId"] != nil || original["revisionDate"] != payload.Revision || target["id"] != payload.CipherID || target["organizationId"] != payload.OrganizationID {
 		return payload, ErrIdentity
 	}
-	itemKey, err := DecryptString(payload.ItemKey, key)
+	itemKey, err := vaultcrypto.DecryptString(payload.ItemKey, key)
 	if err != nil {
 		return payload, err
 	}

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strings"
 	"testing"
 	"time"
@@ -157,7 +158,7 @@ func TestSendRotationConvertAndVerify(t *testing.T) {
 	// Re-randomized valid wrapping of the same seed remains cryptographic proof.
 	_, w, _ := sendRotationOwner(old[0])
 	seed, _ := sendRotationSeed(w, in.OldUserKey)
-	key, _ := EncryptString(seed, in.NewUserKey)
+	key, _ := vaultcrypto.EncryptString(seed, in.NewUserKey)
 	clear(seed)
 	randomized := append([]json.RawMessage(nil), fresh...)
 	randomized[0] = sendRotationChange(t, randomized[0], "key", key)
@@ -234,7 +235,7 @@ func TestSendRotationRejectsAndEmpty(t *testing.T) {
 		})
 	}
 	for _, size := range []int{0, 15, 17, 64} {
-		key, _ := EncryptString(bytes.Repeat([]byte{3}, size), in.OldUserKey)
+		key, _ := vaultcrypto.EncryptString(bytes.Repeat([]byte{3}, size), in.OldUserKey)
 		bad := in
 		bad.Sync = sendRotationSync(t, in.Scope, []json.RawMessage{sendRotationChange(t, old[0], "key", key)})
 		if _, e := ConvertSendRotationResources(context.Background(), bad); e == nil {

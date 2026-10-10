@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/url"
 )
@@ -215,7 +216,7 @@ func (s *Session) withOrganizationBackup(ctx context.Context, vault *VaultData, 
 		if json.Unmarshal(raw, &c) != nil || c.OrganizationID != orgID || !validObjectID(c.ID) || seenCollections[c.ID] {
 			return ErrIdentity
 		}
-		name, err := DecryptString(c.Name, data.keys[orgID])
+		name, err := vaultcrypto.DecryptString(c.Name, data.keys[orgID])
 		if err != nil {
 			return err
 		}
@@ -376,7 +377,7 @@ func (s *Session) ImportOrganizationBackup(ctx context.Context, vault *VaultData
 		if id == "" && !target.CanCreateCollections() {
 			return result, ErrPermission
 		}
-		name, err := EncryptString([]byte(c.Name), data.keys[orgID])
+		name, err := vaultcrypto.EncryptString([]byte(c.Name), data.keys[orgID])
 		if err != nil {
 			return result, err
 		}

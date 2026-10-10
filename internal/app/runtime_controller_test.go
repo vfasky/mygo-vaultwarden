@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"strings"
 	"sync"
@@ -77,17 +78,17 @@ func newRuntimeResourceControllerFixture(t *testing.T) *resourceControllerFixtur
 	f := newResourceControllerFixture(t, true)
 	a := f.a
 	d := &runtimeDeviceFixture{key: bytes.Repeat([]byte{4}, 64), email: a.snapshot.PasswordUnlock.Email, config: *a.snapshot.PasswordUnlock}
-	master, e := vaultwarden.DeriveMaster([]byte("fixture-master"), d.email, d.config.KDF)
+	master, e := vaultcrypto.DeriveMaster([]byte("fixture-master"), d.email, d.config.KDF)
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer clear(master)
-	stretched, e := vaultwarden.StretchMaster(master)
+	stretched, e := vaultcrypto.StretchMaster(master)
 	if e != nil {
 		t.Fatal(e)
 	}
 	defer clear(stretched)
-	d.wrapped, e = vaultwarden.EncryptString(d.key, stretched)
+	d.wrapped, e = vaultcrypto.EncryptString(d.key, stretched)
 	if e != nil {
 		t.Fatal(e)
 	}
@@ -99,7 +100,7 @@ func newRuntimeResourceControllerFixture(t *testing.T) *resourceControllerFixtur
 	if e != nil {
 		t.Fatal(e)
 	}
-	d.private, e = vaultwarden.EncryptString(der, d.key)
+	d.private, e = vaultcrypto.EncryptString(der, d.key)
 	clear(der)
 	if e != nil {
 		t.Fatal(e)
@@ -113,11 +114,11 @@ func newRuntimeResourceControllerFixture(t *testing.T) *resourceControllerFixtur
 	}
 	var loginObject map[string]any
 	json.Unmarshal(login.JSON, &loginObject)
-	itemKey, e := vaultwarden.DecryptString(loginObject["key"].(string), d.key)
+	itemKey, e := vaultcrypto.DecryptString(loginObject["key"].(string), d.key)
 	if e != nil {
 		t.Fatal(e)
 	}
-	history, e := vaultwarden.EncryptString([]byte("prior-runtime-secret"), itemKey)
+	history, e := vaultcrypto.EncryptString([]byte("prior-runtime-secret"), itemKey)
 	clear(itemKey)
 	if e != nil {
 		t.Fatal(e)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"mime"
 	"mime/multipart"
@@ -106,7 +107,7 @@ func TestLiveMFAEmail(t *testing.T) {
 	if verification.EmailSent {
 		token = mfaReadMail(t, spool, email, `[?&]token=([A-Za-z0-9._~-]+)`)
 	}
-	if e = c.AccountRegister(ctx, email, password, KDF{Type: 0, Iterations: 100000}, "", token); e != nil {
+	if e = c.AccountRegister(ctx, email, password, vaultcrypto.KDF{Type: 0, Iterations: 100000}, "", token); e != nil {
 		t.Fatal("registration", e)
 	}
 	s, e := c.Login(ctx, email, password, nil)

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package vaultwarden
+package totp
 
 import (
 	"crypto/hmac"
@@ -9,6 +9,7 @@ import (
 	"encoding/base32"
 	"encoding/binary"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaulterr"
 	"hash"
 	"net/url"
 	"strconv"
@@ -18,7 +19,7 @@ import (
 
 // TOTPCode is ephemeral secret material; it must never enter display metadata,
 // status messages or logs. ValidUntil is exclusive, including at period edges.
-type TOTPCode struct {
+type Code struct {
 	Code       string
 	ValidUntil time.Time
 }
@@ -27,9 +28,9 @@ type TOTPCode struct {
 // 39dbb510f5eae82f5cbfd527b0f70a01d5626ec1. Unlike the SDK's permissive parser,
 // malformed secrets/unknown algorithms are rejected rather than sanitized.
 // Supported resource limits: 6–8 decimal digits, 1–300 seconds, 1–1024 key bytes.
-func GenerateTOTP(input string, now time.Time) (TOTPCode, error) {
+func Generate(input string, now time.Time) (Code, error) {
 	if len(input) == 0 || len(input) > 4096 || now.Unix() < 0 || now.Unix() > 253402300499 {
-		return TOTPCode{}, ErrValidation
+		return Code{}, vaulterr.ErrValidation
 	}
 	secret := strings.TrimSpace(input)
 	period, digits := int64(30), 6
@@ -41,20 +42,20 @@ func GenerateTOTP(input string, now time.Time) (TOTPCode, error) {
 	} else if strings.HasPrefix(lower, "otpauth://") {
 		u, err := url.Parse(secret)
 		if err != nil || !strings.EqualFold(u.Scheme, "otpauth") || !strings.EqualFold(u.Host, "totp") || u.User != nil || u.Fragment != "" || u.Path == "" {
-			return TOTPCode{}, ErrValidation
+			return Code{}, vaulterr.ErrValidation
 		}
 		q, err := url.ParseQuery(u.RawQuery)
 		if err != nil {
-			return TOTPCode{}, ErrValidation
+			return Code{}, vaulterr.ErrValidation
 		}
 		for key, values := range q {
 			if len(values) != 1 {
-				return TOTPCode{}, ErrValidation
+				return Code{}, vaulterr.ErrValidation
 			}
 			switch key {
 			case "secret", "issuer", "algorithm", "digits", "period":
 			default:
-				return TOTPCode{}, ErrValidation
+				return Code{}, vaulterr.ErrValidation
 			}
 		}
 		secret = q.Get("secret")
@@ -64,13 +65,13 @@ func GenerateTOTP(input string, now time.Time) (TOTPCode, error) {
 		if value, ok := q["period"]; ok {
 			period, err = strconv.ParseInt(value[0], 10, 64)
 			if err != nil || period < 1 || period > 300 {
-				return TOTPCode{}, ErrValidation
+				return Code{}, vaulterr.ErrValidation
 			}
 		}
 		if value, ok := q["digits"]; ok {
 			digits, err = strconv.Atoi(value[0])
 			if err != nil || digits < 6 || digits > 8 {
-				return TOTPCode{}, ErrValidation
+				return Code{}, vaulterr.ErrValidation
 			}
 		}
 	}
@@ -83,7 +84,7 @@ func GenerateTOTP(input string, now time.Time) (TOTPCode, error) {
 	case "SHA512":
 		makeHash = sha512.New
 	default:
-		return TOTPCode{}, ErrValidation
+		return Code{}, vaulterr.ErrValidation
 	}
 	secret = strings.ToUpper(secret)
 	encoding := base32.StdEncoding.WithPadding(base32.NoPadding)
@@ -93,12 +94,12 @@ func GenerateTOTP(input string, now time.Time) (TOTPCode, error) {
 	key, err := encoding.DecodeString(secret)
 	if err != nil || len(key) == 0 || len(key) > 1024 {
 		clear(key)
-		return TOTPCode{}, ErrValidation
+		return Code{}, vaulterr.ErrValidation
 	}
 	defer clear(key)
 	// Reject ignored CR/LF and non-canonical padding/trailing bits as well.
 	if encoding.EncodeToString(key) != secret {
-		return TOTPCode{}, ErrValidation
+		return Code{}, vaulterr.ErrValidation
 	}
 	counter := uint64(now.Unix() / period)
 	var message [8]byte
@@ -109,7 +110,7 @@ func GenerateTOTP(input string, now time.Time) (TOTPCode, error) {
 	defer clear(digest)
 	offset := int(digest[len(digest)-1] & 15)
 	value := binary.BigEndian.Uint32(digest[offset:offset+4]) & 0x7fffffff
-	result := TOTPCode{ValidUntil: time.Unix((int64(counter)+1)*period, 0)}
+	result := Code{ValidUntil: time.Unix((int64(counter)+1)*period, 0)}
 	if steam {
 		const alphabet = "23456789BCDFGHJKMNPQRTVWXY"
 		var code [5]byte

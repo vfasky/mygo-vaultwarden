@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
@@ -102,7 +103,7 @@ func TestLiveAccountRecoveryStorage(t *testing.T) {
 	if err != nil || registration.EmailSent {
 		t.Fatal("registration email", err)
 	}
-	if err := client.AccountRegister(ctx, email, password, vaultwarden.KDF{Iterations: 100000}, "", registration.Token); err != nil {
+	if err := client.AccountRegister(ctx, email, password, vaultcrypto.KDF{Iterations: 100000}, "", registration.Token); err != nil {
 		t.Fatal("register", err)
 	}
 	session, err := client.Login(ctx, email, password, nil)

@@ -6,13 +6,14 @@ package app
 import (
 	"bytes"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"os"
 	"sync/atomic"
 	"testing"
 )
 
 func targetFixture(scope vaultwarden.Scope) vaultwarden.SyncResult {
-	return vaultwarden.SyncResult{Scope: scope, Vault: &vaultwarden.VaultData{Version: 1, Scope: scope, Sync: []byte(`{"profile":{"id":"` + scope.Account + `","organizations":[]},"policies":[],"policiesNew":[],"ciphers":[]}`)}, Session: []byte("isolated-fresh-session"), PasswordUnlock: &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultwarden.KDF{Iterations: 5000}}, Key: bytes.Repeat([]byte{41}, 32)}}
+	return vaultwarden.SyncResult{Scope: scope, Vault: &vaultwarden.VaultData{Version: 1, Scope: scope, Sync: []byte(`{"profile":{"id":"` + scope.Account + `","organizations":[]},"policies":[],"policiesNew":[],"ciphers":[]}`)}, Session: []byte("isolated-fresh-session"), PasswordUnlock: &vaultwarden.PasswordUnlock{Config: vaultwarden.PasswordUnlockConfig{Email: "fixture@example.invalid", KDF: vaultcrypto.KDF{Iterations: 5000}}, Key: bytes.Repeat([]byte{41}, 32)}}
 }
 func targetFixtureExpectation() vaultwarden.RecoveryVerificationExpectation {
 	// Structural native-storage fixture; this is not a remote verification proof.

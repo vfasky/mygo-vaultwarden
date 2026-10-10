@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/http/httptest"
 	"sync/atomic"
@@ -38,13 +39,13 @@ func accountFixture(t *testing.T, handle func(http.ResponseWriter, *http.Request
 	}))
 	t.Cleanup(server.Close)
 	client, _ := NewClient(server.URL, "account-test-device-1234")
-	kdf := KDF{Type: 0, Iterations: 100000}
-	master, _ := DeriveMaster(accountTestPassword, "old@example.invalid", kdf)
+	kdf := vaultcrypto.KDF{Type: 0, Iterations: 100000}
+	master, _ := vaultcrypto.DeriveMaster(accountTestPassword, "old@example.invalid", kdf)
 	defer clear(master)
-	stretched, _ := StretchMaster(master)
+	stretched, _ := vaultcrypto.StretchMaster(master)
 	defer clear(stretched)
 	key := bytes.Repeat([]byte{23}, 64)
-	wrapped, _ := EncryptString(key, stretched)
+	wrapped, _ := vaultcrypto.EncryptString(key, stretched)
 	unlock, _ := snapshotUnlockKey(master)
 	s = &Session{client: client, account: "account-a", email: "old@example.invalid", access: "token", refresh: "refresh", expires: time.Now().Add(time.Hour), wrapped: wrapped, key: key, passwordUnlock: &PasswordUnlock{Config: PasswordUnlockConfig{Email: "old@example.invalid", KDF: kdf}, Key: unlock}}
 	keys, err := makeOrganizationKeyPair(key)
@@ -74,7 +75,7 @@ func TestAccountCredentialsRewrapAndRecoveryBeforeDispatch(t *testing.T) {
 			oldKey := append([]byte(nil), s.key...)
 			defer clear(oldKey)
 			password := []byte("Fixture-new-Passphrase-927!")
-			kdf := KDF{Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}
+			kdf := vaultcrypto.KDF{Type: 1, Iterations: 2, Memory: 16, Parallelism: 1}
 			email := "new@example.invalid"
 			plan, err := s.PrepareAccountCredentials(context.Background(), v, kind, accountTestPassword, password, email, kdf, "hint", "123456", nil)
 			if err != nil {
@@ -95,14 +96,14 @@ func TestAccountCredentialsRewrapAndRecoveryBeforeDispatch(t *testing.T) {
 			if kind != AccountChangePassword {
 				newPassword = accountTestPassword
 			}
-			master, err := DeriveMaster(newPassword, recovery.NewUnlock.Config.Email, recovery.NewUnlock.Config.KDF)
+			master, err := vaultcrypto.DeriveMaster(newPassword, recovery.NewUnlock.Config.Email, recovery.NewUnlock.Config.KDF)
 			if err != nil {
 				t.Fatal(err)
 			}
 			defer clear(master)
-			stretched, _ := StretchMaster(master)
+			stretched, _ := vaultcrypto.StretchMaster(master)
 			defer clear(stretched)
-			unwrapped, err := DecryptString(recovery.NewWrappedKey, stretched)
+			unwrapped, err := vaultcrypto.DecryptString(recovery.NewWrappedKey, stretched)
 			defer clear(unwrapped)
 			if err != nil || !bytes.Equal(unwrapped, oldKey) {
 				t.Fatal("lost original user key")
@@ -247,7 +248,7 @@ func TestAccountPolicyAndSensitiveInput(t *testing.T) {
 	if _, err := s.accountProofLocked(AccountSensitiveInput{OTP: "123456"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []KDF{{Type: 0, Iterations: 99999}, {Type: 2, Iterations: 100000}, {Type: 1, Iterations: 2, Memory: 257, Parallelism: 1}, {Type: 1, Iterations: 100000, Memory: 16, Parallelism: 1}} {
+	for _, k := range []vaultcrypto.KDF{{Type: 0, Iterations: 99999}, {Type: 2, Iterations: 100000}, {Type: 1, Iterations: 2, Memory: 257, Parallelism: 1}, {Type: 1, Iterations: 100000, Memory: 16, Parallelism: 1}} {
 		if accountNewKDF(k) == nil {
 			t.Fatal("unbounded KDF accepted")
 		}
