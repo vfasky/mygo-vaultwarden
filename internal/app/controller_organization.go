@@ -10,6 +10,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -307,29 +308,29 @@ func (c *orgServicesController) replacePanel(panel connectedPanel) {
 		p.Busy = c.busy
 	case *account.EmergencyViewer:
 		p.Busy = c.busy
-	case *orgOperationsPanel:
-		p.busy = c.busy
-	case *orgEventsPanel:
-		p.busy = c.busy
-	case *orgCopyPanel:
-		p.flow.busy = c.busy
-	case *orgCollectionPanel:
-		p.flow.busy = c.busy
-	case *orgImportPanel:
-		p.flow.busy = c.busy
-	case *orgExportPanel:
-		p.flow.busy = c.busy
-	case *orgAPIKeyPanel:
-		p.flow.busy = c.busy
-	case *orgDirectoryPanel:
-		p.flow.busy = c.busy
+	case *organization.OperationsPanel:
+		p.Busy = c.busy
+	case *organization.EventsPanel:
+		p.Busy = c.busy
+	case *organization.CopyPanel:
+		p.Flow.Busy = c.busy
+	case *organization.CollectionPanel:
+		p.Flow.Busy = c.busy
+	case *organization.ImportPanel:
+		p.Flow.Busy = c.busy
+	case *organization.ExportPanel:
+		p.Flow.Busy = c.busy
+	case *organization.APIKeyPanel:
+		p.Flow.Busy = c.busy
+	case *organization.DirectoryPanel:
+		p.Flow.Busy = c.busy
 	}
 }
-func (c *orgServicesController) choices(orgID string) []orgCollectionChoice {
-	out := []orgCollectionChoice{}
+func (c *orgServicesController) choices(orgID string) []organization.CollectionChoice {
+	out := []organization.CollectionChoice{}
 	for _, collection := range c.collections {
 		if orgID == "" || collection.OrganizationID == orgID {
-			out = append(out, orgCollectionChoice{ID: collection.ID, OrganizationID: collection.OrganizationID, Name: collection.Name, Writable: !collection.ReadOnly && !collection.HidePasswords})
+			out = append(out, organization.CollectionChoice{ID: collection.ID, OrganizationID: collection.OrganizationID, Name: collection.Name, Writable: !collection.ReadOnly && !collection.HidePasswords})
 		}
 	}
 	return out
@@ -352,7 +353,7 @@ func (c *orgServicesController) selectAction(action string) {
 	}
 	switch action {
 	case "state":
-		p := newOrgOperationsPanel(orgID, c.entries, func(ctx context.Context, id string, ids []string, action vaultwarden.CipherAction) (vaultwarden.OrganizationOperationResult, error) {
+		p := organization.NewOperationsPanel(orgID, c.entries, func(ctx context.Context, id string, ids []string, action vaultwarden.CipherAction) (vaultwarden.OrganizationOperationResult, error) {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
 			if err != nil {
@@ -369,7 +370,7 @@ func (c *orgServicesController) selectAction(action string) {
 		if action == "cipher-events" {
 			query.CipherID = entry.ID
 		}
-		c.replacePanel(newOrgEventsPanel(query, func(ctx context.Context, q vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error) {
+		c.replacePanel(organization.NewEventsPanel(query, func(ctx context.Context, q vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error) {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
 			if err != nil {
@@ -378,7 +379,7 @@ func (c *orgServicesController) selectAction(action string) {
 			return env.session.OrganizationEvents(ctx, env.vault, q, c.checkpoint(env))
 		}, c.deliver))
 	case "api-key":
-		c.replacePanel(newOrgAPIKeyPanel(org.Type == 0, func(ctx context.Context, password []byte, rotate bool, use func(string, []byte, time.Time) error) error {
+		c.replacePanel(organization.NewAPIKeyPanel(org.Type == 0, func(ctx context.Context, password []byte, rotate bool, use func(string, []byte, time.Time) error) error {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
 			if err != nil {
@@ -387,7 +388,7 @@ func (c *orgServicesController) selectAction(action string) {
 			return env.session.WithOrganizationAPIKey(ctx, env.vault, orgID, password, rotate, true, use, c.checkpoint(env))
 		}, c.deliver))
 	case "directory":
-		c.replacePanel(newOrgDirectoryPanel(org.Type == 0, org.UseGroups, func(ctx context.Context, key []byte, input vaultwarden.OrganizationDirectoryImport) (vaultwarden.OrganizationDirectoryResult, error) {
+		c.replacePanel(organization.NewDirectoryPanel(org.Type == 0, org.UseGroups, func(ctx context.Context, key []byte, input vaultwarden.OrganizationDirectoryImport) (vaultwarden.OrganizationDirectoryResult, error) {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
 			if err != nil {
@@ -396,7 +397,7 @@ func (c *orgServicesController) selectAction(action string) {
 			return env.session.ImportOrganizationDirectory(ctx, env.vault, orgID, key, input, true, c.isolate(env, orgID))
 		}, c.deliver))
 	case "collections":
-		c.replacePanel(newOrgCollectionPanel(entry, c.choices(orgID), entry.CollectionIDs, func(ctx context.Context, id string, ids []string) error {
+		c.replacePanel(organization.NewCollectionPanel(entry, c.choices(orgID), entry.CollectionIDs, func(ctx context.Context, id string, ids []string) error {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
 			if err != nil {
@@ -411,7 +412,7 @@ func (c *orgServicesController) selectAction(action string) {
 	case "copy":
 		c.openCopy(entry)
 	case "export":
-		c.replacePanel(newOrgExportPanelWithResources(org.Name, org.Type == 0 || org.Type == 1, func(ctx context.Context, path string, official bool) error {
+		c.replacePanel(organization.NewExportPanelWithResources(org.Name, org.Type == 0 || org.Type == 1, func(ctx context.Context, path string, official bool) error {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
 			if err != nil {

@@ -11,17 +11,13 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-type backupResourceRow struct {
-	resource                    vaultwarden.BackupResource
-	target, attachmentID, state string
-	problem                     string
-}
 type backupResourceEditor struct {
 	plan         *vaultwarden.ResourceImportPlan
-	rows         []backupResourceRow
+	rows         []organization.ResourceRow
 	targets      map[string]string
 	trash        []string
 	finalized    map[string]bool
@@ -33,7 +29,7 @@ type backupResourceEditor struct {
 func resourceEditor(plan *vaultwarden.ResourceImportPlan) *backupResourceEditor {
 	e := &backupResourceEditor{plan: plan, targets: map[string]string{}, finalized: map[string]bool{}, trashPending: map[string]bool{}, trash: plan.DeferredTrashIDs()}
 	for _, resource := range plan.Resources() {
-		e.rows = append(e.rows, backupResourceRow{resource: resource, state: "未执行"})
+		e.rows = append(e.rows, organization.ResourceRow{Resource: resource, State: "未执行"})
 	}
 	return e
 }
@@ -43,7 +39,7 @@ func (a *app) backupResourcePreview(c *ui.Context, e *backupEditor) {
 	}
 	ui.Text(c, "此自有资源格式保留每个文件的来源编号、文件名及校验值。先创建元数据，再按明确目标编号逐文件上传、同步和下载核验；这是多请求操作。含附件的回收站项目先保持活动，文件全部核验后再明确移入回收站。中途停止不会自动删除或重试。").MaxLines(7)
 	for _, row := range e.resources.rows {
-		ui.Text(c, fmt.Sprintf("%s · %s/%s · %d 字节", row.resource.FileName, row.resource.CipherID, row.resource.AttachmentID, row.resource.Size)).FontSize(12)
+		ui.Text(c, fmt.Sprintf("%s · %s/%s · %d 字节", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, row.Resource.Size)).FontSize(12)
 	}
 	if kit.Action(c, "仅继续附件恢复，使用已存在的明确目标编号（不创建项目）", "", false, a.pending != 0).Clicked() {
 		e.plan.Clear()
@@ -224,19 +220,19 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 	ui.TextInput(c, &m.password).Label("目标要求再次验证时输入主密码（每次操作后清除）").Password().Disabled(busy)
 	for i := range m.rows {
 		row := &m.rows[i]
-		if row.target == "" {
-			row.target = m.targets[row.resource.CipherID]
+		if row.Target == "" {
+			row.Target = m.targets[row.Resource.CipherID]
 		}
-		ui.Text(c, fmt.Sprintf("%s · 来源 %s/%s · %s", row.resource.FileName, row.resource.CipherID, row.resource.AttachmentID, row.state)).MaxLines(3)
-		if row.problem != "" {
-			ui.Text(c, row.problem).MaxLines(3)
+		ui.Text(c, fmt.Sprintf("%s · 来源 %s/%s · %s", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, row.State)).MaxLines(3)
+		if row.Problem != "" {
+			ui.Text(c, row.Problem).MaxLines(3)
 		}
-		ui.TextInput(c, &row.target).Label("明确选择的目标项目编号").Disabled(busy || row.state == "已核验")
-		ui.TextInput(c, &row.attachmentID).Label("核对的目标附件编号（上传回执或同步后填写）").Disabled(busy || row.state == "已核验")
-		if kit.Action(c, "确认向此目标上传一次", "", false, busy || row.target == "" || row.state != "未执行").Clicked() {
+		ui.TextInput(c, &row.Target).Label("明确选择的目标项目编号").Disabled(busy || row.State == "已核验")
+		ui.TextInput(c, &row.AttachmentID).Label("核对的目标附件编号（上传回执或同步后填写）").Disabled(busy || row.State == "已核验")
+		if kit.Action(c, "确认向此目标上传一次", "", false, busy || row.Target == "" || row.State != "未执行").Clicked() {
 			a.runResourceRestore(i, false, "")
 		}
-		if kit.Action(c, "下载并核验此附件的文件名、长度和完整内容", "", false, busy || row.target == "" || row.attachmentID == "" || row.state == "已核验").Clicked() {
+		if kit.Action(c, "下载并核验此附件的文件名、长度和完整内容", "", false, busy || row.Target == "" || row.AttachmentID == "" || row.State == "已核验").Clicked() {
 			a.runResourceRestore(i, true, "")
 		}
 	}
@@ -265,11 +261,11 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 func resourceTrashTarget(m *backupResourceEditor, source string) (string, bool) {
 	target := ""
 	for _, row := range m.rows {
-		if row.resource.CipherID == source {
-			if row.state != "已核验" || (target != "" && target != row.target) {
+		if row.Resource.CipherID == source {
+			if row.State != "已核验" || (target != "" && target != row.Target) {
 				return "", false
 			}
-			target = row.target
+			target = row.Target
 		}
 	}
 	return target, target != ""
@@ -293,7 +289,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 	if m.plan == nil || index < 0 || index >= len(m.rows) {
 		return
 	}
-	target, attachment := m.rows[index].target, m.rows[index].attachmentID
+	target, attachment := m.rows[index].Target, m.rows[index].AttachmentID
 	if trashSource != "" {
 		var ready bool
 		target, ready = resourceTrashTarget(m, trashSource)
@@ -305,7 +301,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 		a.status = "请先明确目标项目及待核验的附件编号；不会自动重发上传。"
 		return
 	}
-	if trashSource == "" && ((!verify && m.rows[index].state != "未执行") || m.rows[index].state == "已核验") {
+	if trashSource == "" && ((!verify && m.rows[index].State != "未执行") || m.rows[index].State == "已核验") {
 		a.status = "此文件已执行过操作，请同步后按明确附件编号核验；不会重复上传。"
 		return
 	}
@@ -319,11 +315,11 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 	}{}
 	if trashSource != "" {
 		for i, row := range m.rows {
-			if row.resource.CipherID == trashSource {
+			if row.Resource.CipherID == trashSource {
 				finalFiles = append(finalFiles, struct {
 					index      int
 					attachment string
-				}{i, row.attachmentID})
+				}{i, row.AttachmentID})
 			}
 		}
 	}
@@ -403,19 +399,19 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 				m.finalized[trashSource] = false // acknowledgement alone is not reconciliation
 			} else if verify {
 				if err == nil {
-					m.rows[index].state = "已核验"
+					m.rows[index].State = "已核验"
 				}
 			} else if attempted {
-				m.rows[index].state = "待同步核对"
-				m.rows[index].attachmentID = result.AttachmentID
+				m.rows[index].State = "待同步核对"
+				m.rows[index].AttachmentID = result.AttachmentID
 			}
 			a.status = "附件操作结束；请同步核对，未知结果不会自动重发。"
 			if trashSource != "" && !trashResult.Dispatched {
 				a.status = "尚未提交回收站变更；修正问题后请重新明确确认。"
 			}
-			m.rows[index].problem = ""
+			m.rows[index].Problem = ""
 			if err != nil {
-				m.rows[index].problem = err.Error()
+				m.rows[index].Problem = err.Error()
 				a.status = err.Error() + " " + a.status
 			}
 			if !verify && (attempted || trashResult.Dispatched) && a.sessionOwnsSnapshot() {

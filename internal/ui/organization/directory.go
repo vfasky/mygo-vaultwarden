@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package organization
 
 import (
 	"context"
@@ -12,39 +12,39 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-type orgAPIKeyPanel struct {
-	flow                    orgBusinessFlow
+type APIKeyPanel struct {
+	Flow                    orgBusinessFlow
 	allowed, rotate, reveal bool
 	password, key, clientID string
 	expires                 time.Time
 	execute                 func(context.Context, []byte, bool, func(string, []byte, time.Time) error) error
 }
 
-func newOrgAPIKeyPanel(owner bool, execute func(context.Context, []byte, bool, func(string, []byte, time.Time) error) error, dispatch func(func())) *orgAPIKeyPanel {
-	return &orgAPIKeyPanel{flow: orgBusinessFlow{dispatch: dispatch}, allowed: owner, execute: execute}
+func NewAPIKeyPanel(owner bool, execute func(context.Context, []byte, bool, func(string, []byte, time.Time) error) error, dispatch func(func())) *APIKeyPanel {
+	return &APIKeyPanel{Flow: orgBusinessFlow{dispatch: dispatch}, allowed: owner, execute: execute}
 }
-func (p *orgAPIKeyPanel) Close() {
-	p.flow.close()
+func (p *APIKeyPanel) Close() {
+	p.Flow.close()
 	p.password = ""
 	p.key = ""
 	p.clientID = ""
 	p.reveal = false
 }
-func (p *orgAPIKeyPanel) start() {
-	if !p.allowed || p.execute == nil || p.password == "" || p.flow.dispatch == nil || p.flow.blocked() || !p.flow.confirm {
+func (p *APIKeyPanel) start() {
+	if !p.allowed || p.execute == nil || p.password == "" || p.Flow.dispatch == nil || p.Flow.blocked() || !p.Flow.confirm {
 		return
 	}
 	password := []byte(p.password)
 	p.password = ""
-	rotate, execute, dispatch := p.rotate, p.execute, p.flow.dispatch
+	rotate, execute, dispatch := p.rotate, p.execute, p.Flow.dispatch
 	ctx, cancel := context.WithCancel(context.Background())
-	p.flow.cancel = cancel
-	p.flow.running = true
-	if p.flow.busy != nil {
-		p.flow.busy(true)
+	p.Flow.cancel = cancel
+	p.Flow.running = true
+	if p.Flow.Busy != nil {
+		p.Flow.Busy(true)
 	}
-	p.flow.confirm = false
-	generation := p.flow.generation
+	p.Flow.confirm = false
+	generation := p.Flow.generation
 	go func() {
 		var secret []byte
 		var clientID string
@@ -58,36 +58,36 @@ func (p *orgAPIKeyPanel) start() {
 		clear(password)
 		cancel()
 		dispatch(func() {
-			if p.flow.busy != nil {
-				p.flow.busy(false)
+			if p.Flow.Busy != nil {
+				p.Flow.Busy(false)
 			}
 			defer clear(secret)
-			if p.flow.closed || p.flow.generation != generation {
+			if p.Flow.closed || p.Flow.generation != generation {
 				return
 			}
-			p.flow.running = false
-			p.flow.terminal = true
-			p.flow.cancel = nil
+			p.Flow.running = false
+			p.Flow.terminal = true
+			p.Flow.cancel = nil
 			if err != nil {
-				p.flow.status = "API key 请求未完整完成；轮换可能已生效，请重新读取核对。"
+				p.Flow.status = "API key 请求未完整完成；轮换可能已生效，请重新读取核对。"
 				return
 			}
 			p.key = string(secret)
 			p.clientID = clientID
 			p.expires = expires
-			p.flow.status = "仅本窗口临时显示；关闭或锁定即清除。"
+			p.Flow.status = "仅本窗口临时显示；关闭或锁定即清除。"
 		})
 	}()
 }
-func (p *orgAPIKeyPanel) View(c *ui.Context) {
-	if p.flow.closed {
+func (p *APIKeyPanel) View(c *ui.Context) {
+	if p.Flow.closed {
 		return
 	}
 	ui.Text(c, "组织 API key").FontSize(22)
 	if !p.allowed {
 		ui.Text(c, "仅组织所有者可读取或轮换 API key。")
 	}
-	disabled := p.flow.blocked() || p.flow.confirm || !p.allowed
+	disabled := p.Flow.blocked() || p.Flow.confirm || !p.allowed
 	ui.TextInput(c, &p.password).Label("当前主密码").Password().Disabled(disabled)
 	if kit.Action(c, "读取现有 key（首次可能创建）", "", !p.rotate, disabled).Key("org-key-read").Clicked() {
 		p.rotate = false
@@ -95,7 +95,7 @@ func (p *orgAPIKeyPanel) View(c *ui.Context) {
 	if kit.Action(c, "轮换 key（旧 key 立即失效）", "", p.rotate, disabled).Key("org-key-rotate").Clicked() {
 		p.rotate = true
 	}
-	p.flow.footer(c, "org-key", "确认读取或轮换组织密钥？轮换会使使用旧 key 的目录同步失效。", p.allowed && p.execute != nil && p.password != "", p.start)
+	p.Flow.footer(c, "org-key", "确认读取或轮换组织密钥？轮换会使使用旧 key 的目录同步失效。", p.allowed && p.execute != nil && p.password != "", p.start)
 	if p.key != "" {
 		ui.Text(c, "Client ID："+p.clientID)
 		field := ui.TextInput(c, &p.key).Label("组织 API key").Disabled(true)
@@ -113,8 +113,8 @@ func (p *orgAPIKeyPanel) View(c *ui.Context) {
 	}
 }
 
-type orgDirectoryPanel struct {
-	flow                                         orgBusinessFlow
+type DirectoryPanel struct {
+	Flow                                         orgBusinessFlow
 	allowed, useGroups, overwrite                bool
 	secret, email, external, name, groupExternal string
 	deleted                                      bool
@@ -124,11 +124,11 @@ type orgDirectoryPanel struct {
 	execute                                      func(context.Context, []byte, vaultwarden.OrganizationDirectoryImport) (vaultwarden.OrganizationDirectoryResult, error)
 }
 
-func newOrgDirectoryPanel(owner, useGroups bool, execute func(context.Context, []byte, vaultwarden.OrganizationDirectoryImport) (vaultwarden.OrganizationDirectoryResult, error), dispatch func(func())) *orgDirectoryPanel {
-	return &orgDirectoryPanel{flow: orgBusinessFlow{dispatch: dispatch}, allowed: owner, useGroups: useGroups, groupMembers: map[string]bool{}, execute: execute}
+func NewDirectoryPanel(owner, useGroups bool, execute func(context.Context, []byte, vaultwarden.OrganizationDirectoryImport) (vaultwarden.OrganizationDirectoryResult, error), dispatch func(func())) *DirectoryPanel {
+	return &DirectoryPanel{Flow: orgBusinessFlow{dispatch: dispatch}, allowed: owner, useGroups: useGroups, groupMembers: map[string]bool{}, execute: execute}
 }
-func (p *orgDirectoryPanel) Close() {
-	p.flow.close()
+func (p *DirectoryPanel) Close() {
+	p.Flow.close()
 	p.secret = ""
 	p.email = ""
 	p.external = ""
@@ -138,20 +138,20 @@ func (p *orgDirectoryPanel) Close() {
 	p.groups = nil
 	p.groupMembers = nil
 }
-func (p *orgDirectoryPanel) addMember() {
-	if p.flow.blocked() || p.flow.confirm || !p.allowed {
+func (p *DirectoryPanel) addMember() {
+	if p.Flow.blocked() || p.Flow.confirm || !p.allowed {
 		return
 	}
 	email := strings.ToLower(strings.TrimSpace(p.email))
 	external := strings.TrimSpace(p.external)
 	address, err := mail.ParseAddress(email)
 	if err != nil || address.Address != email || len(email) > 320 || external == "" || len(external) > 1024 {
-		p.flow.status = "请输入有效邮箱及不重复的目录外部 ID。"
+		p.Flow.status = "请输入有效邮箱及不重复的目录外部 ID。"
 		return
 	}
 	for _, m := range p.members {
 		if m.Email == email || m.ExternalID == external {
-			p.flow.status = "邮箱或外部 ID 重复，请修改。"
+			p.Flow.status = "邮箱或外部 ID 重复，请修改。"
 			return
 		}
 	}
@@ -159,10 +159,10 @@ func (p *orgDirectoryPanel) addMember() {
 	p.email = ""
 	p.external = ""
 	p.deleted = false
-	p.flow.status = ""
+	p.Flow.status = ""
 }
-func (p *orgDirectoryPanel) addGroup() {
-	if p.flow.blocked() || p.flow.confirm || !p.allowed || !p.useGroups {
+func (p *DirectoryPanel) addGroup() {
+	if p.Flow.blocked() || p.Flow.confirm || !p.allowed || !p.useGroups {
 		return
 	}
 	name, external := strings.TrimSpace(p.name), strings.TrimSpace(p.groupExternal)
@@ -171,7 +171,7 @@ func (p *orgDirectoryPanel) addGroup() {
 	}
 	for _, g := range p.groups {
 		if g.ExternalID == external {
-			p.flow.status = "群组外部 ID 重复。"
+			p.Flow.status = "群组外部 ID 重复。"
 			return
 		}
 	}
@@ -186,8 +186,8 @@ func (p *orgDirectoryPanel) addGroup() {
 	p.groupExternal = ""
 	p.groupMembers = map[string]bool{}
 }
-func (p *orgDirectoryPanel) start() {
-	if !p.allowed || p.execute == nil || p.secret == "" || len(p.members)+len(p.groups) == 0 || p.flow.blocked() || !p.flow.confirm || p.flow.dispatch == nil {
+func (p *DirectoryPanel) start() {
+	if !p.allowed || p.execute == nil || p.secret == "" || len(p.members)+len(p.groups) == 0 || p.Flow.blocked() || !p.Flow.confirm || p.Flow.dispatch == nil {
 		return
 	}
 	secret := []byte(p.secret)
@@ -197,7 +197,7 @@ func (p *orgDirectoryPanel) start() {
 	for i := range input.Groups {
 		input.Groups[i].MemberExternalIDs = append([]string(nil), input.Groups[i].MemberExternalIDs...)
 	}
-	p.flow.run(func(ctx context.Context) ([]string, error) {
+	p.Flow.run(func(ctx context.Context) ([]string, error) {
 		defer clear(secret)
 		result, err := execute(ctx, secret, input)
 		rows := []string{"组织仍处于持久隔离状态，需重新验证权限。"}
@@ -215,13 +215,13 @@ func (p *orgDirectoryPanel) start() {
 		return rows, err
 	})
 }
-func (p *orgDirectoryPanel) View(c *ui.Context) {
-	if p.flow.closed {
+func (p *DirectoryPanel) View(c *ui.Context) {
+	if p.Flow.closed {
 		return
 	}
 	ui.Text(c, "Public 目录导入").FontSize(22)
 	ui.Text(c, "以组织 API key 同步外部目录成员和群组。提交后不能自动重发。")
-	disabled := p.flow.blocked() || p.flow.confirm || !p.allowed
+	disabled := p.Flow.blocked() || p.Flow.confirm || !p.allowed
 	ui.TextInput(c, &p.secret).Label("组织 API key（临时使用）").Password().Disabled(disabled)
 	ui.TextInput(c, &p.email).Label("成员邮箱").Disabled(disabled)
 	ui.TextInput(c, &p.external).Label("目录成员外部 ID").Disabled(disabled)
@@ -265,5 +265,5 @@ func (p *orgDirectoryPanel) View(c *ui.Context) {
 	if kit.Action(c, "撤权未出现在本次目录中的现有外部成员", "", p.overwrite, disabled).Key("org-dir-overwrite").Clicked() {
 		p.overwrite = !p.overwrite
 	}
-	p.flow.footer(c, "org-dir", "确认目录预览及缺席成员撤权选项？组织将先持久隔离；服务器可能仅完成部分成员/群组。", p.allowed && p.execute != nil && p.secret != "" && len(p.members)+len(p.groups) > 0, p.start)
+	p.Flow.footer(c, "org-dir", "确认目录预览及缺席成员撤权选项？组织将先持久隔离；服务器可能仅完成部分成员/群组。", p.allowed && p.execute != nil && p.secret != "" && len(p.members)+len(p.groups) > 0, p.start)
 }

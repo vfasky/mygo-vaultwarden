@@ -64,8 +64,8 @@ func (c *backupContinuation) resume(a *app) {
 	c.editor.confirm = false
 	for i := range c.resources.rows {
 		row := &c.resources.rows[i]
-		if row.target == "" {
-			row.target = c.resources.targets[row.resource.CipherID]
+		if row.Target == "" {
+			row.Target = c.resources.targets[row.Resource.CipherID]
 		}
 	}
 }

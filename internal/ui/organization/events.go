@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package organization
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 // orgEventsPanel runs entirely through injected session-bound dependencies. The
 // host chooses an organization/member/cipher from its authenticated business
 // lists, then closes this panel on lock, sync or scope change.
-type orgEventsPanel struct {
+type EventsPanel struct {
 	query                      vaultwarden.OrganizationEventQuery
 	startDate, endDate, status string
 	events                     []vaultwarden.OrganizationEvent
@@ -24,13 +24,13 @@ type orgEventsPanel struct {
 	cancel                     context.CancelFunc
 	fetch                      func(context.Context, vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error)
 	dispatch                   func(func())
-	busy                       func(bool)
+	Busy                       func(bool)
 }
 
-func newOrgEventsPanel(query vaultwarden.OrganizationEventQuery, fetch func(context.Context, vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error), dispatch func(func())) *orgEventsPanel {
-	return &orgEventsPanel{query: query, startDate: query.Start.Format(time.RFC3339), endDate: query.End.Format(time.RFC3339), fetch: fetch, dispatch: dispatch}
+func NewEventsPanel(query vaultwarden.OrganizationEventQuery, fetch func(context.Context, vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error), dispatch func(func())) *EventsPanel {
+	return &EventsPanel{query: query, startDate: query.Start.Format(time.RFC3339), endDate: query.End.Format(time.RFC3339), fetch: fetch, dispatch: dispatch}
 }
-func (p *orgEventsPanel) Close() {
+func (p *EventsPanel) Close() {
 	if p.cancel != nil {
 		p.cancel()
 	}
@@ -40,7 +40,7 @@ func (p *orgEventsPanel) Close() {
 	p.next = nil
 	p.status = ""
 }
-func (p *orgEventsPanel) load(next bool) {
+func (p *EventsPanel) load(next bool) {
 	if p.closed || p.running || p.fetch == nil || p.dispatch == nil {
 		return
 	}
@@ -67,8 +67,8 @@ func (p *orgEventsPanel) load(next bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.running = true
-	if p.busy != nil {
-		p.busy(true)
+	if p.Busy != nil {
+		p.Busy(true)
 	}
 	p.status = "正在读取审计事件…"
 	generation := p.generation
@@ -77,8 +77,8 @@ func (p *orgEventsPanel) load(next bool) {
 		page, err := fetch(ctx, query)
 		cancel()
 		dispatch(func() {
-			if p.busy != nil {
-				p.busy(false)
+			if p.Busy != nil {
+				p.Busy(false)
 			}
 			if p.closed || p.generation != generation {
 				return
@@ -99,7 +99,7 @@ func (p *orgEventsPanel) load(next bool) {
 		})
 	}()
 }
-func (p *orgEventsPanel) View(c *ui.Context) {
+func (p *EventsPanel) View(c *ui.Context) {
 	if p.closed {
 		return
 	}

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package organization
 
 import (
 	"context"
@@ -14,7 +14,7 @@ func TestOrgEventsPanelPagingAndCancellation(t *testing.T) {
 	requests := make(chan vaultwarden.OrganizationEventQuery, 2)
 	query := vaultwarden.OrganizationEventQuery{OrganizationID: "org-1", Start: time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), End: time.Date(2026, 6, 3, 0, 0, 0, 0, time.UTC)}
 	token := "2026-06-02T00:00:00Z"
-	p := newOrgEventsPanel(query, func(ctx context.Context, q vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error) {
+	p := NewEventsPanel(query, func(ctx context.Context, q vaultwarden.OrganizationEventQuery) (vaultwarden.OrganizationEventPage, error) {
 		requests <- q
 		if q.ContinuationToken != "" {
 			<-ctx.Done()

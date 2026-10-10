@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 	"testing"
 )
 
@@ -37,19 +38,19 @@ func TestOrgControllerRoutesRealComponentsAndCancelsStaleWorker(t *testing.T) {
 		}
 	}
 	c.selectAction("state")
-	panel := c.panel.(*orgOperationsPanel)
-	panel.selected["organization-item"] = true
-	panel.confirmation = true
+	panel := c.panel.(*organization.OperationsPanel)
+	panel.Selected["organization-item"] = true
+	panel.Confirmation = true
 	f.mu.Lock()
 	f.failLease = true
 	f.mu.Unlock()
-	panel.start()
+	panel.Start()
 	if f.a.pending != 1 {
 		t.Fatal("worker not tracked")
 	}
 	f.a.advanceEpoch()
 	f.drain()
-	if f.a.orgServices != nil || !panel.closed || f.a.pending != 0 {
+	if f.a.orgServices != nil || !panel.Closed || f.a.pending != 0 {
 		t.Fatal("closed controller revived or worker accounting leaked")
 	}
 	f.mu.Lock()
@@ -65,27 +66,27 @@ func TestOrgControllerResourceContinuationAdoptsOnlyNormalPublication(t *testing
 			c := f.a.orgServices
 			plan := orgResourceUIFixture(t)
 			c.installResources(plan, map[string]string{}, "organization-1", false)
-			panel := c.panel.(*orgResourceRestorePanel)
+			panel := c.panel.(*organization.ResourceRestorePanel)
 			priorEpoch, priorRevision := f.a.epoch, f.a.snapshot.Revision
 			f.mu.Lock()
 			f.failPublish = fail
 			f.mu.Unlock()
-			panel.run(func(ctx context.Context) (func(), error) {
-				err := panel.callbacks.refresh(ctx)
+			panel.Run(func(ctx context.Context) (func(), error) {
+				err := panel.Callbacks.Refresh(ctx)
 				return func() {
 					if err == nil {
-						panel.needsRefresh = false
+						panel.NeedsRefresh = false
 					}
 				}, err
 			})
 			f.drain()
 			if fail {
-				if f.a.snapshot.Revision != priorRevision || !panel.needsRefresh {
+				if f.a.snapshot.Revision != priorRevision || !panel.NeedsRefresh {
 					t.Fatal("failed publication adopted continuation")
 				}
 				return
 			}
-			if f.a.orgServices != c || c.panel != panel || panel.closed || panel.needsRefresh || f.a.epoch <= priorEpoch || f.a.snapshot.Revision == priorRevision {
+			if f.a.orgServices != c || c.panel != panel || panel.Closed || panel.NeedsRefresh || f.a.epoch <= priorEpoch || f.a.snapshot.Revision == priorRevision {
 				t.Fatalf("continuation was lost or not authenticated: %s", f.a.status)
 			}
 			env, err := c.environment()

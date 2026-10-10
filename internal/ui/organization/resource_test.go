@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package organization
 
 import (
 	"archive/zip"
@@ -58,21 +58,21 @@ func orgResourceUIFixture(t *testing.T) *vaultwarden.ResourceImportPlan {
 func TestOrgResourceExportRequiresExplicitFormatAndConfirmation(t *testing.T) {
 	q := make(chan func(), 2)
 	normal, resources := 0, 0
-	panel := newOrgExportPanelWithResources("Org", true, func(context.Context, string, bool) error { normal++; return nil }, func(context.Context, string) error { resources++; return nil }, func(f func()) { q <- f })
+	panel := NewExportPanelWithResources("Org", true, func(context.Context, string, bool) error { normal++; return nil }, func(context.Context, string) error { resources++; return nil }, func(f func()) { q <- f })
 	panel.path = "/tmp/not-written-by-test.mygoresources"
 	tester := ui.NewTester(panel.View, 1000, 700)
 	uitest.Click(t, tester, "MyGo 完整组织资源备份（附件与通行密钥，非官方格式）")
 	panel.start()
-	if panel.flow.running || normal != 0 || resources != 0 {
+	if panel.Flow.running || normal != 0 || resources != 0 {
 		t.Fatal("unconfirmed export")
 	}
-	panel.flow.confirm = true
+	panel.Flow.confirm = true
 	panel.start()
 	orgUIComplete(t, q)
-	if resources != 1 || normal != 0 || !panel.flow.terminal {
+	if resources != 1 || normal != 0 || !panel.Flow.terminal {
 		t.Fatal("resource format not routed")
 	}
-	panel.flow.confirm = true
+	panel.Flow.confirm = true
 	panel.start()
 	if resources != 1 {
 		t.Fatal("automatic repeat")
@@ -83,7 +83,7 @@ func TestOrgResourceImportDefersStateAndTransfersOwnedPlan(t *testing.T) {
 	plan := orgResourceUIFixture(t)
 	q := make(chan func(), 4)
 	var handed *vaultwarden.ResourceImportPlan
-	panel, err := newOrgResourceImportPanel(plan, []orgCollectionChoice{{ID: "target-col", Writable: true}}, false, func(_ context.Context, metadata *vaultwarden.OrganizationImportPlan, mappings map[string]string) (vaultwarden.OrganizationOperationResult, error) {
+	panel, err := NewResourceImportPanel(plan, []CollectionChoice{{ID: "target-col", Writable: true}}, false, func(_ context.Context, metadata *vaultwarden.OrganizationImportPlan, mappings map[string]string) (vaultwarden.OrganizationOperationResult, error) {
 		preview := metadata.PreviewItems()
 		if len(preview) != 1 || preview[0].Archived || preview[0].Deleted || mappings["source-col"] != "target-col" {
 			t.Error("metadata not explicitly deferred")
@@ -102,7 +102,7 @@ func TestOrgResourceImportDefersStateAndTransfersOwnedPlan(t *testing.T) {
 		t.Fatal("source state/preview lost")
 	}
 	panel.mappings["source-col"] = "target-col"
-	panel.flow.confirm = true
+	panel.Flow.confirm = true
 	panel.start()
 	orgUIComplete(t, q)
 	orgUIComplete(t, q)
@@ -110,7 +110,7 @@ func TestOrgResourceImportDefersStateAndTransfersOwnedPlan(t *testing.T) {
 	if handed != plan || len(plan.Resources()) != 1 {
 		t.Fatal("plan lost between metadata and resources")
 	}
-	restore := newOrgResourceRestorePanel(handed, map[string]string{"source-item": "target-item"}, false, orgResourceCallbacks{})
+	restore := NewResourceRestorePanel(handed, map[string]string{"source-item": "target-item"}, false, ResourceCallbacks{})
 	if len(restore.states) != 1 || restore.states[0].folder != "source-folder" {
 		t.Fatal("deferred state not visible")
 	}
@@ -123,8 +123,8 @@ func TestOrgResourceRestoreUnknownUploadSyncAndVerify(t *testing.T) {
 	plan := orgResourceUIFixture(t)
 	q := make(chan func(), 4)
 	uploads, verifications, syncs := 0, 0, 0
-	panel := newOrgResourceRestorePanel(plan, map[string]string{"source-item": "target-item"}, false, orgResourceCallbacks{
-		file: func(_ context.Context, owned *vaultwarden.ResourceImportPlan, index int, target, id string, verify bool) (vaultwarden.AttachmentUploadResult, error) {
+	panel := NewResourceRestorePanel(plan, map[string]string{"source-item": "target-item"}, false, ResourceCallbacks{
+		File: func(_ context.Context, owned *vaultwarden.ResourceImportPlan, index int, target, id string, verify bool) (vaultwarden.AttachmentUploadResult, error) {
 			if len(owned.Resources()) != 1 || index != 0 || target != "target-item" {
 				t.Error("wrong resource scope")
 			}
@@ -137,25 +137,25 @@ func TestOrgResourceRestoreUnknownUploadSyncAndVerify(t *testing.T) {
 			}
 			uploads++
 			return vaultwarden.AttachmentUploadResult{AttachmentID: "server-file", MetadataCreated: true}, vaultwarden.ErrNetwork
-		}, refresh: func(context.Context) error { syncs++; return nil }, dispatch: func(f func()) { q <- f },
+		}, Refresh: func(context.Context) error { syncs++; return nil }, Dispatch: func(f func()) { q <- f },
 	})
 	tester := ui.NewTester(panel.View, 1100, 1000)
 	uitest.Click(t, tester, "确认向目标上传一次（保留源文件）")
 	orgUIComplete(t, q)
 	tester.Frame()
-	if uploads != 1 || panel.rows[0].attachmentID != "server-file" || panel.rows[0].state != "待核对" || !panel.needsRefresh {
+	if uploads != 1 || panel.rows[0].AttachmentID != "server-file" || panel.rows[0].State != "待核对" || !panel.NeedsRefresh {
 		t.Fatal("partial upload not retained")
 	}
 	uitest.Click(t, tester, "同步并刷新权限后继续")
 	orgUIComplete(t, q)
 	tester.Frame()
-	if syncs != 1 || panel.needsRefresh {
+	if syncs != 1 || panel.NeedsRefresh {
 		t.Fatal("refresh gate")
 	}
 	uitest.Click(t, tester, "下载并核验所选附件")
 	orgUIComplete(t, q)
 	tester.Frame()
-	if verifications != 1 || uploads != 1 || panel.rows[0].state != "已核验" || !panel.filesVerified("source-item", "target-item") {
+	if verifications != 1 || uploads != 1 || panel.rows[0].State != "已核验" || !panel.filesVerified("source-item", "target-item") {
 		t.Fatal("independent verification missing")
 	}
 	panel.Close()
@@ -164,8 +164,8 @@ func TestOrgResourceCloseDuringOperationKeepsPlanUntilWorkerSettles(t *testing.T
 	plan := orgResourceUIFixture(t)
 	q := make(chan func(), 2)
 	started := make(chan struct{})
-	panel := newOrgResourceRestorePanel(plan, nil, true, orgResourceCallbacks{dispatch: func(f func()) { q <- f }})
-	panel.run(func(ctx context.Context) (func(), error) {
+	panel := NewResourceRestorePanel(plan, nil, true, ResourceCallbacks{Dispatch: func(f func()) { q <- f }})
+	panel.Run(func(ctx context.Context) (func(), error) {
 		close(started)
 		<-ctx.Done()
 		if len(plan.Resources()) != 1 {

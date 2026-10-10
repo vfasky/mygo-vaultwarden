@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package organization
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func orgUIComplete(t *testing.T, q chan func()) {
 func TestOrgBusinessCopyPermissionConfirmationAndFreeze(t *testing.T) {
 	q := make(chan func(), 1)
 	calls := 0
-	p := newOrgCopyPanel(vaultwarden.VaultEntry{ID: "item", Title: "Item", Readable: true, Editable: true, RequiresPassword: true}, []orgCollectionChoice{{ID: "c", OrganizationID: "org", Name: "Collection", Writable: true}}, func(_ context.Context, id, org, col string) (vaultwarden.CipherDocument, error) {
+	p := NewCopyPanel(vaultwarden.VaultEntry{ID: "item", Title: "Item", Readable: true, Editable: true, RequiresPassword: true}, []CollectionChoice{{ID: "c", OrganizationID: "org", Name: "Collection", Writable: true}}, func(_ context.Context, id, org, col string) (vaultwarden.CipherDocument, error) {
 		calls++
 		if id != "item" || org != "org" || col != "c" {
 			t.Error("identity changed")
@@ -31,16 +31,16 @@ func TestOrgBusinessCopyPermissionConfirmationAndFreeze(t *testing.T) {
 	}, func(f func()) { q <- f })
 	p.target = 0
 	p.start()
-	if p.flow.running {
+	if p.Flow.running {
 		t.Fatal("unconfirmed")
 	}
-	p.flow.confirm = true
+	p.Flow.confirm = true
 	p.start()
 	orgUIComplete(t, q)
-	if calls != 1 || !p.flow.terminal || p.flow.status == "" {
+	if calls != 1 || !p.Flow.terminal || p.Flow.status == "" {
 		t.Fatal("missing error")
 	}
-	p.flow.confirm = true
+	p.Flow.confirm = true
 	p.start()
 	if calls != 1 {
 		t.Fatal("retry")
@@ -49,7 +49,7 @@ func TestOrgBusinessCopyPermissionConfirmationAndFreeze(t *testing.T) {
 }
 func TestOrgBusinessCollectionScopeAndIsolationOutcome(t *testing.T) {
 	q := make(chan func(), 1)
-	p := newOrgCollectionPanel(vaultwarden.VaultEntry{ID: "i", OrganizationID: "org", Readable: true, Editable: true}, []orgCollectionChoice{{ID: "one", OrganizationID: "org", Writable: true}, {ID: "other", OrganizationID: "other", Writable: true}}, []string{"one"}, func(_ context.Context, id string, ids []string) error {
+	p := NewCollectionPanel(vaultwarden.VaultEntry{ID: "i", OrganizationID: "org", Readable: true, Editable: true}, []CollectionChoice{{ID: "one", OrganizationID: "org", Writable: true}, {ID: "other", OrganizationID: "other", Writable: true}}, []string{"one"}, func(_ context.Context, id string, ids []string) error {
 		if id != "i" || len(ids) != 1 || ids[0] != "one" {
 			t.Error("cross-org")
 		}
@@ -58,10 +58,10 @@ func TestOrgBusinessCollectionScopeAndIsolationOutcome(t *testing.T) {
 	if len(p.choices) != 1 {
 		t.Fatal("cross org displayed")
 	}
-	p.flow.confirm = true
+	p.Flow.confirm = true
 	p.start()
 	orgUIComplete(t, q)
-	if !strings.Contains(p.flow.rows[0], "隔离") {
+	if !strings.Contains(p.Flow.rows[0], "隔离") {
 		t.Fatal("isolation outcome lost")
 	}
 }
@@ -69,14 +69,14 @@ func TestOrgBusinessAPIKeyCloseErasesLateSecret(t *testing.T) {
 	q := make(chan func(), 1)
 	started := make(chan struct{})
 	var password []byte
-	p := newOrgAPIKeyPanel(true, func(ctx context.Context, pw []byte, _ bool, borrow func(string, []byte, time.Time) error) error {
+	p := NewAPIKeyPanel(true, func(ctx context.Context, pw []byte, _ bool, borrow func(string, []byte, time.Time) error) error {
 		password = pw
 		close(started)
 		<-ctx.Done()
 		return borrow("organization.org", []byte("secret"), time.Time{})
 	}, func(f func()) { q <- f })
 	p.password = "password"
-	p.flow.confirm = true
+	p.Flow.confirm = true
 	p.start()
 	<-started
 	p.Close()
@@ -93,7 +93,7 @@ func TestOrgBusinessAPIKeyCloseErasesLateSecret(t *testing.T) {
 func TestOrgBusinessDirectoryPartialAndPreview(t *testing.T) {
 	q := make(chan func(), 1)
 	var borrowed []byte
-	p := newOrgDirectoryPanel(true, true, func(_ context.Context, secret []byte, input vaultwarden.OrganizationDirectoryImport) (vaultwarden.OrganizationDirectoryResult, error) {
+	p := NewDirectoryPanel(true, true, func(_ context.Context, secret []byte, input vaultwarden.OrganizationDirectoryImport) (vaultwarden.OrganizationDirectoryResult, error) {
 		borrowed = secret
 		if len(input.Members) != 1 || len(input.Groups) != 1 || !input.OverwriteExisting {
 			t.Error("preview lost")
@@ -115,11 +115,11 @@ func TestOrgBusinessDirectoryPartialAndPreview(t *testing.T) {
 	p.addGroup()
 	p.overwrite = true
 	p.secret = "secret"
-	p.flow.confirm = true
+	p.Flow.confirm = true
 	p.start()
 	orgUIComplete(t, q)
-	if len(p.flow.rows) != 3 || !strings.Contains(p.flow.rows[1], "已确认") || !strings.Contains(p.flow.rows[2], "未知") {
-		t.Fatal(p.flow.rows)
+	if len(p.Flow.rows) != 3 || !strings.Contains(p.Flow.rows[1], "已确认") || !strings.Contains(p.Flow.rows[2], "未知") {
+		t.Fatal(p.Flow.rows)
 	}
 	for _, b := range borrowed {
 		if b != 0 {
@@ -135,7 +135,7 @@ func TestOrgBusinessImportMappingAndCloseDuringFlight(t *testing.T) {
 	}
 	q := make(chan func(), 1)
 	started := make(chan struct{})
-	p := newOrgImportPanel(plan, "Bitwarden 官方明文 JSON", []orgCollectionChoice{{ID: "target", Writable: true}}, false, func(ctx context.Context, plan *vaultwarden.OrganizationImportPlan, m map[string]string) (vaultwarden.OrganizationOperationResult, error) {
+	p := NewImportPanel(plan, "Bitwarden 官方明文 JSON", []CollectionChoice{{ID: "target", Writable: true}}, false, func(ctx context.Context, plan *vaultwarden.OrganizationImportPlan, m map[string]string) (vaultwarden.OrganizationOperationResult, error) {
 		close(started)
 		<-ctx.Done()
 		if len(plan.PreviewItems()) != 1 || m["11111111-1111-4111-8111-111111111111"] != "target" {
@@ -147,12 +147,12 @@ func TestOrgBusinessImportMappingAndCloseDuringFlight(t *testing.T) {
 		t.Fatal("missing mapping accepted")
 	}
 	p.mappings["11111111-1111-4111-8111-111111111111"] = "target"
-	p.flow.confirm = true
+	p.Flow.confirm = true
 	p.start()
 	<-started
 	p.Close()
 	orgUIComplete(t, q)
-	if len(plan.PreviewItems()) != 0 || p.flow.status != "" {
+	if len(plan.PreviewItems()) != 0 || p.Flow.status != "" {
 		t.Fatal("plan retained or late result")
 	}
 }
