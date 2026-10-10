@@ -4,12 +4,11 @@ package app
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -197,27 +196,6 @@ func backupDialogFilter(format vaultwarden.BackupFormat) mygo.FileFilter {
 	}
 	return mygo.FileFilter{Name: "Bitwarden JSON", Extensions: []string{"json"}}
 }
-func backupOutputPath(path string, format vaultwarden.BackupFormat) (string, error) {
-	if path == "" {
-		return "", vaultwarden.ErrCancelled
-	}
-	extension := ".json"
-	if format == vaultwarden.MyGoResources {
-		extension = ".mygoresources"
-	} else if format == vaultwarden.MyGoBackup {
-		extension = ".mygovault"
-	} else if format != vaultwarden.BitwardenJSON {
-		return "", vaultwarden.ErrValidation
-	}
-	if filepath.Ext(path) == "" {
-		return path + extension, nil
-	}
-	if strings.ToLower(filepath.Ext(path)) != extension {
-		return "", fmt.Errorf("此格式请使用 %s 文件扩展名，未写入文件。", extension)
-	}
-	return path, nil
-}
-
 func (a *app) chooseImportFile() {
 	if a.backupEditor != nil && a.backupEditor.format == vaultwarden.MyGoResources {
 		a.chooseResourceImportFile()
@@ -244,7 +222,7 @@ func (a *app) chooseImportFile() {
 				err = vaultwarden.ErrConflict
 			} else {
 				var data []byte
-				data, err = readBackupFile(ctx, paths[0])
+				data, err = fileio.ReadBackupFile(ctx, paths[0])
 				if err == nil {
 					plan, err = vaultwarden.ParseImport(data, format)
 				}
@@ -316,7 +294,7 @@ func (a *app) chooseExportFile() {
 		status := callStorage(storageRequest{Operation: "status"})
 		var data []byte
 		var err error
-		var stage *stagedBackup
+		var stage *fileio.StagedFile
 		if !status.OK || !backupLease(status.State, scope, revision) {
 			err = vaultwarden.ErrConflict
 		} else {
@@ -339,7 +317,7 @@ func (a *app) chooseExportFile() {
 			var path string
 			path, err = mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
 			if err == nil && path != "" && ctx.Err() == nil {
-				path, err = backupOutputPath(path, format)
+				path, err = fileio.BackupOutputPath(path, format)
 				if err != nil {
 					a.window.Update(func() { a.completeBackupExport(e, epoch, ctx, nil, err, cancel) })
 					return
@@ -350,7 +328,7 @@ func (a *app) chooseExportFile() {
 				} else {
 					data, err = session.ExportPersonalBackupAuthorized(ctx, vault, ids, format, grants)
 					if err == nil {
-						stage, err = stageBackupFile(ctx, path, data)
+						stage, err = fileio.StageBackupFile(ctx, path, data)
 					}
 					clear(data)
 					data = nil
@@ -360,7 +338,7 @@ func (a *app) chooseExportFile() {
 		a.window.Update(func() { a.completeBackupExport(e, epoch, ctx, stage, err, cancel) })
 	}()
 }
-func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Context, stage *stagedBackup, err error, cancel context.CancelFunc) {
+func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Context, stage *fileio.StagedFile, err error, cancel context.CancelFunc) {
 	callStorage := a.vaultStorage()
 	a.pending--
 	defer cancel()

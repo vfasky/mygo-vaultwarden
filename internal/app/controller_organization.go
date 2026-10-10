@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -420,7 +421,7 @@ func (c *orgServicesController) selectAction(action string) {
 			if err != nil {
 				return err
 			}
-			return exportOrgBackupFormatFile(ctx, env.session, env.vault, orgID, path, grants, true, official, c.checkpoint(env), func() error { return env.lease.check(env.storage) })
+			return fileio.ExportOrgBackupFormatFile(ctx, env.session, env.vault, orgID, path, grants, true, official, c.checkpoint(env), func() error { return env.lease.check(env.storage) })
 		}, func(ctx context.Context, path string) error {
 			ctx, done, env, err := c.operation(ctx)
 			defer done()
@@ -431,7 +432,7 @@ func (c *orgServicesController) selectAction(action string) {
 			if err != nil {
 				return err
 			}
-			return exportOrgResourceFile(ctx, env.session, env.vault, orgID, path, grants, true, func() error { return env.lease.check(env.storage) }, c.checkpoint(env))
+			return fileio.ExportOrgResourceFile(ctx, env.session, env.vault, orgID, path, grants, true, func() error { return env.lease.check(env.storage) }, c.checkpoint(env))
 		}, c.deliver))
 	}
 }

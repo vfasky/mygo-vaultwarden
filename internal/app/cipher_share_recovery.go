@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -39,7 +40,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			return vaultwarden.ErrConflict
 		}
-		stage, err := stageBackupFile(ctx, path, data)
+		stage, err := fileio.StageBackupFile(ctx, path, data)
 		if err != nil {
 			return err
 		}
@@ -83,7 +84,7 @@ func (a *app) chooseCipherShareRecovery() {
 			CipherID string `json:"cipherId"`
 		}
 		if err == nil && len(paths) == 1 {
-			data, err = readBackupFile(ctx, paths[0])
+			data, err = fileio.ReadBackupFile(ctx, paths[0])
 			if err == nil && json.Unmarshal(data, &header) != nil {
 				err = vaultwarden.ErrProtocol
 			}

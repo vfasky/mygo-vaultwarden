@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 //go:build darwin || linux
 
-package app
+package fileio
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-func openAttachmentInput(path string) (*os.File, error) {
+func OpenAttachmentInput(path string) (*os.File, error) {
 	dir, name, err := openBackupParent(path)
 	if err != nil {
 		return nil, err
@@ -35,7 +35,7 @@ func openAttachmentInput(path string) (*os.File, error) {
 
 // Stage on the selected filesystem, using pinned directory descriptors. The
 // final linkat is short and atomic and never overwrites an existing user file.
-func stageAttachmentFile(ctx context.Context, path string, input *os.File, size int64) (*stagedBackup, error) {
+func StageAttachmentFile(ctx context.Context, path string, input *os.File, size int64) (*StagedFile, error) {
 	if input == nil || size < 0 || size > 512*1024*1024 {
 		return nil, vaultwarden.ErrValidation
 	}
@@ -48,7 +48,7 @@ func stageAttachmentFile(ctx context.Context, path string, input *os.File, size 
 		unix.Close(dir)
 		return nil, errBackupFile
 	}
-	stage := &stagedBackup{dir: dir, target: name, temporary: ".mygo-attachment-" + hex.EncodeToString(random)}
+	stage := &StagedFile{dir: dir, target: name, Temporary: ".mygo-attachment-" + hex.EncodeToString(random)}
 	success := false
 	defer func() {
 		if !success {
@@ -59,7 +59,7 @@ func stageAttachmentFile(ctx context.Context, path string, input *os.File, size 
 	if unix.Fstatat(dir, name, &stat, unix.AT_SYMLINK_NOFOLLOW) != unix.ENOENT {
 		return nil, errBackupFile
 	}
-	raw, err := unix.Openat(dir, stage.temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
+	raw, err := unix.Openat(dir, stage.Temporary, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0600)
 	if err != nil {
 		return nil, errBackupFile
 	}

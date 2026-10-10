@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -72,7 +73,7 @@ func (a *app) chooseResourceImportFile() {
 				err = vaultwarden.ErrConflict
 			} else {
 				var file *os.File
-				file, err = openAttachmentInput(paths[0])
+				file, err = fileio.OpenAttachmentInput(paths[0])
 				if err == nil {
 					resources, err = vaultwarden.ParseResourceImport(ctx, file)
 				}
@@ -144,11 +145,11 @@ func (a *app) chooseResourceExportFile() {
 			return err
 		}
 		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(vaultwarden.MyGoResources)}})
-		var stage *stagedBackup
+		var stage *fileio.StagedFile
 		var proof *vaultwarden.ResourceBackupPublication
 		grants := map[string]*vaultwarden.ItemAuthorization{}
 		if err == nil && path != "" && ctx.Err() == nil {
-			path, err = backupOutputPath(path, vaultwarden.MyGoResources)
+			path, err = fileio.BackupOutputPath(path, vaultwarden.MyGoResources)
 			state := callStorage(storageRequest{Operation: "status"})
 			if err == nil && (!state.OK || !backupLease(state.State, scope, revision)) {
 				err = vaultwarden.ErrConflict
@@ -165,7 +166,7 @@ func (a *app) chooseResourceExportFile() {
 				clear(password)
 			}
 			if err == nil {
-				stage, err = stageBackupStream(ctx, path, func(file *os.File) error {
+				stage, err = fileio.StageBackupStream(ctx, path, func(file *os.File) error {
 					var err error
 					proof, err = session.WriteResourceBackup(ctx, vault, ids, "", grants, true, file, persist)
 					return err
