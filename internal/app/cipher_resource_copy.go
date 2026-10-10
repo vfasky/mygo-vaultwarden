@@ -23,7 +23,7 @@ func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEdi
 
 func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *cipherEditor, dispatch func(func()), storage func(localstore.Request) localstore.Reply, refresh func()) {
 	if err := attachmentDraftSaved(session, a.vault, e); err != nil {
-		a.status = i18n.T("复制含附件项目之前，请先保存草稿；完整复制使用已保存版本。")
+		a.status = i18n.T("vault.copy.err_unsaved_draft")
 		return
 	}
 	a.advanceEpoch()
@@ -115,7 +115,7 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 			}
 			a.editor = nil
 			a.backupEditor = editor
-			a.status = i18n.T("副本尚未完成：请逐文件恢复并核验。源项目及其附件保留；创建结果未知时先同步核对目标编号，勿再次创建。")
+			a.status = i18n.T("vault.copy.status_incomplete")
 			if err != nil {
 				a.status = err.Error() + " " + a.status
 			}

@@ -36,7 +36,7 @@ func (a *app) compareCipher(grant *vaultwarden.ItemAuthorization) {
 			e.authorization = nil
 			a.secretInputVersion++
 		}
-		a.status = i18n.Tf("暂时无法比较：%s 项目已删除、归属、密钥或权限变化时，请取消草稿并重新打开最新项目。", err.Error())
+		a.status = i18n.Tf("vault.compare.err_unavailable", err.Error())
 		return
 	}
 	e.repromptID, e.repromptPassword = "", ""
@@ -55,38 +55,38 @@ func (a *app) compareCipher(grant *vaultwarden.ItemAuthorization) {
 		}
 		e.rowChoices[change.Path] = choices
 	}
-	a.status = i18n.T("请核对双方改动，明确选择要重新应用的字段；继续后还需要再次保存。")
+	a.status = i18n.T("vault.compare.status_review_required")
 	a.secretInputVersion++
 }
 
 func comparisonFieldLabel(path string) string {
 	switch path {
 	case "name":
-		return i18n.T("标题")
+		return i18n.T("vault.field.title")
 	case "notes":
-		return i18n.T("备注")
+		return i18n.T("common.notes")
 	case "folderId":
-		return i18n.T("文件夹")
+		return i18n.T("common.folder")
 	case "favorite":
-		return i18n.T("收藏")
+		return i18n.T("vault.field.favorite")
 	case "fields":
-		return i18n.T("自定义字段")
+		return i18n.T("vault.field.custom")
 	case "passwordHistory":
-		return i18n.T("密码历史（仅删除原先观察到的记录）")
+		return i18n.T("vault.compare.password_history")
 	case "login.uris":
-		return i18n.T("网站及匹配规则")
+		return i18n.T("vault.compare.websites")
 	case "secureNote.type":
-		return i18n.T("笔记类型")
+		return i18n.T("vault.field.note.type")
 	}
 	key := path[strings.Index(path, ".")+1:]
 	for _, specs := range editorSpecs {
 		for _, spec := range specs {
 			if spec.key == key {
-				return spec.label
+				return i18n.T(spec.label)
 			}
 		}
 	}
-	return i18n.T("项目内容")
+	return i18n.T("vault.compare.item_content")
 }
 
 func (a *app) cipherComparisonView(c *ui.Context) {
@@ -100,51 +100,51 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 	}
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Gap(12).Padding(18).Children(func() {
-			ui.Text(c, i18n.T("比较本地与远端改动")).FontSize(23).FontWeight(600)
-			ui.Text(c, i18n.T("默认隐藏秘密内容，可经认证短时显示逐行对照。默认采用远端值；选中的本地改动会重新应用到最新项目，其他内容保持最新版本。"))
+			ui.Text(c, i18n.T("vault.compare.title")).FontSize(23).FontWeight(600)
+			ui.Text(c, i18n.T("vault.compare.description"))
 			if e.uncertain {
-				ui.Text(c, i18n.T("上次写入结果未知。下表是同步核实后的状态；若远端已包含你的更改，请采用远端版本，避免重复提交。"))
+				ui.Text(c, i18n.T("vault.compare.uncertain_hint"))
 			}
 			if len(e.changes) == 0 {
-				ui.Text(c, i18n.T("未发现可编辑字段的差异，可以采用远端版本。"))
+				ui.Text(c, i18n.T("vault.compare.no_changes"))
 			}
 			for _, change := range e.changes {
-				text := i18n.Tf("%s：本地未改；远端已改", comparisonFieldLabel(change.Path))
+				text := i18n.Tf("vault.compare.remote_changed", comparisonFieldLabel(change.Path))
 				if change.Local {
-					text = i18n.Tf("%s：本地已改；远端未改", comparisonFieldLabel(change.Path))
+					text = i18n.Tf("vault.compare.local_changed", comparisonFieldLabel(change.Path))
 					if change.Remote {
-						text = i18n.Tf("%s：双方均已改", comparisonFieldLabel(change.Path))
+						text = i18n.Tf("vault.compare.both_changed", comparisonFieldLabel(change.Path))
 					}
 				}
 				if change.SameValue {
-					text = i18n.Tf("%s（双方当前值相同）", text)
+					text = i18n.Tf("vault.compare.same_value", text)
 				}
 				ui.Text(c, text)
 				if change.Local && change.CanApply {
-					label := i18n.T("采用我的修改")
+					label := i18n.T("vault.compare.use_local")
 					if e.localChoices[change.Path] {
-						label = i18n.T("✓ 采用我的修改（点击改用远端）")
+						label = i18n.T("vault.compare.local_selected")
 					}
 					if kit.Action(c, label, "", false, a.pending != 0).Clicked() {
 						e.localChoices[change.Path] = !e.localChoices[change.Path]
 					}
 				} else if change.Local {
 					a.cipherRowPreviewView(c, e, change.Path)
-					ui.Text(c, i18n.T("列表没有固定行 ID。逐行明确选择对应关系；未选择的远端行及其扩展始终保留。点击选择按钮循环：保留远端、作为新增、对应远端各行。删除请继续后在新表单中确认。"))
+					ui.Text(c, i18n.T("vault.compare.row_matching_hint"))
 					for _, label := range change.RemoteRows {
-						ui.Text(c, i18n.Tf("远端 · %s", label)).FontSize(12)
+						ui.Text(c, i18n.Tf("vault.compare.remote_row", label)).FontSize(12)
 					}
 					for i, label := range change.LocalRows {
-						ui.Text(c, i18n.Tf("本地 · %s", label)).FontSize(12)
+						ui.Text(c, i18n.Tf("vault.compare.local_row", label)).FontSize(12)
 						choices := e.rowChoices[change.Path]
 						if i >= len(choices) {
 							continue
 						}
-						label := i18n.T("保留远端，不应用此本地行")
+						label := i18n.T("vault.compare.keep_remote_row")
 						if choices[i] == -1 {
-							label = i18n.T("作为独立新增行")
+							label = i18n.T("vault.compare.add_row")
 						} else if choices[i] >= 0 {
-							label = i18n.Tf("明确对应远端第 %d 行", choices[i]+1)
+							label = i18n.Tf("vault.compare.match_remote_row", choices[i]+1)
 						}
 						if kit.Action(c, label, "", false, a.pending != 0).Clicked() {
 							choices[i]++
@@ -155,14 +155,14 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 					}
 				}
 			}
-			ui.Text(c, i18n.T("服务器按整秒差值大于 1 检测旧版本（不足两秒可能不拒绝），无法保证比较后没有其他客户端再次修改。保存若再次冲突，会保留草稿供重新比较。"))
-			if kit.Action(c, i18n.T("采用远端版本，放弃本地修改"), "", false, a.pending != 0).Clicked() {
+			ui.Text(c, i18n.T("vault.compare.version_conflict_hint"))
+			if kit.Action(c, i18n.T("vault.compare.use_remote"), "", false, a.pending != 0).Clicked() {
 				a.applyCipherComparison(false)
 			}
-			if kit.Action(c, i18n.T("按以上选择重新应用到草稿"), "", true, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("vault.compare.reapply_selections"), "", true, a.pending != 0).Clicked() {
 				a.applyCipherComparison(true)
 			}
-			if kit.Action(c, i18n.T("返回，保留原草稿"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("vault.compare.back_keep_draft"), "", false, a.pending != 0).Clicked() {
 				clearCipherRowReveal(e)
 				e.comparison = nil
 				e.changes = nil
@@ -203,7 +203,7 @@ func (a *app) applyCipherComparison(useChoices bool) {
 	}
 	document, fields, err := s.ApplyPersonalCipherComparisonRows(a.vault, a.sessionRevision, e.comparison, choices, rows)
 	if err != nil {
-		a.status = i18n.Tf("比较版本已失效，请重新同步和比较：%s", err.Error())
+		a.status = i18n.Tf("vault.compare.err_expired", err.Error())
 		e.comparison = nil
 		e.changes = nil
 		e.localChoices = nil
@@ -213,5 +213,5 @@ func (a *app) applyCipherComparison(useChoices bool) {
 	*e = cipherEditor{document: document, fields: fields, revision: a.sessionRevision, authorization: grant, authorizationExpires: expires}
 	populateCipherEditor(e)
 	a.secretInputVersion++
-	a.status = i18n.T("已采用最新版本并保留所选修改，请检查表单后明确保存。")
+	a.status = i18n.T("vault.compare.status_applied")
 }

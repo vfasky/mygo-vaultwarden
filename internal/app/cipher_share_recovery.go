@@ -25,7 +25,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 	if !vaultwarden.CipherShareRequiresRecovery(e.document) {
 		return session.SharePersonalCipher(ctx, vault, e.shareOrganizationID, e.shareCollectionID, e.document, e.fields, e.authorization, persist)
 	}
-	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("MyGo 加密共享迁移恢复文件"), Extensions: []string{"mygoshare-recovery"}}}})
+	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
 	if err != nil {
 		return vaultwarden.CipherDocument{}, err
 	}
@@ -80,7 +80,7 @@ func (a *app) chooseCipherShareRecovery() {
 	a.pending++
 	parent := a.window
 	go func() {
-		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("MyGo 加密共享迁移恢复文件"), Extensions: []string{"mygoshare-recovery"}}}})
+		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
 		var data []byte
 		var header struct {
 			CipherID string `json:"cipherId"`
@@ -106,7 +106,7 @@ func (a *app) chooseCipherShareRecovery() {
 			}
 			if len(data) > 0 {
 				e.recovery = &cipherShareRecoveryEditor{file: data, id: header.CipherID}
-				a.status = i18n.T("文件尚未认证；请先同步，再核对迁移状态。")
+				a.status = i18n.T("vault.share_recovery.status_unauthenticated")
 			}
 		})
 	}()
@@ -116,29 +116,29 @@ func (a *app) cipherShareRecoveryView(c *ui.Context, e *backupEditor) {
 	busy := a.pending != 0
 	ui.Scroll(c).Grow(1).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("共享迁移恢复核对")).FontSize(23)
-			ui.Text(c, i18n.T("恢复文件绑定原服务器、账户和当时的账户密钥。它不能替代当前权限，也不能在账户密钥轮换/删除后保证解锁。只修复与记录一致的旧个人或新组织条目的附件包装；不会抢回组织所有权、覆盖外部修改或删除文件。未决文件不会自动移除。")).MaxLines(7)
-			ui.Text(c, i18n.Tf("文件声明的项目编号（认证前不可信）：%s", r.id)).MaxLines(2)
-			ui.TextInput(c, &r.password).Label(i18n.T("受保护项目的主密码（操作后清除）")).Password().Disabled(busy)
-			if kit.Action(c, i18n.T("先同步当前密码库"), "sync", false, busy).Clicked() {
+			ui.Text(c, i18n.T("vault.share_recovery.title")).FontSize(23)
+			ui.Text(c, i18n.T("vault.share_recovery.description")).MaxLines(7)
+			ui.Text(c, i18n.Tf("vault.share_recovery.declared_item_id", r.id)).MaxLines(2)
+			ui.TextInput(c, &r.password).Label(i18n.T("vault.share_recovery.master_password")).Password().Disabled(busy)
+			if kit.Action(c, i18n.T("vault.share_recovery.sync_first"), "sync", false, busy).Clicked() {
 				a.syncVault(false)
 			}
-			if kit.Action(c, i18n.T("认证恢复文件并新读取核对"), "", false, busy).Clicked() {
+			if kit.Action(c, i18n.T("vault.share_recovery.authenticate_verify"), "", false, busy).Clicked() {
 				a.runCipherShareRecovery(false)
 			}
 			if r.inspected {
-				ui.Text(c, i18n.Tf("当前项目：%s · %s", vaultwarden.ShareRecoveryStateText(r.inspection.CipherState), r.inspection.CipherID))
+				ui.Text(c, i18n.Tf("vault.share_recovery.current_item", vaultwarden.ShareRecoveryStateText(r.inspection.CipherState), r.inspection.CipherID))
 				for _, attachment := range r.inspection.Attachments {
 					ui.Text(c, attachment.ID+"："+vaultwarden.ShareRecoveryStateText(attachment.State)).FontSize(12)
 				}
 				if r.attempted {
-					ui.Text(c, i18n.T("本轮修复已尝试，请同步并再次核对。结果未知时不重复发请求；继续修复需重新打开文件、认证和确认。"))
+					ui.Text(c, i18n.T("vault.share_recovery.attempted_hint"))
 				}
-				if kit.Action(c, i18n.T("确认仅把附件包装修复为当前项目密钥对应的版本"), "", true, busy || !r.inspection.CanRepair || r.attempted).Clicked() {
+				if kit.Action(c, i18n.T("vault.share_recovery.confirm_repair"), "", true, busy || !r.inspection.CanRepair || r.attempted).Clicked() {
 					a.runCipherShareRecovery(true)
 				}
 			}
-			if kit.Action(c, i18n.T("取消并关闭恢复核对"), "", false, false).Clicked() {
+			if kit.Action(c, i18n.T("vault.share_recovery.cancel_close"), "", false, false).Clicked() {
 				if a.cancel != nil {
 					a.cancel()
 					a.cancel = nil
@@ -225,14 +225,14 @@ func (a *app) runCipherShareRecovery(repair bool) {
 				return
 			}
 			if err != nil {
-				a.status = i18n.Tf("%s 请保留恢复文件并同步核对。", err.Error())
+				a.status = i18n.Tf("vault.share_recovery.err_keep_file", err.Error())
 				return
 			}
 			if !repair {
 				r.inspection, r.inspected = inspection, true
-				a.status = i18n.T("已依据认证文件和新服务器读取完成分类。")
+				a.status = i18n.T("vault.share_recovery.status_classified")
 			} else {
-				a.status = i18n.T("修复请求已确认；请同步后重新核对所有附件包装。")
+				a.status = i18n.T("vault.share_recovery.status_repaired")
 			}
 		})
 	}()

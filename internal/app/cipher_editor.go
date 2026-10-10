@@ -73,15 +73,17 @@ type cipherEditor struct {
 
 // Type names also form organization selector keys; translate only for display.
 var cipherTypeNames = []string{"", "itemtype.login", "itemtype.note", "itemtype.card", "itemtype.identity", "itemtype.ssh_key", "itemtype.bank", "itemtype.license", "itemtype.passport"}
+
+// Specs store label keys; populateCipherEditor resolves them for display.
 var editorSpecs = map[int][]editorField{
-	1: {{key: "username", label: i18n.T("用户名")}, {key: "password", label: i18n.T("密码"), secret: true}, {key: "totp", label: i18n.T("验证码密钥"), secret: true}},
+	1: {{key: "username", label: "common.username"}, {key: "password", label: "common.password", secret: true}, {key: "totp", label: "vault.field.login.totp", secret: true}},
 	2: {},
-	3: {{key: "cardholderName", label: i18n.T("持卡人")}, {key: "brand", label: i18n.T("卡组织")}, {key: "number", label: i18n.T("卡号"), secret: true}, {key: "expMonth", label: i18n.T("到期月")}, {key: "expYear", label: i18n.T("到期年")}, {key: "code", label: i18n.T("安全码"), secret: true}},
-	4: {{key: "title", label: i18n.T("称谓")}, {key: "firstName", label: i18n.T("名")}, {key: "middleName", label: i18n.T("中间名")}, {key: "lastName", label: i18n.T("姓")}, {key: "address1", label: i18n.T("地址一")}, {key: "address2", label: i18n.T("地址二")}, {key: "address3", label: i18n.T("地址三")}, {key: "city", label: i18n.T("城市")}, {key: "state", label: i18n.T("省/州")}, {key: "postalCode", label: i18n.T("邮编")}, {key: "country", label: i18n.T("国家")}, {key: "company", label: i18n.T("公司")}, {key: "email", label: i18n.T("邮箱")}, {key: "phone", label: i18n.T("电话")}, {key: "ssn", label: i18n.T("社会保障号码"), secret: true}, {key: "username", label: i18n.T("用户名")}, {key: "passportNumber", label: i18n.T("护照号码"), secret: true}, {key: "licenseNumber", label: i18n.T("驾驶证号码"), secret: true}},
-	5: {{key: "privateKey", label: i18n.T("私钥"), secret: true}, {key: "publicKey", label: i18n.T("公钥")}, {key: "keyFingerprint", label: i18n.T("指纹")}},
-	6: {{key: "bankName", label: i18n.T("银行名称")}, {key: "nameOnAccount", label: i18n.T("账户姓名")}, {key: "accountType", label: i18n.T("账户类型")}, {key: "accountNumber", label: i18n.T("账号"), secret: true}, {key: "routingNumber", label: i18n.T("路由号码")}, {key: "branchNumber", label: i18n.T("分行号码")}, {key: "pin", label: "PIN", secret: true}, {key: "swiftCode", label: "SWIFT"}, {key: "iban", label: "IBAN"}, {key: "bankContactPhone", label: i18n.T("银行电话")}},
-	7: {{key: "firstName", label: i18n.T("名")}, {key: "middleName", label: i18n.T("中间名")}, {key: "lastName", label: i18n.T("姓")}, {key: "dateOfBirth", label: i18n.T("出生日期")}, {key: "licenseNumber", label: i18n.T("驾驶证号码"), secret: true}, {key: "issuingCountry", label: i18n.T("签发国家")}, {key: "issuingState", label: i18n.T("签发省/州")}, {key: "issueDate", label: i18n.T("签发日期")}, {key: "expirationDate", label: i18n.T("到期日期")}, {key: "issuingAuthority", label: i18n.T("签发机关")}, {key: "licenseClass", label: i18n.T("准驾车型")}},
-	8: {{key: "surname", label: i18n.T("姓")}, {key: "givenName", label: i18n.T("名")}, {key: "dateOfBirth", label: i18n.T("出生日期")}, {key: "sex", label: i18n.T("性别")}, {key: "birthPlace", label: i18n.T("出生地")}, {key: "nationality", label: i18n.T("国籍")}, {key: "issuingCountry", label: i18n.T("签发国家")}, {key: "passportNumber", label: i18n.T("护照号码"), secret: true}, {key: "passportType", label: i18n.T("护照类型")}, {key: "nationalIdentificationNumber", label: i18n.T("身份证号码"), secret: true}, {key: "issuingAuthority", label: i18n.T("签发机关")}, {key: "issueDate", label: i18n.T("签发日期")}, {key: "expirationDate", label: i18n.T("到期日期")}},
+	3: {{key: "cardholderName", label: "vault.field.card.holder"}, {key: "brand", label: "vault.field.card.brand"}, {key: "number", label: "vault.field.card.number", secret: true}, {key: "expMonth", label: "vault.field.card.expiration_month"}, {key: "expYear", label: "vault.field.card.expiration_year"}, {key: "code", label: "vault.field.card.security_code", secret: true}},
+	4: {{key: "title", label: "vault.field.identity.title"}, {key: "firstName", label: "vault.field.first_name"}, {key: "middleName", label: "vault.field.middle_name"}, {key: "lastName", label: "vault.field.last_name"}, {key: "address1", label: "vault.field.identity.address_one"}, {key: "address2", label: "vault.field.identity.address_two"}, {key: "address3", label: "vault.field.identity.address_three"}, {key: "city", label: "vault.field.identity.city"}, {key: "state", label: "vault.field.identity.state"}, {key: "postalCode", label: "vault.field.identity.postal_code"}, {key: "country", label: "vault.field.identity.country"}, {key: "company", label: "vault.field.identity.company"}, {key: "email", label: "common.email"}, {key: "phone", label: "vault.field.identity.phone"}, {key: "ssn", label: "vault.field.identity.social_security_number", secret: true}, {key: "username", label: "common.username"}, {key: "passportNumber", label: "vault.field.passport.number", secret: true}, {key: "licenseNumber", label: "vault.field.license.number", secret: true}},
+	5: {{key: "privateKey", label: "vault.field.ssh.private_key", secret: true}, {key: "publicKey", label: "vault.field.ssh.public_key"}, {key: "keyFingerprint", label: "vault.field.ssh.fingerprint"}},
+	6: {{key: "bankName", label: "vault.field.bank.name"}, {key: "nameOnAccount", label: "vault.field.bank.account_holder"}, {key: "accountType", label: "vault.field.bank.account_type"}, {key: "accountNumber", label: "vault.field.bank.account_number", secret: true}, {key: "routingNumber", label: "vault.field.bank.routing_number"}, {key: "branchNumber", label: "vault.field.bank.branch_number"}, {key: "pin", label: "vault.field.bank.pin", secret: true}, {key: "swiftCode", label: "vault.field.bank.swift"}, {key: "iban", label: "vault.field.bank.iban"}, {key: "bankContactPhone", label: "vault.field.bank.phone"}},
+	7: {{key: "firstName", label: "vault.field.first_name"}, {key: "middleName", label: "vault.field.middle_name"}, {key: "lastName", label: "vault.field.last_name"}, {key: "dateOfBirth", label: "vault.field.date_of_birth"}, {key: "licenseNumber", label: "vault.field.license.number", secret: true}, {key: "issuingCountry", label: "vault.field.issuing_country"}, {key: "issuingState", label: "vault.field.license.issuing_state"}, {key: "issueDate", label: "vault.field.issue_date"}, {key: "expirationDate", label: "vault.field.expiration_date"}, {key: "issuingAuthority", label: "vault.field.issuing_authority"}, {key: "licenseClass", label: "vault.field.license.class"}},
+	8: {{key: "surname", label: "vault.field.last_name"}, {key: "givenName", label: "vault.field.first_name"}, {key: "dateOfBirth", label: "vault.field.date_of_birth"}, {key: "sex", label: "vault.field.passport.sex"}, {key: "birthPlace", label: "vault.field.passport.birth_place"}, {key: "nationality", label: "vault.field.passport.nationality"}, {key: "issuingCountry", label: "vault.field.issuing_country"}, {key: "passportNumber", label: "vault.field.passport.number", secret: true}, {key: "passportType", label: "vault.field.passport.type"}, {key: "nationalIdentificationNumber", label: "vault.field.passport.national_identification_number", secret: true}, {key: "issuingAuthority", label: "vault.field.issuing_authority"}, {key: "issueDate", label: "vault.field.issue_date"}, {key: "expirationDate", label: "vault.field.expiration_date"}},
 }
 
 func sectionFields(f *vaultwarden.CipherFields) map[string]any {
@@ -240,7 +242,7 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 			}
 		}
 		if strings.HasPrefix(a.category, "org:") {
-			a.status = i18n.T("请先选择可写集合，再新增组织项目。")
+			a.status = i18n.T("vault.editor.err_select_writable_collection")
 			return
 		}
 	}
@@ -260,6 +262,7 @@ func populateCipherEditor(editor *cipherEditor) {
 	editor.inputs = append([]editorField(nil), editorSpecs[editor.fields.Type]...)
 	section := sectionFields(&editor.fields)
 	for i := range editor.inputs {
+		editor.inputs[i].label = i18n.T(editor.inputs[i].label)
 		editor.inputs[i].value, _ = section[editor.inputs[i].key].(string)
 	}
 	if uris, ok := editor.fields.Login["uris"].([]any); ok {
@@ -300,7 +303,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			}
 			a.editor = nil
 			a.secretInputVersion++
-			a.status = i18n.T("项目授权已到期，请重新验证主密码。")
+			a.status = i18n.T("vault.editor.err_authorization_expired")
 			return
 		}
 		c.After(time.Until(e.authorizationExpires))
@@ -322,19 +325,19 @@ func (a *app) cipherEditorView(c *ui.Context) {
 	}
 	ui.Scroll(c.Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion))).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(12).Padding(18).Children(func() {
-			title := i18n.Tf("编辑%s", i18n.T(cipherTypeNames[e.fields.Type]))
+			title := i18n.Tf("vault.editor.edit_title", i18n.T(cipherTypeNames[e.fields.Type]))
 			if e.fields.ID == "" {
-				title = i18n.Tf("新增%s", i18n.T(cipherTypeNames[e.fields.Type]))
+				title = i18n.Tf("vault.editor.add_title", i18n.T(cipherTypeNames[e.fields.Type]))
 			}
 			ui.Text(c, title).FontSize(23).FontWeight(600)
 			if e.fields.OrganizationID != nil || e.organizationID != "" {
-				ui.Text(c, i18n.T("组织权限以最新同步为准；同步会关闭此表单并清除未保存更改。")).FontSize(12)
+				ui.Text(c, i18n.T("vault.editor.organization_sync_hint")).FontSize(12)
 			}
 			if e.organizationID != "" && e.fields.ID == "" {
 				a.organizationTypePicker(c, e)
 			}
-			ui.Text(c, i18n.T("标题")).FontSize(12)
-			ui.TextInput(c, &e.fields.Name).Label(i18n.T("标题")).Disabled(a.pending != 0 || e.uncertain)
+			ui.Text(c, i18n.T("vault.field.title")).FontSize(12)
+			ui.TextInput(c, &e.fields.Name).Label(i18n.T("vault.field.title")).Disabled(a.pending != 0 || e.uncertain)
 			for i := range e.inputs {
 				f := &e.inputs[i]
 				ui.Text(c, f.label).FontSize(12)
@@ -354,34 +357,34 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			if e.fields.Type == 1 {
 				if e.fields.ID != "" {
 					ui.Row(c).Gap(8).Children(func() {
-						if kit.Action(c, i18n.T("显示已保存密码"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, i18n.T("vault.editor.show_saved_password"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.showPersonalSecret("password", callStorage)
 						}
-						if kit.Action(c, i18n.T("显示当前验证码"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, i18n.T("vault.editor.show_current_code"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.showPersonalSecret("totp", callStorage)
 						}
-						if kit.Action(c, i18n.T("复制已保存密码"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, i18n.T("vault.editor.copy_saved_password"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.copyPersonalSecret("password", callStorage)
 						}
-						if kit.Action(c, i18n.T("复制当前验证码"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, i18n.T("vault.editor.copy_current_code"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.copyPersonalSecret("totp", callStorage)
 						}
 					})
 					if e.shownSecret != "" {
 						ui.Text(c, e.shownSecret).FontSize(20)
-						if kit.Action(c, i18n.T("隐藏"), "", false, false).Clicked() {
+						if kit.Action(c, i18n.T("common.hide"), "", false, false).Clicked() {
 							e.shownSecret = ""
 						}
 					}
-					ui.Text(c, i18n.T("显示与复制使用已保存内容，最多显示 30 秒；剪贴板可被其他应用读取。")).FontSize(12)
+					ui.Text(c, i18n.T("vault.editor.secret_display_hint")).FontSize(12)
 				}
-				ui.Text(c, i18n.T("网站")).FontSize(12)
+				ui.Text(c, i18n.T("vault.field.website")).FontSize(12)
 				remove := -1
 				for i := range e.uris {
 					uri := &e.uris[i]
 					ui.Row(c.Key(fmt.Sprintf("uri-%d", i))).Gap(8).Children(func() {
-						ui.TextInput(c, &uri.value).Label(i18n.Tf("网站 %d", i+1)).Grow(1).Disabled(a.pending != 0 || e.uncertain)
-						if kit.Action(c, i18n.T("移除"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+						ui.TextInput(c, &uri.value).Label(i18n.Tf("vault.editor.website_number", i+1)).Grow(1).Disabled(a.pending != 0 || e.uncertain)
+						if kit.Action(c, i18n.T("vault.editor.remove"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 							remove = i
 						}
 					})
@@ -390,26 +393,26 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				if remove >= 0 {
 					e.uris = append(e.uris[:remove], e.uris[remove+1:]...)
 				}
-				if kit.Action(c, i18n.T("添加网站"), "", false, a.pending != 0 || e.uncertain || len(e.uris) >= 128).Clicked() {
+				if kit.Action(c, i18n.T("vault.editor.add_website"), "", false, a.pending != 0 || e.uncertain || len(e.uris) >= 128).Clicked() {
 					e.uris = append(e.uris, editorURI{source: map[string]any{"match": nil}})
 				}
 			}
 			a.folderPicker(c, &e.fields.FolderID, a.pending != 0 || e.uncertain)
-			favorite := i18n.T("加入收藏")
+			favorite := i18n.T("vault.editor.add_favorite")
 			if e.fields.Favorite {
-				favorite = i18n.T("取消收藏")
+				favorite = i18n.T("vault.editor.remove_favorite")
 			}
 			if kit.Action(c, favorite, "star", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.fields.Favorite = !e.fields.Favorite
 			}
-			ui.Text(c, i18n.T("自定义字段")).FontSize(12)
+			ui.Text(c, i18n.T("vault.field.custom")).FontSize(12)
 			removeCustom := -1
 			for i := range e.custom {
 				field := &e.custom[i]
 				ui.Column(c.Key(fmt.Sprintf("custom-%d", i))).Gap(6).Children(func() {
-					ui.TextInput(c, &field.name).Label(i18n.T("字段名称")).Disabled(a.pending != 0 || e.uncertain || !field.editable)
+					ui.TextInput(c, &field.name).Label(i18n.T("vault.field.custom_name")).Disabled(a.pending != 0 || e.uncertain || !field.editable)
 					a.customValueEditor(c, e, field)
-					if kit.Action(c, i18n.T("删除字段"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+					if kit.Action(c, i18n.T("vault.editor.delete_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 						removeCustom = i
 					}
 				})
@@ -418,52 +421,52 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				e.custom = append(e.custom[:removeCustom], e.custom[removeCustom+1:]...)
 			}
 			ui.Row(c).Gap(8).Children(func() {
-				if kit.Action(c, i18n.T("添加文本字段"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if kit.Action(c, i18n.T("vault.editor.add_text_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("0")}, editable: true, kind: "0"})
 				}
-				if kit.Action(c, i18n.T("添加隐藏字段"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if kit.Action(c, i18n.T("vault.editor.add_hidden_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("1")}, hidden: true, editable: true, kind: "1"})
 				}
 			})
 			ui.Row(c).Gap(8).Children(func() {
-				if kit.Action(c, i18n.T("添加布尔字段"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if kit.Action(c, i18n.T("vault.editor.add_boolean_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("2")}, value: "false", editable: true, kind: "2"})
 				}
-				if len(linkedFields[e.fields.Type]) > 0 && kit.Action(c, i18n.T("添加关联字段"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if len(linkedFields[e.fields.Type]) > 0 && kit.Action(c, i18n.T("vault.editor.add_linked_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("3")}, editable: true, kind: "3", linkedID: linkedFields[e.fields.Type][0].id})
 				}
 			})
 			a.passwordHistoryView(c, e)
 			a.attachmentView(c, e)
 			a.cipherAttachmentMigrationView(c, e)
-			ui.Text(c, i18n.T("备注")).FontSize(12)
-			ui.TextArea(c, &e.notes).Label(i18n.T("备注")).MinHeight(100).Disabled(a.pending != 0 || e.uncertain)
+			ui.Text(c, i18n.T("common.notes")).FontSize(12)
+			ui.TextArea(c, &e.notes).Label(i18n.T("common.notes")).MinHeight(100).Disabled(a.pending != 0 || e.uncertain)
 			if e.uncertain {
-				ui.Text(c, i18n.T("请先同步核对服务器结果，当前表单不会重复提交。")).FontSize(12).TextColor(kit.Purple)
+				ui.Text(c, i18n.T("vault.editor.uncertain_hint")).FontSize(12).TextColor(kit.Purple)
 			}
 			if e.fields.OrganizationID == nil && e.fields.ID != "" && (e.conflict || e.uncertain || e.revision != a.sessionRevision) {
-				ui.Text(c, i18n.T("草稿已保留。先同步核实结果，再比较改动；不会自动重试。秘密比较仅显示是否更改。"))
-				if kit.Action(c, i18n.T("同步最新版本"), "sync", false, a.pending != 0).Clicked() {
+				ui.Text(c, i18n.T("vault.compare.draft_preserved_hint"))
+				if kit.Action(c, i18n.T("vault.editor.sync_latest"), "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
 				}
-				if kit.Action(c, i18n.T("比较本地与远端改动"), "", false, a.pending != 0 || e.revision == a.sessionRevision).Clicked() {
+				if kit.Action(c, i18n.T("vault.compare.title"), "", false, a.pending != 0 || e.revision == a.sessionRevision).Clicked() {
 					a.compareCipher(nil)
 				}
 			}
 			ui.Row(c).Gap(8).Children(func() {
-				if kit.Action(c, i18n.T("保存"), "sync", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
+				if kit.Action(c, i18n.T("common.save"), "sync", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
 					a.saveCipher()
 				}
-				if kit.Action(c, i18n.T("取消"), "", false, a.pending != 0).Clicked() {
+				if kit.Action(c, i18n.T("common.cancel"), "", false, a.pending != 0).Clicked() {
 					a.editor = nil
 				}
-				if e.uncertain && kit.Action(c, i18n.T("同步核对"), "sync", false, a.pending != 0).Clicked() {
+				if e.uncertain && kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
 				}
 			})
 			if e.fields.ID != "" && e.fields.OrganizationID == nil {
 				if organizationUIEnabled && vaultwarden.CipherShareRequiresRecovery(e.document) {
-					ui.Text(c, i18n.T("旧格式附件共享需要先保存账户绑定的加密恢复文件。共享前后都请保留它，结果未知时从导入导出页打开核对；文件依赖当前账户密钥，账号密钥轮换或删除前必须处理未决迁移。无 key 附件需先完成上方迁移。"))
+					ui.Text(c, i18n.T("vault.share_recovery.legacy_attachment_hint"))
 				}
 				if organizationUIEnabled {
 					a.organizationShareView(c, e)
@@ -478,44 +481,44 @@ const copyCipherAction vaultwarden.CipherAction = "copyDraft"
 
 func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 	if e.confirm != "" {
-		text := i18n.T("确认将项目移入回收站？")
+		text := i18n.T("vault.editor.confirm_trash")
 		if e.confirm == vaultwarden.CipherDeletePermanently {
-			text = i18n.T("永久删除无法恢复。确认删除此项目及其附件？")
+			text = i18n.T("vault.editor.confirm_delete_permanently")
 		}
 		if e.confirm == copyCipherAction {
-			text = i18n.T("将项目复制为独立条目，原项目不变。副本保留文件夹、收藏、密码历史和通行密钥数据，恢复为未归档状态。含附件时请先保存草稿；验证源文件并创建副本后，还需逐文件恢复和核验才算完成。未知扩展不会被默默丢弃。")
+			text = i18n.T("vault.copy.confirm_copy")
 		}
 		ui.Text(c, text).TextColor(kit.Purple)
 		ui.Row(c).Gap(8).Children(func() {
-			if kit.Action(c, i18n.T("确认"), "", true, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, i18n.T("common.confirm"), "", true, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(e.confirm)
 			}
-			if kit.Action(c, i18n.T("取消操作"), "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, i18n.T("vault.editor.cancel_operation"), "", false, a.pending != 0).Clicked() {
 				e.confirm = ""
 			}
 		})
 		return
 	}
 	ui.Row(c).Gap(8).Children(func() {
-		if kit.Action(c, i18n.T("复制为新项目"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+		if kit.Action(c, i18n.T("vault.copy.create_item"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 			e.confirm = copyCipherAction
 		}
 		if e.fields.DeletedDate != nil {
-			if kit.Action(c, i18n.T("恢复"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, i18n.T("common.restore"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(vaultwarden.CipherRestore)
 			}
-			if kit.Action(c, i18n.T("永久删除"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, i18n.T("common.delete_permanently"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = vaultwarden.CipherDeletePermanently
 			}
 		} else {
-			label, op := i18n.T("归档"), vaultwarden.CipherArchive
+			label, op := i18n.T("common.archive"), vaultwarden.CipherArchive
 			if e.fields.ArchivedDate != nil {
-				label, op = i18n.T("取消归档"), vaultwarden.CipherUnarchive
+				label, op = i18n.T("common.unarchive"), vaultwarden.CipherUnarchive
 			}
 			if kit.Action(c, label, "", false, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(op)
 			}
-			if kit.Action(c, i18n.T("移入回收站"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, i18n.T("vault.editor.move_to_trash"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = vaultwarden.CipherTrash
 			}
 		}
@@ -530,11 +533,11 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 		*a.editor = cipherEditor{}
 		a.editor = nil
 		a.secretInputVersion++
-		a.status = i18n.T("项目授权已到期，请重新验证主密码。")
+		a.status = i18n.T("vault.editor.err_authorization_expired")
 		return
 	}
 	if a.editor.revision != a.sessionRevision {
-		a.status = i18n.T("密码库版本已变化，已保留表单内容。请核对最新项目后重新编辑。")
+		a.status = i18n.T("vault.editor.err_revision_changed")
 		return
 	}
 	session, ok := a.session.(*vaultwarden.Session)
@@ -556,7 +559,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	a.cancel = cancel
 	a.pending++
 	parent := a.window
-	a.status = i18n.T("正在保存修改…")
+	a.status = i18n.T("vault.editor.status_saving")
 	go func() {
 		var reply localstore.Reply
 		var checkpointState *localstore.SnapshotStatus
@@ -622,6 +625,6 @@ func (a *app) completeCipherMutation(epoch uint64, editor *cipherEditor, checkpo
 		return
 	}
 	editor.uncertain, editor.saved = true, true
-	a.status = i18n.T("修改已提交，正在同步核对…")
+	a.status = i18n.T("vault.editor.status_submitted")
 	a.syncVault(false)
 }
