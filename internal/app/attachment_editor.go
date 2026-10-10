@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -13,6 +12,7 @@ import (
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -23,46 +23,46 @@ func (a *app) attachmentView(c *ui.Context, e *cipherEditor) {
 		return
 	}
 	busy := a.pending != 0
-	ui.Text(c, "附件").FontSize(16)
-	ui.Text(c, "文件单独加密传输，最大 512 MiB。下载会保存为新的明文文件，不覆盖已有文件；当前需要联网。上传和删除前请先保存项目草稿。").FontSize(12).MaxLines(4)
-	if kit.Action(c, "加载或刷新附件列表", "", false, busy || e.uncertain).Clicked() {
+	ui.Text(c, i18n.T("附件")).FontSize(16)
+	ui.Text(c, i18n.T("文件单独加密传输，最大 512 MiB。下载会保存为新的明文文件，不覆盖已有文件；当前需要联网。上传和删除前请先保存项目草稿。")).FontSize(12).MaxLines(4)
+	if kit.Action(c, i18n.T("加载或刷新附件列表"), "", false, busy || e.uncertain).Clicked() {
 		a.runAttachmentOperation("list", vaultwarden.AttachmentInfo{})
 	}
-	if e.fields.Edit && kit.Action(c, "选择并上传文件…", "", false, busy || e.uncertain || e.fields.DeletedDate != nil).Clicked() {
+	if e.fields.Edit && kit.Action(c, i18n.T("选择并上传文件…"), "", false, busy || e.uncertain || e.fields.DeletedDate != nil).Clicked() {
 		a.runAttachmentOperation("upload", vaultwarden.AttachmentInfo{})
 	}
 	if e.attachmentsLoaded && len(e.attachments) == 0 {
-		ui.Text(c, "此项目没有附件。").FontSize(12)
+		ui.Text(c, i18n.T("此项目没有附件。")).FontSize(12)
 	}
 	for _, attachment := range e.attachments {
 		ui.Column(c).Gap(6).Children(func() {
 			ui.Text(c, attachment.FileName).MaxLines(2)
-			ui.Text(c, fmt.Sprintf("加密大小：%d 字节", attachment.CiphertextSize)).FontSize(11)
-			if kit.Action(c, "下载并另存为…", "", false, busy || e.uncertain).Clicked() {
+			ui.Text(c, i18n.Tf("加密大小：%d 字节", attachment.CiphertextSize)).FontSize(11)
+			if kit.Action(c, i18n.T("下载并另存为…"), "", false, busy || e.uncertain).Clicked() {
 				a.runAttachmentOperation("download", attachment)
 			}
 			if e.fields.Edit {
 				if e.attachmentDelete == attachment.ID {
-					ui.Text(c, "永久删除此附件？此操作无法撤销。").FontSize(12)
-					if kit.Action(c, "确认永久删除附件", "", true, busy || e.uncertain).Clicked() {
+					ui.Text(c, i18n.T("永久删除此附件？此操作无法撤销。")).FontSize(12)
+					if kit.Action(c, i18n.T("确认永久删除附件"), "", true, busy || e.uncertain).Clicked() {
 						a.runAttachmentOperation("delete", attachment)
 					}
-					if kit.Action(c, "保留附件", "", false, busy).Clicked() {
+					if kit.Action(c, i18n.T("保留附件"), "", false, busy).Clicked() {
 						e.attachmentDelete = ""
 					}
-				} else if kit.Action(c, "删除附件…", "", false, busy || e.uncertain).Clicked() {
+				} else if kit.Action(c, i18n.T("删除附件…"), "", false, busy || e.uncertain).Clicked() {
 					e.attachmentDelete = attachment.ID
 				}
 			}
 		})
 	}
 	if e.attachmentBusy {
-		ui.Text(c, "正在验证权限并传输附件，请稍候…").FontSize(12)
-		if kit.Action(c, "取消附件操作", "", false, false).Clicked() {
+		ui.Text(c, i18n.T("正在验证权限并传输附件，请稍候…")).FontSize(12)
+		if kit.Action(c, i18n.T("取消附件操作"), "", false, false).Clicked() {
 			if a.cancel != nil {
 				a.cancel()
 			}
-			a.status = "已请求取消；已经发出的上传或删除仍需同步核对。"
+			a.status = i18n.T("已请求取消；已经发出的上传或删除仍需同步核对。")
 		}
 	}
 }
@@ -124,7 +124,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 			return
 		}
 		if err := attachmentDraftSaved(session, a.vault, e); err != nil {
-			a.status = "请先保存项目更改，再上传或删除附件。"
+			a.status = i18n.T("请先保存项目更改，再上传或删除附件。")
 			return
 		}
 	}
@@ -229,9 +229,9 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				a.status = err.Error()
 				if submitted {
 					e.uncertain = true
-					a.status += " 请同步核对附件列表，不要重复提交。"
+					a.status = i18n.Tf("%s 请同步核对附件列表，不要重复提交。", a.status)
 					if upload.AttachmentID != "" {
-						a.status += " 附件编号：" + upload.AttachmentID
+						a.status = i18n.Tf("%s 附件编号：%s", a.status, upload.AttachmentID)
 					}
 				}
 				return
@@ -243,7 +243,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 			switch operation {
 			case "list":
 				e.attachments, e.attachmentsLoaded = rows, true
-				a.status = "附件列表已验证。"
+				a.status = i18n.T("附件列表已验证。")
 			case "download":
 				if stage == nil {
 					a.status = vaultwarden.ErrProtocol.Error()
@@ -253,10 +253,10 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 					a.status = err.Error()
 					return
 				}
-				a.status = "附件已校验并保存为新的明文文件。"
+				a.status = i18n.T("附件已校验并保存为新的明文文件。")
 			case "upload", "delete":
 				a.editor = nil
-				a.status = "附件操作已确认，正在同步更新密码库。"
+				a.status = i18n.T("附件操作已确认，正在同步更新密码库。")
 				a.syncVault(false)
 			}
 		})
