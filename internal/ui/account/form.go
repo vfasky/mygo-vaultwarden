@@ -397,7 +397,7 @@ func FormView(c *ui.Context, f *Form) {
 		if preparation.Deleted {
 			ui.Text(c, "此项在回收站：只有明确恢复并重新同步后才能升级旧附件；不会自动恢复或删除。").MaxLines(4)
 		}
-		if f.OpenRotationPreparation != nil && ui.Button(c, "打开对应条目进行明确迁移").Key(preparation.CipherID+"/"+preparation.AttachmentID).Disabled(f.busy).Clicked() {
+		if f.OpenRotationPreparation != nil && ui.Button(c.Key(preparation.CipherID+"/"+preparation.AttachmentID), "打开对应条目进行明确迁移").Disabled(f.busy).Clicked() {
 			f.OpenRotationPreparation(preparation.CipherID, preparation.Deleted)
 		}
 	}

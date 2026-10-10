@@ -58,7 +58,7 @@ func (a *app) folderPicker(c *ui.Context, selected **string, disabled bool) {
 
 func (a *app) folderEditorView(c *ui.Context) {
 	e := a.folderEditor
-	ui.Column(c).Key("folder-editor").Padding(18).Gap(12).Children(func() {
+	ui.Column(c.Key("folder-editor")).Padding(18).Gap(12).Children(func() {
 		title := "新建文件夹"
 		if e.id != "" {
 			title = "管理文件夹"

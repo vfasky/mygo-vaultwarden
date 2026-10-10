@@ -16,7 +16,7 @@ NSGraphicsContext.current = context
 context.imageInterpolation = .high
 NSColor.clear.setFill()
 NSRect(x: 0, y: 0, width: size, height: size).fill(using: .copy)
-// Match the inset and radius of MyGo v0.2.15's macOS default icon.
+// Match the inset and radius of MyGo v0.3.7's macOS default icon.
 let tile = NSRect(x: 100, y: 100, width: 824, height: 824)
 let path = NSBezierPath(roundedRect: tile, xRadius: 185, yRadius: 185)
 NSGraphicsContext.saveGraphicsState()

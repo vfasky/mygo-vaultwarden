@@ -156,7 +156,7 @@ func (a *app) openOrganizationEditor(id string) {
 func (a *app) organizationEditorView(c *ui.Context) {
 	e := a.organizationEditor
 	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Key("organization-management").Padding(18).Gap(12).Children(func() {
+		ui.Column(c.Key("organization-management")).Padding(18).Gap(12).Children(func() {
 			title := "管理组织"
 			if e.id == "" {
 				title = "创建组织"

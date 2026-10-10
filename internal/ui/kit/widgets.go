@@ -35,8 +35,8 @@ func Pill(c *ui.Context, text string, bg, fg ui.Color) {
 	ui.Text(c, text).FontSize(11).TextColor(fg).Background(bg).Padding(5, 10).Radius(20).Shrink(0)
 }
 
-func Action(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Element {
-	var b *ui.Element
+func Action(c *ui.Context, label, symbol string, primary, disabled bool) ui.Element {
+	var b ui.Element
 	if primary {
 		b = ui.PrimaryButton(c, "")
 	} else {
@@ -51,14 +51,14 @@ func Action(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Ele
 	return b
 }
 
-func IconButton(c *ui.Context, label, symbol string) *ui.Element {
+func IconButton(c *ui.Context, label, symbol string) ui.Element {
 	return ui.Button(c, "").Label(label).Tooltip(label).Size(36, 36).Padding(8).Radius(18).Border(0, ui.Transparent).
 		Children(func() { Icon(c, symbol, 18) })
 }
 
 // titleBarButton is a borderless toolbar icon button, like the sidebar toggle
 // of native macOS apps: no fill until hovered, sitting on the title bar row.
-func TitleBarButton(c *ui.Context, label, symbol string) *ui.Element {
+func TitleBarButton(c *ui.Context, label, symbol string) ui.Element {
 	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(5).Radius(7).Shrink(0).TextColor(Muted)
 	if b.Pressed() {
 		b.Background(ui.RGBA(38, 30, 62, .12)).TextColor(Ink)
@@ -68,8 +68,8 @@ func TitleBarButton(c *ui.Context, label, symbol string) *ui.Element {
 	return b.Children(func() { Icon(c, symbol, 18) })
 }
 
-func ToolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Element {
-	var b *ui.Element
+func ToolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) ui.Element {
+	var b ui.Element
 	if primary {
 		b = ui.PrimaryButton(c, "")
 	} else {
@@ -95,7 +95,7 @@ var (
 )
 
 // sidebarAction is a quiet inline button beside a sidebar section title.
-func SidebarAction(c *ui.Context, label, symbol string, disabled bool) *ui.Element {
+func SidebarAction(c *ui.Context, label, symbol string, disabled bool) ui.Element {
 	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(22, 22).Padding(4).Radius(6).Shrink(0).Disabled(disabled).TextColor(sidebarIcon)
 	if disabled {
 		b.Opacity(.45)
@@ -109,7 +109,7 @@ func SidebarAction(c *ui.Context, label, symbol string, disabled bool) *ui.Eleme
 
 // sidebarItem is a source-list row: a soft rounded rectangle, a tinted icon
 // when selected, and a quiet trailing count instead of a badge.
-func SidebarItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {
+func SidebarItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) ui.Element {
 	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 10).Gap(10).Radius(9).Disabled(disabled).TextColor(sidebarText)
 	if collapsed {
 		b.Tooltip(title).Height(36).Padding(0).Justify(ui.Center)
@@ -144,11 +144,11 @@ func SidebarItem(c *ui.Context, title, symbol, count string, selected, disabled,
 	return b
 }
 
-func NavItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+func NavItem(c *ui.Context, title, symbol, count string, selected, disabled bool) ui.Element {
 	return navigationItem(c, title, symbol, count, selected, disabled, false)
 }
 
-func navigationItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {
+func navigationItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) ui.Element {
 	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 11).Gap(10).Radius(20).Disabled(disabled).TextColor(Muted)
 	if collapsed {
 		b.Tooltip(title).Justify(ui.Center)

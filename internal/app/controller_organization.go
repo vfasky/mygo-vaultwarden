@@ -488,7 +488,7 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		return
 	}
 	if prompt := c.prompt; prompt != nil {
-		ui.Column(uiContext).Key(prompt.challenge).Gap(10).Children(func() {
+		ui.Column(uiContext.Key(prompt.challenge)).Gap(10).Children(func() {
 			ui.Text(uiContext, prompt.label).MaxLines(4)
 			ui.TextInput(uiContext, &prompt.password).Label("主密码（仅用于本次项目授权）").Password()
 			if ui.Button(uiContext, "验证并继续").Clicked() {

@@ -363,7 +363,7 @@ func (p *targetRecoveryController) View(c *ui.Context) {
 	ui.Text(c, "不会复用旧会话、重发恢复请求或清除其它账号记录。密码与MFA须属于目标本人。").MaxLines(4)
 	ui.TextInput(c, &p.server).Label("目标服务器").Disabled(p.running)
 	ui.TextInput(c, &p.email).Label("目标当前邮箱").Disabled(p.running)
-	ui.Column(c).Key(fmt.Sprintf("target-password-%d", p.generation)).Children(func() { ui.TextInput(c, &p.password).Label("目标当前主密码").Password().Disabled(p.running) })
+	ui.Column(c.Key(fmt.Sprintf("target-password-%d", p.generation))).Children(func() { ui.TextInput(c, &p.password).Label("目标当前主密码").Password().Disabled(p.running) })
 	if ui.Button(c, "全新登录并读取待核验记录").Disabled(p.running || p.password == "").Clicked() {
 		p.inspect()
 	}

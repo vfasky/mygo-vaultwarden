@@ -398,7 +398,7 @@ func (p *Panel) saveReceived() {
 }
 func (p *Panel) View(c *ui.Context) {
 	ui.Scroll(c).Children(func() {
-		ui.Column(c).Key("send-panel").Padding(18).Gap(10).Children(func() {
+		ui.Column(c.Key("send-panel")).Padding(18).Gap(10).Children(func() {
 			ui.Text(c, "Send 安全分享").FontSize(23)
 			if p.Closed {
 				ui.Text(c, "Send 已关闭")

@@ -318,7 +318,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 		a.cipherComparisonView(c)
 		return
 	}
-	ui.Scroll(c).Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion)).Grow(1).MinHeight(0).Children(func() {
+	ui.Scroll(c.Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion))).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(12).Padding(18).Children(func() {
 			title := "编辑"
 			if e.fields.ID == "" {
@@ -336,8 +336,8 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			for i := range e.inputs {
 				f := &e.inputs[i]
 				ui.Text(c, f.label).FontSize(12)
-				ui.Column(c).Key(f.key).Children(func() {
-					var input *ui.Element
+				ui.Column(c.Key(f.key)).Children(func() {
+					var input ui.Element
 					if f.key == "privateKey" || f.key == "publicKey" {
 						input = ui.TextArea(c, &f.value).MinHeight(100)
 					} else {
@@ -377,7 +377,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				remove := -1
 				for i := range e.uris {
 					uri := &e.uris[i]
-					ui.Row(c).Key(fmt.Sprintf("uri-%d", i)).Gap(8).Children(func() {
+					ui.Row(c.Key(fmt.Sprintf("uri-%d", i))).Gap(8).Children(func() {
 						ui.TextInput(c, &uri.value).Label(fmt.Sprintf("网站 %d", i+1)).Grow(1).Disabled(a.pending != 0 || e.uncertain)
 						if kit.Action(c, "移除", "", false, a.pending != 0 || e.uncertain).Clicked() {
 							remove = i
@@ -404,7 +404,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			removeCustom := -1
 			for i := range e.custom {
 				field := &e.custom[i]
-				ui.Column(c).Key(fmt.Sprintf("custom-%d", i)).Gap(6).Children(func() {
+				ui.Column(c.Key(fmt.Sprintf("custom-%d", i))).Gap(6).Children(func() {
 					ui.TextInput(c, &field.name).Label("字段名称").Disabled(a.pending != 0 || e.uncertain || !field.editable)
 					a.customValueEditor(c, e, field)
 					if kit.Action(c, "删除字段", "", false, a.pending != 0 || e.uncertain).Clicked() {

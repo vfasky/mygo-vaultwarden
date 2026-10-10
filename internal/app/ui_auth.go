@@ -31,7 +31,7 @@ func (a *app) authentication(c *ui.Context) {
 		page, title, subtitle = "target-recovery", "恢复目标账号", "全新认证、逐项核验与专用发布"
 	}
 	width, _ := c.Size()
-	ui.Column(c).Key("auth-"+page).Fill().TextColor(kit.Ink).
+	ui.Column(c.Key("auth-"+page)).Fill().TextColor(kit.Ink).
 		Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
 		ui.Box(c).Height(max(c.TitleBar().Height, 52)).Shrink(0).DragWindow()
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
@@ -106,7 +106,7 @@ func authContentHeight(c *ui.Context) float32 {
 }
 
 // authPrimary spans the form width so it lines up with the inputs above it.
-func authPrimary(c *ui.Context, label string, disabled bool) *ui.Element {
+func authPrimary(c *ui.Context, label string, disabled bool) ui.Element {
 	button := ui.PrimaryButton(c, "").Label(label).Height(40).Margin(8, 0, 0, 0).Padding(0, 16).Gap(6).
 		Radius(20).Border(0, ui.Transparent).Shadow(0, 4, 12, 0, ui.RGBA(41, 41, 47, .18)).
 		Justify(ui.Center).AlignItems(ui.Center).Disabled(disabled).Children(func() {
@@ -118,7 +118,7 @@ func authPrimary(c *ui.Context, label string, disabled bool) *ui.Element {
 	return button
 }
 
-func authLink(c *ui.Context, label string, disabled bool) *ui.Element {
+func authLink(c *ui.Context, label string, disabled bool) ui.Element {
 	return ui.Button(c, label).Height(30).FontSize(12).Padding(0, 12).Radius(15).
 		Border(0, ui.Transparent).Background(ui.Transparent).TextColor(kit.Purple).Disabled(disabled)
 }
@@ -148,7 +148,7 @@ func (a *app) serverLogin(c *ui.Context) {
 	busy := a.pending != 0
 	ready := !busy && a.snapshot != nil && a.deviceID != ""
 	submitted := false
-	ui.Column(c).Key(a.secretInputVersion).Gap(16).Children(func() {
+	ui.Column(c.Key(a.secretInputVersion)).Gap(16).Children(func() {
 		ui.Field(c, "服务器地址", func() {
 			field := ui.TextInput(c, &a.serverURL).Placeholder("https://vault.example.com").
 				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(busy)
@@ -230,7 +230,7 @@ func (a *app) twoFactorLogin(c *ui.Context) {
 	}
 	ready := a.loginChallenge != nil && a.loginChallenge.epoch == a.epoch && a.loginChallenge.ctx.Err() == nil
 	submitted := false
-	ui.Column(c).Key(a.secretInputVersion).Gap(16).Children(func() {
+	ui.Column(c.Key(a.secretInputVersion)).Gap(16).Children(func() {
 		ui.Text(c, a.email+" · "+websiteHost(a.serverURL)).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center).MaxLines(2)
 		ui.Field(c, "验证码", func() {
 			field := ui.TextInput(c, &a.verificationCode).Password().Placeholder("6 位数字验证码").
@@ -257,7 +257,7 @@ func (a *app) twoFactorLogin(c *ui.Context) {
 func (a *app) vaultUnlock(c *ui.Context) {
 	busy := a.pending != 0
 	passwordReady := a.snapshot != nil && a.snapshot.PasswordUnlock != nil
-	ui.Column(c).Key(a.secretInputVersion).Gap(16).Children(func() {
+	ui.Column(c.Key(a.secretInputVersion)).Gap(16).Children(func() {
 		submitted := false
 		ui.Field(c, "主密码", func() {
 			field := ui.TextInput(c, &a.masterPassword).Password().Placeholder("输入主密码").

@@ -303,7 +303,7 @@ func (a *app) body(c *ui.Context) {
 		items := a.filteredItems()
 		a.reconcileSelection(items)
 		a.credentialList(c, items)
-		ui.Column(c).Key("detail-pane").Grow(1).MinWidth(0).Gap(16).Children(func() {
+		ui.Column(c.Key("detail-pane")).Grow(1).MinWidth(0).Gap(16).Children(func() {
 			if a.backupEditor != nil {
 				a.backupEditorView(c)
 			} else if a.bulkEditor != nil {
@@ -559,7 +559,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	})
 }
 
-func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
+func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) ui.Element {
 	return kit.SidebarItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
 }
 
@@ -575,7 +575,7 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 			ui.Spacer(c)
 			kit.Pill(c, fmt.Sprint(len(items)), kit.White, kit.Muted)
 		})
-		field := ui.Row(c).Key("vault-search").Background(kit.White).Radius(22).Padding(0, 12).Height(43).Gap(8)
+		field := ui.Row(c.Key("vault-search")).Background(kit.White).Radius(22).Padding(0, 12).Height(43).Gap(8)
 		field.Children(func() {
 			kit.Icon(c, "search", 18).TextColor(kit.Muted)
 			search := ui.TextInput(c, &a.query).Label("搜索密码库").Placeholder("搜索密码库").Grow(1).MinWidth(0).Border(0, ui.Transparent).Background(ui.Transparent).Padding(0).FocusRing(false)
@@ -620,7 +620,7 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 			c.SetTheme(&listTheme)
 			list := ui.List(c, &a.listState, len(items), func(i int) {
 				item := items[i]
-				row := ui.Row(c).Key(item.ID).TextColor(kit.Ink).Padding(12).Gap(12).Height(78).Radius(19)
+				row := ui.Row(c.Key(item.ID)).TextColor(kit.Ink).Padding(12).Gap(12).Height(78).Radius(19)
 				if a.selectedRow == i {
 					row.Background(kit.White).Border(1, ui.Hex("#DDD5EE"))
 				} else if row.Hovered() {
@@ -695,7 +695,7 @@ func credentialAvatar(c *ui.Context, item localstore.DisplayCredential, size flo
 }
 
 func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential) {
-	ui.Scroll(c).Key(item.ID).Grow(1).MinHeight(0).Children(func() {
+	ui.Scroll(c.Key(item.ID)).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(14).Padding(10, 8, 8, 8).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Text(c, "我的密码库").FontSize(12).TextColor(kit.Muted)
@@ -768,7 +768,7 @@ func openAutoFillSettings(c *ui.Context) {
 func (a *app) settings(c *ui.Context) {
 	ready := a.snapshot != nil && a.pending == 0
 	available := a.snapshot != nil && a.snapshot.Available
-	ui.Scroll(c).Key("settings").Grow(1).MinHeight(0).Children(func() {
+	ui.Scroll(c.Key("settings")).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(18).Padding(10, 8).Children(func() {
 			ui.Row(c).Children(func() {
 				ui.Text(c, "账号与设置").FontSize(26).FontWeight(650)
@@ -782,7 +782,7 @@ func (a *app) settings(c *ui.Context) {
 					ui.Text(c, warning).MaxLines(4)
 				}
 				if a.runtimeVault != nil {
-					ui.Column(c).Key(a.secretInputVersion).Padding(16).Gap(8).Children(func() {
+					ui.Column(c.Key(a.secretInputVersion)).Padding(16).Gap(8).Children(func() {
 						ui.Text(c, "临时在线库：不会持久保存会话或注册系统自动填充。原磁盘账号保持不变。").MaxLines(4)
 						if a.diskSnapshot != nil && a.diskSnapshot.Scope != nil && a.liveScope != nil && *a.diskSnapshot.Scope != *a.liveScope {
 							oldAccount := a.diskSnapshot.Scope.Account

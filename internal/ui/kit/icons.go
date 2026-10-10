@@ -52,6 +52,6 @@ var Icons = map[string]*ui.SVG{
 	"close":       lineIcon(`<path d="m6 6 12 12M6 18 18 6"/>`),
 }
 
-func Icon(c *ui.Context, name string, size float32) *ui.Element {
+func Icon(c *ui.Context, name string, size float32) ui.Element {
 	return ui.Icon(c, Icons[name]).Size(size, size).Shrink(0)
 }
