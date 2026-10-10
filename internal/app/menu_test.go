@@ -61,8 +61,12 @@ func TestMenuRejectsUnavailableCommands(t *testing.T) {
 			for _, command := range []menuCommand{menuNew, menuBackup, menuAccount, menuDevices} {
 				a.runMenuCommand(command)
 			}
-			if a.editor != editor || a.backupEditor != backup || a.epoch != epoch || a.windows.accountOpen {
+			if a.editor != editor || a.backupEditor != backup || a.epoch != epoch {
 				t.Fatal("unavailable command changed state")
+			}
+			// The account center opens to say why, without a panel or a new lease.
+			if !a.windows.accountOpen || a.sendPanel != nil || a.devicePanel != nil || a.componentLease != nil {
+				t.Fatal("unavailable account page opened a panel or no window")
 			}
 			if state == "pending" {
 				a.runMenuCommand(menuSync)

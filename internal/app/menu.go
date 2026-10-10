@@ -33,9 +33,8 @@ func (a *app) runMenuCommand(command menuCommand) {
 	case menuMain:
 		a.showMainWindow()
 	case menuAccount, menuSend, menuDevices, menuSecurity, menuMFA, menuEmergency:
-		if !a.unlocked() || a.showLogin || a.pending != 0 || a.mainEditorOpen() {
-			return
-		}
+		// The account center always opens: while the vault is locked, busy or
+		// being edited, openAccountPage opens no panel and the page says why.
 		tab := a.windows.accountTab
 		switch command {
 		case menuSend:

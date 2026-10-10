@@ -7,8 +7,8 @@
 ```text
 main.go                        入口，只调用 app.Run()
 internal/
-  app/                         应用控制器：主窗口、生命周期、登录/解锁、同步、密码库编辑器，
-                               以及把各领域面板接到存储与 Vaultwarden 会话的控制器
+  app/                         应用控制器：窗口（主窗口、设置、账号中心）、菜单、生命周期、登录/解锁、
+                               同步、自动更新、密码库编辑器，以及把各领域面板接到存储与 Vaultwarden 会话的控制器
   ui/                          UI 层（MyGo Native UI，无 WebView）
     kit/                       共享主题、颜色、图标与通用组件（Action、Pill、DetailCard……）
     account/                   账号、认证管理、MFA 表单、恢复、紧急访问、设备与设备登录
@@ -34,6 +34,7 @@ third_party/
 tools/
   dev-debug/                   开发监听、构建、安装、重启工具（入口 scripts/dev-debug.sh）
   invitation-smtp/             集成测试用的邀请邮件 SMTP 接收器
+  release-update/              生成签名更新包与 manifest，并为 Release 构建输出更新源链接参数（docs/updates.md）
 scripts/                       构建、安装、签名、许可证收集与图标生成脚本
 macos/                         Xcode 工程与 Swift：App、AutoFill 扩展、Bridge、Shared、
                                Authentication 及其 Tests
@@ -53,6 +54,22 @@ internal/passwordstrength → third_party/zxcvbn
 - 只有 `internal/app` 可以把各层组装起来；其他包都不能导入 `internal/app`。
 - `internal/ui` 下的领域包互不依赖，只依赖 `kit`、`vaultwarden`、`passwordstrength`、MyGo 与标准库。面板通过 Host、回调或字段接收控制器能力，不直接访问存储或网络会话。
 - `vaultcrypto`、`totp`、`vaulterr` 是不依赖 Session 的叶子包。
+
+## 窗口
+
+所有窗口都画同一个 `app` 状态，状态只在主线程修改：
+
+| 窗口 | 文件 | 内容 |
+|---|---|---|
+| 主窗口 | `ui.go`、`ui_auth.go` | 锁定时只显示登录/解锁；解锁后是侧栏、列表、详情与编辑器。关闭时隐藏，Dock 图标恢复 |
+| 设置 | `window_settings.go` | 账号、存储与自动填充、更新、关于；账号与存储标签在锁定时只显示占位 |
+| 账号中心 | `window_account.go` | Send、设备与登录审批、账号与安全、两步验证、紧急访问 |
+| 更新 | MyGo `plugins/updater/native` | 由 `updates.go` 接入，见 [自动更新](updates.md) |
+
+- 哪些窗口打开、显示哪个标签是 `windowSet` 中的状态（`windows.go`）；原生窗口只是它的投影，`Run` 设置 `native` 后才创建。headless 测试直接改状态并用 `ui.NewTester` 渲染 `settingsWindowView`、`accountWindowView`。
+- 后台结果经 `dispatchUI`/`postUI` 回到主线程并重绘所有窗口；某个窗口的一帧改变了共享状态（`uiSignature`）时，`frame` 重绘其他窗口。
+- 账号中心各页面的面板共用一个 `controllerLease`，`advanceEpoch` 会关闭全部面板。`reconcileAccountPanels` 在每个窗口每帧开头运行，只保留账号中心当前显示页面的面板；关闭账号中心立即撤销。`openAccountPage` 是菜单、设置与侧栏的唯一入口，在锁定、`pending` 或主窗口有编辑器时不打开面板。
+- 菜单栏（`menu.go`）与工具栏共用 `runMenuCommand`。
 
 ## 测试放置
 
@@ -82,5 +99,5 @@ internal/passwordstrength → third_party/zxcvbn
 
 ## 已知限制
 
-- `internal/app` 的 `app` 类型保存单窗口的全部状态，约 160 个方法分布在约 45 个文件中。Go 要求方法与类型同包，因此控制器层仍集中在一个包。进一步拆分需要先把编辑器和控制器改成持有窄接口的独立对象，属于设计调整，而不是目录迁移。
+- `internal/app` 的 `app` 类型保存所有窗口共享的全部状态，约 160 个方法分布在约 45 个文件中。Go 要求方法与类型同包，因此控制器层仍集中在一个包。进一步拆分需要先把编辑器和控制器改成持有窄接口的独立对象，属于设计调整，而不是目录迁移。
 - `internal/vaultwarden` 以 `Session` 为核心（约 250 个方法），同样只拆出了不依赖 Session 的叶子部分。

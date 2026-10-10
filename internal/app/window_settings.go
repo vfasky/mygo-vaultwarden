@@ -23,7 +23,7 @@ func (a *app) settingsWindowView(c *ui.Context) {
 	c.SetTheme(kit.Theme)
 	ui.Column(c).Fill().TextColor(kit.Ink).Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
 		ui.Box(c).Height(max(c.TitleBar().Height, 28)).Shrink(0).DragWindow()
-		ui.Row(c).Justify(ui.Center).Gap(4).Padding(0, 8, 10, 8).Role(ui.RoleTabList).Label(i18n.T("app.settings.title")).Children(func() {
+		ui.Row(c).Justify(ui.Center).Gap(4).Padding(0, 8, 10, 8).Role(ui.RoleTabList).Label(i18n.T("app.window.settings_title")).Children(func() {
 			for _, pane := range []struct {
 				tab         settingsTab
 				label, icon string

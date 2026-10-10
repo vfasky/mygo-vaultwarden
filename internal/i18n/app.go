@@ -69,7 +69,6 @@ var app = map[string]text{
 	"app.settings.snapshot_count":               {"本机快照 · %d 个登录项目", "Local snapshot · Login items: %d"},
 	"app.settings.status_account_revoked":       {"本机账号和快照已撤销；不会修改服务器上的密码库。", "The local account and snapshot have been revoked. The vault on the server will not be changed."},
 	"app.settings.status_autofill_submitted":    {"候选更新已提交，请刷新状态查看系统回执。", "The AutoFill suggestion update has been submitted. Refresh the status to check the system receipt."},
-	"app.settings.title":                        {"账号与设置", "Account & settings"},
 	"app.settings.unlock_offline":               {"离线解锁", "Unlock offline"},
 	"app.settings.update_autofill":              {"更新系统候选", "Update AutoFill suggestions"},
 	"app.settings.verify_target_recovery":       {"核验目标账号恢复记录", "Verify target account recovery record"},

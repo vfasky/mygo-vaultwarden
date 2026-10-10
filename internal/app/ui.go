@@ -464,7 +464,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	})
 	ui.Column(c).Gap(6).Shrink(0).Padding(0, inset).Children(func() {
 		ui.Box(c).Height(1).Margin(0, 4).Background(ui.RGBA(38, 30, 62, .08))
-		if navItem(c, i18n.T("app.window.account_center_title"), "user", "", false, !a.unlocked() || a.showLogin || a.pending != 0 || a.mainEditorOpen()).Clicked() {
+		if navItem(c, i18n.T("app.window.account_center_title"), "user", "", false, !a.unlocked() || a.showLogin).Clicked() {
 			a.runMenuCommand(menuAccount)
 		}
 		if navItem(c, i18n.T("app.window.settings_title"), "settings", "", false, false).Clicked() {
