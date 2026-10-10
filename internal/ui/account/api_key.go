@@ -15,7 +15,7 @@ func (f *Form) APIKeyCompleted(scope vaultwarden.Scope, epoch, sequence uint64, 
 	if err == nil {
 		f.apiKey = key.APIKey
 		f.apiKeyVisible = false
-		f.Status = i18n.T("个人 API key 已读取，请妥善保管")
+		f.Status = i18n.T("account.apikey.status_loaded")
 	}
 	return true
 }

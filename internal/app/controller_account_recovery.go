@@ -38,36 +38,36 @@ func (a *app) openAccountRecovery() {
 	}
 	a.stopNetwork()
 	a.showLogin = true
-	a.recoveryForm = &accountRecoveryForm{email: a.snapshot.PasswordUnlock.Email, status: i18n.T("先用原主密码打开本机加密恢复材料，再用服务器当前凭据全新登录核验；不会重放原请求。")}
+	a.recoveryForm = &accountRecoveryForm{email: a.snapshot.PasswordUnlock.Email, status: i18n.T("account.recovery.verification_hint")}
 }
 func (a *app) accountRecoveryView(c *ui.Context) {
 	f := a.recoveryForm
 	if f == nil || f.closed {
 		return
 	}
-	ui.Text(c, i18n.T("账号恢复与完整资源核验")).FontSize(20)
-	ui.Text(c, i18n.T("恢复记录中的旧会话不会用作网络或离线权限。混合、缺失、未知资源继续保留屏障及旧新材料。")).MaxLines(5)
-	ui.TextInput(c, &f.oldPassword).Label(i18n.T("原主密码（解密本机恢复材料）")).Password().Disabled(f.busy)
-	ui.TextInput(c, &f.email).Label(i18n.T("服务器当前登录邮箱")).Disabled(f.busy)
-	ui.TextInput(c, &f.currentPassword).Label(i18n.T("服务器当前主密码")).Password().Disabled(f.busy)
-	label := i18n.T("确认核验全部资源，成功后才解除恢复屏障")
+	ui.Text(c, i18n.T("account.recovery.verification_title")).FontSize(20)
+	ui.Text(c, i18n.T("account.recovery.barrier_hint")).MaxLines(5)
+	ui.TextInput(c, &f.oldPassword).Label(i18n.T("account.recovery.original_password")).Password().Disabled(f.busy)
+	ui.TextInput(c, &f.email).Label(i18n.T("account.recovery.current_email")).Disabled(f.busy)
+	ui.TextInput(c, &f.currentPassword).Label(i18n.T("account.recovery.current_password")).Password().Disabled(f.busy)
+	label := i18n.T("account.recovery.confirm_full_verification")
 	if f.confirmed {
-		label = i18n.T("已确认完整核验后解除屏障（点击撤回）")
+		label = i18n.T("account.recovery.revoke_verification_confirmation")
 	}
 	if ui.Button(c, label).Disabled(f.busy).Clicked() {
 		f.confirmed = !f.confirmed
 	}
-	if ui.Button(c, i18n.T("全新登录并核验恢复")).Disabled(f.busy || !f.confirmed || f.oldPassword == "" || f.currentPassword == "").Clicked() {
+	if ui.Button(c, i18n.T("account.recovery.login_verify")).Disabled(f.busy || !f.confirmed || f.oldPassword == "" || f.currentPassword == "").Clicked() {
 		a.resolveAccountRecoveryWith(false, a.window.Update, localstore.Call)
 	}
-	ui.Text(c, i18n.T("仅当加密日志记录服务器已确认删除账号时，才能明确删除本机恢复副本。")).MaxLines(3)
-	if ui.Button(c, i18n.T("确认删除本机恢复副本")).Disabled(f.busy).Clicked() {
+	ui.Text(c, i18n.T("account.recovery.delete_local_copy_hint")).MaxLines(3)
+	if ui.Button(c, i18n.T("account.recovery.confirm_delete_local_copy")).Disabled(f.busy).Clicked() {
 		f.deleteConfirmed = !f.deleteConfirmed
 	}
-	if f.deleteConfirmed && ui.Button(c, i18n.T("执行本机恢复副本删除")).Disabled(f.busy || f.oldPassword == "").Clicked() {
+	if f.deleteConfirmed && ui.Button(c, i18n.T("account.recovery.delete_local_copy")).Disabled(f.busy || f.oldPassword == "").Clicked() {
 		a.resolveAccountRecoveryWith(true, a.window.Update, localstore.Call)
 	}
-	if ui.Button(c, i18n.T("取消并保留恢复记录")).Clicked() {
+	if ui.Button(c, i18n.T("account.recovery.cancel_keep_records")).Clicked() {
 		a.runStorage("lock")
 	}
 	ui.Text(c, f.status).MaxLines(16)
@@ -213,7 +213,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 			a.stopNetwork()
 			a.snapshot = reply.State
 			if deleting {
-				a.status = i18n.T("已删除本机恢复副本；没有向服务器重放删除请求。")
+				a.status = i18n.T("account.recovery.status_local_copy_deleted")
 				a.showLogin = false
 				return
 			}
@@ -227,7 +227,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 			}
 			a.itemsRevision = reply.State.Revision
 			a.showLogin, a.showSettings = false, false
-			a.status = i18n.Tf("恢复已通过完整认证核验并采用专用存储回执。%s", strings.Join(verified.ResourceEvidence, "；"))
+			a.status = i18n.Tf("account.recovery.status_verified_receipt", strings.Join(verified.ResourceEvidence, "；"))
 			a.startNotifications(dispatch, storage)
 		})
 	}()

@@ -42,7 +42,7 @@ type DeviceLoginPanel struct {
 }
 
 func NewDeviceLoginPanel(client *vaultwarden.Client, email string, scope vaultwarden.Scope, epoch uint64, host DeviceLoginHost) *DeviceLoginPanel {
-	p := &DeviceLoginPanel{client: client, email: email, scope: scope, epoch: epoch, host: host, status: i18n.T("仅支持此账号以前登录过的设备。需在另一台已解锁设备批准。")}
+	p := &DeviceLoginPanel{client: client, email: email, scope: scope, epoch: epoch, host: host, status: i18n.T("account.device_login.registered_device_hint")}
 	if client == nil || host.Check == nil || host.Dispatch == nil || host.Accept == nil {
 		p.closed = true
 	}
@@ -70,9 +70,9 @@ func (p *DeviceLoginPanel) retainRecovery(r vaultwarden.DeviceLoginRecovery) {
 }
 func deviceLoginRecoveryWarning(r vaultwarden.DeviceLoginRecovery) string {
 	if r.State == vaultwarden.DeviceLoginRecoveryConfirmed {
-		return i18n.T("已关闭全部两步验证，需核验并重新设置。")
+		return i18n.T("account.mfa.status_all_disabled")
 	}
-	return i18n.T("可能已关闭全部两步验证，需核验并重新设置。")
+	return i18n.T("account.mfa.status_all_maybe_disabled")
 }
 func (p *DeviceLoginPanel) cancelAttempt() {
 	if p.cancel != nil {
@@ -109,7 +109,7 @@ func (p *DeviceLoginPanel) Cancel() {
 		return
 	}
 	p.cancelAttempt()
-	p.status = i18n.T("已取消本机等待；服务器请求可能保留到五分钟过期，迟到批准不会在本机登录。")
+	p.status = i18n.T("account.device_login.status_cancelled")
 }
 func (p *DeviceLoginPanel) current(seq uint64) bool {
 	return !p.closed && p.sequence == seq && p.host.Check(p.scope, p.epoch) == nil
@@ -127,7 +127,7 @@ func (p *DeviceLoginPanel) Start() {
 	p.cancel = cancel
 	p.busy = true
 	seq := p.sequence
-	p.status = i18n.T("正在核对此设备并发起审批请求…")
+	p.status = i18n.T("account.device_login.status_requesting")
 	go func() {
 		flow, err := p.client.BeginDeviceLogin(ctx, p.email, p.scope, p.epoch, p.host.Check)
 		if err != nil {
@@ -142,7 +142,7 @@ func (p *DeviceLoginPanel) Start() {
 			}
 			p.flow = flow
 			p.fingerprint = authPublicFingerprint(flow.Metadata().PublicKey)
-			p.status = i18n.T("等待另一台设备核对完整公钥指纹并批准；断线时仍会轮询。")
+			p.status = i18n.T("account.device_login.status_awaiting_approval")
 		})
 		result, err := flow.Run(func(callCtx context.Context, ch vaultwarden.MFAChallenge) (vaultwarden.MFAResponse, error) {
 			return p.prompt(callCtx, seq, ch)
@@ -168,18 +168,18 @@ func (p *DeviceLoginPanel) finish(seq uint64, flow *vaultwarden.DeviceLogin, res
 	p.platform = nil
 	p.busy = false
 	if err != nil {
-		p.status = i18n.T("登录失败；请核对账号与设备，再手动发起新请求。")
+		p.status = i18n.T("account.device_login.err_login_failed")
 		switch {
 		case errors.Is(err, vaultwarden.ErrDeviceUnknown):
-			p.status = i18n.Key("服务器不认识此账号的当前设备。请先使用主密码登录登记设备。")
+			p.status = i18n.T("account.device_login.err_unknown_device")
 		case errors.Is(err, vaultwarden.ErrDeviceRejected):
-			p.status = i18n.T("审批请求已拒绝、被移除，或设备/IP 来源条件已变化。")
+			p.status = i18n.T("account.device_login.err_approval_rejected")
 		case errors.Is(err, vaultwarden.ErrExpired), errors.Is(err, vaultwarden.ErrCancelled):
-			p.status = i18n.T("审批等待已过期或取消。")
+			p.status = i18n.T("account.device_login.status_expired")
 		}
 		var uncertain *vaultwarden.MutationUncertainError
 		if errors.As(err, &uncertain) {
-			p.status = i18n.Key("服务器操作结果未知；本次交换不会重放。请核验设备会话后手动发起新请求。")
+			p.status = i18n.T("account.device_login.status_exchange_unknown")
 		}
 		if flow != nil {
 			flow.Cancel()
@@ -192,7 +192,7 @@ func (p *DeviceLoginPanel) finish(seq uint64, flow *vaultwarden.DeviceLogin, res
 		flow.Cancel()
 		go flow.Close()
 		p.flow = nil
-		p.status = i18n.T("账号或存储状态已变化，登录结果未采用。")
+		p.status = i18n.T("account.device_login.status_result_discarded")
 		return
 	}
 	// Ownership including cancellation moves to integration; closing this panel
@@ -200,7 +200,7 @@ func (p *DeviceLoginPanel) finish(seq uint64, flow *vaultwarden.DeviceLogin, res
 	p.accepted = true
 	p.flow = nil
 	p.cancel = nil
-	p.status = i18n.T("登录成功（当前运行期）。锁定或访问令牌到期后需重新审批或主密码登录。")
+	p.status = i18n.T("account.device_login.status_logged_in")
 	if p.host.AcceptingMessage != "" {
 		p.status = p.host.AcceptingMessage
 	}
@@ -225,7 +225,7 @@ func (p *DeviceLoginPanel) prompt(ctx context.Context, seq uint64, ch vaultwarde
 		}
 		p.providers = map[int]string{}
 		p.platformProviders = map[int]string{}
-		labels := map[int]string{0: i18n.T("验证器验证码"), 1: i18n.T("邮件验证码"), 2: i18n.T("Duo 系统浏览器"), 3: "YubiKey OTP", 7: i18n.T("系统安全密钥")}
+		labels := map[int]string{0: i18n.T("account.mfa.authenticator_code"), 1: i18n.T("account.mfa.email_code"), 2: i18n.T("account.mfa.duo_browser"), 3: "YubiKey OTP", 7: i18n.T("account.mfa.system_security_key")}
 		for raw := range ch.Providers {
 			provider, e := strconv.Atoi(raw)
 			if e != nil {
@@ -263,7 +263,7 @@ func (p *DeviceLoginPanel) prompt(ctx context.Context, seq uint64, ch vaultwarde
 				deliver(response)
 			}()
 		}
-		p.status = i18n.T("审批已通过，还需双重验证。邮件仅支持服务器自动发码；本流程不使用 accessCode 冒充密码证明。")
+		p.status = i18n.T("account.device_login.status_mfa_required")
 	})
 	select {
 	case response := <-replies:
@@ -275,21 +275,21 @@ func (p *DeviceLoginPanel) prompt(ctx context.Context, seq uint64, ch vaultwarde
 func (p *DeviceLoginPanel) View(c *ui.Context) {
 	ui.Scroll(c).Children(func() {
 		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("通过另一台设备登录")).FontSize(23)
+			ui.Text(c, i18n.T("account.device_login.title")).FontSize(23)
 			ui.Text(c, p.email)
-			ui.Text(c, i18n.T("请通过可信的当面或独立通信渠道，在审批设备核对下面完整 SHA-256 公钥指纹。不要只信任服务器显示的请求。 ")).MaxLines(6)
+			ui.Text(c, i18n.T("account.device_login.fingerprint_hint")).MaxLines(6)
 			for _, r := range p.recovery {
 				ui.Text(c, r.Email+"（"+r.Scope.Server+"）："+deviceLoginRecoveryWarning(r)).MaxLines(6)
 			}
 			if p.closed {
-				ui.Text(c, i18n.T("面板已关闭"))
+				ui.Text(c, i18n.T("account.device.status_panel_closed"))
 				return
 			}
 			if p.fingerprint != "" {
 				ui.Text(c, p.fingerprint).MaxLines(4)
 			}
-			ui.Text(c, i18n.T(p.status)).MaxLines(6)
-			ui.Text(c, i18n.T("未绑定主密码时不会保存可恢复的登录会话，也不能在访问令牌到期后续期。系统认证快照只可提供受保护的最小自动填充数据，不能恢复主界面网络会话。已有密码快照会保留。 ")).MaxLines(6)
+			ui.Text(c, p.status).MaxLines(6)
+			ui.Text(c, i18n.T("account.device_login.unbound_session_hint")).MaxLines(6)
 			if p.auth != nil {
 				AuthFormView(c, p.auth, p.providers)
 				if p.auth.Closed {
@@ -304,10 +304,10 @@ func (p *DeviceLoginPanel) View(c *ui.Context) {
 					}
 				}
 			}
-			if ui.Button(c, i18n.T("发起新的审批请求")).Disabled(p.busy || p.accepted).Clicked() {
+			if ui.Button(c, i18n.T("account.device_login.request_new_approval")).Disabled(p.busy || p.accepted).Clicked() {
 				p.Start()
 			}
-			if ui.Button(c, i18n.T("取消本次请求")).Disabled(!p.busy || p.accepted).Clicked() {
+			if ui.Button(c, i18n.T("account.device_login.cancel_request")).Disabled(!p.busy || p.accepted).Clicked() {
 				p.Cancel()
 			}
 		})

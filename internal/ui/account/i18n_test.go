@@ -9,15 +9,20 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-func TestAccountEnglishRegistrationPreservesStatusValue(t *testing.T) {
+func TestAccountRegistrationStatusFollowsLanguage(t *testing.T) {
 	defer i18n.Set(i18n.Current())
-	i18n.Set(i18n.English)
+	i18n.Set(i18n.Chinese)
 	f := NewForm(vaultwarden.Scope{}, 1, nil)
 	defer f.Close()
 	f.Mode = "register"
 	f.Registration(f.scope, f.epoch, f.sequence, vaultwarden.AccountRegistrationVerification{EmailSent: true}, nil)
 	if f.Status != "验证邮件已请求发送，请输入邮件中的注册令牌" {
-		t.Fatal("registration status value changed with language")
+		t.Fatal("Chinese registration status changed")
+	}
+	i18n.Set(i18n.English)
+	f.Registration(f.scope, f.epoch, f.sequence, vaultwarden.AccountRegistrationVerification{EmailSent: true}, nil)
+	if f.Status != "Verification email requested. Enter the registration token from the email" {
+		t.Fatal("registration status did not follow the current language")
 	}
 	tt := ui.NewTester(func(c *ui.Context) { FormView(c, f) }, 1200, 2400)
 	for _, text := range []string{"Account & security", "Complete registration", "Check password strength", "Verification email requested. Enter the registration token from the email"} {
