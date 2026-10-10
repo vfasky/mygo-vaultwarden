@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // TOTPCode is ephemeral secret material; it must never enter display metadata,
@@ -24,9 +25,10 @@ type Code struct {
 	ValidUntil time.Time
 }
 
-// GenerateTOTP implements RFC 6238 and the Steam alphabet from Bitwarden SDK
-// 39dbb510f5eae82f5cbfd527b0f70a01d5626ec1. Unlike the SDK's permissive parser,
-// malformed secrets/unknown algorithms are rejected rather than sanitized.
+// Generate implements RFC 6238 and the Steam alphabet from Bitwarden SDK
+// 39dbb510f5eae82f5cbfd527b0f70a01d5626ec1. It tolerates display/import metadata
+// and whitespace grouping, but rejects malformed secrets and invalid known parameters.
+// This is a code-generation parser, not a validator for persisted input.
 // Supported resource limits: 6–8 decimal digits, 1–300 seconds, 1–1024 key bytes.
 func Generate(input string, now time.Time) (Code, error) {
 	if len(input) == 0 || len(input) > 4096 || now.Unix() < 0 || now.Unix() > 253402300499 {
@@ -49,13 +51,14 @@ func Generate(input string, now time.Time) (Code, error) {
 			return Code{}, vaulterr.ErrValidation
 		}
 		for key, values := range q {
-			if len(values) != 1 {
-				return Code{}, vaulterr.ErrValidation
-			}
 			switch key {
 			case "secret", "issuer", "algorithm", "digits", "period":
+				if len(values) != 1 {
+					return Code{}, vaulterr.ErrValidation
+				}
 			default:
-				return Code{}, vaulterr.ErrValidation
+				// Metadata such as image does not affect code generation.
+				continue
 			}
 		}
 		secret = q.Get("secret")
@@ -86,7 +89,12 @@ func Generate(input string, now time.Time) (Code, error) {
 	default:
 		return Code{}, vaulterr.ErrValidation
 	}
-	secret = strings.ToUpper(secret)
+	secret = strings.Map(func(r rune) rune {
+		if unicode.IsSpace(r) {
+			return -1
+		}
+		return unicode.ToUpper(r)
+	}, secret)
 	encoding := base32.StdEncoding.WithPadding(base32.NoPadding)
 	if strings.Contains(secret, "=") {
 		encoding = base32.StdEncoding
@@ -97,7 +105,7 @@ func Generate(input string, now time.Time) (Code, error) {
 		return Code{}, vaulterr.ErrValidation
 	}
 	defer clear(key)
-	// Reject ignored CR/LF and non-canonical padding/trailing bits as well.
+	// Reject non-canonical padding/trailing bits after normalizing whitespace.
 	if encoding.EncodeToString(key) != secret {
 		return Code{}, vaulterr.ErrValidation
 	}

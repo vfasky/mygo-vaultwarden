@@ -44,9 +44,9 @@ func TestTOTPSteamAndExpiry(t *testing.T) {
 	}
 }
 func TestTOTPRejectsAmbiguousParameters(t *testing.T) {
-	for _, input := range []string{"", "ABCD123", "PIUD1IS!EQYA=", "WQIQ\n25BRKZYCJVYP", "otpauth://hotp/a?secret=WQIQ25BRKZYCJVYP", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&algorithm=MD5", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&digits=10", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&period=0", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&period=301", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&secret=PIUDISEQYA", "otpauth://user@totp/a?secret=WQIQ25BRKZYCJVYP", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP#fragment", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&counter=1"} {
+	for i, input := range []string{"", "ABCD123", "PIUD1IS!EQYA=", "otpauth://hotp/a?secret=WQIQ25BRKZYCJVYP", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&algorithm=MD5", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&digits=10", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&period=0", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&period=301", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP&secret=PIUDISEQYA", "otpauth://user@totp/a?secret=WQIQ25BRKZYCJVYP", "otpauth://totp/a?secret=WQIQ25BRKZYCJVYP#fragment"} {
 		if _, err := Generate(input, time.Unix(100, 0)); err != vaulterr.ErrValidation {
-			t.Fatal("malformed TOTP accepted")
+			t.Fatalf("malformed TOTP accepted at fixture %d", i)
 		}
 	}
 	if _, err := Generate("WQIQ25BRKZYCJVYP", time.Unix(-1, 0)); err != vaulterr.ErrValidation {
