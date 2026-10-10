@@ -20,9 +20,9 @@ import (
 
 const importPath = "github.com/vfasky/mygo-vaultwarden/internal/i18n"
 
-// sourceRoots are scanned for user-visible Chinese text. I18N_SCOPE narrows
-// the scan to a comma-separated list of directories relative to the module
-// root; the unused-entry check then only runs for the full scan.
+// I18N_SCOPE narrows the scan to a comma-separated list of files or
+// directories relative to the module root; the unused-key check then only
+// runs for the full scan.
 var sourceRoots = []string{"internal"}
 
 func hasHan(s string) bool {
@@ -51,16 +51,19 @@ func moduleRoot(t *testing.T) string {
 	}
 }
 
-type use struct {
-	source, where string
+type use struct{ value, where string }
+
+type scanResult struct {
+	keys     []use           // literal keys passed to T or Tf
+	legacy   []use           // Chinese passed to T, Tf, Key or Tc
+	bare     []string        // Chinese literals outside them
+	literals map[string]bool // every string literal, to find used keys
 }
 
-// scan returns the Chinese literals passed to T, Tf or Key, and the
-// locations of Chinese literals outside them that are not marked
-// "i18n:ignore" on their line.
-func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) {
-	for _, dir := range dirs {
-		err := filepath.WalkDir(filepath.Join(root, dir), func(path string, d fs.DirEntry, err error) error {
+func scan(t *testing.T, root string, paths []string) scanResult {
+	r := scanResult{literals: map[string]bool{}}
+	for _, p := range paths {
+		err := filepath.WalkDir(filepath.Join(root, p), func(path string, d fs.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}
@@ -96,10 +99,10 @@ func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) 
 					}
 				}
 			}
-			wrapped := map[*ast.BasicLit]string{} // literal -> context prefix
+			arg := map[*ast.BasicLit]string{} // literal -> function receiving it
 			ast.Inspect(file, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
-				if !ok || len(call.Args) == 0 || local == "" {
+				if !ok || local == "" || len(call.Args) == 0 {
 					return true
 				}
 				sel, ok := call.Fun.(*ast.SelectorExpr)
@@ -109,18 +112,13 @@ func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) 
 				if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != local {
 					return true
 				}
-				switch sel.Sel.Name {
-				case "T", "Tf", "Key":
-					if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-						wrapped[lit] = ""
-					}
-				case "Tc":
-					ctx, ok1 := call.Args[0].(*ast.BasicLit)
-					if len(call.Args) == 2 && ok1 && ctx.Kind == token.STRING {
-						if lit, ok := call.Args[1].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-							c, _ := strconv.Unquote(ctx.Value)
-							wrapped[lit] = c + "\x04"
-						}
+				i := 0
+				if sel.Sel.Name == "Tc" {
+					i = 1
+				}
+				if i < len(call.Args) {
+					if lit, ok := call.Args[i].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+						arg[lit] = sel.Sel.Name
 					}
 				}
 				return true
@@ -131,17 +129,22 @@ func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) 
 					return true
 				}
 				s, err := strconv.Unquote(lit.Value)
-				if err != nil || !hasHan(s) {
+				if err != nil {
 					return true
 				}
+				r.literals[s] = true
 				pos := fset.Position(lit.Pos())
 				where := filepath.ToSlash(rel) + ":" + strconv.Itoa(pos.Line)
-				prefix, isWrapped := wrapped[lit]
+				fn, wrapped := arg[lit]
 				switch {
-				case isWrapped:
-					keys = append(keys, use{prefix + s, where})
-				case !ignored[pos.Line]:
-					bare = append(bare, where+" "+strconv.Quote(s))
+				case wrapped && (fn == "T" || fn == "Tf") && !hasHan(s):
+					r.keys = append(r.keys, use{s, where})
+				case wrapped && hasHan(s):
+					r.legacy = append(r.legacy, use{s, where})
+				case wrapped && (fn == "Key" || fn == "Tc"):
+					r.legacy = append(r.legacy, use{s, where})
+				case hasHan(s) && !ignored[pos.Line]:
+					r.bare = append(r.bare, where+" "+strconv.Quote(s))
 				}
 				return true
 			})
@@ -151,78 +154,100 @@ func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) 
 			t.Fatal(err)
 		}
 	}
-	return keys, bare
+	return r
 }
 
-var verb = regexp.MustCompile(`%(\[\d+\])?[-+# 0]*(\d+|\*)?(\.(\d+|\*))?[a-zA-Z%]`)
-
-func verbs(s string) []string {
-	out := verb.FindAllString(s, -1)
-	for i, v := range out {
-		// Width and flags may differ between languages; the verb may not.
-		out[i] = v[len(v)-1:]
-		if m := regexp.MustCompile(`^%\[\d+\]`).FindString(v); m != "" {
-			out[i] = m + out[i]
-		}
+func report(t *testing.T, title string, lines []string) {
+	if len(lines) > 0 {
+		sort.Strings(lines)
+		t.Errorf("%d %s:\n%s", len(lines), title, strings.Join(lines, "\n"))
 	}
-	return out
 }
 
 func TestCatalogCoverage(t *testing.T) {
 	root := moduleRoot(t)
-	dirs, full := sourceRoots, true
+	paths, full := sourceRoots, true
 	if scope := os.Getenv("I18N_SCOPE"); scope != "" {
-		dirs, full = strings.Split(scope, ","), false
+		paths, full = strings.Split(scope, ","), false
 	}
-	keys, bare := scan(t, root, dirs)
-	if len(bare) > 0 {
-		sort.Strings(bare)
-		t.Errorf("%d Chinese literals are not wrapped in i18n.T/Tf/Key (or marked i18n:ignore):\n%s", len(bare), strings.Join(bare, "\n"))
-	}
-	var missing []string
-	used := map[string]bool{}
-	for _, k := range keys {
-		used[k.source] = true
-		if _, ok := english[k.source]; !ok {
-			missing = append(missing, k.where+" "+strconv.Quote(k.source))
+	r := scan(t, root, paths)
+	report(t, "Chinese literals outside the i18n catalogs (use i18n.T with a key, or mark i18n:ignore)", r.bare)
+	var unknown []string
+	for _, k := range r.keys {
+		if _, ok := messages[k.value]; !ok {
+			unknown = append(unknown, k.where+" "+strconv.Quote(k.value))
 		}
 	}
-	if len(missing) > 0 {
-		sort.Strings(missing)
-		t.Errorf("%d strings have no English translation:\n%s", len(missing), strings.Join(missing, "\n"))
+	report(t, "keys passed to i18n.T/Tf are not defined", unknown)
+	var legacy, untranslated []string
+	for _, l := range r.legacy {
+		legacy = append(legacy, l.where+" "+strconv.Quote(l.value))
+		if _, ok := legacyEnglish[l.value]; !ok && hasHan(l.value) && !legacyContext(l.value) {
+			untranslated = append(untranslated, l.where+" "+strconv.Quote(l.value))
+		}
 	}
-	if full {
+	if !full || len(legacyCatalogs) == 0 {
+		report(t, "Chinese source strings, i18n.Key or i18n.Tc still used instead of semantic keys", legacy)
+	} else {
+		report(t, "legacy source strings have no English translation", untranslated)
+	}
+	// TODO(i18n): the unused check starts once the legacy catalogs are gone.
+	if full && len(legacyCatalogs) == 0 {
 		var unused []string
-		for source := range english {
-			if !used[source] {
-				unused = append(unused, strconv.Quote(source))
+		for key := range messages {
+			if !r.literals[key] {
+				unused = append(unused, key)
 			}
 		}
-		if len(unused) > 0 {
-			sort.Strings(unused)
-			t.Errorf("%d catalog entries are not used by the code:\n%s", len(unused), strings.Join(unused, "\n"))
-		}
+		report(t, "keys are not used by the code", unused)
 	}
 }
 
-func TestCatalogEntries(t *testing.T) {
-	if len(conflicts) > 0 {
-		t.Errorf("source strings translated differently by two catalogs:\n%s", strings.Join(conflicts, "\n"))
-	}
-	for name, entries := range catalogs {
-		for source, translation := range entries {
-			switch {
-			case !hasHan(source):
-				t.Errorf("%s: key %q is not Chinese source text", name, source)
-			case strings.TrimSpace(translation) == "":
-				t.Errorf("%s: %q has an empty translation", name, source)
-			case hasHan(translation):
-				t.Errorf("%s: translation of %q still contains Chinese: %q", name, source, translation)
-			case !slices.Equal(verbs(source), verbs(translation)):
-				t.Errorf("%s: format verbs differ: %q %v vs %q %v", name, source, verbs(source), translation, verbs(translation))
-			}
+func legacyContext(source string) bool {
+	for k := range legacyEnglish {
+		if strings.HasSuffix(k, "\x04"+source) {
+			return true
 		}
 	}
+	return false
+}
+
+var verb = regexp.MustCompile(`%(\[\d+\])?[-+# 0]*(\d+|\*)?(\.(\d+|\*))?[a-zA-Z%]`)
+
+// verbs returns the verbs of a format in argument order; explicit argument
+// indexes let the languages place them differently.
+func verbs(s string) []string {
+	var out []string
+	next := 1
+	for _, v := range verb.FindAllString(s, -1) {
+		if v == "%%" {
+			continue
+		}
+		n := next
+		if m := regexp.MustCompile(`^%\[(\d+)\]`).FindStringSubmatch(v); m != nil {
+			n, _ = strconv.Atoi(m[1])
+		}
+		out = append(out, strconv.Itoa(n)+v[len(v)-1:])
+		next = n + 1
+	}
+	sort.Strings(out)
+	return out
+}
+
+func TestCatalogEntries(t *testing.T) {
+	var problems []string
+	for key, m := range messages {
+		switch {
+		case strings.TrimSpace(m.zh) == "" || strings.TrimSpace(m.en) == "":
+			problems = append(problems, key+": empty text")
+		case hasHan(m.en):
+			problems = append(problems, key+": English contains Chinese: "+strconv.Quote(m.en))
+		case !slices.Equal(verbs(m.zh), verbs(m.en)):
+			problems = append(problems, key+": format verbs differ: "+strconv.Quote(m.zh)+" vs "+strconv.Quote(m.en))
+		}
+	}
+	report(t, "catalog entries are invalid", problems)
+	report(t, "legacy source strings translated differently by two catalogs", legacyConflicts)
 }
 
 func TestMatch(t *testing.T) {
@@ -246,36 +271,44 @@ func TestMatch(t *testing.T) {
 
 func TestTranslate(t *testing.T) {
 	defer Set(Current())
-	register("test", map[string]string{"测试：%d 项": "Test: %d items"})
-	defer func() { delete(catalogs, "test"); delete(english, "测试：%d 项") }()
+	register("zztest", map[string]text{"zztest.items": {"测试：%[1]d 项，%[2]s", "Test %[2]s: %[1]d items"}})
+	defer func() { delete(areas, "zztest"); delete(messages, "zztest.items") }()
 	Set(Chinese)
-	if got := Tf("测试：%d 项", 3); got != "测试：3 项" {
+	if got := Tf("zztest.items", 3, "x"); got != "测试：3 项，x" {
 		t.Fatal(got)
 	}
 	Set(English)
-	if got := Tf("测试：%d 项", 3); got != "Test: 3 items" {
+	if got := Tf("zztest.items", 3, "x"); got != "Test x: 3 items" {
 		t.Fatal(got)
 	}
-	if got := T("未翻译"); got != "未翻译" {
+	if got := T("zztest.missing"); got != "zztest.missing" {
 		t.Fatal(got)
 	}
-	register("test-context", map[string]string{"nav\x04测试": "Tests", "测试": "Test"})
-	defer func() { delete(catalogs, "test-context"); delete(english, "nav\x04测试"); delete(english, "测试") }()
-	if Tc("nav", "测试") != "Tests" || Tc("other", "测试") != "Test" {
-		t.Fatal(Tc("nav", "测试"), Tc("other", "测试"))
+	if got := T("common.save"); got != "Save" {
+		t.Fatal(got)
 	}
-	Set(Chinese)
-	if Tc("nav", "测试") != "测试" {
-		t.Fatal("Tc must keep the Chinese source")
+	if !slices.Equal(verbs("%[1]d 项，%[2]s"), verbs("%[2]s: %[1]d")) || slices.Equal(verbs("%d %s"), verbs("%s %d")) {
+		t.Fatal("verb comparison")
 	}
-	if Key("已核验") != "已核验" {
-		t.Fatal("Key must not translate")
+}
+
+func TestRegisterRejectsBadKeys(t *testing.T) {
+	for _, key := range []string{"zzbad.Upper", "zzbad", "other.key", "zzbad.保存", "zzbad.trailing."} {
+		func() {
+			defer func() {
+				delete(areas, "zzbad")
+				if recover() == nil {
+					t.Errorf("key %q was accepted", key)
+				}
+			}()
+			register("zzbad", map[string]text{key: {"保存", "Save"}})
+		}()
 	}
 }
 
 func TestDefaultsToChineseInTests(t *testing.T) {
 	if os.Getenv(EnvLanguage) == "" && detect() != Chinese {
-		t.Fatal("tests must default to the Chinese source text")
+		t.Fatal("tests must default to the Chinese text")
 	}
 }
 

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package i18n
 
-func init() { register("appvault", enAppVault) }
+func init() { registerLegacy("appvault", enAppVault) }
 
 var enAppVault = map[string]string{
 	"登录":     "Login",

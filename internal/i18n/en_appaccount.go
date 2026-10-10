@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package i18n
 
-func init() { register("appaccount", enAppAccount) }
+func init() { registerLegacy("appaccount", enAppAccount) }
 
 var enAppAccount = map[string]string{
 	"导入与导出":         "Import & export",

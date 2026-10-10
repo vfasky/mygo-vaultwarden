@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package i18n
 
-func init() { register("appshell", enAppShell) }
+func init() { registerLegacy("appshell", enAppShell) }
 
 var enAppShell = map[string]string{
 	"所有项目":    "All items",

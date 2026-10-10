@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package i18n
 
-func init() { register("orgsend", enOrgSend) }
+func init() { registerLegacy("orgsend", enOrgSend) }
 
 var enOrgSend = map[string]string{
 	"正在执行；取消不会回滚已发送的请求。":           "Running. Cancelling will not undo requests already sent.",

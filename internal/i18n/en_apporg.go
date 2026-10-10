@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package i18n
 
-func init() { register("apporg", enAppOrg) }
+func init() { registerLegacy("apporg", enAppOrg) }
 
 var enAppOrg = map[string]string{
 	"接受组织邀请": "Accept organization invite",

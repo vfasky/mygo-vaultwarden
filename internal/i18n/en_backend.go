@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package i18n
 
-func init() { register("backend", enBackend) }
+func init() { registerLegacy("backend", enBackend) }
 
 var enBackend = map[string]string{
 	"此格式请使用 %s 文件扩展名，未写入文件。":                     "Use the %s file extension for this format. No file was written.",

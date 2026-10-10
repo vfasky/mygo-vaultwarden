@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 package i18n
 
-func init() { register("account", enAccount) }
+func init() { registerLegacy("account", enAccount) }
 
 var enAccount = map[string]string{
 	"正在取消；已发送操作不会自动回滚。":                              "Cancelling. Operations already sent will not be rolled back automatically.",

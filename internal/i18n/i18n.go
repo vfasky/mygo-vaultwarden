@@ -1,24 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
-// Package i18n localizes user-visible text. Source strings are written in
-// Simplified Chinese and double as catalog keys; English catalogs in this
-// package map them to translations. The language follows the system's
+// Package i18n localizes user-visible text in Simplified Chinese and
+// English. Text is looked up by a semantic key such as "app.sidebar.items";
+// each catalog file in this package defines the Chinese and English text of
+// the keys of one area side by side. The language follows the system's
 // preferred languages and is fixed at startup, before any other package
 // initializes, so package-level text such as sentinel errors is localized
 // too.
 //
-//	ui.Text(c, i18n.T("保存"))
-//	status = i18n.Tf("已同步 %d 个项目", n)
-//	err = fmt.Errorf(i18n.T("读取失败：%w"), err)
+//	ui.Text(c, i18n.T("common.save"))
+//	status = i18n.Tf("app.sync.done", n)
+//	err = fmt.Errorf(i18n.T("backup.read_failed"), err) // "…: %w"
 //
-// Text that is also program state (compared, persisted or sent to a server)
-// keeps its Chinese value: mark the literal with Key and translate it only
-// where it is shown, with T(value).
+// Keys name text, never program state: compare, persist and send stable
+// identifiers, and translate them only where they are shown.
 package i18n
 
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -43,7 +44,7 @@ func detect() Lang {
 	if l, ok := parse(os.Getenv(EnvLanguage)); ok {
 		return l
 	}
-	// Tests assert the Chinese source text unless they choose a language.
+	// Tests assert the Chinese text unless they choose a language.
 	if testing.Testing() {
 		return Chinese
 	}
@@ -85,60 +86,49 @@ func Set(l Lang) {
 	current.Store(l)
 }
 
-// T returns the translation of a Chinese source string in the active
-// language, or the source string itself when it has none.
-func T(source string) string {
-	if Current() == English {
-		if t, ok := english[source]; ok {
-			return t
+// T returns the text of key in the active language. An unknown key is
+// returned as is, so it shows up in the interface instead of failing; the
+// catalog test rejects unknown keys.
+func T(key string) string {
+	if m, ok := messages[key]; ok {
+		if Current() == English {
+			return m.en
 		}
+		return m.zh
 	}
-	return source
+	return legacyT(key)
 }
 
-// Tc translates source where its English depends on context, such as a
-// sidebar heading ("Items") whose source also names one item elsewhere
-// ("Item"). The catalog key is context+"\x04"+source; without such an
-// entry it falls back to T(source).
-func Tc(context, source string) string {
-	if Current() == English {
-		if t, ok := english[context+"\x04"+source]; ok {
-			return t
-		}
-	}
-	return T(source)
+// Tf formats the text of key with args as fmt.Sprintf does. Use %[n]v
+// verbs where the languages order the arguments differently.
+func Tf(key string, args ...any) string {
+	return fmt.Sprintf(T(key), args...)
 }
 
-// Tf translates format and formats it with args as fmt.Sprintf does.
-func Tf(format string, args ...any) string {
-	return fmt.Sprintf(T(format), args...)
-}
-
-// Key marks a Chinese literal that is program state rather than text, so it
-// is kept as is. Translate it with T where it is displayed.
-func Key(source string) string { return source }
+// text is one message in both languages.
+type text struct{ zh, en string }
 
 var (
-	english   = map[string]string{}
-	catalogs  = map[string]map[string]string{}
-	conflicts []string
+	messages = map[string]text{}
+	areas    = map[string]bool{}
+	keyRe    = regexp.MustCompile(`^[a-z][a-z0-9]*(\.[a-z0-9]+(_[a-z0-9]+)*)+$`)
 )
 
-// register adds an English catalog; each catalog file registers one from
-// init. A source string translated differently by two catalogs is reported
-// by the catalog test and keeps its first translation.
-func register(name string, entries map[string]string) {
-	if _, dup := catalogs[name]; dup {
-		panic("i18n: catalog " + name + " registered twice")
+// register adds the messages of an area, such as "app" or "org.member";
+// every key must start with the area and a dot. Each catalog file registers
+// its areas from init.
+func register(area string, entries map[string]text) {
+	if areas[area] {
+		panic("i18n: area " + area + " registered twice")
 	}
-	catalogs[name] = entries
-	for source, translation := range entries {
-		if prior, ok := english[source]; ok {
-			if prior != translation {
-				conflicts = append(conflicts, fmt.Sprintf("%q: %q vs %q (%s)", source, prior, translation, name))
-			}
-			continue
+	areas[area] = true
+	for key, m := range entries {
+		if !keyRe.MatchString(key) || !strings.HasPrefix(key, area+".") {
+			panic("i18n: key " + key + " is malformed or outside area " + area)
 		}
-		english[source] = translation
+		if _, dup := messages[key]; dup {
+			panic("i18n: key " + key + " defined twice")
+		}
+		messages[key] = m
 	}
 }
