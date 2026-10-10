@@ -37,7 +37,7 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM HUP
-"$GO_BIN" build -o "$runner_dir/dev-debug" ./scripts/dev-debug
+"$GO_BIN" build -o "$runner_dir/dev-debug" ./tools/dev-debug
 "$runner_dir/dev-debug" "${1:---watch}" &
 runner_pid=$!
 result=0

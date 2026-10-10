@@ -38,7 +38,7 @@ func TestFingerprintInputsAndGeneratedOutputs(t *testing.T) {
 		return s
 	}
 	previous := sum()
-	for _, name := range []string{"ui.go", "internal/vault/client.go", "go.mod", "resources/logo.png", "macos/Bridge/SnapshotBridge.swift", "macos/App/AppIcon.icns", "macos/App/App.entitlements", "scripts/build-macos.sh", ".local/signing.env"} {
+	for _, name := range []string{"ui.go", "main.go", "internal/vault/client.go", "go.mod", "go.sum", "resources/logo.png", "resources/assets.go", "third_party/mygo/client.go", "third_party/mygo/runtime.js", "macos/Bridge/SnapshotBridge.swift", "macos/App/AppIcon.icns", "macos/App/App.entitlements", "scripts/build-macos.sh", ".local/signing.env"} {
 		put(t, root, name, "changed")
 		next := sum()
 		if next == previous {
@@ -46,7 +46,7 @@ func TestFingerprintInputsAndGeneratedOutputs(t *testing.T) {
 		}
 		previous = next
 	}
-	for _, name := range []string{"build/debug/app.go", "macos/.build/output.swift", "macos/project.xcodeproj/xcuserdata/state.plist", ".mygo/dev/app.go", "README.md", "scripts/dev-debug/main.go"} {
+	for _, name := range []string{"build/debug/app.go", "macos/.build/output.swift", "macos/project.xcodeproj/xcuserdata/state.plist", ".mygo/dev/app.go", "README.md", "tools/dev-debug/main.go"} {
 		put(t, root, name, "generated")
 		if sum() != previous {
 			t.Fatalf("watched generated/unrelated file %s", name)

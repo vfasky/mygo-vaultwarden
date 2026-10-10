@@ -49,7 +49,7 @@ func testLiveSMTPInvitations(t *testing.T, autoEnroll bool) {
 	if err := os.Mkdir(filepath.Join(dir, "mail"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	build := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", filepath.Join(dir, "smtp"), "../../scripts/invitation-smtp")
+	build := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", filepath.Join(dir, "smtp"), "../../tools/invitation-smtp")
 	build.Env = append(os.Environ(), "CGO_ENABLED=0", "GOOS=linux")
 	if output, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("SMTP fixture build: %s %v", output, err)

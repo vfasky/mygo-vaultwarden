@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Test-only SMTP sink. It never relays mail and accepts only example.invalid.
+// Package main provides the test invitation SMTP receiver.
 package main
 
 import (

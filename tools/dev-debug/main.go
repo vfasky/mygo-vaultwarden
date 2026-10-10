@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Full signed macOS Debug builds with automatic rebuild/restart.
+// Package main provides the development build watcher.
 package main
 
 import (
@@ -132,10 +133,10 @@ func sourceFile(path string) bool {
 	if path == "go.mod" || path == "go.sum" || path == "mygo.json" || path == "mygo.config.ts" {
 		return true
 	}
-	if strings.HasPrefix(path, "resources/") || strings.HasPrefix(path, "macos/") {
+	if strings.HasPrefix(path, "resources/") || strings.HasPrefix(path, "third_party/") || strings.HasPrefix(path, "macos/") {
 		return true
 	}
-	if strings.HasPrefix(path, "scripts/dev-debug/") {
+	if strings.HasPrefix(path, "tools/dev-debug/") {
 		return false // the watcher itself must be restarted when edited
 	}
 	switch filepath.Ext(path) {
