@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -116,10 +117,10 @@ func (a *app) cipherShareRecoveryView(c *ui.Context, e *backupEditor) {
 			ui.Text(c, "恢复文件绑定原服务器、账户和当时的账户密钥。它不能替代当前权限，也不能在账户密钥轮换/删除后保证解锁。只修复与记录一致的旧个人或新组织条目的附件包装；不会抢回组织所有权、覆盖外部修改或删除文件。未决文件不会自动移除。").MaxLines(7)
 			ui.Text(c, "文件声明的项目编号（认证前不可信）："+r.id).MaxLines(2)
 			ui.TextInput(c, &r.password).Label("受保护项目的主密码（操作后清除）").Password().Disabled(busy)
-			if action(c, "先同步当前密码库", "sync", false, busy).Clicked() {
+			if kit.Action(c, "先同步当前密码库", "sync", false, busy).Clicked() {
 				a.syncVault(false)
 			}
-			if action(c, "认证恢复文件并新读取核对", "", false, busy).Clicked() {
+			if kit.Action(c, "认证恢复文件并新读取核对", "", false, busy).Clicked() {
 				a.runCipherShareRecovery(false)
 			}
 			if r.inspected {
@@ -130,11 +131,11 @@ func (a *app) cipherShareRecoveryView(c *ui.Context, e *backupEditor) {
 				if r.attempted {
 					ui.Text(c, "本轮修复已尝试，请同步并再次核对。结果未知时不重复发请求；继续修复需重新打开文件、认证和确认。")
 				}
-				if action(c, "确认仅把附件包装修复为当前项目密钥对应的版本", "", true, busy || !r.inspection.CanRepair || r.attempted).Clicked() {
+				if kit.Action(c, "确认仅把附件包装修复为当前项目密钥对应的版本", "", true, busy || !r.inspection.CanRepair || r.attempted).Clicked() {
 					a.runCipherShareRecovery(true)
 				}
 			}
-			if action(c, "取消并关闭恢复核对", "", false, false).Clicked() {
+			if kit.Action(c, "取消并关闭恢复核对", "", false, false).Clicked() {
 				if a.cancel != nil {
 					a.cancel()
 					a.cancel = nil

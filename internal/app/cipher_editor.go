@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -350,22 +351,22 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			if e.fields.Type == 1 {
 				if e.fields.ID != "" {
 					ui.Row(c).Gap(8).Children(func() {
-						if action(c, "显示已保存密码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, "显示已保存密码", "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.showPersonalSecret("password", callStorage)
 						}
-						if action(c, "显示当前验证码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, "显示当前验证码", "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.showPersonalSecret("totp", callStorage)
 						}
-						if action(c, "复制已保存密码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, "复制已保存密码", "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.copyPersonalSecret("password", callStorage)
 						}
-						if action(c, "复制当前验证码", "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, "复制当前验证码", "", false, a.pending != 0 || e.uncertain).Clicked() {
 							a.copyPersonalSecret("totp", callStorage)
 						}
 					})
 					if e.shownSecret != "" {
 						ui.Text(c, e.shownSecret).FontSize(20)
-						if action(c, "隐藏", "", false, false).Clicked() {
+						if kit.Action(c, "隐藏", "", false, false).Clicked() {
 							e.shownSecret = ""
 						}
 					}
@@ -377,7 +378,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 					uri := &e.uris[i]
 					ui.Row(c).Key(fmt.Sprintf("uri-%d", i)).Gap(8).Children(func() {
 						ui.TextInput(c, &uri.value).Label(fmt.Sprintf("网站 %d", i+1)).Grow(1).Disabled(a.pending != 0 || e.uncertain)
-						if action(c, "移除", "", false, a.pending != 0 || e.uncertain).Clicked() {
+						if kit.Action(c, "移除", "", false, a.pending != 0 || e.uncertain).Clicked() {
 							remove = i
 						}
 					})
@@ -386,7 +387,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				if remove >= 0 {
 					e.uris = append(e.uris[:remove], e.uris[remove+1:]...)
 				}
-				if action(c, "添加网站", "", false, a.pending != 0 || e.uncertain || len(e.uris) >= 128).Clicked() {
+				if kit.Action(c, "添加网站", "", false, a.pending != 0 || e.uncertain || len(e.uris) >= 128).Clicked() {
 					e.uris = append(e.uris, editorURI{source: map[string]any{"match": nil}})
 				}
 			}
@@ -395,7 +396,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			if e.fields.Favorite {
 				favorite = "取消收藏"
 			}
-			if action(c, favorite, "star", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, favorite, "star", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.fields.Favorite = !e.fields.Favorite
 			}
 			ui.Text(c, "自定义字段").FontSize(12)
@@ -405,7 +406,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				ui.Column(c).Key(fmt.Sprintf("custom-%d", i)).Gap(6).Children(func() {
 					ui.TextInput(c, &field.name).Label("字段名称").Disabled(a.pending != 0 || e.uncertain || !field.editable)
 					a.customValueEditor(c, e, field)
-					if action(c, "删除字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
+					if kit.Action(c, "删除字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
 						removeCustom = i
 					}
 				})
@@ -414,18 +415,18 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				e.custom = append(e.custom[:removeCustom], e.custom[removeCustom+1:]...)
 			}
 			ui.Row(c).Gap(8).Children(func() {
-				if action(c, "添加文本字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if kit.Action(c, "添加文本字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("0")}, editable: true, kind: "0"})
 				}
-				if action(c, "添加隐藏字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if kit.Action(c, "添加隐藏字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("1")}, hidden: true, editable: true, kind: "1"})
 				}
 			})
 			ui.Row(c).Gap(8).Children(func() {
-				if action(c, "添加布尔字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if kit.Action(c, "添加布尔字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("2")}, value: "false", editable: true, kind: "2"})
 				}
-				if len(linkedFields[e.fields.Type]) > 0 && action(c, "添加关联字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
+				if len(linkedFields[e.fields.Type]) > 0 && kit.Action(c, "添加关联字段", "", false, a.pending != 0 || e.uncertain).Clicked() {
 					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("3")}, editable: true, kind: "3", linkedID: linkedFields[e.fields.Type][0].id})
 				}
 			})
@@ -435,25 +436,25 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			ui.Text(c, "备注").FontSize(12)
 			ui.TextArea(c, &e.notes).Label("备注").MinHeight(100).Disabled(a.pending != 0 || e.uncertain)
 			if e.uncertain {
-				ui.Text(c, "请先同步核对服务器结果，当前表单不会重复提交。").FontSize(12).TextColor(vaultPurple)
+				ui.Text(c, "请先同步核对服务器结果，当前表单不会重复提交。").FontSize(12).TextColor(kit.Purple)
 			}
 			if e.fields.OrganizationID == nil && e.fields.ID != "" && (e.conflict || e.uncertain || e.revision != a.sessionRevision) {
 				ui.Text(c, "草稿已保留。先同步核实结果，再比较改动；不会自动重试。秘密比较仅显示是否更改。")
-				if action(c, "同步最新版本", "sync", false, a.pending != 0).Clicked() {
+				if kit.Action(c, "同步最新版本", "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
 				}
-				if action(c, "比较本地与远端改动", "", false, a.pending != 0 || e.revision == a.sessionRevision).Clicked() {
+				if kit.Action(c, "比较本地与远端改动", "", false, a.pending != 0 || e.revision == a.sessionRevision).Clicked() {
 					a.compareCipher(nil)
 				}
 			}
 			ui.Row(c).Gap(8).Children(func() {
-				if action(c, "保存", "sync", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
+				if kit.Action(c, "保存", "sync", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
 					a.saveCipher()
 				}
-				if action(c, "取消", "", false, a.pending != 0).Clicked() {
+				if kit.Action(c, "取消", "", false, a.pending != 0).Clicked() {
 					a.editor = nil
 				}
-				if e.uncertain && action(c, "同步核对", "sync", false, a.pending != 0).Clicked() {
+				if e.uncertain && kit.Action(c, "同步核对", "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
 				}
 			})
@@ -481,26 +482,26 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 		if e.confirm == copyCipherAction {
 			text = "将项目复制为独立条目，原项目不变。副本保留文件夹、收藏、密码历史和通行密钥数据，恢复为未归档状态。含附件时请先保存草稿；验证源文件并创建副本后，还需逐文件恢复和核验才算完成。未知扩展不会被默默丢弃。"
 		}
-		ui.Text(c, text).TextColor(vaultPurple)
+		ui.Text(c, text).TextColor(kit.Purple)
 		ui.Row(c).Gap(8).Children(func() {
-			if action(c, "确认", "", true, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, "确认", "", true, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(e.confirm)
 			}
-			if action(c, "取消操作", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "取消操作", "", false, a.pending != 0).Clicked() {
 				e.confirm = ""
 			}
 		})
 		return
 	}
 	ui.Row(c).Gap(8).Children(func() {
-		if action(c, "复制为新项目", "", false, a.pending != 0 || e.uncertain).Clicked() {
+		if kit.Action(c, "复制为新项目", "", false, a.pending != 0 || e.uncertain).Clicked() {
 			e.confirm = copyCipherAction
 		}
 		if e.fields.DeletedDate != nil {
-			if action(c, "恢复", "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, "恢复", "", false, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(vaultwarden.CipherRestore)
 			}
-			if action(c, "永久删除", "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, "永久删除", "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = vaultwarden.CipherDeletePermanently
 			}
 		} else {
@@ -508,10 +509,10 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 			if e.fields.ArchivedDate != nil {
 				label, op = "取消归档", vaultwarden.CipherUnarchive
 			}
-			if action(c, label, "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, label, "", false, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(op)
 			}
-			if action(c, "移入回收站", "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, "移入回收站", "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = vaultwarden.CipherTrash
 			}
 		}

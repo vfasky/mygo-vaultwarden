@@ -12,6 +12,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -22,10 +23,10 @@ func (a *app) attachmentView(c *ui.Context, e *cipherEditor) {
 	busy := a.pending != 0
 	ui.Text(c, "附件").FontSize(16)
 	ui.Text(c, "文件单独加密传输，最大 512 MiB。下载会保存为新的明文文件，不覆盖已有文件；当前需要联网。上传和删除前请先保存项目草稿。").FontSize(12).MaxLines(4)
-	if action(c, "加载或刷新附件列表", "", false, busy || e.uncertain).Clicked() {
+	if kit.Action(c, "加载或刷新附件列表", "", false, busy || e.uncertain).Clicked() {
 		a.runAttachmentOperation("list", vaultwarden.AttachmentInfo{})
 	}
-	if e.fields.Edit && action(c, "选择并上传文件…", "", false, busy || e.uncertain || e.fields.DeletedDate != nil).Clicked() {
+	if e.fields.Edit && kit.Action(c, "选择并上传文件…", "", false, busy || e.uncertain || e.fields.DeletedDate != nil).Clicked() {
 		a.runAttachmentOperation("upload", vaultwarden.AttachmentInfo{})
 	}
 	if e.attachmentsLoaded && len(e.attachments) == 0 {
@@ -35,19 +36,19 @@ func (a *app) attachmentView(c *ui.Context, e *cipherEditor) {
 		ui.Column(c).Gap(6).Children(func() {
 			ui.Text(c, attachment.FileName).MaxLines(2)
 			ui.Text(c, fmt.Sprintf("加密大小：%d 字节", attachment.CiphertextSize)).FontSize(11)
-			if action(c, "下载并另存为…", "", false, busy || e.uncertain).Clicked() {
+			if kit.Action(c, "下载并另存为…", "", false, busy || e.uncertain).Clicked() {
 				a.runAttachmentOperation("download", attachment)
 			}
 			if e.fields.Edit {
 				if e.attachmentDelete == attachment.ID {
 					ui.Text(c, "永久删除此附件？此操作无法撤销。").FontSize(12)
-					if action(c, "确认永久删除附件", "", true, busy || e.uncertain).Clicked() {
+					if kit.Action(c, "确认永久删除附件", "", true, busy || e.uncertain).Clicked() {
 						a.runAttachmentOperation("delete", attachment)
 					}
-					if action(c, "保留附件", "", false, busy).Clicked() {
+					if kit.Action(c, "保留附件", "", false, busy).Clicked() {
 						e.attachmentDelete = ""
 					}
-				} else if action(c, "删除附件…", "", false, busy || e.uncertain).Clicked() {
+				} else if kit.Action(c, "删除附件…", "", false, busy || e.uncertain).Clicked() {
 					e.attachmentDelete = attachment.ID
 				}
 			}
@@ -55,7 +56,7 @@ func (a *app) attachmentView(c *ui.Context, e *cipherEditor) {
 	}
 	if e.attachmentBusy {
 		ui.Text(c, "正在验证权限并传输附件，请稍候…").FontSize(12)
-		if action(c, "取消附件操作", "", false, false).Clicked() {
+		if kit.Action(c, "取消附件操作", "", false, false).Clicked() {
 			if a.cancel != nil {
 				a.cancel()
 			}

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -263,7 +264,7 @@ func (p *recoveryPanel) View(c *ui.Context) {
 				kind = "接管账号"
 			}
 			label := fmt.Sprintf("%s · %s · %s · %s · 等待 %d 天", row.Name, row.Email, state, kind, row.WaitTimeDays)
-			if action(c, label, "", p.selected == i, disabled).Key("emergency-contact-" + row.ID).Clicked() {
+			if kit.Action(c, label, "", p.selected == i, disabled).Key("emergency-contact-" + row.ID).Clicked() {
 				p.selected = i
 			}
 		}
@@ -277,7 +278,7 @@ func (p *recoveryPanel) View(c *ui.Context) {
 				}
 				allowed = allowed || vaultwarden.EmergencyActionAllowed(p.contacts[p.selected], p.trusted, a)
 			}
-			if action(c, o.label, "", p.operation == o.action, disabled || !allowed).Key("emergency-action-" + o.action).Clicked() {
+			if kit.Action(c, o.label, "", p.operation == o.action, disabled || !allowed).Key("emergency-action-" + o.action).Clicked() {
 				p.operation = o.action
 				p.clearSecrets()
 			}
@@ -291,7 +292,7 @@ func (p *recoveryPanel) View(c *ui.Context) {
 		}
 		if p.operation == "invite" || p.operation == "update" {
 			for i, label := range []string{"只读查看", "接管账号（重置密码和 MFA）"} {
-				if action(c, label, "", p.accessType == i, disabled).Key(fmt.Sprintf("emergency-type-%d", i)).Clicked() {
+				if kit.Action(c, label, "", p.accessType == i, disabled).Key(fmt.Sprintf("emergency-type-%d", i)).Clicked() {
 					p.accessType = i
 				}
 			}
@@ -299,12 +300,12 @@ func (p *recoveryPanel) View(c *ui.Context) {
 		}
 	} else {
 		for i, m := range p.members {
-			if action(c, m.Label, "", p.selected == i, disabled).Key("recovery-member-" + m.OrganizationID + "-" + m.MemberID).Clicked() {
+			if kit.Action(c, m.Label, "", p.selected == i, disabled).Key("recovery-member-" + m.OrganizationID + "-" + m.MemberID).Clicked() {
 				p.selected = i
 			}
 		}
 		for _, o := range []struct{ action, label string }{{"enroll", "登记自身账号恢复"}, {"withdraw", "退出自身账号恢复"}, {"administrator", "管理员恢复成员"}} {
-			if action(c, o.label, "", p.operation == o.action, disabled).Key("recovery-action-" + o.action).Clicked() {
+			if kit.Action(c, o.label, "", p.operation == o.action, disabled).Key("recovery-action-" + o.action).Clicked() {
 				p.operation = o.action
 				p.clearSecrets()
 			}
@@ -314,10 +315,10 @@ func (p *recoveryPanel) View(c *ui.Context) {
 			ui.TextInput(c, &p.otp).Label("或受保护操作邮件 OTP（二选一）").Password().Disabled(disabled)
 		}
 		if p.operation == "administrator" {
-			if action(c, "重置主密码", "", p.resetPassword, disabled).Key("recovery-reset-password").Clicked() {
+			if kit.Action(c, "重置主密码", "", p.resetPassword, disabled).Key("recovery-reset-password").Clicked() {
 				p.resetPassword = !p.resetPassword
 			}
-			if action(c, "重置 MFA", "", p.resetMFA, disabled).Key("recovery-reset-mfa").Clicked() {
+			if kit.Action(c, "重置 MFA", "", p.resetMFA, disabled).Key("recovery-reset-mfa").Clicked() {
 				p.resetMFA = !p.resetMFA
 			}
 		}
@@ -343,18 +344,18 @@ func (p *recoveryPanel) View(c *ui.Context) {
 			ui.Text(c, fmt.Sprintf("联系人：%s · %s · 等待 %d 天", summary.CounterpartyEmail, kind, summary.WaitTimeDays))
 		}
 		ui.Text(c, p.plan.Impact())
-		if action(c, "我已核对对象并授权执行", "", true, p.blocked()).Key("recovery-confirm").Clicked() {
+		if kit.Action(c, "我已核对对象并授权执行", "", true, p.blocked()).Key("recovery-confirm").Clicked() {
 			p.commitPlan()
 		}
-		if action(c, "取消此计划", "", false, p.blocked()).Key("recovery-discard").Clicked() {
+		if kit.Action(c, "取消此计划", "", false, p.blocked()).Key("recovery-discard").Clicked() {
 			p.plan.Close()
 			p.plan = nil
 			p.status = "已取消；未提交。"
 		}
-	} else if action(c, "读取核验并准备确认", "", true, p.blocked()).Key("recovery-prepare").Clicked() {
+	} else if kit.Action(c, "读取核验并准备确认", "", true, p.blocked()).Key("recovery-prepare").Clicked() {
 		p.preparePlan()
 	}
-	if p.running && action(c, "取消并核对结果", "", false, false).Key("recovery-cancel").Clicked() {
+	if p.running && kit.Action(c, "取消并核对结果", "", false, false).Key("recovery-cancel").Clicked() {
 		p.cancelOperation()
 	}
 	if p.status != "" {

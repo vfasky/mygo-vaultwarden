@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -74,16 +75,16 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 func (f *orgBusinessFlow) footer(c *ui.Context, key, warning string, ready bool, start func()) {
 	if f.confirm {
 		ui.Text(c, warning)
-		if action(c, "确认执行", "", true, f.blocked() || !ready).Key(key + "-confirm").Clicked() {
+		if kit.Action(c, "确认执行", "", true, f.blocked() || !ready).Key(key + "-confirm").Clicked() {
 			start()
 		}
-		if action(c, "返回修改", "", false, f.blocked()).Key(key + "-back").Clicked() {
+		if kit.Action(c, "返回修改", "", false, f.blocked()).Key(key + "-back").Clicked() {
 			f.confirm = false
 		}
-	} else if action(c, "核对并继续", "", true, f.blocked() || !ready || f.dispatch == nil).Key(key + "-review").Clicked() {
+	} else if kit.Action(c, "核对并继续", "", true, f.blocked() || !ready || f.dispatch == nil).Key(key + "-review").Clicked() {
 		f.confirm = true
 	}
-	if f.running && action(c, "取消请求并核对", "", false, false).Key(key+"-cancel").Clicked() {
+	if f.running && kit.Action(c, "取消请求并核对", "", false, false).Key(key+"-cancel").Clicked() {
 		f.cancel()
 		f.status = "正在取消；服务器可能已部分执行。"
 	}
@@ -162,11 +163,11 @@ func (p *orgCopyPanel) View(c *ui.Context) {
 		ui.Text(c, "执行时需通过主密码再次验证；取消验证不会提交。")
 	}
 	for i, choice := range p.choices {
-		if action(c, choice.Name, "", p.target == i, p.flow.blocked() || p.flow.confirm || !choice.Writable).Key("org-copy-" + choice.ID).Clicked() {
+		if kit.Action(c, choice.Name, "", p.target == i, p.flow.blocked() || p.flow.confirm || !choice.Writable).Key("org-copy-" + choice.ID).Clicked() {
 			p.target = i
 		}
 	}
-	if action(c, "完整资源复制（含附件，先验证所有源文件）", "", p.resources, p.flow.blocked() || p.flow.confirm || p.prepareResources == nil || p.resourcesReady == nil).Key("org-copy-resources").Clicked() {
+	if kit.Action(c, "完整资源复制（含附件，先验证所有源文件）", "", p.resources, p.flow.blocked() || p.flow.confirm || p.prepareResources == nil || p.resourcesReady == nil).Key("org-copy-resources").Clicked() {
 		p.resources = !p.resources
 	}
 	p.flow.footer(c, "org-copy", "确认在所选组织集合新建独立副本？完整资源复制会先验证源文件，再创建元数据并进入逐文件恢复核验；中途失败不自动重试或删除原件。普通复制不支持附件。", p.ready(), p.start)
@@ -221,7 +222,7 @@ func (p *orgCollectionPanel) View(c *ui.Context) {
 	ui.Text(c, "调整组织集合").FontSize(22)
 	ui.Text(c, p.item.Title)
 	for _, choice := range p.choices {
-		if action(c, choice.Name, "", p.selected[choice.ID], p.flow.blocked() || p.flow.confirm || !choice.Writable).Key("org-assign-" + choice.ID).Clicked() {
+		if kit.Action(c, choice.Name, "", p.selected[choice.ID], p.flow.blocked() || p.flow.confirm || !choice.Writable).Key("org-assign-" + choice.ID).Clicked() {
 			p.selected[choice.ID] = !p.selected[choice.ID]
 		}
 	}
@@ -365,11 +366,11 @@ func (p *orgImportPanel) View(c *ui.Context) {
 		for _, source := range p.plan.Collections() {
 			ui.Text(c, "源集合："+source.Name)
 			value, set := p.mappings[source.ID]
-			if action(c, "创建同名新集合", "", set && value == "", p.flow.confirm || !p.createAllowed).Key("org-map-new-" + source.ID).Clicked() {
+			if kit.Action(c, "创建同名新集合", "", set && value == "", p.flow.confirm || !p.createAllowed).Key("org-map-new-" + source.ID).Clicked() {
 				p.mappings[source.ID] = ""
 			}
 			for _, target := range p.choices {
-				if action(c, target.Name, "", set && value == target.ID, p.flow.confirm || !target.Writable).Key("org-map-" + source.ID + "-" + target.ID).Clicked() {
+				if kit.Action(c, target.Name, "", set && value == target.ID, p.flow.confirm || !target.Writable).Key("org-map-" + source.ID + "-" + target.ID).Clicked() {
 					p.mappings[source.ID] = target.ID
 				}
 			}
@@ -426,13 +427,13 @@ func (p *orgExportPanel) View(c *ui.Context) {
 	ui.Text(c, "导出组织："+p.organizationName).FontSize(22)
 	disabled := p.flow.blocked() || p.flow.confirm || !p.allowed
 	ui.TextInput(c, &p.path).Label("保存到新文件（禁止覆盖已有文件）").Disabled(disabled)
-	if action(c, "MyGo 组织备份 v1", "", !p.official && !p.resources, disabled).Key("org-export-mygo").Clicked() {
+	if kit.Action(c, "MyGo 组织备份 v1", "", !p.official && !p.resources, disabled).Key("org-export-mygo").Clicked() {
 		p.official, p.resources = false, false
 	}
-	if action(c, "Bitwarden 官方明文 JSON", "", p.official && !p.resources, disabled).Key("org-export-official").Clicked() {
+	if kit.Action(c, "Bitwarden 官方明文 JSON", "", p.official && !p.resources, disabled).Key("org-export-official").Clicked() {
 		p.official, p.resources = true, false
 	}
-	if action(c, "MyGo 完整组织资源备份（附件与通行密钥，非官方格式）", "", p.resources, disabled || p.executeResources == nil).Key("org-export-resources").Clicked() {
+	if kit.Action(c, "MyGo 完整组织资源备份（附件与通行密钥，非官方格式）", "", p.resources, disabled || p.executeResources == nil).Key("org-export-resources").Clicked() {
 		p.resources = true
 		p.official = false
 	}

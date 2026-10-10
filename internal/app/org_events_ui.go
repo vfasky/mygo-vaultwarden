@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -105,7 +106,7 @@ func (p *orgEventsPanel) View(c *ui.Context) {
 	ui.Text(c, "组织审计事件").FontSize(22)
 	ui.TextInput(c, &p.startDate).Label("开始时间（含时区）").Disabled(p.running)
 	ui.TextInput(c, &p.endDate).Label("结束时间（含时区）").Disabled(p.running)
-	if action(c, "读取事件", "", true, p.running || p.fetch == nil || p.dispatch == nil).Key("org-events-load").Clicked() {
+	if kit.Action(c, "读取事件", "", true, p.running || p.fetch == nil || p.dispatch == nil).Key("org-events-load").Clicked() {
 		p.load(false)
 	}
 	for i, event := range p.events {
@@ -121,10 +122,10 @@ func (p *orgEventsPanel) View(c *ui.Context) {
 			ui.Text(c, "条目："+*event.CipherID)
 		}
 	}
-	if action(c, "加载下一页", "", false, p.running || p.next == nil).Key("org-events-next").Clicked() {
+	if kit.Action(c, "加载下一页", "", false, p.running || p.next == nil).Key("org-events-next").Clicked() {
 		p.load(true)
 	}
-	if p.running && action(c, "取消读取", "", false, false).Key("org-events-cancel").Clicked() {
+	if p.running && kit.Action(c, "取消读取", "", false, false).Key("org-events-cancel").Clicked() {
 		if p.cancel != nil {
 			p.cancel()
 		}

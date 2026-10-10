@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -124,7 +125,7 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 					if e.localChoices[change.Path] {
 						label = "✓ 采用我的修改（点击改用远端）"
 					}
-					if action(c, label, "", false, a.pending != 0).Clicked() {
+					if kit.Action(c, label, "", false, a.pending != 0).Clicked() {
 						e.localChoices[change.Path] = !e.localChoices[change.Path]
 					}
 				} else if change.Local {
@@ -145,7 +146,7 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 						} else if choices[i] >= 0 {
 							label = fmt.Sprintf("明确对应远端第 %d 行", choices[i]+1)
 						}
-						if action(c, label, "", false, a.pending != 0).Clicked() {
+						if kit.Action(c, label, "", false, a.pending != 0).Clicked() {
 							choices[i]++
 							if choices[i] >= len(change.RemoteRows) {
 								choices[i] = -2
@@ -155,13 +156,13 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 				}
 			}
 			ui.Text(c, "服务器按整秒差值大于 1 检测旧版本（不足两秒可能不拒绝），无法保证比较后没有其他客户端再次修改。保存若再次冲突，会保留草稿供重新比较。")
-			if action(c, "采用远端版本，放弃本地修改", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "采用远端版本，放弃本地修改", "", false, a.pending != 0).Clicked() {
 				a.applyCipherComparison(false)
 			}
-			if action(c, "按以上选择重新应用到草稿", "", true, a.pending != 0).Clicked() {
+			if kit.Action(c, "按以上选择重新应用到草稿", "", true, a.pending != 0).Clicked() {
 				a.applyCipherComparison(true)
 			}
-			if action(c, "返回，保留原草稿", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "返回，保留原草稿", "", false, a.pending != 0).Clicked() {
 				clearCipherRowReveal(e)
 				e.comparison = nil
 				e.changes = nil

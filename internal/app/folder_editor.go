@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
 )
@@ -41,11 +42,11 @@ func (a *app) folderPicker(c *ui.Context, selected **string, disabled bool) {
 	ui.Text(c, "文件夹").FontSize(12)
 	ui.Scroll(c).Height(110).Children(func() {
 		ui.Column(c).Gap(4).Children(func() {
-			if navItem(c, "无文件夹", "vault", "", *selected == nil, disabled).Clicked() {
+			if kit.NavItem(c, "无文件夹", "vault", "", *selected == nil, disabled).Clicked() {
 				*selected = nil
 			}
 			for _, f := range a.folders {
-				if navItem(c, f.Name, "vault", "", *selected != nil && **selected == f.ID, disabled).Clicked() {
+				if kit.NavItem(c, f.Name, "vault", "", *selected != nil && **selected == f.ID, disabled).Clicked() {
 					id := f.ID
 					*selected = &id
 				}
@@ -65,27 +66,27 @@ func (a *app) folderEditorView(c *ui.Context) {
 		ui.TextInput(c, &e.name).Label("文件夹名称").Disabled(a.pending != 0 || e.uncertain)
 		if e.confirm {
 			ui.Text(c, "删除文件夹后，项目会变为无文件夹，项目本身不会删除。确认继续？").MaxLines(3)
-			if action(c, "确认删除文件夹", "", true, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, "确认删除文件夹", "", true, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateFolder(true)
 			}
-			if action(c, "取消删除", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "取消删除", "", false, a.pending != 0).Clicked() {
 				e.confirm = false
 			}
 		} else {
-			if action(c, "保存文件夹", "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
+			if kit.Action(c, "保存文件夹", "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
 				a.mutateFolder(false)
 			}
-			if e.id != "" && action(c, "删除文件夹", "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if e.id != "" && kit.Action(c, "删除文件夹", "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = true
 			}
 		}
 		if e.uncertain {
 			ui.Text(c, "请先同步核对结果。此表单不会再次提交。").FontSize(12)
-			if action(c, "同步核对", "sync", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "同步核对", "sync", false, a.pending != 0).Clicked() {
 				a.syncVault(false)
 			}
 		}
-		if action(c, "关闭文件夹编辑", "", false, a.pending != 0).Clicked() {
+		if kit.Action(c, "关闭文件夹编辑", "", false, a.pending != 0).Clicked() {
 			a.folderEditor = nil
 		}
 	})

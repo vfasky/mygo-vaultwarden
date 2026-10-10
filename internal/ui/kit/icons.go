@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package kit
 
 import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/resources"
 )
 
-var appLogo = func() *ui.Bitmap {
+var AppLogo = func() *ui.Bitmap {
 	b, err := ui.DecodeBitmap(resources.AppLogo)
 	if err != nil {
 		return nil
@@ -19,7 +19,7 @@ func lineIcon(paths string) *ui.SVG {
 	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">` + paths + `</svg>`))
 }
 
-var vaultIcons = map[string]*ui.SVG{
+var Icons = map[string]*ui.SVG{
 	"panel-left":  lineIcon(`<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 3v18"/>`),
 	"vault":       lineIcon(`<rect x="4" y="3" width="16" height="18" rx="4"/><circle cx="12" cy="11" r="3"/><path d="M12 8v6m-3-3h6M8 18h8"/>`),
 	"grid":        lineIcon(`<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>`),
@@ -52,6 +52,6 @@ var vaultIcons = map[string]*ui.SVG{
 	"close":       lineIcon(`<path d="m6 6 12 12M6 18 18 6"/>`),
 }
 
-func icon(c *ui.Context, name string, size float32) *ui.Element {
-	return ui.Icon(c, vaultIcons[name]).Size(size, size).Shrink(0)
+func Icon(c *ui.Context, name string, size float32) *ui.Element {
+	return ui.Icon(c, Icons[name]).Size(size, size).Shrink(0)
 }

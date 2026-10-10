@@ -3,6 +3,7 @@ package app
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
 )
@@ -13,7 +14,7 @@ func (a *app) organizationTypePicker(c *ui.Context, e *cipherEditor) {
 	for row := 0; row < 2; row++ {
 		ui.Row(c).Gap(4).Children(func() {
 			for kind := 1 + row*4; kind <= 4+row*4; kind++ {
-				if action(c, "类型："+cipherTypeNames[kind], "", kind == e.fields.Type, a.pending != 0 || e.uncertain).Key("organization-type-" + cipherTypeNames[kind]).Clicked() {
+				if kit.Action(c, "类型："+cipherTypeNames[kind], "", kind == e.fields.Type, a.pending != 0 || e.uncertain).Key("organization-type-" + cipherTypeNames[kind]).Clicked() {
 					e.applyInputs()
 					e.fields.Type = kind
 					populateCipherEditor(e)
@@ -35,10 +36,10 @@ func (a *app) organizationShareView(c *ui.Context, e *cipherEditor) {
 				ui.Text(c, "目标集合："+collection.Name)
 			}
 		}
-		if action(c, "确认共享到组织", "", true, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-confirm").Clicked() {
+		if kit.Action(c, "确认共享到组织", "", true, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-confirm").Clicked() {
 			a.mutateCipher(shareOrganizationAction)
 		}
-		if action(c, "取消共享", "", false, a.pending != 0).Key("organization-share-cancel").Clicked() {
+		if kit.Action(c, "取消共享", "", false, a.pending != 0).Key("organization-share-cancel").Clicked() {
 			e.shareOrganizationID, e.shareCollectionID = "", ""
 		}
 		return
@@ -46,7 +47,7 @@ func (a *app) organizationShareView(c *ui.Context, e *cipherEditor) {
 	for _, org := range a.organizations {
 		for _, collection := range a.collections {
 			if collection.OrganizationID == org.ID && !collection.ReadOnly && !collection.HidePasswords {
-				if action(c, "共享到 "+org.Name+" / "+collection.Name, "", false, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-select-" + collection.ID).Clicked() {
+				if kit.Action(c, "共享到 "+org.Name+" / "+collection.Name, "", false, a.pending != 0 || e.uncertain || e.conflict).Key("organization-share-select-" + collection.ID).Clicked() {
 					e.shareOrganizationID, e.shareCollectionID = org.ID, collection.ID
 				}
 			}
@@ -98,21 +99,21 @@ func (a *app) readOnlyOrganizationCipherView(c *ui.Context, e *cipherEditor) {
 			}
 		}
 		if e.fields.Type == 1 {
-			if action(c, "显示密码（30 秒）", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "显示密码（30 秒）", "", false, a.pending != 0).Clicked() {
 				a.showPersonalSecret("password", callStorage)
 			}
-			if action(c, "复制密码", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "复制密码", "", false, a.pending != 0).Clicked() {
 				a.copyPersonalSecret("password", callStorage)
 			}
-			if action(c, "显示验证码", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "显示验证码", "", false, a.pending != 0).Clicked() {
 				a.showPersonalSecret("totp", callStorage)
 			}
-			if action(c, "复制验证码", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "复制验证码", "", false, a.pending != 0).Clicked() {
 				a.copyPersonalSecret("totp", callStorage)
 			}
 		}
 		a.attachmentView(c, e)
-		if action(c, "关闭", "", false, false).Clicked() {
+		if kit.Action(c, "关闭", "", false, false).Clicked() {
 			*e = cipherEditor{}
 			a.editor = nil
 		}

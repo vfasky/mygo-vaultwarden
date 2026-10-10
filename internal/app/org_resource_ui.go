@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -124,7 +125,7 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 		ui.Text(c, fmt.Sprintf("%s · 来源 %s/%s · %s", row.resource.FileName, row.resource.CipherID, row.resource.AttachmentID, row.state)).MaxLines(3)
 		ui.TextInput(c, &row.target).Label("已创建或明确选择的目标项目编号").Disabled(busy || row.state == "已核验")
 		ui.TextInput(c, &row.attachmentID).Label("待核对的目标附件编号").Disabled(busy || row.state == "已核验")
-		if action(c, "确认向目标上传一次（保留源文件）", "", false, busy || p.needsRefresh || row.target == "" || row.state != "未执行" || p.callbacks.file == nil).Key(fmt.Sprintf("org-resource-upload-%d", i)).Clicked() {
+		if kit.Action(c, "确认向目标上传一次（保留源文件）", "", false, busy || p.needsRefresh || row.target == "" || row.state != "未执行" || p.callbacks.file == nil).Key(fmt.Sprintf("org-resource-upload-%d", i)).Clicked() {
 			index, target := i, row.target
 			plan, execute := p.plan, p.callbacks.file
 			p.run(func(ctx context.Context) (func(), error) {
@@ -140,7 +141,7 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 				}, err
 			})
 		}
-		if action(c, "下载并核验所选附件", "", false, busy || p.needsRefresh || row.target == "" || row.attachmentID == "" || row.state == "已核验" || p.callbacks.file == nil).Key(fmt.Sprintf("org-resource-verify-%d", i)).Clicked() {
+		if kit.Action(c, "下载并核验所选附件", "", false, busy || p.needsRefresh || row.target == "" || row.attachmentID == "" || row.state == "已核验" || p.callbacks.file == nil).Key(fmt.Sprintf("org-resource-verify-%d", i)).Clicked() {
 			index, target, id := i, row.target, row.attachmentID
 			plan, execute := p.plan, p.callbacks.file
 			p.run(func(ctx context.Context) (func(), error) {
@@ -169,7 +170,7 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 			labels := map[string]string{"folder": "文件夹映射", "archive": "归档状态", "trash": "回收站状态"}
 			ui.Text(c, labels[step]+"："+row.steps[step])
 			disabled := busy || p.needsRefresh || !p.filesVerified(row.source.SourceID, row.target) || p.callbacks.state == nil || (step == "folder" && row.folder == "")
-			if action(c, "确认恢复"+labels[step], "", false, disabled || row.steps[step] != "").Clicked() {
+			if kit.Action(c, "确认恢复"+labels[step], "", false, disabled || row.steps[step] != "").Clicked() {
 				index, source, target, folder, operation := i, row.source, row.target, row.folder, step
 				execute, fileExecute, plan := p.callbacks.state, p.callbacks.file, p.plan
 				files := []struct {
@@ -209,7 +210,7 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 					}, err
 				})
 			}
-			if action(c, "核对"+labels[step], "", false, disabled || row.steps[step] == "已核验").Clicked() {
+			if kit.Action(c, "核对"+labels[step], "", false, disabled || row.steps[step] == "已核验").Clicked() {
 				index, source, target, folder, operation := i, row.source, row.target, row.folder, step
 				execute := p.callbacks.state
 				p.run(func(ctx context.Context) (func(), error) {
@@ -223,7 +224,7 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 			}
 		}
 	}
-	if action(c, "同步并刷新权限后继续", "sync", false, busy || p.callbacks.refresh == nil).Key("org-resource-refresh").Clicked() {
+	if kit.Action(c, "同步并刷新权限后继续", "sync", false, busy || p.callbacks.refresh == nil).Key("org-resource-refresh").Clicked() {
 		execute := p.callbacks.refresh
 		p.run(func(ctx context.Context) (func(), error) {
 			err := execute(ctx)
@@ -234,7 +235,7 @@ func (p *orgResourceRestorePanel) View(c *ui.Context) {
 			}, err
 		})
 	}
-	if p.running && action(c, "取消本步骤并核对", "", false, false).Clicked() {
+	if p.running && kit.Action(c, "取消本步骤并核对", "", false, false).Clicked() {
 		p.cancel()
 	}
 	if p.status != "" {

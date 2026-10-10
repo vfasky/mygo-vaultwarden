@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 )
 
 func (a *app) connectedServer() string {
@@ -29,7 +30,7 @@ func (a *app) authentication(c *ui.Context) {
 		page, title, subtitle = "target-recovery", "恢复目标账号", "全新认证、逐项核验与专用发布"
 	}
 	width, _ := c.Size()
-	ui.Column(c).Key("auth-"+page).Fill().TextColor(vaultInk).
+	ui.Column(c).Key("auth-"+page).Fill().TextColor(kit.Ink).
 		Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
 		ui.Box(c).Height(max(c.TitleBar().Height, 52)).Shrink(0).DragWindow()
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
@@ -37,11 +38,11 @@ func (a *app) authentication(c *ui.Context) {
 				Justify(ui.Center).AlignItems(ui.Center).Children(func() {
 				ui.Column(c).Width(min(float32(360), max(float32(0), width-48))).Gap(28).Children(func() {
 					ui.Column(c).AlignItems(ui.Center).Gap(12).Children(func() {
-						if appLogo != nil {
-							ui.Image(c, appLogo).Size(80, 80).Shrink(0)
+						if kit.AppLogo != nil {
+							ui.Image(c, kit.AppLogo).Size(80, 80).Shrink(0)
 						}
 						ui.Text(c, title).FontSize(25).FontWeight(650).TextAlign(ui.Center)
-						ui.Text(c, subtitle).FontSize(13).TextColor(vaultMuted).TextAlign(ui.Center).MaxLines(2)
+						ui.Text(c, subtitle).FontSize(13).TextColor(kit.Muted).TextAlign(ui.Center).MaxLines(2)
 					})
 					if a.snapshot != nil && a.snapshot.AccountSwitchPending {
 						ui.Text(c, "本机账号替换已写入或回执未知。原账号加密副本与密钥在确认前保留，不会盲重试或回滚新状态。").MaxLines(5)
@@ -110,7 +111,7 @@ func authPrimary(c *ui.Context, label string, disabled bool) *ui.Element {
 		Justify(ui.Center).AlignItems(ui.Center).Disabled(disabled).Children(func() {
 		ui.Text(c, label).FontSize(14).FontWeight(600)
 		if !disabled {
-			icon(c, "chevron", 15)
+			kit.Icon(c, "chevron", 15)
 		}
 	})
 	return button
@@ -118,7 +119,7 @@ func authPrimary(c *ui.Context, label string, disabled bool) *ui.Element {
 
 func authLink(c *ui.Context, label string, disabled bool) *ui.Element {
 	return ui.Button(c, label).Height(30).FontSize(12).Padding(0, 12).Radius(15).
-		Border(0, ui.Transparent).Background(ui.Transparent).TextColor(vaultPurple).Disabled(disabled)
+		Border(0, ui.Transparent).Background(ui.Transparent).TextColor(kit.Purple).Disabled(disabled)
 }
 
 func (a *app) authStatus(c *ui.Context) {
@@ -126,7 +127,7 @@ func (a *app) authStatus(c *ui.Context) {
 		ui.Text(c, warning).MaxLines(5)
 	}
 	if a.status != "" {
-		ui.Text(c, a.status).FontSize(12).LineHeight(1.5).TextColor(vaultMuted).
+		ui.Text(c, a.status).FontSize(12).LineHeight(1.5).TextColor(kit.Muted).
 			TextAlign(ui.Center).Role(ui.RoleStatus)
 	}
 }
@@ -149,7 +150,7 @@ func (a *app) serverLogin(c *ui.Context) {
 	ui.Column(c).Key(a.secretInputVersion).Gap(16).Children(func() {
 		ui.Field(c, "服务器地址", func() {
 			field := ui.TextInput(c, &a.serverURL).Placeholder("https://vault.example.com").
-				Height(38).Padding(0, 14).Radius(19).Background(vaultWhite).Disabled(busy)
+				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(busy)
 			if a.serverURL == "" {
 				field.AutoFocus()
 			}
@@ -157,7 +158,7 @@ func (a *app) serverLogin(c *ui.Context) {
 		})
 		ui.Field(c, "邮箱", func() {
 			field := ui.TextInput(c, &a.email).Placeholder("you@example.com").
-				Height(38).Padding(0, 14).Radius(19).Background(vaultWhite).Disabled(busy)
+				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(busy)
 			if a.serverURL != "" && a.email == "" {
 				field.AutoFocus()
 			}
@@ -165,14 +166,14 @@ func (a *app) serverLogin(c *ui.Context) {
 		})
 		ui.Field(c, "主密码", func() {
 			field := ui.TextInput(c, &a.masterPassword).Password().Placeholder("输入主密码").
-				Height(38).Padding(0, 14).Radius(19).Background(vaultWhite).Disabled(busy)
+				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(busy)
 			if a.serverURL != "" && a.email != "" {
 				field.AutoFocus()
 			}
 			submitted = submitted || field.Submitted()
 		})
 		if a.snapshot != nil && a.snapshot.Available {
-			ui.Text(c, "继续登录将切换本机账号，并替换已有离线快照。").FontSize(12).LineHeight(1.5).TextColor(vaultMuted).TextAlign(ui.Center)
+			ui.Text(c, "继续登录将切换本机账号，并替换已有离线快照。").FontSize(12).LineHeight(1.5).TextColor(kit.Muted).TextAlign(ui.Center)
 		}
 		label := "登录并同步"
 		if busy {
@@ -229,10 +230,10 @@ func (a *app) twoFactorLogin(c *ui.Context) {
 	ready := a.loginChallenge != nil && a.loginChallenge.epoch == a.epoch && a.loginChallenge.ctx.Err() == nil
 	submitted := false
 	ui.Column(c).Key(a.secretInputVersion).Gap(16).Children(func() {
-		ui.Text(c, a.email+" · "+websiteHost(a.serverURL)).FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center).MaxLines(2)
+		ui.Text(c, a.email+" · "+websiteHost(a.serverURL)).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center).MaxLines(2)
 		ui.Field(c, "验证码", func() {
 			field := ui.TextInput(c, &a.verificationCode).Password().Placeholder("6 位数字验证码").
-				Height(38).Padding(0, 14).Radius(19).Background(vaultWhite).Disabled(!ready).AutoFocus()
+				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(!ready).AutoFocus()
 			submitted = field.Submitted()
 		})
 		label := "验证并登录"
@@ -259,7 +260,7 @@ func (a *app) vaultUnlock(c *ui.Context) {
 		submitted := false
 		ui.Field(c, "主密码", func() {
 			field := ui.TextInput(c, &a.masterPassword).Password().Placeholder("输入主密码").
-				Height(38).Padding(0, 14).Radius(19).Background(vaultWhite).Disabled(busy || !passwordReady).AutoFocus()
+				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(busy || !passwordReady).AutoFocus()
 			submitted = field.Submitted()
 		})
 		label := "解锁密码库"
@@ -270,17 +271,17 @@ func (a *app) vaultUnlock(c *ui.Context) {
 		if !busy && passwordReady && (clicked || submitted) {
 			a.unlockWithPassword()
 		}
-		if ui.Button(c, "使用 Touch ID 解锁").Height(40).Radius(20).Background(vaultWhite).
+		if ui.Button(c, "使用 Touch ID 解锁").Height(40).Radius(20).Background(kit.White).
 			Disabled(a.pending != 0).Clicked() {
 			a.runStorage("list")
 		}
-		ui.Text(c, "Touch ID 不可用时，可按系统提示使用 Mac 登录密码。").FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center)
+		ui.Text(c, "Touch ID 不可用时，可按系统提示使用 Mac 登录密码。").FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
 		if authLink(c, "通过另一台设备登录", busy).Clicked() {
 			a.openUnlockLogin()
 			a.deviceLoginSetup = true
 		}
 		if !passwordReady {
-			ui.Text(c, "此密码库需重新登录一次，以启用主密码解锁。").FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center)
+			ui.Text(c, "此密码库需重新登录一次，以启用主密码解锁。").FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
 			ui.Row(c).Justify(ui.Center).Children(func() {
 				if authLink(c, "重新登录", busy).Clicked() {
 					a.openUnlockLogin()

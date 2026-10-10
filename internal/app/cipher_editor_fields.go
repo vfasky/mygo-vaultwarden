@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"time"
 )
 
@@ -42,12 +43,12 @@ func (a *app) uriMatchPicker(c *ui.Context, u *editorURI, disabled bool) {
 			}
 		}
 	}
-	if action(c, "匹配方式："+label, "", false, disabled).Clicked() {
+	if kit.Action(c, "匹配方式："+label, "", false, disabled).Clicked() {
 		u.showMatch = !u.showMatch
 	}
 	if u.showMatch {
 		for _, m := range uriMatches {
-			if navItem(c, m.label, "globe", "", u.source["match"] == m.value, disabled).Clicked() {
+			if kit.NavItem(c, m.label, "globe", "", u.source["match"] == m.value, disabled).Clicked() {
 				copy := map[string]any{}
 				for key, value := range u.source {
 					copy[key] = value
@@ -70,7 +71,7 @@ func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom)
 		} else if f.value != "false" {
 			label = "布尔值：未知（保留）"
 		}
-		if action(c, label, "", false, disabled).Clicked() {
+		if kit.Action(c, label, "", false, disabled).Clicked() {
 			if f.value == "true" {
 				f.value = "false"
 			} else {
@@ -84,12 +85,12 @@ func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom)
 				label = linked.label
 			}
 		}
-		if action(c, "关联到："+label, "", false, disabled).Clicked() {
+		if kit.Action(c, "关联到："+label, "", false, disabled).Clicked() {
 			f.showLinks = !f.showLinks
 		}
 		if f.showLinks {
 			for _, linked := range linkedFields[e.fields.Type] {
-				if navItem(c, linked.label, "key", "", linked.id == f.linkedID, disabled).Clicked() {
+				if kit.NavItem(c, linked.label, "key", "", linked.id == f.linkedID, disabled).Clicked() {
 					f.linkedID = linked.id
 					f.showLinks = false
 				}
@@ -117,26 +118,26 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 	if e.confirmHistoryDelete {
 		ui.Text(c, "确认清除全部密码历史？仅在保存项目后提交；同时修改密码仍会记录本次替换的旧密码。").FontSize(12)
 		ui.Row(c).Gap(8).Children(func() {
-			if action(c, "确认清除历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Action(c, "确认清除历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
 				e.fields.PasswordHistory = nil
 				e.confirmHistoryDelete, e.showHistory = false, false
 				clear(e.shownHistory)
 				e.shownHistory = nil
 			}
-			if action(c, "保留历史", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "保留历史", "", false, a.pending != 0).Clicked() {
 				e.confirmHistoryDelete = false
 			}
 		})
 		return
 	}
-	if action(c, "清除密码历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
+	if kit.Action(c, "清除密码历史", "", false, a.pending != 0 || e.uncertain).Clicked() {
 		e.confirmHistoryDelete = true
 	}
 	label := fmt.Sprintf("显示已保存密码历史明文（%d）", len(e.fields.PasswordHistory))
 	if e.showHistory {
 		label = "隐藏密码历史"
 	}
-	if action(c, label, "key", false, a.pending != 0 || e.uncertain).Clicked() {
+	if kit.Action(c, label, "key", false, a.pending != 0 || e.uncertain).Clicked() {
 		if e.showHistory {
 			e.showHistory = false
 			clear(e.shownHistory)

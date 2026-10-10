@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -88,10 +89,10 @@ func (p *orgAPIKeyPanel) View(c *ui.Context) {
 	}
 	disabled := p.flow.blocked() || p.flow.confirm || !p.allowed
 	ui.TextInput(c, &p.password).Label("当前主密码").Password().Disabled(disabled)
-	if action(c, "读取现有 key（首次可能创建）", "", !p.rotate, disabled).Key("org-key-read").Clicked() {
+	if kit.Action(c, "读取现有 key（首次可能创建）", "", !p.rotate, disabled).Key("org-key-read").Clicked() {
 		p.rotate = false
 	}
-	if action(c, "轮换 key（旧 key 立即失效）", "", p.rotate, disabled).Key("org-key-rotate").Clicked() {
+	if kit.Action(c, "轮换 key（旧 key 立即失效）", "", p.rotate, disabled).Key("org-key-rotate").Clicked() {
 		p.rotate = true
 	}
 	p.flow.footer(c, "org-key", "确认读取或轮换组织密钥？轮换会使使用旧 key 的目录同步失效。", p.allowed && p.execute != nil && p.password != "", p.start)
@@ -101,10 +102,10 @@ func (p *orgAPIKeyPanel) View(c *ui.Context) {
 		if !p.reveal {
 			field.Password()
 		}
-		if action(c, "显示 / 隐藏密钥", "", p.reveal, false).Key("org-key-reveal").Clicked() {
+		if kit.Action(c, "显示 / 隐藏密钥", "", p.reveal, false).Key("org-key-reveal").Clicked() {
 			p.reveal = !p.reveal
 		}
-		if action(c, "清除密钥", "", false, false).Key("org-key-clear").Clicked() {
+		if kit.Action(c, "清除密钥", "", false, false).Key("org-key-clear").Clicked() {
 			p.key = ""
 			p.clientID = ""
 			p.reveal = false
@@ -224,10 +225,10 @@ func (p *orgDirectoryPanel) View(c *ui.Context) {
 	ui.TextInput(c, &p.secret).Label("组织 API key（临时使用）").Password().Disabled(disabled)
 	ui.TextInput(c, &p.email).Label("成员邮箱").Disabled(disabled)
 	ui.TextInput(c, &p.external).Label("目录成员外部 ID").Disabled(disabled)
-	if action(c, "标记此成员已删除 / 撤权", "", p.deleted, disabled).Key("org-dir-deleted").Clicked() {
+	if kit.Action(c, "标记此成员已删除 / 撤权", "", p.deleted, disabled).Key("org-dir-deleted").Clicked() {
 		p.deleted = !p.deleted
 	}
-	if action(c, "加入预览", "", true, disabled).Key("org-dir-add").Clicked() {
+	if kit.Action(c, "加入预览", "", true, disabled).Key("org-dir-add").Clicked() {
 		p.addMember()
 	}
 	for i, m := range p.members {
@@ -236,7 +237,7 @@ func (p *orgDirectoryPanel) View(c *ui.Context) {
 			label += " · 撤权"
 		}
 		ui.Text(c, label)
-		if action(c, "移除此行", "", false, disabled || len(p.groups) > 0).Key("org-dir-remove-" + m.ExternalID).Clicked() {
+		if kit.Action(c, "移除此行", "", false, disabled || len(p.groups) > 0).Key("org-dir-remove-" + m.ExternalID).Clicked() {
 			p.members = append(p.members[:i], p.members[i+1:]...)
 			delete(p.groupMembers, m.ExternalID)
 			break
@@ -246,22 +247,22 @@ func (p *orgDirectoryPanel) View(c *ui.Context) {
 		ui.TextInput(c, &p.name).Label("群组名称").Disabled(disabled)
 		ui.TextInput(c, &p.groupExternal).Label("群组外部 ID").Disabled(disabled)
 		for _, m := range p.members {
-			if action(c, m.Email, "", p.groupMembers[m.ExternalID], disabled).Key("org-dir-group-member-" + m.ExternalID).Clicked() {
+			if kit.Action(c, m.Email, "", p.groupMembers[m.ExternalID], disabled).Key("org-dir-group-member-" + m.ExternalID).Clicked() {
 				p.groupMembers[m.ExternalID] = !p.groupMembers[m.ExternalID]
 			}
 		}
-		if action(c, "加入群组预览", "", true, disabled).Key("org-dir-add-group").Clicked() {
+		if kit.Action(c, "加入群组预览", "", true, disabled).Key("org-dir-add-group").Clicked() {
 			p.addGroup()
 		}
 		for i, g := range p.groups {
 			ui.Text(c, g.Name+" · "+g.ExternalID+" · "+strings.Join(g.MemberExternalIDs, ", "))
-			if action(c, "移除此群组", "", false, disabled).Key("org-dir-remove-group-" + g.ExternalID).Clicked() {
+			if kit.Action(c, "移除此群组", "", false, disabled).Key("org-dir-remove-group-" + g.ExternalID).Clicked() {
 				p.groups = append(p.groups[:i], p.groups[i+1:]...)
 				break
 			}
 		}
 	}
-	if action(c, "撤权未出现在本次目录中的现有外部成员", "", p.overwrite, disabled).Key("org-dir-overwrite").Clicked() {
+	if kit.Action(c, "撤权未出现在本次目录中的现有外部成员", "", p.overwrite, disabled).Key("org-dir-overwrite").Clicked() {
 		p.overwrite = !p.overwrite
 	}
 	p.flow.footer(c, "org-dir", "确认目录预览及缺席成员撤权选项？组织将先持久隔离；服务器可能仅完成部分成员/群组。", p.allowed && p.execute != nil && p.secret != "" && len(p.members)+len(p.groups) > 0, p.start)

@@ -9,6 +9,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -43,7 +44,7 @@ func (a *app) backupResourcePreview(c *ui.Context, e *backupEditor) {
 	for _, row := range e.resources.rows {
 		ui.Text(c, fmt.Sprintf("%s · %s/%s · %d 字节", row.resource.FileName, row.resource.CipherID, row.resource.AttachmentID, row.resource.Size)).FontSize(12)
 	}
-	if action(c, "仅继续附件恢复，使用已存在的明确目标编号（不创建项目）", "", false, a.pending != 0).Clicked() {
+	if kit.Action(c, "仅继续附件恢复，使用已存在的明确目标编号（不创建项目）", "", false, a.pending != 0).Clicked() {
 		e.plan.Clear()
 		e.plan = nil
 		e.submitted = true
@@ -231,10 +232,10 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 		}
 		ui.TextInput(c, &row.target).Label("明确选择的目标项目编号").Disabled(busy || row.state == "已核验")
 		ui.TextInput(c, &row.attachmentID).Label("核对的目标附件编号（上传回执或同步后填写）").Disabled(busy || row.state == "已核验")
-		if action(c, "确认向此目标上传一次", "", false, busy || row.target == "" || row.state != "未执行").Clicked() {
+		if kit.Action(c, "确认向此目标上传一次", "", false, busy || row.target == "" || row.state != "未执行").Clicked() {
 			a.runResourceRestore(i, false, "")
 		}
-		if action(c, "下载并核验此附件的文件名、长度和完整内容", "", false, busy || row.target == "" || row.attachmentID == "" || row.state == "已核验").Clicked() {
+		if kit.Action(c, "下载并核验此附件的文件名、长度和完整内容", "", false, busy || row.target == "" || row.attachmentID == "" || row.state == "已核验").Clicked() {
 			a.runResourceRestore(i, true, "")
 		}
 	}
@@ -255,7 +256,7 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 			ui.Text(c, "回收站状态待同步核对，不自动再次提交："+target)
 			continue
 		}
-		if action(c, "全部文件核验后，确认将目标移入原计划的回收站："+target, "", false, busy || !ready).Clicked() {
+		if kit.Action(c, "全部文件核验后，确认将目标移入原计划的回收站："+target, "", false, busy || !ready).Clicked() {
 			a.runResourceRestore(0, false, source)
 		}
 	}

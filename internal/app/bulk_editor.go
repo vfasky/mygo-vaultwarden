@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
 )
@@ -61,7 +62,7 @@ func (a *app) bulkEditorView(c *ui.Context) {
 				for _, result := range e.results {
 					ui.Text(c, result).MaxLines(2).FontSize(12)
 				}
-				if action(c, "同步核对批量结果", "sync", false, a.pending != 0).Clicked() {
+				if kit.Action(c, "同步核对批量结果", "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
 				}
 			} else {
@@ -71,12 +72,12 @@ func (a *app) bulkEditorView(c *ui.Context) {
 					if e.selected[item.ID] {
 						label = "✓ " + item.Title
 					}
-					if action(c, label, "", false, a.pending != 0 || e.confirm).Clicked() {
+					if kit.Action(c, label, "", false, a.pending != 0 || e.confirm).Clicked() {
 						e.selected[item.ID] = !e.selected[item.ID]
 					}
 				}
 				for _, op := range bulkActions {
-					if navItem(c, op.label, "vault", "", e.action == op.action, a.pending != 0 || e.confirm).Clicked() {
+					if kit.NavItem(c, op.label, "vault", "", e.action == op.action, a.pending != 0 || e.confirm).Clicked() {
 						e.action = op.action
 					}
 				}
@@ -89,17 +90,17 @@ func (a *app) bulkEditorView(c *ui.Context) {
 						message = "永久删除选中的回收站项目及其附件，无法恢复。确认继续？"
 					}
 					ui.Text(c, message).MaxLines(3)
-					if action(c, "确认执行批量操作", "", true, a.pending != 0).Clicked() {
+					if kit.Action(c, "确认执行批量操作", "", true, a.pending != 0).Clicked() {
 						a.mutateBulk()
 					}
-					if action(c, "取消批量确认", "", false, a.pending != 0).Clicked() {
+					if kit.Action(c, "取消批量确认", "", false, a.pending != 0).Clicked() {
 						e.confirm = false
 					}
-				} else if action(c, "继续批量操作", "", true, a.pending != 0).Clicked() {
+				} else if kit.Action(c, "继续批量操作", "", true, a.pending != 0).Clicked() {
 					e.confirm = true
 				}
 			}
-			if action(c, "关闭批量管理", "", false, a.pending != 0).Clicked() {
+			if kit.Action(c, "关闭批量管理", "", false, a.pending != 0).Clicked() {
 				a.bulkEditor = nil
 			}
 		})

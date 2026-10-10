@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -171,10 +172,10 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				if e.id == "" {
 					ui.TextInput(c, &e.collection).Label("默认集合名称").Disabled(disabled)
 				}
-				if action(c, "保存组织", "", true, disabled || !e.loaded || e.name == "" || e.email == "").Key("organization-save").Clicked() {
+				if kit.Action(c, "保存组织", "", true, disabled || !e.loaded || e.name == "" || e.email == "").Key("organization-save").Clicked() {
 					a.runOrganizationManagement("save")
 				}
-				if !e.loaded && action(c, "重新加载组织资料", "sync", false, disabled).Clicked() {
+				if !e.loaded && kit.Action(c, "重新加载组织资料", "sync", false, disabled).Clicked() {
 					a.runOrganizationManagement("load")
 				}
 			} else {
@@ -184,7 +185,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 			if e.isolated {
 				ui.Text(c, "此组织的本机访问已隔离。只有重新连接服务器并核验您当前已确认的成员身份和组织密钥后，才可恢复本机访问；不会重新提交退出或删除请求。").MaxLines(5)
 				a.pendingPolicyRecoveryView(c, e, disabled)
-				if !a.hasPendingPolicy(e.id) && action(c, "确认重新核验并恢复访问", "sync", true, disabled).Clicked() {
+				if !a.hasPendingPolicy(e.id) && kit.Action(c, "确认重新核验并恢复访问", "sync", true, disabled).Clicked() {
 					a.runOrganizationManagement("restore")
 				}
 			}
@@ -197,10 +198,10 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				a.groupManagementView(c, e, disabled)
 				a.memberManagementView(c, e, disabled)
 				if e.confirmation == "" {
-					if action(c, "退出组织", "", false, disabled).Key("organization-leave").Clicked() {
+					if kit.Action(c, "退出组织", "", false, disabled).Key("organization-leave").Clicked() {
 						e.confirmation = "leave"
 					}
-					if e.owner && action(c, "删除组织", "", false, disabled).Key("organization-delete").Clicked() {
+					if e.owner && kit.Action(c, "删除组织", "", false, disabled).Key("organization-delete").Clicked() {
 						e.confirmation = "delete"
 					}
 				} else if e.confirmation == "leave" || e.confirmation == "delete" {
@@ -212,10 +213,10 @@ func (a *app) organizationEditorView(c *ui.Context) {
 					} else {
 						ui.Text(c, "继续将立即隔离本机此组织访问，其他密码库保留。退出后需要重新邀请才能加入；最后一位所有者须先转移所有权，服务器会再次核验。").MaxLines(4)
 					}
-					if action(c, label, "", true, disabled || (e.confirmation == "delete" && e.password == "")).Key("organization-danger-confirm").Clicked() {
+					if kit.Action(c, label, "", true, disabled || (e.confirmation == "delete" && e.password == "")).Key("organization-danger-confirm").Clicked() {
 						a.runOrganizationManagement(e.confirmation)
 					}
-					if action(c, "取消组织操作", "", false, a.pending != 0).Clicked() {
+					if kit.Action(c, "取消组织操作", "", false, a.pending != 0).Clicked() {
 						e.confirmation, e.password = "", ""
 						a.secretInputVersion++
 					}
@@ -223,15 +224,15 @@ func (a *app) organizationEditorView(c *ui.Context) {
 			}
 			if e.uncertain {
 				ui.Text(c, "请求可能已部分执行。请同步核对组织列表与资料，此表单不能再次提交。").MaxLines(3)
-				if action(c, "同步核对组织", "sync", false, a.pending != 0).Clicked() {
+				if kit.Action(c, "同步核对组织", "sync", false, a.pending != 0).Clicked() {
 					a.syncVault(false)
 				}
 			}
 			if a.pending != 0 {
-				if action(c, "取消并锁定密码库", "", false, false).Clicked() {
+				if kit.Action(c, "取消并锁定密码库", "", false, false).Clicked() {
 					a.runStorage("lock")
 				}
-			} else if action(c, "关闭组织管理", "", false, false).Clicked() {
+			} else if kit.Action(c, "关闭组织管理", "", false, false).Clicked() {
 				a.clearOrganizationEditor()
 			}
 		})

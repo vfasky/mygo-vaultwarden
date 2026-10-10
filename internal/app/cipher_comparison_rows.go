@@ -4,6 +4,7 @@ package app
 import (
 	"fmt"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"time"
 )
@@ -53,7 +54,7 @@ func (a *app) cipherRowPreviewView(c *ui.Context, e *cipherEditor, path string) 
 	if shown {
 		label = "隐藏逐行内容"
 	}
-	if action(c, label, "key", false, a.pending != 0).Clicked() {
+	if kit.Action(c, label, "key", false, a.pending != 0).Clicked() {
 		if shown {
 			clearCipherRowReveal(e)
 		} else {

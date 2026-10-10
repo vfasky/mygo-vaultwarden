@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -41,31 +42,31 @@ func clickUI(t *testing.T, tt *ui.Tester, label string) {
 
 func TestDumpAlignment(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) {
-		c.SetTheme(vaultTheme)
-		ui.Column(c).Fill().Padding(20).Gap(24).Background(vaultPanel).Children(func() {
+		c.SetTheme(kit.Theme)
+		ui.Column(c).Fill().Padding(20).Gap(24).Background(kit.Panel).Children(func() {
 			ui.Row(c).Padding(10, 8, 0, 8).Background(ui.Hex("#EEE")).Children(func() {
 				ui.Text(c, "所有项目").FontSize(22).FontWeight(650).Label("heading")
 				ui.Spacer(c)
-				pill(c, "947", vaultWhite, vaultMuted)
+				kit.Pill(c, "947", kit.White, kit.Muted)
 			})
 			ui.Row(c).Gap(8).Background(ui.Hex("#EEE")).Children(func() {
-				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted).Label("crumb-vault")
-				icon(c, "chevron", 12).TextColor(vaultMuted).Label("crumb-chevron")
-				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted).Label("crumb-login")
+				ui.Text(c, "我的密码库").FontSize(12).TextColor(kit.Muted).Label("crumb-vault")
+				kit.Icon(c, "chevron", 12).TextColor(kit.Muted).Label("crumb-chevron")
+				ui.Text(c, "登录").FontSize(12).TextColor(kit.Muted).Label("crumb-login")
 				ui.Spacer(c)
-				pill(c, "只读", vaultWhite, vaultMuted)
+				kit.Pill(c, "只读", kit.White, kit.Muted)
 			})
 			ui.Row(c).Gap(8).AlignItems(ui.Center).Background(ui.Hex("#DDD")).Children(func() {
-				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted).Label("c2-vault")
-				icon(c, "chevron", 12).TextColor(vaultMuted).Label("c2-chevron")
-				ui.Text(c, "登录").FontSize(12).TextColor(vaultMuted).Label("c2-login")
+				ui.Text(c, "我的密码库").FontSize(12).TextColor(kit.Muted).Label("c2-vault")
+				kit.Icon(c, "chevron", 12).TextColor(kit.Muted).Label("c2-chevron")
+				ui.Text(c, "登录").FontSize(12).TextColor(kit.Muted).Label("c2-login")
 				ui.Spacer(c)
-				pill(c, "只读", vaultWhite, vaultMuted)
+				kit.Pill(c, "只读", kit.White, kit.Muted)
 			})
 			ui.Row(c).Height(32).AlignItems(ui.Center).Background(ui.Hex("#CCC")).Children(func() {
 				ui.Text(c, "所有项目").FontSize(22).FontWeight(650).Label("h2")
 				ui.Spacer(c)
-				pill(c, "947", vaultWhite, vaultMuted)
+				kit.Pill(c, "947", kit.White, kit.Muted)
 			})
 		})
 	}, 640, 220)

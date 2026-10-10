@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -120,17 +121,17 @@ func (v *emergencyViewer) View(c *ui.Context) {
 	ui.Text(c, "紧急访问 · 只读查看").FontSize(22)
 	ui.Text(c, v.contact.Name+" · "+v.contact.Email)
 	ui.Text(c, "必须已获服务器批准。此处不会导入个人库或启用 AutoFill。")
-	if action(c, "我确认查看此人的个人密码库", "", true, v.running || v.terminal || !vaultwarden.EmergencyActionAllowed(v.contact, false, "view")).Key("emergency-view-consent").Clicked() {
+	if kit.Action(c, "我确认查看此人的个人密码库", "", true, v.running || v.terminal || !vaultwarden.EmergencyActionAllowed(v.contact, false, "view")).Key("emergency-view-consent").Clicked() {
 		v.load()
 	}
 	for i, row := range v.rows {
-		if action(c, row.Name, "", v.selected == i, false).Key("emergency-view-item-" + row.ID).Clicked() {
+		if kit.Action(c, row.Name, "", v.selected == i, false).Key("emergency-view-item-" + row.ID).Clicked() {
 			v.selected = i
 			v.revealed = false
 		}
 	}
 	if v.selected >= 0 && v.selected < len(v.rows) {
-		if action(c, "显示或隐藏此条目的敏感内容", "", v.revealed, false).Key("emergency-view-reveal").Clicked() {
+		if kit.Action(c, "显示或隐藏此条目的敏感内容", "", v.revealed, false).Key("emergency-view-reveal").Clicked() {
 			v.revealed = !v.revealed
 		}
 		if v.revealed {
@@ -155,7 +156,7 @@ func (v *emergencyViewer) View(c *ui.Context) {
 			}
 		}
 	}
-	if v.running && action(c, "取消查看", "", false, false).Key("emergency-view-cancel").Clicked() {
+	if v.running && kit.Action(c, "取消查看", "", false, false).Key("emergency-view-cancel").Clicked() {
 		v.cancelLoad()
 	}
 	if v.status != "" {

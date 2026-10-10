@@ -11,30 +11,8 @@ import (
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 )
-
-var (
-	vaultInk      = ui.Hex("#29292F")
-	vaultMuted    = ui.Hex("#777681")
-	vaultPanel    = ui.Hex("#F4F3F8")
-	vaultWhite    = ui.Hex("#FFFFFF")
-	vaultLavender = ui.Hex("#EAE5FA")
-	vaultPurple   = ui.Hex("#7561AA")
-	vaultLine     = ui.Hex("#E7E5ED")
-	vaultTheme    = makeVaultTheme()
-)
-
-func makeVaultTheme() *ui.Theme {
-	t := ui.LightTheme()
-	t.Background, t.Surface = vaultPanel, vaultWhite
-	t.Text, t.TextMuted, t.Border = vaultInk, vaultMuted, vaultLine
-	t.Accent, t.AccentHover, t.AccentPressed = vaultInk, ui.Hex("#41414B"), ui.Hex("#17171C")
-	t.SurfaceHover, t.SurfacePressed = ui.Hex("#EFECF7"), vaultLavender
-	t.Selection, t.Focus = ui.RGBA(142, 121, 198, .2), ui.RGBA(117, 97, 170, .55)
-	t.FontSize, t.Radius = 14, 16
-	t.Scrollbar, t.ScrollbarWidth = ui.RGBA(38, 30, 62, .22), 5
-	return t
-}
 
 type vaultCategory struct {
 	id, title, symbol string
@@ -235,7 +213,7 @@ func (a *app) view(c *ui.Context) {
 	if a.sendPanel != nil && (a.category != "send" || a.showSettings) {
 		a.advanceEpoch()
 	}
-	c.SetTheme(vaultTheme)
+	c.SetTheme(kit.Theme)
 	c.Root().Background(ui.Transparent)
 	if a.showLogin || !a.unlocked() {
 		a.authentication(c)
@@ -244,7 +222,7 @@ func (a *app) view(c *ui.Context) {
 	if c.Shortcut(ui.Cmd, ui.KeyB) {
 		a.sidebarCollapsed = !a.sidebarCollapsed
 	}
-	ui.Row(c).Fill().TextColor(vaultInk).AlignItems(ui.Stretch).Children(func() {
+	ui.Row(c).Fill().TextColor(kit.Ink).AlignItems(ui.Stretch).Children(func() {
 		a.sidebar(c)
 		ui.Column(c).Grow(1).MinWidth(0).Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
 			a.header(c)
@@ -344,49 +322,12 @@ func (a *app) body(c *ui.Context) {
 		})
 	})
 	ui.Row(c).Gap(8).Height(32).Shrink(0).Children(func() {
-		icon(c, "shield", 15).TextColor(vaultPurple)
-		ui.Text(c, a.status).FontSize(12).TextColor(vaultMuted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(a.status).Role(ui.RoleStatus)
+		kit.Icon(c, "shield", 15).TextColor(kit.Purple)
+		ui.Text(c, a.status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(a.status).Role(ui.RoleStatus)
 		if a.pending != 0 {
-			ui.Text(c, "处理中…").FontSize(12).TextColor(vaultPurple)
+			ui.Text(c, "处理中…").FontSize(12).TextColor(kit.Purple)
 		}
 	})
-}
-
-func pill(c *ui.Context, text string, bg, fg ui.Color) {
-	ui.Text(c, text).FontSize(11).TextColor(fg).Background(bg).Padding(5, 10).Radius(20).Shrink(0)
-}
-
-func action(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Element {
-	var b *ui.Element
-	if primary {
-		b = ui.PrimaryButton(c, "")
-	} else {
-		b = ui.Button(c, "")
-	}
-	b.Label(label).Height(38).Padding(0, 14).Radius(20).Border(0, ui.Transparent).Disabled(disabled).Children(func() {
-		if symbol != "" {
-			icon(c, symbol, 17)
-		}
-		ui.Text(c, label).FontSize(13)
-	})
-	return b
-}
-
-func iconButton(c *ui.Context, label, symbol string) *ui.Element {
-	return ui.Button(c, "").Label(label).Tooltip(label).Size(36, 36).Padding(8).Radius(18).Border(0, ui.Transparent).
-		Children(func() { icon(c, symbol, 18) })
-}
-
-// titleBarButton is a borderless toolbar icon button, like the sidebar toggle
-// of native macOS apps: no fill until hovered, sitting on the title bar row.
-func titleBarButton(c *ui.Context, label, symbol string) *ui.Element {
-	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(5).Radius(7).Shrink(0).TextColor(vaultMuted)
-	if b.Pressed() {
-		b.Background(ui.RGBA(38, 30, 62, .12)).TextColor(vaultInk)
-	} else if b.Hovered() {
-		b.Background(ui.RGBA(38, 30, 62, .07)).TextColor(vaultInk)
-	}
-	return b.Children(func() { icon(c, symbol, 18) })
 }
 
 func (a *app) sidebarToggle(c *ui.Context) {
@@ -394,28 +335,9 @@ func (a *app) sidebarToggle(c *ui.Context) {
 	if a.sidebarCollapsed {
 		label = "展开侧栏"
 	}
-	if titleBarButton(c, label, "panel-left").Key("sidebar-toggle").Clicked() {
+	if kit.TitleBarButton(c, label, "panel-left").Key("sidebar-toggle").Clicked() {
 		a.sidebarCollapsed = !a.sidebarCollapsed
 	}
-}
-
-func toolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) *ui.Element {
-	var b *ui.Element
-	if primary {
-		b = ui.PrimaryButton(c, "")
-	} else {
-		b = ui.Button(c, "")
-	}
-	b.Label(label).Height(32).Padding(0, 13).Gap(6).Radius(16).Disabled(disabled).Children(func() {
-		icon(c, symbol, 15)
-		ui.Text(c, label).FontSize(13)
-	})
-	if !primary {
-		b.Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55))
-	} else {
-		b.Border(0, ui.Transparent)
-	}
-	return b
 }
 
 // header is a unified toolbar: it sits beside the traffic lights' row and
@@ -441,32 +363,32 @@ func (a *app) header(c *ui.Context) {
 		if a.session != nil {
 			state = "可同步"
 		}
-		pill(c, state, vaultLavender, vaultPurple)
-		if toolbarButton(c, "导入导出", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+		kit.Pill(c, state, kit.Lavender, kit.Purple)
+		if kit.ToolbarButton(c, "导入导出", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBackupEditor()
 		}
-		if toolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+		if kit.ToolbarButton(c, "新增", "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			kind := categoryKinds[a.category]
 			if kind == 0 {
 				kind = 1
 			}
 			a.openCipherEditor("", kind)
 		}
-		if toolbarButton(c, "批量管理", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+		if kit.ToolbarButton(c, "批量管理", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBulkEditor(false)
 		}
-		if a.category == "trash" && toolbarButton(c, "清空回收站", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
+		if a.category == "trash" && kit.ToolbarButton(c, "清空回收站", "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBulkEditor(true)
 		}
-		if toolbarButton(c, "同步", "sync", false, a.pending != 0).Clicked() {
+		if kit.ToolbarButton(c, "同步", "sync", false, a.pending != 0).Clicked() {
 			a.syncVault(false)
 		}
-		if toolbarButton(c, "锁定", "lock", true, false).Clicked() {
+		if kit.ToolbarButton(c, "锁定", "lock", true, false).Clicked() {
 			a.runStorage("lock")
 		}
 		if ui.Button(c, "").Label("账号与设置").Tooltip("账号与设置").Size(32, 32).Padding(7).Radius(16).
 			Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55)).
-			Children(func() { icon(c, "settings", 16) }).Clicked() {
+			Children(func() { kit.Icon(c, "settings", 16) }).Clicked() {
 			a.showSettings = !a.showSettings
 		}
 	})
@@ -481,18 +403,11 @@ func (a *app) sidebarWidth(c *ui.Context) float32 {
 	return 236
 }
 
-var (
-	sidebarBackground = ui.Hex("#F2F1F7")
-	sidebarText       = ui.Hex("#3E3D47")
-	sidebarIcon       = ui.Hex("#86858F")
-	sidebarFaint      = ui.Hex("#A4A3AE")
-)
-
 func (a *app) sidebar(c *ui.Context) {
 	bar := c.TitleBar()
 	width := a.sidebarWidth(c)
 	ui.Row(c).Width(width + 1).Shrink(0).AlignItems(ui.Stretch).Children(func() {
-		ui.Column(c).Width(width).Shrink(0).Background(sidebarBackground).Children(func() {
+		ui.Column(c).Width(width).Shrink(0).Background(kit.SidebarBackground).Children(func() {
 			top := ui.Row(c).Height(max(bar.Height, 52)).Shrink(0).AlignItems(ui.Center).DragWindow()
 			if !a.sidebarCollapsed {
 				// Like native split views, the toggle sits just past the
@@ -501,7 +416,7 @@ func (a *app) sidebar(c *ui.Context) {
 			}
 			ui.Column(c).Grow(1).MinHeight(0).Padding(0, 0, 12, 0).Gap(6).Children(func() { a.sidebarContent(c, width) })
 		})
-		ui.Box(c).Width(1).Background(vaultLine)
+		ui.Box(c).Width(1).Background(kit.Line)
 	})
 }
 
@@ -530,7 +445,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 				top = 4
 			}
 			ui.Row(c).Height(top+24).Padding(top, 4, 0, 10).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(sidebarFaint).Grow(1).SingleLine()
+				ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(kit.SidebarFaint).Grow(1).SingleLine()
 				if action != nil {
 					action()
 				}
@@ -551,15 +466,15 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 		brand.Padding(2, 0, 8, 0).Justify(ui.Center)
 	}
 	brand.Children(func() {
-		if appLogo != nil {
-			ui.Image(c, appLogo).Size(30, 30).Shrink(0)
+		if kit.AppLogo != nil {
+			ui.Image(c, kit.AppLogo).Size(30, 30).Shrink(0)
 		}
 		if collapsed {
 			return
 		}
 		ui.Column(c).Gap(2).MinWidth(0).Children(func() {
-			ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).TextColor(vaultInk).SingleLine()
-			ui.Text(c, "个人密码库").FontSize(11).TextColor(vaultMuted).SingleLine()
+			ui.Text(c, "Vaultwarden").FontSize(14).FontWeight(650).TextColor(kit.Ink).SingleLine()
+			ui.Text(c, "个人密码库").FontSize(11).TextColor(kit.Muted).SingleLine()
 		})
 	})
 	ui.Scroll(c).Grow(1).MinHeight(0).ScrollbarInsets(2, 3, 2, 0).Children(func() {
@@ -611,7 +526,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 				}
 			}
 			section("文件夹", func() {
-				if sidebarAction(c, "新建文件夹", "plus", folderBusy).Clicked() {
+				if kit.SidebarAction(c, "新建文件夹", "plus", folderBusy).Clicked() {
 					a.openFolderEditor("")
 				}
 			})
@@ -642,88 +557,8 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	})
 }
 
-// sidebarAction is a quiet inline button beside a sidebar section title.
-func sidebarAction(c *ui.Context, label, symbol string, disabled bool) *ui.Element {
-	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(22, 22).Padding(4).Radius(6).Shrink(0).Disabled(disabled).TextColor(sidebarIcon)
-	if disabled {
-		b.Opacity(.45)
-	} else if b.Pressed() {
-		b.Background(ui.RGBA(38, 30, 62, .1)).TextColor(vaultInk)
-	} else if b.Hovered() {
-		b.Background(ui.RGBA(38, 30, 62, .06)).TextColor(vaultInk)
-	}
-	return b.Children(func() { icon(c, symbol, 14) })
-}
-
 func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
-	return sidebarItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
-}
-
-// sidebarItem is a source-list row: a soft rounded rectangle, a tinted icon
-// when selected, and a quiet trailing count instead of a badge.
-func sidebarItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {
-	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 10).Gap(10).Radius(9).Disabled(disabled).TextColor(sidebarText)
-	if collapsed {
-		b.Tooltip(title).Height(36).Padding(0).Justify(ui.Center)
-	}
-	iconColor := sidebarIcon
-	if selected {
-		b.Background(vaultWhite).TextColor(vaultInk).Shadow(0, 1, 3, 0, ui.RGBA(38, 30, 62, .08))
-		iconColor = vaultPurple
-	} else if disabled {
-		b.Opacity(.45)
-	} else if b.Pressed() {
-		b.Background(ui.RGBA(38, 30, 62, .08))
-	} else if b.Hovered() {
-		b.Background(ui.RGBA(38, 30, 62, .045))
-	}
-	b.Children(func() {
-		icon(c, symbol, 17).TextColor(iconColor)
-		if collapsed {
-			return
-		}
-		text := ui.Text(c, title).Grow(1).MinWidth(0).FontSize(13).SingleLine()
-		if selected {
-			text.FontWeight(600)
-		}
-		if count != "" {
-			badge := ui.Text(c, count).FontSize(11).TextColor(sidebarFaint).Shrink(0)
-			if selected {
-				badge.TextColor(vaultPurple)
-			}
-		}
-	})
-	return b
-}
-
-func navItem(c *ui.Context, title, symbol, count string, selected, disabled bool) *ui.Element {
-	return navigationItem(c, title, symbol, count, selected, disabled, false)
-}
-
-func navigationItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) *ui.Element {
-	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 11).Gap(10).Radius(20).Disabled(disabled).TextColor(vaultMuted)
-	if collapsed {
-		b.Tooltip(title).Justify(ui.Center)
-	}
-	if selected {
-		b.Background(vaultWhite).TextColor(vaultInk).Shadow(0, 2, 6, 0, ui.RGBA(38, 30, 62, .06))
-	} else if b.Hovered() && !disabled {
-		b.Background(ui.RGBA(255, 255, 255, .6))
-	}
-	if disabled {
-		b.Opacity(.5)
-	}
-	b.Children(func() {
-		icon(c, symbol, 18)
-		if collapsed {
-			return
-		}
-		ui.Text(c, title).Grow(1).FontSize(13).SingleLine()
-		if count != "" {
-			ui.Text(c, count).FontSize(11).Background(ui.RGBA(255, 255, 255, .7)).Padding(2, 6).Radius(9)
-		}
-	})
-	return b
+	return kit.SidebarItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
 }
 
 func (a *app) credentialList(c *ui.Context, items []displayCredential) {
@@ -732,15 +567,15 @@ func (a *app) credentialList(c *ui.Context, items []displayCredential) {
 	if w >= 1240 {
 		width = 330
 	}
-	ui.Column(c).Width(width).Shrink(0).Padding(12).Gap(12).Background(vaultPanel).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65)).Children(func() {
+	ui.Column(c).Width(width).Shrink(0).Padding(12).Gap(12).Background(kit.Panel).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65)).Children(func() {
 		ui.Row(c).Padding(10, 8, 0, 8).Children(func() {
 			ui.Text(c, a.currentCategory().title).FontSize(22).FontWeight(650)
 			ui.Spacer(c)
-			pill(c, fmt.Sprint(len(items)), vaultWhite, vaultMuted)
+			kit.Pill(c, fmt.Sprint(len(items)), kit.White, kit.Muted)
 		})
-		field := ui.Row(c).Key("vault-search").Background(vaultWhite).Radius(22).Padding(0, 12).Height(43).Gap(8)
+		field := ui.Row(c).Key("vault-search").Background(kit.White).Radius(22).Padding(0, 12).Height(43).Gap(8)
 		field.Children(func() {
-			icon(c, "search", 18).TextColor(vaultMuted)
+			kit.Icon(c, "search", 18).TextColor(kit.Muted)
 			search := ui.TextInput(c, &a.query).Label("搜索密码库").Placeholder("搜索密码库").Grow(1).MinWidth(0).Border(0, ui.Transparent).Background(ui.Transparent).Padding(0).FocusRing(false)
 			if c.Shortcut(ui.Cmd, ui.KeyF) {
 				search.Focus()
@@ -748,44 +583,44 @@ func (a *app) credentialList(c *ui.Context, items []displayCredential) {
 			if search.Focused() {
 				field.DrawOver(func(p *ui.Painter, r ui.Rect) {
 					outer := ui.Rect{X: r.X - 2, Y: r.Y - 2, W: r.W + 4, H: r.H + 4}
-					p.Stroke(outer, vaultPurple, 24, 2)
+					p.Stroke(outer, kit.Purple, 24, 2)
 				})
 			}
 			if search.Changed() {
 				a.listState.ScrollTo(0, ui.Start)
 			}
 			if a.query != "" {
-				if iconButton(c, "清除搜索", "close").Size(25, 25).Padding(5).Clicked() {
+				if kit.IconButton(c, "清除搜索", "close").Size(25, 25).Padding(5).Clicked() {
 					a.query = ""
 				}
 			} else {
-				ui.Text(c, "⌘ F").FontSize(10).TextColor(vaultMuted)
+				ui.Text(c, "⌘ F").FontSize(10).TextColor(kit.Muted)
 			}
 		})
 		ui.Row(c).Padding(0, 8).Children(func() {
-			ui.Text(c, "名称").FontSize(11).TextColor(vaultMuted)
+			ui.Text(c, "名称").FontSize(11).TextColor(kit.Muted)
 			ui.Spacer(c)
-			ui.Text(c, "A – Z").FontSize(10).TextColor(vaultMuted)
+			ui.Text(c, "A – Z").FontSize(10).TextColor(kit.Muted)
 		})
 		if len(items) == 0 {
 			ui.Column(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Gap(12).Padding(20).Children(func() {
-				icon(c, "search", 30).TextColor(vaultPurple)
+				kit.Icon(c, "search", 30).TextColor(kit.Purple)
 				title, subtitle := a.emptyListMessage()
 				ui.Text(c, title).FontSize(15).FontWeight(550).TextAlign(ui.Center)
-				ui.Text(c, subtitle).FontSize(12).TextColor(vaultMuted).TextAlign(ui.Center)
+				ui.Text(c, subtitle).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
 			})
 		} else {
 			a.listState.Key = func(i int) any { return items[i].ID }
 			a.listState.Label = func(i int) string { return items[i].Title }
 			a.listState.Selected = &a.selectedRow
-			listTheme := *vaultTheme
-			listTheme.Accent, listTheme.AccentText, listTheme.Radius = vaultWhite, vaultInk, 19
+			listTheme := *kit.Theme
+			listTheme.Accent, listTheme.AccentText, listTheme.Radius = kit.White, kit.Ink, 19
 			c.SetTheme(&listTheme)
 			list := ui.List(c, &a.listState, len(items), func(i int) {
 				item := items[i]
-				row := ui.Row(c).Key(item.ID).TextColor(vaultInk).Padding(12).Gap(12).Height(78).Radius(19)
+				row := ui.Row(c).Key(item.ID).TextColor(kit.Ink).Padding(12).Gap(12).Height(78).Radius(19)
 				if a.selectedRow == i {
-					row.Background(vaultWhite).Border(1, ui.Hex("#DDD5EE"))
+					row.Background(kit.White).Border(1, ui.Hex("#DDD5EE"))
 				} else if row.Hovered() {
 					row.Background(ui.RGBA(255, 255, 255, .55))
 				}
@@ -800,20 +635,20 @@ func (a *app) credentialList(c *ui.Context, items []displayCredential) {
 						if subtitle == "" {
 							subtitle = "未填写用户名"
 						}
-						ui.Text(c, subtitle).FontSize(12).TextColor(vaultMuted).SingleLine()
+						ui.Text(c, subtitle).FontSize(12).TextColor(kit.Muted).SingleLine()
 					})
 					if a.selectedRow == i {
-						icon(c, "chevron", 13).TextColor(vaultPurple)
+						kit.Icon(c, "chevron", 13).TextColor(kit.Purple)
 					}
 				})
 			}).Label("密码库项目").Grow(1).MinHeight(0).Gap(5)
-			c.SetTheme(vaultTheme)
+			c.SetTheme(kit.Theme)
 			if list.Changed() && a.selectedRow >= 0 && a.selectedRow < len(items) {
 				a.selectedID = items[a.selectedRow].ID
 				a.showSettings = false
 			}
 		}
-		ui.Text(c, fmt.Sprintf("已载入 %d 个项目 · 个人密码库", a.releaseItemCount())).FontSize(11).TextColor(vaultMuted).Padding(4, 8)
+		ui.Text(c, fmt.Sprintf("已载入 %d 个项目 · 个人密码库", a.releaseItemCount())).FontSize(11).TextColor(kit.Muted).Padding(4, 8)
 	})
 }
 
@@ -853,7 +688,7 @@ func credentialAvatar(c *ui.Context, item displayCredential, size float32) {
 	r, _ := utf8.DecodeRuneInString(displayTitle(item))
 	index := int(r) % len(colors)
 	ui.Row(c).Size(size, size).Shrink(0).Justify(ui.Center).Radius(size * .31).Background(colors[index]).Children(func() {
-		ui.Text(c, strings.ToUpper(string(r))).FontSize(size * .43).FontWeight(650).TextColor(vaultInk)
+		ui.Text(c, strings.ToUpper(string(r))).FontSize(size * .43).FontWeight(650).TextColor(kit.Ink)
 	})
 }
 
@@ -861,15 +696,15 @@ func (a *app) credentialDetail(c *ui.Context, item displayCredential) {
 	ui.Scroll(c).Key(item.ID).Grow(1).MinHeight(0).Children(func() {
 		ui.Column(c).Gap(14).Padding(10, 8, 8, 8).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
-				ui.Text(c, "我的密码库").FontSize(12).TextColor(vaultMuted)
-				icon(c, "chevron", 12).TextColor(vaultMuted)
+				ui.Text(c, "我的密码库").FontSize(12).TextColor(kit.Muted)
+				kit.Icon(c, "chevron", 12).TextColor(kit.Muted)
 				kind := "登录"
 				if item.Type > 0 && item.Type < len(cipherTypeNames) {
 					kind = cipherTypeNames[item.Type]
 				}
-				ui.Text(c, kind).FontSize(12).TextColor(vaultMuted)
+				ui.Text(c, kind).FontSize(12).TextColor(kit.Muted)
 				ui.Spacer(c)
-				if action(c, "查看与编辑", "", false, a.pending != 0 || (!item.Editable && !item.Readable && !item.RequiresPassword) || a.vault == nil).Clicked() {
+				if kit.Action(c, "查看与编辑", "", false, a.pending != 0 || (!item.Editable && !item.Readable && !item.RequiresPassword) || a.vault == nil).Clicked() {
 					a.openCipherEditor(item.ID, item.Type)
 				}
 			})
@@ -877,68 +712,50 @@ func (a *app) credentialDetail(c *ui.Context, item displayCredential) {
 				credentialAvatar(c, item, 60)
 				ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
 					ui.Text(c, displayTitle(item)).FontSize(29).FontWeight(650).MaxLines(2).Tooltip(displayTitle(item))
-					ui.Text(c, websiteHost(item.URL)).FontSize(13).TextColor(vaultMuted).SingleLine()
+					ui.Text(c, websiteHost(item.URL)).FontSize(13).TextColor(kit.Muted).SingleLine()
 				})
 			})
 			ui.Row(c).Gap(8).Children(func() {
-				if action(c, "打开网站", "external", true, !safeWebsite(item.URL)).Clicked() {
+				if kit.Action(c, "打开网站", "external", true, !safeWebsite(item.URL)).Clicked() {
 					c.OpenURL(item.URL)
 				}
-				if action(c, "复制用户名", "copy", false, item.Username == "").Clicked() {
+				if kit.Action(c, "复制用户名", "copy", false, item.Username == "").Clicked() {
 					c.WriteClipboard(item.Username)
 					a.status = "用户名已复制。"
 				}
 			})
-			detailCard(c, "登录信息", func() {
-				detailField(c, "用户名", item.Username, "未填写用户名")
+			kit.DetailCard(c, "登录信息", func() {
+				kit.DetailField(c, "用户名", item.Username, "未填写用户名")
 				ui.Divider(c)
 				ui.Row(c).Padding(12, 16).Gap(10).Children(func() {
 					ui.Column(c).Grow(1).Gap(7).Children(func() {
-						ui.Text(c, "密码").FontSize(11).TextColor(vaultMuted)
+						ui.Text(c, "密码").FontSize(11).TextColor(kit.Muted)
 						ui.Text(c, "由系统安全自动填充").FontSize(14)
 					})
-					icon(c, "lock", 19).TextColor(vaultPurple)
+					kit.Icon(c, "lock", 19).TextColor(kit.Purple)
 				})
 			})
-			detailCard(c, "网站", func() { detailField(c, "登录地址", item.URL, "未填写网站") })
-			ui.Column(c).Gap(8).Padding(14, 18).Background(vaultLavender).Radius(22).Children(func() {
+			kit.DetailCard(c, "网站", func() { kit.DetailField(c, "登录地址", item.URL, "未填写网站") })
+			ui.Column(c).Gap(8).Padding(14, 18).Background(kit.Lavender).Radius(22).Children(func() {
 				ui.Row(c).Gap(9).Children(func() {
-					icon(c, "shield", 20).TextColor(vaultPurple)
+					kit.Icon(c, "shield", 20).TextColor(kit.Purple)
 					ui.Text(c, "安全自动填充").FontWeight(600)
 					ui.Spacer(c)
-					if iconButton(c, "自动填充设置", "settings").Size(30, 30).Padding(7).Clicked() {
+					if kit.IconButton(c, "自动填充设置", "settings").Size(30, 30).Padding(7).Clicked() {
 						openAutoFillSettings(c)
 					}
 				})
-				ui.Text(c, "在 Safari 中选择此凭据，完成系统认证后填充密码。").FontSize(12).LineHeight(1.5).TextColor(vaultPurple)
+				ui.Text(c, "在 Safari 中选择此凭据，完成系统认证后填充密码。").FontSize(12).LineHeight(1.5).TextColor(kit.Purple)
 			})
 		})
 	})
 }
 
-func detailCard(c *ui.Context, title string, content func()) {
-	ui.Column(c).Gap(8).Padding(10).Background(vaultPanel).Radius(24).Children(func() {
-		ui.Text(c, title).Padding(3, 6).FontSize(14).FontWeight(550)
-		ui.Column(c).Background(vaultWhite).Radius(16).Clip().Children(content)
-	})
-}
-
-func detailField(c *ui.Context, label, value, empty string) {
-	ui.Column(c).Gap(8).Padding(12, 16).Children(func() {
-		ui.Text(c, label).FontSize(11).TextColor(vaultMuted)
-		if value == "" {
-			ui.Text(c, empty).FontSize(14).TextColor(vaultMuted)
-		} else {
-			ui.Text(c, value).FontSize(14).MaxLines(3).Tooltip(value)
-		}
-	})
-}
-
 func (a *app) emptyDetail(c *ui.Context) {
 	ui.Column(c).Grow(1).Background(ui.RGBA(247, 246, 251, .6)).Radius(26).Padding(34).Justify(ui.Center).AlignItems(ui.Center).Gap(16).Children(func() {
-		ui.Row(c).Size(76, 76).Justify(ui.Center).Radius(26).Background(vaultWhite).Children(func() { icon(c, "vault", 38).TextColor(vaultPurple) })
+		ui.Row(c).Size(76, 76).Justify(ui.Center).Radius(26).Background(kit.White).Children(func() { kit.Icon(c, "vault", 38).TextColor(kit.Purple) })
 		ui.Text(c, "选择一个项目").FontSize(23).FontWeight(600).TextAlign(ui.Center)
-		ui.Text(c, "项目的登录信息和网站会显示在这里。").FontSize(13).LineHeight(1.6).TextColor(vaultMuted).TextAlign(ui.Center)
+		ui.Text(c, "项目的登录信息和网站会显示在这里。").FontSize(13).LineHeight(1.6).TextColor(kit.Muted).TextAlign(ui.Center)
 	})
 }
 
@@ -954,11 +771,11 @@ func (a *app) settings(c *ui.Context) {
 			ui.Row(c).Children(func() {
 				ui.Text(c, "账号与设置").FontSize(26).FontWeight(650)
 				ui.Spacer(c)
-				if iconButton(c, "关闭设置", "close").Clicked() {
+				if kit.IconButton(c, "关闭设置", "close").Clicked() {
 					a.showSettings = false
 				}
 			})
-			detailCard(c, "账号服务", func() {
+			kit.DetailCard(c, "账号服务", func() {
 				if warning := a.mfaWarnings.warning(a.serverURL, a.email); warning != "" {
 					ui.Text(c, warning).MaxLines(4)
 				}
@@ -976,49 +793,49 @@ func (a *app) settings(c *ui.Context) {
 							if a.runtimeReplaceConfirmed {
 								label = "已同意替换（点击撤回）"
 							}
-							if action(c, label, "user", false, a.pending != 0).Clicked() {
+							if kit.Action(c, label, "user", false, a.pending != 0).Clicked() {
 								a.runtimeReplaceConfirmed = !a.runtimeReplaceConfirmed
 							}
 						}
 						ui.TextInput(c, &a.masterPassword).Label("显式绑定当前账号主密码").Password().Disabled(a.pending != 0)
-						if action(c, "绑定主密码并重新同步", "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
+						if kit.Action(c, "绑定主密码并重新同步", "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
 							a.bindRuntimePasswordWith(a.window.Update, callStorage)
 						}
 					})
 				}
 				ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
-					if action(c, "核验目标账号恢复记录", "vault", false, a.pending != 0).Clicked() {
+					if kit.Action(c, "核验目标账号恢复记录", "vault", false, a.pending != 0).Clicked() {
 						a.openTargetRecovery()
 					}
-					if action(c, "紧急访问", "vault", false, !ready).Clicked() {
+					if kit.Action(c, "紧急访问", "vault", false, !ready).Clicked() {
 						a.openEmergencyServices()
 					}
-					if action(c, "Send", "send", false, !ready).Clicked() {
+					if kit.Action(c, "Send", "send", false, !ready).Clicked() {
 						a.openSend()
 					}
-					if action(c, "设备与登录审批", "shield", false, !ready).Clicked() {
+					if kit.Action(c, "设备与登录审批", "shield", false, !ready).Clicked() {
 						a.openDevices()
 					}
-					if action(c, "账号与安全", "user", false, !ready).Clicked() {
+					if kit.Action(c, "账号与安全", "user", false, !ready).Clicked() {
 						a.openAccount()
 					}
-					if action(c, "两步验证设置", "shield", false, !ready).Clicked() {
+					if kit.Action(c, "两步验证设置", "shield", false, !ready).Clicked() {
 						a.openAuthenticationManagement()
 					}
 				})
 			})
-			detailCard(c, "连接密码库", func() {
+			kit.DetailCard(c, "连接密码库", func() {
 				ui.Column(c).Padding(16).Gap(13).Children(func() {
 					ui.Text(c, a.connectedServer()).FontSize(14).MaxLines(2)
-					ui.Text(c, "登录凭据在本地加密保存，解锁后可同步；也可连接其他服务器与账号。").FontSize(12).LineHeight(1.5).TextColor(vaultMuted)
-					if action(c, "登录服务器", "user", true, a.pending != 0).Clicked() {
+					ui.Text(c, "登录凭据在本地加密保存，解锁后可同步；也可连接其他服务器与账号。").FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
+					if kit.Action(c, "登录服务器", "user", true, a.pending != 0).Clicked() {
 						a.resetLoginForm()
 						a.showLogin = true
 						a.status = ""
 					}
 				})
 			})
-			detailCard(c, "本机存储与自动填充", func() {
+			kit.DetailCard(c, "本机存储与自动填充", func() {
 				ui.Column(c).Padding(16).Gap(12).Children(func() {
 					state := "尚无本机快照"
 					if available {
@@ -1026,31 +843,31 @@ func (a *app) settings(c *ui.Context) {
 					}
 					ui.Text(c, state).FontSize(13)
 					if available && a.snapshot.UpdatedAt > 0 {
-						ui.Text(c, "最近同步："+time.UnixMilli(a.snapshot.UpdatedAt).Format("2006-01-02 15:04")).FontSize(11).TextColor(vaultMuted)
+						ui.Text(c, "最近同步："+time.UnixMilli(a.snapshot.UpdatedAt).Format("2006-01-02 15:04")).FontSize(11).TextColor(kit.Muted)
 					}
 					ui.Row(c).Gap(8).Wrap().Children(func() {
-						if action(c, "离线解锁", "lock", false, !ready || !available).Clicked() {
+						if kit.Action(c, "离线解锁", "lock", false, !ready || !available).Clicked() {
 							a.runStorage("list")
 						}
-						if action(c, "刷新状态", "sync", false, a.pending != 0).Clicked() {
+						if kit.Action(c, "刷新状态", "sync", false, a.pending != 0).Clicked() {
 							a.runStorage("status")
 						}
 					})
 					ui.Divider(c)
 					if a.snapshot != nil && a.snapshot.IndexPending {
-						ui.Text(c, "系统候选尚未确认同步，请刷新状态或认证更新。").FontSize(12).TextColor(vaultPurple)
+						ui.Text(c, "系统候选尚未确认同步，请刷新状态或认证更新。").FontSize(12).TextColor(kit.Purple)
 					}
 					ui.Row(c).Gap(8).Wrap().Children(func() {
-						if action(c, "自动填充设置", "settings", false, false).Clicked() {
+						if kit.Action(c, "自动填充设置", "settings", false, false).Clicked() {
 							openAutoFillSettings(c)
 						}
-						if action(c, "更新系统候选", "shield", false, !ready || !available).Clicked() {
+						if kit.Action(c, "更新系统候选", "shield", false, !ready || !available).Clicked() {
 							a.runStorage("reindex")
 						}
 					})
 					if a.snapshot != nil && a.snapshot.CleanupPending {
-						ui.Text(c, "旧密钥清理尚未完成。").FontSize(12).TextColor(vaultPurple)
-						if action(c, "重试清理", "sync", false, !ready).Clicked() {
+						ui.Text(c, "旧密钥清理尚未完成。").FontSize(12).TextColor(kit.Purple)
+						if kit.Action(c, "重试清理", "sync", false, !ready).Clicked() {
 							a.runStorage("retryCleanup")
 						}
 					}
@@ -1061,11 +878,11 @@ func (a *app) settings(c *ui.Context) {
 				if a.runtimeVault != nil {
 					logoutLabel = "结束临时在线会话（保留原缓存）"
 				}
-				if action(c, logoutLabel, "user", false, a.snapshot == nil).Clicked() {
+				if kit.Action(c, logoutLabel, "user", false, a.snapshot == nil).Clicked() {
 					a.runStorage("logout")
 				}
 			})
-			ui.Text(c, "MyGo Vaultwarden · macOS 原生\n支持个人八类型项目编辑；组织与更多功能仍在开发。").FontSize(11).TextColor(vaultMuted).LineHeight(1.6)
+			ui.Text(c, "MyGo Vaultwarden · macOS 原生\n支持个人八类型项目编辑；组织与更多功能仍在开发。").FontSize(11).TextColor(kit.Muted).LineHeight(1.6)
 		})
 	})
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -26,7 +27,7 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 	}
 	busy := a.pending != 0
 	if e.attachmentMigration == nil {
-		if action(c, "准备旧附件的安全共享迁移", "", false, busy || e.uncertain).Clicked() {
+		if kit.Action(c, "准备旧附件的安全共享迁移", "", false, busy || e.uncertain).Clicked() {
 			rows, err := session.CipherAttachmentMigrationInfo(a.vault, e.fields.ID, e.authorization)
 			if err != nil {
 				a.status = err.Error()
@@ -45,7 +46,7 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 			if m.original == row.ID {
 				label = "✓ " + label
 			}
-			if action(c, label, "", false, busy || e.uncertain).Clicked() {
+			if kit.Action(c, label, "", false, busy || e.uncertain).Clicked() {
 				m.original = row.ID
 			}
 		} else {
@@ -53,24 +54,24 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 			if m.replacement == row.ID {
 				label = "✓ " + label
 			}
-			if action(c, label, "", false, busy || e.uncertain).Clicked() {
+			if kit.Action(c, label, "", false, busy || e.uncertain).Clicked() {
 				m.replacement = row.ID
 			}
 		}
 	}
-	if action(c, "确认创建所选旧附件的独立加密副本（保留原件）", "", false, busy || e.uncertain || m.original == "").Clicked() {
+	if kit.Action(c, "确认创建所选旧附件的独立加密副本（保留原件）", "", false, busy || e.uncertain || m.original == "").Clicked() {
 		a.runCipherAttachmentMigration(false)
 	}
-	if action(c, "确认核验所选两个编号并永久删除旧附件", "", false, busy || e.uncertain || m.original == "" || m.replacement == "").Clicked() {
+	if kit.Action(c, "确认核验所选两个编号并永久删除旧附件", "", false, busy || e.uncertain || m.original == "" || m.replacement == "").Clicked() {
 		a.runCipherAttachmentMigration(true)
 	}
 	if m.result != "" {
 		ui.Text(c, m.result).MaxLines(8)
 	}
-	if e.uncertain && action(c, "同步核对，然后重新打开项目", "sync", false, busy).Clicked() {
+	if e.uncertain && kit.Action(c, "同步核对，然后重新打开项目", "sync", false, busy).Clicked() {
 		a.syncVault(false)
 	}
-	if busy && action(c, "取消附件迁移", "", false, false).Clicked() {
+	if busy && kit.Action(c, "取消附件迁移", "", false, false).Clicked() {
 		if a.cancel != nil {
 			a.cancel()
 		}

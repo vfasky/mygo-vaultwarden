@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -117,7 +118,7 @@ func (p *orgOperationsPanel) View(c *ui.Context) {
 	ui.Text(c, "批量操作可能部分完成；发生错误或取消后必须同步核对。需要主密码的条目请从单项授权入口处理。")
 	for _, entry := range p.entries {
 		blocked := p.running || p.terminal || !entry.Editable || !entry.Readable || entry.RequiresPassword
-		if action(c, entry.Title, "", p.selected[entry.ID], blocked).Key("org-operation-item-" + entry.ID).Clicked() {
+		if kit.Action(c, entry.Title, "", p.selected[entry.ID], blocked).Key("org-operation-item-" + entry.ID).Clicked() {
 			p.selectItem(entry.ID)
 		}
 	}
@@ -125,23 +126,23 @@ func (p *orgOperationsPanel) View(c *ui.Context) {
 		label  string
 		action vaultwarden.CipherAction
 	}{{"移到回收站", vaultwarden.CipherTrash}, {"恢复", vaultwarden.CipherRestore}, {"归档", vaultwarden.CipherArchive}, {"取消归档", vaultwarden.CipherUnarchive}, {"永久删除", vaultwarden.CipherDeletePermanently}} {
-		if action(c, option.label, "", p.action == option.action, p.running || p.terminal).Key("org-operation-" + string(option.action)).Clicked() {
+		if kit.Action(c, option.label, "", p.action == option.action, p.running || p.terminal).Key("org-operation-" + string(option.action)).Clicked() {
 			p.action = option.action
 			p.confirmation = false
 		}
 	}
 	if p.confirmation {
 		ui.Text(c, fmt.Sprintf("确认对 %d 个组织条目执行所选操作？永久删除无法撤销。", len(p.ids())))
-		if action(c, "确认执行", "", true, p.running).Key("org-operation-confirm").Clicked() {
+		if kit.Action(c, "确认执行", "", true, p.running).Key("org-operation-confirm").Clicked() {
 			p.start()
 		}
-		if action(c, "返回选择", "", false, p.running).Key("org-operation-back").Clicked() {
+		if kit.Action(c, "返回选择", "", false, p.running).Key("org-operation-back").Clicked() {
 			p.confirmation = false
 		}
-	} else if action(c, "核对所选操作", "", true, p.running || p.terminal || len(p.ids()) == 0 || p.execute == nil || p.dispatch == nil).Key("org-operation-review").Clicked() {
+	} else if kit.Action(c, "核对所选操作", "", true, p.running || p.terminal || len(p.ids()) == 0 || p.execute == nil || p.dispatch == nil).Key("org-operation-review").Clicked() {
 		p.confirmation = true
 	}
-	if p.running && action(c, "取消请求并核对结果", "", false, false).Key("org-operation-cancel").Clicked() {
+	if p.running && kit.Action(c, "取消请求并核对结果", "", false, false).Key("org-operation-cancel").Clicked() {
 		if p.cancel != nil {
 			p.cancel()
 		}
