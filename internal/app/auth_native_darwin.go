@@ -11,6 +11,7 @@ import (
 
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/nativelib"
 )
 
 var authLibrary struct {
@@ -23,7 +24,7 @@ var authLibrary struct {
 
 func loadAuthentication() error {
 	authLibrary.once.Do(func() {
-		executable, err := nativeExecutablePath()
+		executable, err := nativelib.ExecutablePath()
 		if err != nil {
 			authLibrary.err = errAuthUnavailable
 			return

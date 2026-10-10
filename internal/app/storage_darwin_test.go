@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -123,27 +122,5 @@ func TestNativeLargeAuthenticatedSnapshot(t *testing.T) {
 	stale := call(storageRequest{Operation: "listPassword", ExpectedRevision: checkpoint.State.Revision, Scope: &scope, UnlockKey: key})
 	if stale.OK || stale.Code != "stale_revision" || stale.Vault != nil {
 		t.Fatal("stale request released payload")
-	}
-}
-
-func TestKernelExecutablePath(t *testing.T) {
-	got, err := nativeExecutablePath()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !filepath.IsAbs(got) {
-		t.Fatalf("kernel returned a relative executable path: %q", got)
-	}
-	want, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	gotFile, err := os.Stat(got)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantFile, err := os.Stat(want)
-	if err != nil || !os.SameFile(gotFile, wantFile) {
-		t.Fatalf("resolved path does not identify this executable: %v", err)
 	}
 }

@@ -6,6 +6,7 @@ package app
 import (
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/nativelib"
 	"path/filepath"
 	"runtime"
 	"sync"
@@ -19,7 +20,7 @@ var runtimeSecretLibrary struct {
 
 func nativeRuntimeSecretCall(input []byte) ([]byte, error) {
 	runtimeSecretLibrary.once.Do(func() {
-		executable, err := nativeExecutablePath()
+		executable, err := nativelib.ExecutablePath()
 		if err != nil {
 			runtimeSecretLibrary.err = errRuntimeSecretUnavailable
 			return
