@@ -86,4 +86,24 @@ internal/passwordstrength → third_party/zxcvbn
 - `controllerNotifications` 通过 `notificationSession` 窄接口启动订阅，独立管理通知工作线程、取消、检查点、revision 与迟到事件；它不持有 `*app`。app 负责组装 dispatcher/storage 能力和 UI 更新。
 - `idleLockController` 独立管理 15 分钟空闲期限、系统活动源、定时器和回调代次。后台同步与重绘不会续期；其他应用键鼠输入计入系统活动。
 - `resourceBackupService` 通过五方法 `resourceBackupAccess` 接口完成资源归档、附件恢复 staging/哈希验证及恢复内容核验；不嵌入 Session，也不访问 Session 字段。Session 的薄适配器保留授权、锁和生命周期检查。
-- 资源备份三个方法已移入服务，个人/组织元数据导入导出及授权编排仍保留九个有实际逻辑的 Session 备份方法。app 仍持有 UI、认证、编辑器等状态，尚未完成整体解耦。C3 的长文件可读性整理和 UI 错误展示迁移由后续串行阶段落实。
+- 资源备份三个方法已移入服务，个人/组织元数据导入导出及授权编排仍保留九个有实际逻辑的 Session 备份方法。app 仍持有 UI、认证、编辑器等状态，尚未完成整体解耦。
+
+串行迁移阶段已完成以下跨层契约：
+
+- 主存储协议调用点使用 `localstore.Operation` 常量，Swift Bridge 分派使用生成的 `StorageOperation`；33 个 wire 字符串来自 `tools/storage-operations/operations.json`。两个 Shared 恢复 API 仍接收 String，由已校验的 Bridge enum 通过 `.rawValue` 适配；未改其 ABI。运行期秘密能力的 activate/revoke/copy 协议和 `__transfer_v1` 外层传输帧是独立协议，不混入此枚举。
+- UI/app 通过 `vaultwarden.ErrorMessage` 展示错误。`vaulterr` 保留稳定身份；领域转换、轮换准备、未知写入和 Send 上传提示优先于通用错误。应用自有的本地错误通过 `UserMessage` 明确提供安全文案，国际化 sentinel 使用 `i18n.MessageError` 在展示时翻译；未经认可的错误与外层包装文字不会直接显示。不得把响应体或秘密放入这个展示接口。
+- 长条件按相同短路顺序拆为身份、状态和证据校验；字段/策略定义按条目展开，回调使用领域类型。非测试生产逻辑已无超过 300 字符的行；60 条双语言 catalog 文案和 3 条测试夹具数据长行保留原文，不为长度指标拆散翻译或数据。
+
+### C1 尚未完成的结构工作
+
+串行迁移时通过 AST 统计所有非 `_test.go` 文件，包含私有方法：`app` 有 **68 个字段、163 个接收者方法**，`Session` 有 **25 个字段、246 个接收者方法**。此统计不是复杂度评分，也不把薄适配器当成已拆出的服务。
+
+| 剩余边界 | 下一批建议的独占文件范围 | 最小可验证拆分 |
+|---|---|---|
+| app 个人编辑/备份/附件与视图状态 | `cipher_*`、`attachment_editor.go`、`backup_*`、`folder_editor.go`、`bulk_editor.go`；协调 app 字段组装 | 编辑领域对象持有草稿、续接和取消状态；窄 host 提供 lease/dispatch/publish。复用 lock、迟到回执、未知写入和资源续接回归，证明无需持有整个 app |
+| app 登录、MFA、设备临时会话与恢复 | `network.go`、`login_flow.go`、`controller_mfa.go`、`controller_device_login.go`、`controller_*recovery*.go`、`vault_authority.go` | 认证生命周期控制器独立拥有 epoch/取消，主窗口只接收当前代次结果；保留账户替换、锁定与撤销测试 |
+| app 组织管理及共享 UI | `controller_organization*`、`organization_*ui.go`、`member/group/policy/collection_management_ui.go` | 收窄现有 `orgServicesController.owner *app`，不通过改文件名声称解耦；覆盖隔离、检查点和权限变化 |
+| Session 条目、附件、Send | `cipher_*`、`ciphers_api.go`、`attachment*`、`send_session.go`、`item_authorization.go` | 建立持有窄授权/传输能力的领域服务；Session 保持锁、取消与授权检查，先验证一种完整操作而非迁移包装器 |
+| Session 组织、成员、策略及账户恢复 | `organization*`、`member*`、`group*`、`policy*`、`account*`、`emergency*`、`target_recovery*` | 分批抽出编排服务并保留检查点/未知结果屏障；不能把网络移出锁后省略并发证明 |
+
+上述边界均需单写入者和独立审查；本阶段 C1 是部分完成，文档清点不替代后续代码整改。

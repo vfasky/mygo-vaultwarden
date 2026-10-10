@@ -25,7 +25,7 @@ func (a *app) compareCipher(grant *vaultwarden.ItemAuthorization) {
 	e.shownSecret = ""
 	clearCipherRowReveal(e)
 	if err := s.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	plan, changes, err := s.ComparePersonalCipher(a.vault, a.sessionRevision, e.document, e.fields, grant)
@@ -36,7 +36,7 @@ func (a *app) compareCipher(grant *vaultwarden.ItemAuthorization) {
 			e.authorization = nil
 			a.secretInputVersion++
 		}
-		a.status = i18n.Tf("vault.compare.err_unavailable", err.Error())
+		a.status = i18n.Tf("vault.compare.err_unavailable", vaultwarden.ErrorMessage(err))
 		return
 	}
 	e.repromptID, e.repromptPassword = "", ""
@@ -203,7 +203,7 @@ func (a *app) applyCipherComparison(useChoices bool) {
 	}
 	document, fields, err := s.ApplyPersonalCipherComparisonRows(a.vault, a.sessionRevision, e.comparison, choices, rows)
 	if err != nil {
-		a.status = i18n.Tf("vault.compare.err_expired", err.Error())
+		a.status = i18n.Tf("vault.compare.err_expired", vaultwarden.ErrorMessage(err))
 		e.comparison = nil
 		e.changes = nil
 		e.localChoices = nil

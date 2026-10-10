@@ -15,7 +15,7 @@ func (a *app) componentDispatch(session *vaultwarden.Session, lease *controllerL
 				if cp := lease.takeCheckpoint(); cp != nil {
 					if !a.adoptSessionCheckpoint(cp) {
 						a.stopNetwork()
-						a.status = vaultwarden.ErrIdentity.Error()
+						a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 					} else {
 						a.advanceEpoch()
 						a.status = i18n.T("app.settings.err_credentials_changed")

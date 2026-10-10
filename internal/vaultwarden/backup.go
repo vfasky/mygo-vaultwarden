@@ -174,7 +174,7 @@ func decodeBackup(data []byte, format BackupFormat) (backupFile, error) {
 	seen := map[string]bool{}
 	for i, item := range file.Items {
 		if err := validateBackupItem(item, format); err != nil {
-			return file, &BackupConversionError{Index: i, Reason: err.Error(), Cause: err}
+			return file, &BackupConversionError{Index: i, Reason: ErrorMessage(err), Cause: err}
 		}
 		id, ok := item["id"].(string)
 		if !ok || !validObjectID(id) || seen[id] {
@@ -198,7 +198,13 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 	if _, err := backupItemIdentity(item); err != nil {
 		return err
 	}
-	if err := copyKeys(item, "id", "type", "name", "notes", "folderId", "organizationId", "collectionIds", "favorite", "reprompt", "fields", "passwordHistory", "creationDate", "revisionDate", "deletedDate", "archivedDate", "login", "secureNote", "card", "identity", "sshKey", "bankAccount", "driversLicense", "passport"); err != nil {
+	allowedKeys := []string{
+		"id", "type", "name", "notes", "folderId", "organizationId", "collectionIds",
+		"favorite", "reprompt", "fields", "passwordHistory", "creationDate", "revisionDate",
+		"deletedDate", "archivedDate", "login", "secureNote", "card", "identity", "sshKey",
+		"bankAccount", "driversLicense", "passport",
+	}
+	if err := copyKeys(item, allowedKeys...); err != nil {
 		return err
 	}
 	// Reuse the complete known-field audit, without allowing encrypted keys or
@@ -527,7 +533,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 			}
 		}
 		if err = validateBackupItem(object, format); err != nil {
-			return nil, &BackupConversionError{Index: len(file.Items), Reason: err.Error(), Cause: err}
+			return nil, &BackupConversionError{Index: len(file.Items), Reason: ErrorMessage(err), Cause: err}
 		}
 		if fields.FolderID != nil {
 			needed[*fields.FolderID] = true

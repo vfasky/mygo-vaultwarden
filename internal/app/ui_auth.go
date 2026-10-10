@@ -3,6 +3,7 @@ package app
 
 import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"strings"
 
 	"github.com/egoist/mygo/ui"
@@ -50,13 +51,13 @@ func (a *app) authentication(c *ui.Context) {
 						ui.Text(c, i18n.T("login.account_switch.pending_hint")).MaxLines(5)
 						if a.switchReceipt == nil {
 							if authPrimary(c, i18n.T("login.account_switch.inspect"), a.pending != 0).Clicked() {
-								a.runStorage("inspectAccountSwitch")
+								a.runStorage(localstore.OperationInspectAccountSwitch)
 							}
 						} else {
 							binding := a.switchReceipt.Binding
 							ui.Text(c, i18n.Tf("login.account_switch.summary", binding.Source.Server, binding.Source.Account, binding.Target.Server, binding.Target.Account)).MaxLines(6)
 							if authPrimary(c, i18n.T("login.account_switch.confirm"), a.pending != 0).Clicked() {
-								a.runStorage("confirmAccountSwitch")
+								a.runStorage(localstore.OperationConfirmAccountSwitch)
 							}
 						}
 						a.authStatus(c)
@@ -69,7 +70,7 @@ func (a *app) authentication(c *ui.Context) {
 					} else if a.deviceLoginPanel != nil {
 						a.deviceLoginPanel.View(c)
 						if authLink(c, i18n.T("login.device.end"), false).Clicked() {
-							a.runStorage("lock")
+							a.runStorage(localstore.OperationLock)
 						}
 					} else if a.recoveryForm != nil {
 						if a.mfaLogin != nil {
@@ -201,7 +202,7 @@ func (a *app) serverLogin(c *ui.Context) {
 			switch {
 			case a.cancel != nil:
 				if authLink(c, i18n.T("login.cancel"), false).Clicked() {
-					a.runStorage("lock")
+					a.runStorage(localstore.OperationLock)
 				}
 			case a.unlocked():
 				if authLink(c, i18n.T("login.back_to_vault"), busy).Clicked() {
@@ -217,7 +218,7 @@ func (a *app) serverLogin(c *ui.Context) {
 				}
 			case a.snapshot == nil && !busy:
 				if authLink(c, i18n.T("login.retry_connection"), false).Clicked() {
-					a.runStorage("settings")
+					a.runStorage(localstore.OperationSettings)
 				}
 			}
 		})
@@ -249,7 +250,7 @@ func (a *app) twoFactorLogin(c *ui.Context) {
 		a.authStatus(c)
 		ui.Row(c).Justify(ui.Center).Children(func() {
 			if authLink(c, i18n.T("login.cancel"), false).Clicked() {
-				a.runStorage("lock")
+				a.runStorage(localstore.OperationLock)
 			}
 		})
 	})
@@ -275,7 +276,7 @@ func (a *app) vaultUnlock(c *ui.Context) {
 		}
 		if ui.Button(c, i18n.T("login.unlock.touch_id")).Height(40).Radius(20).Background(kit.White).
 			Disabled(a.pending != 0).Clicked() {
-			a.runStorage("list")
+			a.runStorage(localstore.OperationList)
 		}
 		ui.Text(c, i18n.T("login.unlock.touch_id_hint")).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
 		if authLink(c, i18n.T("login.device.use_another"), busy).Clicked() {

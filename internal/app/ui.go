@@ -388,7 +388,7 @@ func (a *app) header(c *ui.Context) {
 			a.syncVault(false)
 		}
 		if kit.ToolbarButton(c, i18n.T("common.lock"), "lock", true, false).Clicked() {
-			a.runStorage("lock")
+			a.runStorage(localstore.OperationLock)
 		}
 		if ui.Button(c, "").Label(i18n.T("app.settings.title")).Tooltip(i18n.T("app.settings.title")).Size(32, 32).Padding(7).Radius(16).
 			Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55)).
@@ -867,10 +867,10 @@ func (a *app) settings(c *ui.Context) {
 					}
 					ui.Row(c).Gap(8).Wrap().Children(func() {
 						if kit.Action(c, i18n.T("app.settings.unlock_offline"), "lock", false, !ready || !available).Clicked() {
-							a.runStorage("list")
+							a.runStorage(localstore.OperationList)
 						}
 						if kit.Action(c, i18n.T("app.settings.refresh_status"), "sync", false, a.pending != 0).Clicked() {
-							a.runStorage("status")
+							a.runStorage(localstore.OperationStatus)
 						}
 					})
 					ui.Divider(c)
@@ -882,13 +882,13 @@ func (a *app) settings(c *ui.Context) {
 							openAutoFillSettings(c)
 						}
 						if kit.Action(c, i18n.T("app.settings.update_autofill"), "shield", false, !ready || !available).Clicked() {
-							a.runStorage("reindex")
+							a.runStorage(localstore.OperationReindex)
 						}
 					})
 					if a.snapshot != nil && a.snapshot.CleanupPending {
 						ui.Text(c, i18n.T("app.settings.cleanup_pending_hint")).FontSize(12).TextColor(kit.Purple)
 						if kit.Action(c, i18n.T("app.settings.retry_cleanup"), "sync", false, !ready).Clicked() {
-							a.runStorage("retryCleanup")
+							a.runStorage(localstore.OperationRetryCleanup)
 						}
 					}
 				})
@@ -899,7 +899,7 @@ func (a *app) settings(c *ui.Context) {
 					logoutLabel = i18n.T("app.settings.end_temporary_session")
 				}
 				if kit.Action(c, logoutLabel, "user", false, a.snapshot == nil).Clicked() {
-					a.runStorage("logout")
+					a.runStorage(localstore.OperationLogout)
 				}
 			})
 			ui.Text(c, i18n.T("app.settings.about")).FontSize(11).TextColor(kit.Muted).LineHeight(1.6)

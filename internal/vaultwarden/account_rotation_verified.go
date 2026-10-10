@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"reflect"
 	"sort"
@@ -14,7 +13,7 @@ import (
 
 const rotationGit1374 = "7c188967e7a467b19b2757bc3326f9cf3ccae327"
 
-var ErrRotationCompatibility = errors.New(i18n.T("server.rotation.err_compatibility"))
+var ErrRotationCompatibility = i18n.Error("server.rotation.err_compatibility")
 
 // This is a compatibility declaration over the configured trusted server/TLS
 // origin, not attestation of its binary. /api/config.version is deliberately

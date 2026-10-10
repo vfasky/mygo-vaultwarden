@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"sync"
 	"sync/atomic"
@@ -14,7 +13,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-var ErrRuntimeSecretUnavailable = errors.New(i18n.T("store.runtime.err_secret_unavailable"))
+var ErrRuntimeSecretUnavailable = i18n.Error("store.runtime.err_secret_unavailable")
 var runtimeSecretGeneration atomic.Uint64
 
 func nextRuntimeSecretGeneration() uint64 {

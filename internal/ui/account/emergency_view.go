@@ -86,7 +86,62 @@ func (v *EmergencyViewer) load() {
 	}()
 }
 func emergencyDisplayFields(fields map[string]any) []string {
-	labels := map[string]string{"username": i18n.T("common.username"), "password": i18n.T("common.password"), "totp": i18n.T("account.emergency.totp_key"), "uri": i18n.T("account.emergency.uri"), "cardholderName": i18n.T("account.emergency.cardholder_name"), "brand": i18n.T("account.emergency.card_brand"), "number": i18n.T("account.emergency.card_number"), "expMonth": i18n.T("account.emergency.expiration_month"), "expYear": i18n.T("account.emergency.expiration_year"), "code": i18n.T("account.emergency.security_code"), "title": i18n.T("account.emergency.name_title"), "firstName": i18n.T("account.emergency.first_name"), "middleName": i18n.T("account.emergency.middle_name"), "lastName": i18n.T("account.emergency.last_name"), "address1": i18n.T("account.emergency.address"), "address2": i18n.T("account.emergency.address_extra"), "address3": i18n.T("account.emergency.address_extra"), "city": i18n.T("account.emergency.city"), "state": i18n.T("account.emergency.state"), "postalCode": i18n.T("account.emergency.postal_code"), "country": i18n.T("account.emergency.country"), "company": i18n.T("account.emergency.company"), "email": i18n.T("common.email"), "phone": i18n.T("account.emergency.phone"), "ssn": i18n.T("account.emergency.ssn"), "passportNumber": i18n.T("account.emergency.passport_number"), "licenseNumber": i18n.T("account.emergency.license_number"), "privateKey": i18n.T("account.emergency.private_key"), "publicKey": i18n.T("account.emergency.public_key"), "keyFingerprint": i18n.T("account.emergency.key_fingerprint"), "bankName": i18n.T("account.emergency.bank_name"), "nameOnAccount": i18n.T("account.emergency.account_holder"), "accountType": i18n.T("account.emergency.account_type"), "accountNumber": i18n.T("account.emergency.account_number"), "routingNumber": i18n.T("account.emergency.routing_number"), "branchNumber": i18n.T("account.emergency.branch_number"), "pin": "PIN", "swiftCode": "SWIFT", "iban": "IBAN", "bankContactPhone": i18n.T("account.emergency.bank_phone"), "dateOfBirth": i18n.T("account.emergency.birth_date"), "issuingCountry": i18n.T("account.emergency.issuing_country"), "issuingState": i18n.T("account.emergency.issuing_state"), "issueDate": i18n.T("account.emergency.issue_date"), "expirationDate": i18n.T("account.emergency.expiration_date"), "issuingAuthority": i18n.T("account.emergency.issuing_authority"), "licenseClass": i18n.T("account.emergency.license_class"), "surname": i18n.T("account.emergency.last_name"), "givenName": i18n.T("account.emergency.first_name"), "sex": i18n.T("account.emergency.sex"), "birthPlace": i18n.T("account.emergency.birth_place"), "nationality": i18n.T("account.emergency.nationality"), "passportType": i18n.T("account.emergency.passport_type"), "nationalIdentificationNumber": i18n.T("account.emergency.national_id")}
+	labels := map[string]string{
+		"username":                     i18n.T("common.username"),
+		"password":                     i18n.T("common.password"),
+		"totp":                         i18n.T("account.emergency.totp_key"),
+		"uri":                          i18n.T("account.emergency.uri"),
+		"cardholderName":               i18n.T("account.emergency.cardholder_name"),
+		"brand":                        i18n.T("account.emergency.card_brand"),
+		"number":                       i18n.T("account.emergency.card_number"),
+		"expMonth":                     i18n.T("account.emergency.expiration_month"),
+		"expYear":                      i18n.T("account.emergency.expiration_year"),
+		"code":                         i18n.T("account.emergency.security_code"),
+		"title":                        i18n.T("account.emergency.name_title"),
+		"firstName":                    i18n.T("account.emergency.first_name"),
+		"middleName":                   i18n.T("account.emergency.middle_name"),
+		"lastName":                     i18n.T("account.emergency.last_name"),
+		"address1":                     i18n.T("account.emergency.address"),
+		"address2":                     i18n.T("account.emergency.address_extra"),
+		"address3":                     i18n.T("account.emergency.address_extra"),
+		"city":                         i18n.T("account.emergency.city"),
+		"state":                        i18n.T("account.emergency.state"),
+		"postalCode":                   i18n.T("account.emergency.postal_code"),
+		"country":                      i18n.T("account.emergency.country"),
+		"company":                      i18n.T("account.emergency.company"),
+		"email":                        i18n.T("common.email"),
+		"phone":                        i18n.T("account.emergency.phone"),
+		"ssn":                          i18n.T("account.emergency.ssn"),
+		"passportNumber":               i18n.T("account.emergency.passport_number"),
+		"licenseNumber":                i18n.T("account.emergency.license_number"),
+		"privateKey":                   i18n.T("account.emergency.private_key"),
+		"publicKey":                    i18n.T("account.emergency.public_key"),
+		"keyFingerprint":               i18n.T("account.emergency.key_fingerprint"),
+		"bankName":                     i18n.T("account.emergency.bank_name"),
+		"nameOnAccount":                i18n.T("account.emergency.account_holder"),
+		"accountType":                  i18n.T("account.emergency.account_type"),
+		"accountNumber":                i18n.T("account.emergency.account_number"),
+		"routingNumber":                i18n.T("account.emergency.routing_number"),
+		"branchNumber":                 i18n.T("account.emergency.branch_number"),
+		"pin":                          "PIN",
+		"swiftCode":                    "SWIFT",
+		"iban":                         "IBAN",
+		"bankContactPhone":             i18n.T("account.emergency.bank_phone"),
+		"dateOfBirth":                  i18n.T("account.emergency.birth_date"),
+		"issuingCountry":               i18n.T("account.emergency.issuing_country"),
+		"issuingState":                 i18n.T("account.emergency.issuing_state"),
+		"issueDate":                    i18n.T("account.emergency.issue_date"),
+		"expirationDate":               i18n.T("account.emergency.expiration_date"),
+		"issuingAuthority":             i18n.T("account.emergency.issuing_authority"),
+		"licenseClass":                 i18n.T("account.emergency.license_class"),
+		"surname":                      i18n.T("account.emergency.last_name"),
+		"givenName":                    i18n.T("account.emergency.first_name"),
+		"sex":                          i18n.T("account.emergency.sex"),
+		"birthPlace":                   i18n.T("account.emergency.birth_place"),
+		"nationality":                  i18n.T("account.emergency.nationality"),
+		"passportType":                 i18n.T("account.emergency.passport_type"),
+		"nationalIdentificationNumber": i18n.T("account.emergency.national_id"),
+	}
 	keys := make([]string, 0, len(fields))
 	for key := range fields {
 		keys = append(keys, key)
@@ -143,7 +198,15 @@ func (v *EmergencyViewer) View(c *ui.Context) {
 			for _, section := range []struct {
 				title  string
 				fields map[string]any
-			}{{i18n.T("itemtype.login"), row.Login}, {i18n.T("account.emergency.card"), row.Card}, {i18n.T("itemtype.identity"), row.Identity}, {i18n.T("itemtype.ssh_key"), row.SSHKey}, {i18n.T("itemtype.bank"), row.BankAccount}, {i18n.T("itemtype.license"), row.DriversLicense}, {i18n.T("itemtype.passport"), row.Passport}} {
+			}{
+				{i18n.T("itemtype.login"), row.Login},
+				{i18n.T("account.emergency.card"), row.Card},
+				{i18n.T("itemtype.identity"), row.Identity},
+				{i18n.T("itemtype.ssh_key"), row.SSHKey},
+				{i18n.T("itemtype.bank"), row.BankAccount},
+				{i18n.T("itemtype.license"), row.DriversLicense},
+				{i18n.T("itemtype.passport"), row.Passport},
+			} {
 				if len(section.fields) == 0 {
 					continue
 				}

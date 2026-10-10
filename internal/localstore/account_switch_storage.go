@@ -42,7 +42,10 @@ func PublishBoundAccount(ctx context.Context, source *SnapshotStatus, fresh vaul
 	if !reply.OK {
 		return reply, reply.Failure()
 	}
-	if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != binding.Target || !reply.State.AccountSwitchPending || reply.State.Revision == source.Revision || reply.AccountSwitch == nil || reply.AccountSwitch.Binding != binding || reply.AccountSwitch.Phase != "pending" || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID {
+	if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != binding.Target || !reply.State.AccountSwitchPending || reply.State.Revision == source.Revision {
+		return reply, vaultwarden.ErrIdentity
+	}
+	if reply.AccountSwitch == nil || reply.AccountSwitch.Binding != binding || reply.AccountSwitch.Phase != "pending" || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID {
 		return reply, vaultwarden.ErrIdentity
 	}
 	if ctx.Err() != nil {
@@ -55,7 +58,13 @@ func PublishBoundAccount(ctx context.Context, source *SnapshotStatus, fresh vaul
 	if !reply.OK {
 		return reply, reply.Failure()
 	}
-	if reply.AccountSwitch == nil || reply.AccountSwitch.Binding != binding || reply.AccountSwitch.Phase != "confirmed" || reply.State == nil || reply.State.AccountSwitchPending || reply.State.Scope == nil || *reply.State.Scope != binding.Target || reply.State.SnapshotID != pendingID || reply.AccountSwitch.NewSnapshotID != pendingID || reply.Vault == nil {
+	if reply.AccountSwitch == nil || reply.AccountSwitch.Binding != binding || reply.AccountSwitch.Phase != "confirmed" {
+		return reply, vaultwarden.ErrIdentity
+	}
+	if reply.State == nil || reply.State.AccountSwitchPending || reply.State.Scope == nil || *reply.State.Scope != binding.Target {
+		return reply, vaultwarden.ErrIdentity
+	}
+	if reply.State.SnapshotID != pendingID || reply.AccountSwitch.NewSnapshotID != pendingID || reply.Vault == nil {
 		return reply, vaultwarden.ErrIdentity
 	}
 	return reply, nil

@@ -140,7 +140,7 @@ func (p *Panel) Run(work func(context.Context) Result) {
 				return
 			}
 			if r.Err != nil {
-				p.Status = r.Err.Error()
+				p.Status = vaultwarden.ErrorMessage(r.Err)
 				var unknown *vaultwarden.MutationUncertainError
 				var upload *vaultwarden.SendUploadError
 				p.Uncertain = errors.As(r.Err, &unknown) || errors.As(r.Err, &upload)
@@ -197,12 +197,12 @@ func (p *Panel) Offline() {
 		return
 	}
 	if e := p.Host.Check(); e != nil {
-		p.Status = e.Error()
+		p.Status = vaultwarden.ErrorMessage(e)
 		return
 	}
 	rows, e := p.session.Sends(p.vault)
 	if e != nil {
-		p.Status = e.Error()
+		p.Status = vaultwarden.ErrorMessage(e)
 		return
 	}
 	p.clearViews()
@@ -214,12 +214,12 @@ func (p *Panel) New(kind int) {
 		return
 	}
 	if e := p.Host.Check(); e != nil {
-		p.Status = e.Error()
+		p.Status = vaultwarden.ErrorMessage(e)
 		return
 	}
 	d, e := p.session.NewSend(p.vault, kind)
 	if e != nil {
-		p.Status = e.Error()
+		p.Status = vaultwarden.ErrorMessage(e)
 		return
 	}
 	p.clearViews()
@@ -281,7 +281,7 @@ func (p *Panel) Save() {
 		return
 	}
 	if e := p.Host.Check(); e != nil {
-		p.Status = e.Error()
+		p.Status = vaultwarden.ErrorMessage(e)
 		return
 	}
 	if e := p.form(); e != nil {
@@ -334,7 +334,7 @@ func (p *Panel) change(remove bool) {
 		return
 	}
 	if e := p.Host.Check(); e != nil {
-		p.Status = e.Error()
+		p.Status = vaultwarden.ErrorMessage(e)
 		return
 	}
 	d := p.Draft
@@ -454,7 +454,7 @@ func (p *Panel) View(c *ui.Context) {
 					ui.Text(c, i18n.Tf("send.editor.access_count", p.Draft.AccessCount()))
 					button(i18n.T("send.editor.copy_link"), disabled || p.Host.Copy == nil, func() {
 						if e := p.Host.Check(); e != nil {
-							p.Status = e.Error()
+							p.Status = vaultwarden.ErrorMessage(e)
 							return
 						}
 						link, e := p.Draft.ShareLink()
@@ -462,7 +462,7 @@ func (p *Panel) View(c *ui.Context) {
 							e = p.Host.Copy(link)
 						}
 						if e != nil {
-							p.Status = e.Error()
+							p.Status = vaultwarden.ErrorMessage(e)
 						} else {
 							p.Status = i18n.T("send.editor.status_link_copied")
 						}

@@ -112,7 +112,7 @@ func scan(t *testing.T, root string, paths []string) scanResult {
 				if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != local {
 					return true
 				}
-				if sel.Sel.Name != "T" && sel.Sel.Name != "Tf" {
+				if sel.Sel.Name != "T" && sel.Sel.Name != "Tf" && sel.Sel.Name != "Error" {
 					return true
 				}
 				if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {

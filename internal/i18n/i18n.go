@@ -4,13 +4,13 @@
 // English. Text is looked up by a semantic key such as "app.sidebar.items";
 // each catalog file in this package defines the Chinese and English text of
 // the keys of one area side by side. The language follows the system's
-// preferred languages and is fixed at startup, before any other package
-// initializes, so package-level text such as sentinel errors is localized
-// too.
+// preferred languages and is selected at startup before other packages
+// initialize. MessageError stores only a key and translates when displayed,
+// keeping sentinel identity independent of the active language.
 //
 //	ui.Text(c, i18n.T("common.save"))
 //	status = i18n.Tf("app.sync.done", n)
-//	err = fmt.Errorf(i18n.T("backup.read_failed"), err) // "…: %w"
+//	err = i18n.Error("file.backup.err_unsafe_access")
 //
 // Keys name text, never program state: compare, persist and send stable
 // identifiers, and translate them only where they are shown.

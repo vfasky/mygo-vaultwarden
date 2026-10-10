@@ -118,13 +118,13 @@ func (a *app) startNotifications(dispatch func(func()), storage func(localstore.
 		if checkpoint != nil {
 			if !a.adoptSessionCheckpoint(checkpoint) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			a.advanceEpoch()
 		}
 		if event.Kind == vaultwarden.NotificationLogout {
-			a.runStorage("logout")
+			a.runStorage(localstore.OperationLogout)
 			return
 		}
 		if a.pending != 0 {

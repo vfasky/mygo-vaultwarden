@@ -42,7 +42,10 @@ func (s *Session) adminRecoveryDetailsLocked(ctx context.Context, org Organizati
 		return target, details, err
 	}
 	var fields map[string]json.RawMessage
-	if json.Unmarshal(body, &details) != nil || json.Unmarshal(body, &fields) != nil || fields["kdf"] == nil || fields["kdfIterations"] == nil || details.OrganizationUserID != memberID || details.Object != "organizationUserResetPasswordDetails" || details.ResetPasswordKey == "" || details.EncryptedPrivateKey == "" {
+	if json.Unmarshal(body, &details) != nil || json.Unmarshal(body, &fields) != nil || fields["kdf"] == nil || fields["kdfIterations"] == nil {
+		return target, details, ErrIdentity
+	}
+	if details.OrganizationUserID != memberID || details.Object != "organizationUserResetPasswordDetails" || details.ResetPasswordKey == "" || details.EncryptedPrivateKey == "" {
 		return target, details, ErrIdentity
 	}
 	return target, details, nil

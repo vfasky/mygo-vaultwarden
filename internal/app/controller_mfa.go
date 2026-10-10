@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strconv"
 	"sync"
@@ -131,7 +132,7 @@ func (a *app) requestMFA(ctx context.Context, server, email string, epoch uint64
 					dispatch(func() {
 						if a.mfaLogin == m && ctx.Err() == nil {
 							m.form.Busy = false
-							m.form.Status = err.Error()
+							m.form.Status = vaultwarden.ErrorMessage(err)
 						}
 					})
 					return
@@ -151,7 +152,7 @@ func (a *app) requestMFA(ctx context.Context, server, email string, epoch uint64
 						if a.mfaLogin == m && ctx.Err() == nil {
 							m.form.Busy = false
 							if err != nil {
-								m.form.Status = err.Error()
+								m.form.Status = vaultwarden.ErrorMessage(err)
 							} else {
 								m.form.Status = i18n.T("account.mfa.status_email_code_requested")
 							}
@@ -202,6 +203,6 @@ func (a *app) mfaLoginView(c *ui.Context) {
 	}
 	ui.Text(c, i18n.T("account.mfa.no_device_token_hint"))
 	if ui.Button(c, i18n.T("account.mfa.cancel_login")).Clicked() {
-		a.runStorage("lock")
+		a.runStorage(localstore.OperationLock)
 	}
 }

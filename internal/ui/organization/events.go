@@ -86,7 +86,7 @@ func (p *EventsPanel) load(next bool) {
 			p.running = false
 			p.cancel = nil
 			if err != nil {
-				p.status = i18n.Tf("org.events.err_load", err.Error())
+				p.status = i18n.Tf("org.events.err_load", vaultwarden.ErrorMessage(err))
 				return
 			}
 			if !next {

@@ -111,7 +111,7 @@ func (r *runtimeVault) revokeSecrets() {
 	}
 }
 func runtimeFailure(err error) localstore.Reply {
-	return localstore.Reply{Code: "runtime_revoked", Message: err.Error()}
+	return localstore.Reply{Code: "runtime_revoked", Message: vaultwarden.ErrorMessage(err)}
 }
 func runtimeSnapshot(cap *vaultwarden.RuntimeAuthority) *localstore.SnapshotStatus {
 	scope := cap.Scope()
@@ -140,7 +140,7 @@ func (r *runtimeVault) call(epoch uint64, request localstore.Request) localstore
 	if r.clock.Load() != epoch {
 		return runtimeFailure(vaultwarden.ErrCancelled)
 	}
-	if request.Operation == "publishVault" {
+	if request.Operation == localstore.OperationPublishVault {
 		if request.Scope == nil || request.Vault == nil {
 			return runtimeFailure(vaultwarden.ErrIdentity)
 		}
@@ -168,14 +168,14 @@ func (r *runtimeVault) call(epoch uint64, request localstore.Request) localstore
 		return runtimeFailure(err)
 	}
 	switch request.Operation {
-	case "status":
+	case localstore.OperationStatus:
 		return localstore.Reply{OK: true, State: runtimeSnapshot(cap)}
-	case "clearSecretClipboard":
+	case localstore.OperationClearSecretClipboard:
 		if native != nil {
 			native.Revoke()
 		}
 		return localstore.Reply{OK: true, State: runtimeSnapshot(cap)}
-	case "copySecret", "authorizeSecretDisplay":
+	case localstore.OperationCopySecret, localstore.OperationAuthorizeSecretDisplay:
 		if request.Scope == nil || request.ExpectedRevision != cap.Revision() || request.SecretProtocol != 1 || native == nil {
 			return runtimeFailure(vaultwarden.ErrPermission)
 		}
@@ -186,7 +186,7 @@ func (r *runtimeVault) call(epoch uint64, request localstore.Request) localstore
 		if !time.Now().Before(deadline) || deadline.After(time.Now().Add(30*time.Second)) {
 			return runtimeFailure(vaultwarden.ErrExpired)
 		}
-		if err := native.Use(scope, epoch, deadline, request.Secret, request.Operation == "copySecret"); err != nil {
+		if err := native.Use(scope, epoch, deadline, request.Secret, request.Operation == localstore.OperationCopySecret); err != nil {
 			return runtimeFailure(err)
 		}
 		if r.clock.Load() != epoch || cap.CheckLease() != nil {

@@ -42,7 +42,13 @@ func (a *app) captureBackupContinuation(epoch uint64) *backupContinuation {
 }
 
 func (c *backupContinuation) sameForm(a *app) bool {
-	return c != nil && a.epoch == c.epoch && a.backupEditor == c.editor && c.editor.resources == c.resources && c.resources.plan == c.plan && len(c.plan.Resources()) != 0 && c.editor.submitted && c.editor.revision == c.revision && a.session == c.session && a.sessionOwnsSnapshot() && *a.liveScope == c.scope
+	if c == nil || a.epoch != c.epoch || a.backupEditor != c.editor || c.editor.resources != c.resources || c.resources.plan != c.plan {
+		return false
+	}
+	if len(c.plan.Resources()) == 0 || !c.editor.submitted || c.editor.revision != c.revision || a.session != c.session {
+		return false
+	}
+	return a.sessionOwnsSnapshot() && *a.liveScope == c.scope
 }
 
 func (c *backupContinuation) current(a *app) bool {

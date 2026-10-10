@@ -60,7 +60,7 @@ func (a *app) syncFailed(reply localstore.Reply, err error) {
 	if errors.As(err, &storageErr) || errors.Is(err, vaultwarden.ErrExpired) || errors.Is(err, vaultwarden.ErrIdentity) {
 		a.stopNetwork()
 	}
-	a.status = err.Error()
+	a.status = vaultwarden.ErrorMessage(err)
 	if storageErr != nil {
 		a.status = i18n.Tf("app.sync.unlock_again_hint", a.status)
 	}
@@ -129,7 +129,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 	if login {
 		canonical, err := vaultwarden.CanonicalServer(server)
 		if err != nil {
-			a.status = err.Error()
+			a.status = vaultwarden.ErrorMessage(err)
 			return
 		}
 		if !strings.Contains(email, "@") || len(email) > 1024 {
@@ -157,7 +157,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 		return
 	} else if !a.sessionOwnsSnapshot() {
 		a.stopNetwork()
-		a.status = vaultwarden.ErrIdentity.Error()
+		a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 		return
 	}
 	existing := a.session
@@ -203,7 +203,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 		var checkpointState *localstore.SnapshotStatus
 		if login {
 			// Revoke the previous account before prompting, including offline copies.
-			reply = storage(localstore.Request{Operation: "logout", ExpectedRevision: expected})
+			reply = storage(localstore.Request{Operation: localstore.OperationLogout, ExpectedRevision: expected})
 			if !reply.OK || reply.State == nil {
 				workErr = reply.Failure()
 				if reply.OK {
@@ -270,7 +270,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			for _, item := range result.Credentials {
 				metadata = append(metadata, localstore.DisplayCredential{ID: item.ID, Title: item.Title, Username: item.Username, URL: item.URL})
 			}
-			reply = storage(localstore.Request{Operation: "publishVault", ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
+			reply = storage(localstore.Request{Operation: localstore.OperationPublishVault, ExpectedRevision: expected, Scope: &result.Scope, Credentials: result.Credentials, PasswordUnlock: result.PasswordUnlock, Session: result.Session, Vault: result.Vault})
 			if reply.OK && reply.Vault != nil {
 				result.Vault = reply.Vault
 			}
@@ -308,7 +308,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 		}
 		result.Credentials = nil
 		if errors.Is(workErr, vaultwarden.ErrExpired) || errors.Is(workErr, vaultwarden.ErrIdentity) {
-			reply = storage(localstore.Request{Operation: "logout", ExpectedRevision: expected})
+			reply = storage(localstore.Request{Operation: localstore.OperationLogout, ExpectedRevision: expected})
 			if session != nil {
 				session.Close()
 			}
@@ -332,7 +332,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			}
 			if checkpointState != nil && !a.adoptSessionCheckpoint(checkpointState) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			if workErr != nil {
@@ -354,7 +354,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 						go session.Close()
 					}
 					a.stopNetwork()
-					a.status = err.Error()
+					a.status = vaultwarden.ErrorMessage(err)
 					return
 				}
 			}
@@ -364,7 +364,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			a.sessionRevision = reply.State.Revision
 			a.items = metadata
 			if err := a.adoptVault(result.Vault); err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			if a.folderEditor != nil && a.folderEditor.saved {

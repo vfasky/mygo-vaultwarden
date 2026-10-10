@@ -18,11 +18,11 @@ func (a *app) showCipherHistory(storage func(localstore.Request) localstore.Repl
 		return
 	}
 	if err := session.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	err := session.WithCipherPasswordHistory(a.vault, a.sessionRevision, e.fields.ID, e.authorization, func(history []vaultwarden.PasswordHistoryValue, key []byte, deadline time.Time) error {
-		reply := storage(localstore.Request{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+		reply := storage(localstore.Request{Operation: localstore.OperationAuthorizeSecretDisplay, SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
 			return reply.Failure()
 		}
@@ -38,6 +38,6 @@ func (a *app) showCipherHistory(storage func(localstore.Request) localstore.Repl
 		e.showHistory = false
 		clear(e.shownHistory)
 		e.shownHistory = nil
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 	}
 }

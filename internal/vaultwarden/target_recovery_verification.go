@@ -80,10 +80,37 @@ func targetEvidenceHash(value any) string {
 	return recoveryWitness(raw)
 }
 func (p *TargetRecoveryInspection) validLocked(s *Session) bool {
-	return p != nil && p.owner == s && s.itemSessionActiveLocked() && s.authorizationEpoch == p.epoch && time.Now().Before(p.deadline) && !s.freshRecoveryDeadline.IsZero() && p.Fresh.Vault != nil && p.Fresh.PasswordUnlock != nil && p.Fresh.Scope == p.Fresh.Vault.Scope && p.Fresh.Scope == (Scope{s.client.base.String(), s.account}) && targetEvidenceHash(p.Fresh) == p.freshDigest && targetEvidenceHash(p.Fresh.Vault) == p.vaultDigest && recoveryWitness(p.Fresh.Session) == p.sessionDigest && recoveryWitness(p.Fresh.PasswordUnlock.Key) == p.unlockDigest
+	if p == nil || p.owner != s || !s.itemSessionActiveLocked() || s.authorizationEpoch != p.epoch {
+		return false
+	}
+	if !time.Now().Before(p.deadline) || s.freshRecoveryDeadline.IsZero() || p.Fresh.Vault == nil || p.Fresh.PasswordUnlock == nil {
+		return false
+	}
+	if p.Fresh.Scope != p.Fresh.Vault.Scope || p.Fresh.Scope != (Scope{s.client.base.String(), s.account}) {
+		return false
+	}
+	if targetEvidenceHash(p.Fresh) != p.freshDigest || targetEvidenceHash(p.Fresh.Vault) != p.vaultDigest {
+		return false
+	}
+	return recoveryWitness(p.Fresh.Session) == p.sessionDigest && recoveryWitness(p.Fresh.PasswordUnlock.Key) == p.unlockDigest
 }
 func (p *TargetRecoveryInspection) evidence(kind, operation, summary, confirmation string) TargetRecoveryEvidence {
-	return TargetRecoveryEvidence{Kind: kind, AuthorityHash: p.authority, KeyHash: p.key, MembershipHash: p.members, MFAHash: p.mfa, ConfirmationHash: targetEvidenceHash(struct{ Kind, Operation, Summary, Confirmation, Authority string }{kind, operation, summary, confirmation, p.authority}), AuthenticationEpoch: p.epoch}
+	confirmationContext := struct{ Kind, Operation, Summary, Confirmation, Authority string }{
+		Kind:         kind,
+		Operation:    operation,
+		Summary:      summary,
+		Confirmation: confirmation,
+		Authority:    p.authority,
+	}
+	return TargetRecoveryEvidence{
+		Kind:                kind,
+		AuthorityHash:       p.authority,
+		KeyHash:             p.key,
+		MembershipHash:      p.members,
+		MFAHash:             p.mfa,
+		ConfirmationHash:    targetEvidenceHash(confirmationContext),
+		AuthenticationEpoch: p.epoch,
+	}
 }
 func (s *Session) TargetRecoveryDiscoveryEvidence(p *TargetRecoveryInspection, queryID string) (TargetRecoveryEvidence, error) {
 	s.mu.Lock()
@@ -244,7 +271,16 @@ func (s *Session) VerifyTargetRecovery(p *TargetRecoveryInspection, dispatch Rec
 	defer s.mu.Unlock()
 	reject := func() (TargetRecoveryEvidence, error) { return TargetRecoveryEvidence{}, ErrRecoveryUnverified }
 	raw, err := json.Marshal(dispatch)
-	if !p.validLocked(s) || err != nil || dispatch.Verification.Validate(dispatch.Kind) != nil || !dispatch.RequireTargetLogin || dispatch.Target != p.Fresh.Scope || dispatch.Actor.Server != dispatch.Target.Server || !recoveryOperationIDValid(dispatch.OperationID) || dispatch.AuthorizationEpoch == 0 || dispatch.PreviousRevision == "" || dispatch.Actor.Account == "" || summaryHash != recoveryWitness(raw) || confirmation != dispatch.OperationID {
+	if !p.validLocked(s) || err != nil || dispatch.Verification.Validate(dispatch.Kind) != nil {
+		return reject()
+	}
+	if !dispatch.RequireTargetLogin || dispatch.Target != p.Fresh.Scope || dispatch.Actor.Server != dispatch.Target.Server {
+		return reject()
+	}
+	if !recoveryOperationIDValid(dispatch.OperationID) || dispatch.AuthorizationEpoch == 0 || dispatch.PreviousRevision == "" || dispatch.Actor.Account == "" {
+		return reject()
+	}
+	if summaryHash != recoveryWitness(raw) || confirmation != dispatch.OperationID {
 		return reject()
 	}
 	if dispatch.Kind == "administrator-recovery" && (!validObjectID(dispatch.OrganizationID) || !validObjectID(dispatch.MembershipID)) {
@@ -265,7 +301,10 @@ func (s *Session) VerifyTargetRecovery(p *TargetRecoveryInspection, dispatch Rec
 	}
 	noDispatch := origin.Version == 1 && origin.Phase == "not-dispatched"
 	kind := TargetEvidenceEffects
-	notes := []string{"fresh password/MFA login and actual full Sync; authority wrapper, RSA key relationship, current personal cipher/folder/Send cryptography and organization identity/policy/key chain checked", "binary files and hidden server remember-device credentials were not independently read back"}
+	notes := []string{
+		"fresh password/MFA login and actual full Sync; authority wrapper, RSA key relationship, current personal cipher/folder/Send cryptography and organization identity/policy/key chain checked",
+		"binary files and hidden server remember-device credentials were not independently read back",
+	}
 	if noDispatch {
 		kind = TargetEvidenceNoDispatch
 		notes = append(notes, i18n.T("server.recovery.status_not_dispatched"))

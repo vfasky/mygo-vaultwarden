@@ -152,7 +152,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 			if ctx.Err() != nil {
 				return vaultwarden.ErrCancelled
 			}
-			status := callStorage(localstore.Request{Operation: "status"})
+			status := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 			if !status.OK || !backupLease(status.State, scope, revision) {
 				return vaultwarden.ErrConflict
 			}
@@ -217,7 +217,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 			a.cancel = nil
 			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			if !a.attachmentCurrent(e, epoch) {
@@ -227,7 +227,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				if err == nil {
 					err = vaultwarden.ErrCancelled
 				}
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				if submitted {
 					e.uncertain = true
 					a.status = i18n.Tf("vault.attachment.err_verify_list", a.status)
@@ -238,7 +238,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				return
 			}
 			if err := lease(); err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			switch operation {
@@ -247,11 +247,11 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 				a.status = i18n.T("vault.attachment.status_list_verified")
 			case "download":
 				if stage == nil {
-					a.status = vaultwarden.ErrProtocol.Error()
+					a.status = vaultwarden.ErrorMessage(vaultwarden.ErrProtocol)
 					return
 				}
 				if err := session.PublishAttachment(ctx, proof, grant, stage.Commit); err != nil {
-					a.status = err.Error()
+					a.status = vaultwarden.ErrorMessage(err)
 					return
 				}
 				a.status = i18n.T("vault.attachment.status_downloaded")

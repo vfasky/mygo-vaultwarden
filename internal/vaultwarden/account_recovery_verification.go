@@ -10,7 +10,6 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"reflect"
@@ -18,7 +17,7 @@ import (
 	"strings"
 )
 
-var ErrRecoveryUnverified = errors.New(i18n.T("server.recovery.err_unverified"))
+var ErrRecoveryUnverified = i18n.Error("server.recovery.err_unverified")
 
 type AccountRecoveryEvidenceKind string
 
@@ -66,7 +65,13 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		return reject(i18n.T("server.recovery.err_identity_or_password_mismatch"))
 	}
 	var old savedSession
-	if strictJSON(record.OldSession) != nil || json.Unmarshal(record.OldSession, &old) != nil || old.Version != 1 || len(old.UserKey) != 64 || old.Scope != record.Scope || old.PasswordUnlock == nil || len(old.PasswordUnlock.Key) != 32 || old.PasswordUnlock.Config != record.OldUnlock.Config || subtle.ConstantTimeCompare(old.PasswordUnlock.Key, record.OldUnlock.Key) != 1 || old.Email != record.OldUnlock.Config.Email {
+	if strictJSON(record.OldSession) != nil || json.Unmarshal(record.OldSession, &old) != nil {
+		return reject(i18n.T("server.recovery.err_original_auth_unverifiable"))
+	}
+	if old.Version != 1 || len(old.UserKey) != 64 || old.Scope != record.Scope || old.PasswordUnlock == nil || len(old.PasswordUnlock.Key) != 32 {
+		return reject(i18n.T("server.recovery.err_original_auth_unverifiable"))
+	}
+	if old.PasswordUnlock.Config != record.OldUnlock.Config || subtle.ConstantTimeCompare(old.PasswordUnlock.Key, record.OldUnlock.Key) != 1 || old.Email != record.OldUnlock.Config.Email {
 		return reject(i18n.T("server.recovery.err_original_auth_unverifiable"))
 	}
 	defer clear(old.UserKey)
@@ -176,7 +181,11 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 				}
 			}
 			report.AuthorityEvidence = append(report.AuthorityEvidence, "authenticated journal records no transport dispatch; fresh login proves the original key/wrapper; no old Session restored")
-			report.ResourceEvidence = []string{"complete current personal cipher/folder/Send cryptography checked under the original user key; authoritative current organization policy/identity chain; external current changes allowed; hidden recovery wrappers not claimed read-back verified; binary files not downloaded"}
+			report.ResourceEvidence = []string{
+				"complete current personal cipher/folder/Send cryptography checked under the original user key; " +
+					"authoritative current organization policy/identity chain; external current changes allowed; " +
+					"hidden recovery wrappers not claimed read-back verified; binary files not downloaded",
+			}
 		} else {
 			report.Kind = RecoveryEvidenceCredentials
 		}
@@ -237,7 +246,15 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		return reject(i18n.T("server.rotation.err_key_pair_mismatch"))
 	}
 	report.AuthorityEvidence = append(report.AuthorityEvidence, "fresh-login + sync + accounts/keys: unique expected master-userKey and privateKey ciphertext; new userKey distinct; unchanged RSA pair")
-	report.CipherResources, e = VerifyAccountRotationCipherResources(ctx, RotationCipherVerificationInput{Scope: record.Scope, CurrentScope: fresh.Scope, OriginalSync: prior.Sync, CurrentSync: fresh.Vault.Sync, Target: RotationCipherResources{Ciphers: request.Data.Ciphers, Folders: request.Data.Folders}, OldUserKey: old.UserKey, NewUserKey: s.key})
+	report.CipherResources, e = VerifyAccountRotationCipherResources(ctx, RotationCipherVerificationInput{
+		Scope:        record.Scope,
+		CurrentScope: fresh.Scope,
+		OriginalSync: prior.Sync,
+		CurrentSync:  fresh.Vault.Sync,
+		Target:       RotationCipherResources{Ciphers: request.Data.Ciphers, Folders: request.Data.Folders},
+		OldUserKey:   old.UserKey,
+		NewUserKey:   s.key,
+	})
 	if e != nil || report.CipherResources.State != RotationCipherNew {
 		return reject(i18n.T("server.rotation.err_items_or_folders_changed"))
 	}

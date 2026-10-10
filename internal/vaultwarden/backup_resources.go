@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"io"
 	"os"
 	"strings"
@@ -149,7 +148,7 @@ func (s *Session) backupResourceDescriptions(vault *VaultData, ids []string, gra
 			name, ok := row["fileName"].(string)
 			if !ok || name == "" || len(name) > 4096 || strings.ContainsAny(name, "/\\\x00\r\n") {
 				clear(key)
-				return nil, fmt.Errorf(i18n.T("server.backup.err_attachment_filename"), id, ErrUnsupportedEdit)
+				return nil, localError("server.backup.err_attachment_filename", ErrUnsupportedEdit, id)
 			}
 			result = append(result, BackupResource{CipherID: meta.ID, AttachmentID: id, FileName: name, Path: fmt.Sprintf("files/%06d.bin", len(result))})
 			if len(result) > 10000 {
@@ -624,7 +623,10 @@ func ParseResourceImport(ctx context.Context, input *os.File) (_ *ResourceImport
 	pairs := map[string]bool{}
 	for i, resource := range plan.manifest.Resources {
 		pair := resource.CipherID + "/" + resource.AttachmentID
-		if !ids[resource.CipherID] || !validObjectID(resource.AttachmentID) || pairs[pair] || resource.Path != fmt.Sprintf("files/%06d.bin", i) || resource.Size < 0 || resource.Size > 512<<20 || resource.FileName == "" || len(resource.FileName) > 4096 || strings.ContainsAny(resource.FileName, "/\\\x00\r\n") {
+		if !ids[resource.CipherID] || !validObjectID(resource.AttachmentID) || pairs[pair] || resource.Path != fmt.Sprintf("files/%06d.bin", i) {
+			return nil, ErrValidation
+		}
+		if resource.Size < 0 || resource.Size > 512<<20 || resource.FileName == "" || len(resource.FileName) > 4096 || strings.ContainsAny(resource.FileName, "/\\\x00\r\n") {
 			return nil, ErrValidation
 		}
 		pairs[pair] = true

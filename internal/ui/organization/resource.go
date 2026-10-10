@@ -98,9 +98,9 @@ func (p *ResourceRestorePanel) Run(work func(context.Context) (func(), error)) {
 			if err != nil {
 				var preparation *ResourcePreparationError
 				if errors.As(err, &preparation) {
-					p.status = i18n.Tf("org.resource.err_preparation", err.Error())
+					p.status = i18n.Tf("org.resource.err_preparation", vaultwarden.ErrorMessage(err))
 				} else {
-					p.status = i18n.Tf("org.resource.err_unconfirmed", err.Error())
+					p.status = i18n.Tf("org.resource.err_unconfirmed", vaultwarden.ErrorMessage(err))
 				}
 			}
 		})
@@ -244,7 +244,11 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 	}
 }
 
-func ExecuteResourceFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, plan *vaultwarden.ResourceImportPlan, index int, targetOrgID, target, attachment string, verify bool, grant *vaultwarden.ItemAuthorization, persist func(vaultwarden.SessionCheckpoint) error) (vaultwarden.AttachmentUploadResult, error) {
+func ExecuteResourceFile(
+	ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData,
+	plan *vaultwarden.ResourceImportPlan, index int, targetOrgID, target, attachment string,
+	verify bool, grant *vaultwarden.ItemAuthorization, persist func(vaultwarden.SessionCheckpoint) error,
+) (vaultwarden.AttachmentUploadResult, error) {
 	if session == nil {
 		return vaultwarden.AttachmentUploadResult{}, vaultwarden.ErrExpired
 	}

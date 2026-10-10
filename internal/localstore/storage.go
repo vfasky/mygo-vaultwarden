@@ -69,7 +69,10 @@ func (r Request) MarshalJSON() ([]byte, error) {
 type Failure struct{ Code, Message string }
 
 func (e *Failure) Error() string { return e.Message }
-func (r Reply) Failure() error   { return &Failure{Code: r.Code, Message: r.Message} }
+
+// UserMessage contains the native bridge's localized, application-owned reply.
+func (e *Failure) UserMessage() string { return e.Message }
+func (r Reply) Failure() error         { return &Failure{Code: r.Code, Message: r.Message} }
 
 type DisplayCredential struct {
 	OrganizationID   string   `json:"-"`

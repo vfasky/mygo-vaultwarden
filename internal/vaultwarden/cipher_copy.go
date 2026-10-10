@@ -95,7 +95,15 @@ func emptyCopyArray(value any) bool {
 	return ok && len(values) == 0
 }
 func validateCopyObject(object map[string]any) error {
-	if err := copyKeys(object, "object", "id", "type", "name", "notes", "key", "folderId", "favorite", "reprompt", "revisionDate", "creationDate", "deletedDate", "archivedDate", "organizationId", "organizationUseTotp", "collectionIds", "attachments", "edit", "viewPassword", "permissions", "encryptedFor", "encryptedByKeyId", "lastKnownRevisionDate", "fields", "passwordHistory", "login", "secureNote", "card", "identity", "sshKey", "bankAccount", "driversLicense", "passport"); err != nil {
+	allowedKeys := []string{
+		"object", "id", "type", "name", "notes", "key", "folderId", "favorite", "reprompt",
+		"revisionDate", "creationDate", "deletedDate", "archivedDate", "organizationId",
+		"organizationUseTotp", "collectionIds", "attachments", "edit", "viewPassword",
+		"permissions", "encryptedFor", "encryptedByKeyId", "lastKnownRevisionDate",
+		"fields", "passwordHistory", "login", "secureNote", "card", "identity", "sshKey",
+		"bankAccount", "driversLicense", "passport",
+	}
+	if err := copyKeys(object, allowedKeys...); err != nil {
 		return err
 	}
 	if object["organizationId"] != nil || object["edit"] != true || object["viewPassword"] != true {

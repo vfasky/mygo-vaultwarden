@@ -219,7 +219,7 @@ func (a *app) chooseImportFile() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
 		var plan *vaultwarden.ImportPlan
 		if err == nil && len(paths) == 1 && ctx.Err() == nil {
-			status := callStorage(localstore.Request{Operation: "status"})
+			status := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 			if !status.OK || !backupLease(status.State, scope, revision) {
 				err = vaultwarden.ErrConflict
 			} else {
@@ -240,7 +240,7 @@ func (a *app) chooseImportFile() {
 			}
 			a.cancel = nil
 			if err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				plan.Clear()
 				return
 			}
@@ -293,7 +293,7 @@ func (a *app) chooseExportFile() {
 	go func() {
 		defer clear(password)
 		// Preflight before showing Save or touching any target file.
-		status := callStorage(localstore.Request{Operation: "status"})
+		status := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 		var data []byte
 		var err error
 		var stage *fileio.StagedFile
@@ -324,7 +324,7 @@ func (a *app) chooseExportFile() {
 					a.window.Update(func() { a.completeBackupExport(e, epoch, ctx, nil, err, cancel) })
 					return
 				}
-				status = callStorage(localstore.Request{Operation: "status"})
+				status = callStorage(localstore.Request{Operation: localstore.OperationStatus})
 				if !status.OK || !backupLease(status.State, scope, revision) {
 					err = vaultwarden.ErrConflict
 				} else {
@@ -350,7 +350,7 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 	}
 	a.cancel = nil
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	if stage == nil {
@@ -359,9 +359,9 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 	}
 	// Publication stays on the UI thread so a processed lock/cancel cannot race
 	// a later callback writing the final plaintext file. Recheck the storage lease.
-	status := callStorage(localstore.Request{Operation: "status"})
+	status := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 	if !status.OK || !backupLease(status.State, *a.liveScope, e.revision) {
-		a.status = vaultwarden.ErrConflict.Error()
+		a.status = vaultwarden.ErrorMessage(vaultwarden.ErrConflict)
 		return
 	}
 	if session, ok := a.session.(*vaultwarden.Session); ok {
@@ -370,7 +370,7 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 		err = vaultwarden.ErrPermission
 	}
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	e.exportGrants = nil
@@ -413,7 +413,7 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(localstore.Re
 			}
 			return err
 		}
-		state := storage(localstore.Request{Operation: "status"})
+		state := storage(localstore.Request{Operation: localstore.OperationStatus})
 		var result vaultwarden.ImportResult
 		var err error
 		if !state.OK || !backupLease(state.State, scope, prior.Revision) || ctx.Err() != nil {
@@ -430,7 +430,7 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(localstore.Re
 			a.cancel = nil
 			if checkpoint != nil && !a.adoptBackupCheckpoint(e, checkpoint) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			e.results = result.Entries
@@ -442,7 +442,7 @@ func (a *app) importBackupWith(dispatch func(func()), storage func(localstore.Re
 				}
 			}
 			if err != nil {
-				e.results = append(e.results, vaultwarden.ImportEntry{Kind: i18n.T("backup.import.status_stopped"), State: err.Error()})
+				e.results = append(e.results, vaultwarden.ImportEntry{Kind: i18n.T("backup.import.status_stopped"), State: vaultwarden.ErrorMessage(err)})
 				a.syncFailed(reply, err)
 			}
 			if a.backupEditor == e && a.sessionOwnsSnapshot() {

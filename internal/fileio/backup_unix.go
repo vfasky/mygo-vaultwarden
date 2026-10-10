@@ -18,7 +18,7 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-var errBackupFile = errors.New(i18n.T("file.backup.err_unsafe_access"))
+var errBackupFile = i18n.Error("file.backup.err_unsafe_access")
 
 // Open only the explicitly selected directory. A native file selection grants
 // access to that file, not its parent; callers staging exports must separately

@@ -69,7 +69,7 @@ func (a *app) authorizePersonalItem() {
 			}
 			a.cancel = nil
 			if err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			if a.editor != e {

@@ -18,7 +18,27 @@ var linkedFields = map[int][]struct {
 }{
 	1: {{"100", "common.username"}, {"101", "common.password"}},
 	3: {{"300", "vault.field.card.holder"}, {"301", "vault.field.card.expiration_month"}, {"302", "vault.field.card.expiration_year"}, {"303", "vault.field.card.security_code"}, {"304", "vault.field.card.brand"}, {"305", "vault.field.card.number"}},
-	4: {{"400", "vault.field.identity.title"}, {"401", "vault.field.middle_name"}, {"402", "vault.field.identity.address_one"}, {"403", "vault.field.identity.address_two"}, {"404", "vault.field.identity.address_three"}, {"405", "vault.field.identity.city"}, {"406", "vault.field.identity.state"}, {"407", "vault.field.identity.postal_code"}, {"408", "vault.field.identity.country"}, {"409", "vault.field.identity.company"}, {"410", "common.email"}, {"411", "vault.field.identity.phone"}, {"412", "vault.field.identity.social_security_number"}, {"413", "common.username"}, {"414", "vault.field.passport.number"}, {"415", "vault.field.license.number"}, {"416", "vault.field.first_name"}, {"417", "vault.field.last_name"}, {"418", "vault.field.identity.full_name"}},
+	4: {
+		{"400", "vault.field.identity.title"},
+		{"401", "vault.field.middle_name"},
+		{"402", "vault.field.identity.address_one"},
+		{"403", "vault.field.identity.address_two"},
+		{"404", "vault.field.identity.address_three"},
+		{"405", "vault.field.identity.city"},
+		{"406", "vault.field.identity.state"},
+		{"407", "vault.field.identity.postal_code"},
+		{"408", "vault.field.identity.country"},
+		{"409", "vault.field.identity.company"},
+		{"410", "common.email"},
+		{"411", "vault.field.identity.phone"},
+		{"412", "vault.field.identity.social_security_number"},
+		{"413", "common.username"},
+		{"414", "vault.field.passport.number"},
+		{"415", "vault.field.license.number"},
+		{"416", "vault.field.first_name"},
+		{"417", "vault.field.last_name"},
+		{"418", "vault.field.identity.full_name"},
+	},
 }
 
 // The match numbers are from the same commit's

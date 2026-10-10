@@ -8,8 +8,6 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
-	"fmt"
-	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 	"net/mail"
@@ -122,7 +120,7 @@ func (s *Session) SaveOrganization(ctx context.Context, vault *VaultData, orgID 
 			return OrganizationProfile{}, err
 		}
 		if policies.singleOrganization {
-			return OrganizationProfile{}, fmt.Errorf(i18n.T("server.organization.err_single_organization_policy"), ErrPermission)
+			return OrganizationProfile{}, localError("server.organization.err_single_organization_policy", ErrPermission)
 		}
 		previousGuard := guard
 		guard = func() error {

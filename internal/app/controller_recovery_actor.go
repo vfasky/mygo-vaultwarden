@@ -167,7 +167,7 @@ func (c *orgServicesController) commitRecovery(ctx context.Context, plan *vaultw
 	receipt := adapter.Receipt()
 	var observed localstore.Reply
 	if result.IsolationAttempted && receipt == nil {
-		observed = c.baseStorage(localstore.Request{Operation: "status"})
+		observed = c.baseStorage(localstore.Request{Operation: localstore.OperationStatus})
 		if observed.OK {
 			receipt = observed.State
 		}
@@ -227,7 +227,7 @@ func (c *orgServicesController) loadEmergency(trusted bool) {
 				return
 			}
 			if err != nil {
-				c.status = err.Error()
+				c.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			c.emergencyContacts = contacts
@@ -266,7 +266,7 @@ func (c *orgServicesController) loadRecoveryMembers() {
 				return
 			}
 			if err != nil {
-				c.status = err.Error()
+				c.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			c.replacePanel(account.NewRecoveryPanel(choices, c.prepareRecovery, c.commitRecovery, c.deliver))

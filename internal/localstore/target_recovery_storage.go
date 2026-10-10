@@ -152,7 +152,18 @@ func validTargetRecord(r TargetRecoveryRecord) bool {
 		}
 	}
 	b := r.Binding
-	return b.OperationID == d.OperationID && b.Actor == d.Actor && b.Target == d.Target && b.AuthorizationEpoch == d.AuthorizationEpoch && b.AuthorizationEpoch > 0 && b.HostEpoch > 0 && b.StorageRevision != "" && b.SummaryHash == TargetRecoveryHash(r.Summary) && r.RequireTargetLogin == d.RequireTargetLogin && (r.Phase == "prepared" || r.Phase == "unknown" || r.Phase == "confirmed" || r.Phase == "not-dispatched" || r.Phase == "verified" || r.Phase == "resolved")
+	if b.OperationID != d.OperationID || b.Actor != d.Actor || b.Target != d.Target || b.AuthorizationEpoch != d.AuthorizationEpoch {
+		return false
+	}
+	if b.AuthorizationEpoch == 0 || b.HostEpoch == 0 || b.StorageRevision == "" || b.SummaryHash != TargetRecoveryHash(r.Summary) || r.RequireTargetLogin != d.RequireTargetLogin {
+		return false
+	}
+	switch r.Phase {
+	case "prepared", "unknown", "confirmed", "not-dispatched", "verified", "resolved":
+		return true
+	default:
+		return false
+	}
 }
 func (s *TargetRecoveryStorage) receive(req Request) (Reply, error) {
 	s.receipt = nil
@@ -217,8 +228,17 @@ func (s *TargetRecoveryStorage) receive(req Request) (Reply, error) {
 		if req.Operation == OperationTargetRecoveryVerify && (r.Phase != "verified" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash) {
 			return Reply{}, ErrTargetRecovery
 		}
-		if (req.Operation == OperationTargetRecoveryResolve || req.Operation == OperationTargetRecoveryResolveLocal) && (r.Phase != "resolved" || req.TargetResolution == nil || r.VerifiedVaultHash != req.TargetResolution.VaultHash || r.VerifiedSessionHash != req.TargetResolution.SessionHash || r.VerifiedUnlockHash != req.TargetResolution.UnlockHash || reply.Vault == nil || TargetRecoveryHash(reply.Vault.Sync) != req.TargetResolution.VaultHash) {
-			return Reply{}, ErrTargetRecovery
+		if req.Operation == OperationTargetRecoveryResolve || req.Operation == OperationTargetRecoveryResolveLocal {
+			if r.Phase != "resolved" || req.TargetResolution == nil {
+				return Reply{}, ErrTargetRecovery
+			}
+			proof := req.TargetResolution
+			if r.VerifiedVaultHash != proof.VaultHash || r.VerifiedSessionHash != proof.SessionHash || r.VerifiedUnlockHash != proof.UnlockHash {
+				return Reply{}, ErrTargetRecovery
+			}
+			if reply.Vault == nil || TargetRecoveryHash(reply.Vault.Sync) != proof.VaultHash {
+				return Reply{}, ErrTargetRecovery
+			}
 		}
 	}
 	s.revision = reply.State.Revision
@@ -327,7 +347,21 @@ func (s *TargetRecoveryStorage) resolveVerified(fresh vaultwarden.SyncResult, ev
 			return Reply{}, ErrTargetRecovery
 		}
 	}
-	proof := targetRecoveryResolution{evidence.Kind, *s.binding, s.revision, s.binding.Target, TargetRecoveryHash(fresh.Vault.Sync), TargetRecoveryHash(fresh.Session), TargetRecoveryHash(fresh.PasswordUnlock.Key), evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash, evidence.AuthenticationEpoch}
+	proof := targetRecoveryResolution{
+		Kind:                evidence.Kind,
+		Binding:             *s.binding,
+		ExpectedRevision:    s.revision,
+		Target:              s.binding.Target,
+		VaultHash:           TargetRecoveryHash(fresh.Vault.Sync),
+		SessionHash:         TargetRecoveryHash(fresh.Session),
+		UnlockHash:          TargetRecoveryHash(fresh.PasswordUnlock.Key),
+		AuthorityHash:       evidence.AuthorityHash,
+		KeyHash:             evidence.KeyHash,
+		MembershipHash:      evidence.MembershipHash,
+		MFAHash:             evidence.MFAHash,
+		ConfirmationHash:    evidence.ConfirmationHash,
+		AuthenticationEpoch: evidence.AuthenticationEpoch,
+	}
 	req := s.request(OperationTargetRecoveryVerify)
 	if !verifyOnly && (s.localScope == nil || *s.localScope == s.binding.Target) {
 		req.Operation = OperationTargetRecoveryResolve

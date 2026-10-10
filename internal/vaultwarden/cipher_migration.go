@@ -4,8 +4,6 @@ package vaultwarden
 import (
 	"crypto/sha256"
 	"encoding/base64"
-	"fmt"
-	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"time"
 )
@@ -26,7 +24,7 @@ func validateFIDO2Credentials(raw any) error {
 		return ErrProtocol
 	}
 	if len(values) > 100 {
-		return fmt.Errorf(i18n.T("server.item.err_passkey_limit"), ErrValidation)
+		return localError("server.item.err_passkey_limit", ErrValidation)
 	}
 	allowed := append(append([]string(nil), fido2SecretFields...), "creationDate")
 	for _, raw := range values {

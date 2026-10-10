@@ -6,6 +6,25 @@
 
 下方 Board #44 与候选验证是对应候选提交的历史执行记录，不自动覆盖后续审计修复。新增自动化入口、live 许可和 skip 语义见 [CI 与验证边界](ci.md)。审计修复必须在最终集成提交重新验收；单个组件的测试、跳过的 live 任务或新增 CI 配置都不能继承为全量通过。
 
+## 审计串行迁移后的本地验证
+
+本节对应 `audit-fixes/20261010-current` 中以 `0803daf` 为输入的串行迁移，累计差异基线为最新用户快照 `f407d305`。它不重跑七个组件任务，不继承历史 live 或签名测试的通过结论。最终提交号见本阶段交接；本节只记录这次实际执行及尚缺条件。
+
+| 检查 | 本阶段结果与条件 |
+|---|---|
+| Go headless 全仓、race、vet | 均通过；Go 1.27.1。重新编译隔离 MemoryKeys Swift harness，`SNAPSHOT_TEST_HARNESS=… go test -tags headless ./...` 和 `go test -race -tags headless ./...` 均通过，无 `-skip`；live 测试仍按 opt-in 跳过 |
+| Swift | `swift test --package-path macos` 104 项、`macos/Authentication` 9 项通过 |
+| 协议与测试依赖 | `go run ./tools/storage-operations -check`、`bash scripts/ci-check-fixtures.sh` 通过；生产目标不依赖测试 fixture |
+| C2/C3/C4 回归 | wire 字符串不变；业务生产 Go 无 >300 字符行，catalog/夹具数据保留。新增双语言错误身份、备份附件可操作提示、设备提示、轮换提示、未知包装不泄漏和本地文件扩展名回归通过 |
+| staticcheck | PATH 中未安装，未执行、未自动安装；不能以 vet 通过替代它 |
+| A1 spool | 全仓包含立即 unlink 和子进程退出回归；不能证明断电、SSD 擦除或同用户 fd 访问隔离 |
+| A2 文件权限 | 保留用户选择文件/目录、最终 O_NOFOLLOW、固定目录 fd、不覆盖发布回归；本阶段未执行签名沙盒 NSOpenPanel/NSSavePanel 端到端探针，也未宣称跨重启 bookmark |
+| A3/A4 KDF | 弱在线 PBKDF2 拒绝及 Argon2id 上界测试通过；表单显示 16–1024 MiB；未实际进行 1 GiB 派生 |
+| A5 内存 | 测试只覆盖可控缓冲区及生命周期；Go/Swift 隐式副本、交换区、休眠与崩溃转储仍在保证范围外 |
+| A6 空闲锁定 | 注入时钟/活动源、后台不续期回归通过；未实机等待 15 分钟或验证睡眠、锁屏，其他应用的键鼠活动会续期，UI 阻塞可能推迟锁定 |
+| C1 结构 | 部分完成；真实领域提取及 app 68 字段/163 方法、Session 25 字段/246 方法的残余拆分清单见 [架构](architecture.md#c1-尚未完成的结构工作) |
+| 未执行 | Linux runtime、live Docker/真实服务器、GitHub hosted CI、Touch ID/Safari/签名安装；独立 reviewer 由父任务安排，当前没有自签 PASS |
+
 ## 本轮重新执行记录（Board #44）
 
 - 本卡是用户明确要求的 #14 打回后重新执行。固定来源为候选 `63756e4a533253258385eb2d908519377f4b7d28`，已在本卡独立分支以 `--no-ff` 合入（不 reset、不拷旧树文件），未修改主工作区或 recovery 分支。

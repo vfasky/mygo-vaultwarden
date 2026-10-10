@@ -103,6 +103,7 @@ var backendPolicy = map[string]text{
 }
 
 var backendServer = map[string]text{
+	"server.rotation.err_attachment_preparation":           {"轮换账户密钥前，请先为附件创建独立加密密钥；完成附件迁移后重新核验。", "Before rotating the account key, prepare independent encryption keys for attachments. Complete attachment migration, then verify again."},
 	"server.attachment.err_migration_filename":             {"附件 %s 的文件名包含当前上传接口不支持的路径、控制字符或长度，无法无损迁移：%w", "The file name of attachment %s contains a path or control characters, or exceeds the length supported by the current upload API. It cannot be migrated without changes: %w"},
 	"server.backup.err_attachment_filename":                {"附件 %s 的文件名无法通过当前上传接口无损恢复，请保留原件并明确处理文件名：%w", "The file name of attachment %s cannot be restored unchanged through the current upload API. Keep the original and explicitly resolve the file name: %w"},
 	"server.backup.err_blank_text_loss":                    {"Bitwarden 会改写空白名称或备注，请使用 MyGo 备份", "Bitwarden would alter blank names or notes. Use a MyGo backup"},

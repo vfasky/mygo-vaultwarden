@@ -55,7 +55,10 @@ type RecoveryPanel struct {
 	Busy                                                                                  func(bool)
 }
 
-func NewEmergencyPanel(contacts []vaultwarden.EmergencyContact, trusted bool, prepare func(context.Context, RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error), commit func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error), dispatch func(func())) *RecoveryPanel {
+type PrepareEmergencyRecovery func(context.Context, RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error)
+type CommitEmergencyRecovery func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error)
+
+func NewEmergencyPanel(contacts []vaultwarden.EmergencyContact, trusted bool, prepare PrepareEmergencyRecovery, commit CommitEmergencyRecovery, dispatch func(func())) *RecoveryPanel {
 	return &RecoveryPanel{contacts: append([]vaultwarden.EmergencyContact(nil), contacts...), trusted: trusted, emergency: true, selected: -1, operation: "invite", waitDays: "7", prepare: prepare, commit: commit, dispatch: dispatch}
 }
 func NewRecoveryPanel(members []RecoveryMemberChoice, prepare func(context.Context, RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error), commit func(context.Context, *vaultwarden.RecoveryPlan, string) (vaultwarden.RecoveryOperationResult, error), dispatch func(func())) *RecoveryPanel {
@@ -269,7 +272,18 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 				p.selected = i
 			}
 		}
-		options := []struct{ action, label string }{{"invite", i18n.T("account.emergency.invite_contact")}, {"accept", i18n.T("account.emergency.accept_invitation")}, {"reinvite", i18n.T("account.emergency.resend_invitation")}, {"confirm", i18n.T("account.emergency.confirm_distribute_keys")}, {"initiate", i18n.T("account.emergency.request_access")}, {"approve", i18n.T("account.emergency.approve_request")}, {"reject", i18n.T("account.emergency.reject_revoke_approval")}, {"update", i18n.T("account.emergency.change_type_wait")}, {"delete", i18n.T("account.emergency.remove_access")}, {"takeover", i18n.T("account.emergency.take_over_reset_password")}}
+		options := []struct{ action, label string }{
+			{"invite", i18n.T("account.emergency.invite_contact")},
+			{"accept", i18n.T("account.emergency.accept_invitation")},
+			{"reinvite", i18n.T("account.emergency.resend_invitation")},
+			{"confirm", i18n.T("account.emergency.confirm_distribute_keys")},
+			{"initiate", i18n.T("account.emergency.request_access")},
+			{"approve", i18n.T("account.emergency.approve_request")},
+			{"reject", i18n.T("account.emergency.reject_revoke_approval")},
+			{"update", i18n.T("account.emergency.change_type_wait")},
+			{"delete", i18n.T("account.emergency.remove_access")},
+			{"takeover", i18n.T("account.emergency.take_over_reset_password")},
+		}
 		for _, o := range options {
 			allowed := o.action == "invite" || o.action == "accept"
 			if p.selected >= 0 && p.selected < len(p.contacts) {

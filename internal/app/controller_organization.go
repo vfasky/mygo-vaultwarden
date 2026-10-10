@@ -121,7 +121,7 @@ func (c *orgServicesController) deliver(f func()) {
 			if isolation != nil {
 				if !a.adoptOrganizationIsolation(isolation.State, isolation.Vault, id) {
 					a.stopNetwork()
-					a.status = vaultwarden.ErrIdentity.Error()
+					a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				} else {
 					a.advanceEpoch()
 					a.status = i18n.T("org.services.status_quarantined")
@@ -129,7 +129,7 @@ func (c *orgServicesController) deliver(f func()) {
 			} else if cp := env.lease.takeCheckpoint(); cp != nil {
 				if !a.adoptSessionCheckpoint(cp) {
 					a.stopNetwork()
-					a.status = vaultwarden.ErrIdentity.Error()
+					a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				} else {
 					a.advanceEpoch()
 					a.status = i18n.T("org.services.status_credentials_updated")
@@ -145,11 +145,17 @@ func (c *orgServicesController) isolate(env orgServiceSnapshot, orgID string) fu
 		if !active || cp.Scope != *prior.Scope {
 			return vaultwarden.ErrCancelled
 		}
-		reply := env.storage(localstore.Request{Operation: "quarantineOrganization", ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: orgID, UnlockKey: cp.UnlockKey, Session: cp.Session})
+		reply := env.storage(localstore.Request{Operation: localstore.OperationQuarantineOrganization, ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: orgID, UnlockKey: cp.UnlockKey, Session: cp.Session})
 		if !reply.OK {
 			return reply.Failure()
 		}
-		if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != cp.Scope || !reply.State.Available || reply.State.Revision == prior.Revision || reply.State.Revision == "" || reply.State.SnapshotID == prior.SnapshotID || reply.State.SnapshotID == "" || reply.Vault == nil || reply.Vault.Scope != cp.Scope || !reply.Vault.PreservesPendingPolicies(env.vault) {
+		if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != cp.Scope || !reply.State.Available {
+			return vaultwarden.ErrIdentity
+		}
+		if reply.State.Revision == prior.Revision || reply.State.Revision == "" || reply.State.SnapshotID == prior.SnapshotID || reply.State.SnapshotID == "" {
+			return vaultwarden.ErrIdentity
+		}
+		if reply.Vault == nil || reply.Vault.Scope != cp.Scope || !reply.Vault.PreservesPendingPolicies(env.vault) {
 			return vaultwarden.ErrIdentity
 		}
 		found := false
@@ -289,12 +295,32 @@ func (a *app) openOrgServicesWith(dispatch func(func()), storage func(localstore
 		var err error
 		entries, err = session.OrganizationEntries(a.vault)
 		if err != nil {
-			a.status = err.Error()
+			a.status = vaultwarden.ErrorMessage(err)
 			return
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	c := &orgServicesController{emergencyOnly: emergencyOnly, snapshot: orgServiceSnapshot{session, a.vault, lease, a.epoch, a.runtimeVault != nil, storage}, ctx: ctx, cancel: cancel, dispatch: dispatch, baseStorage: baseStorage, busy: a.componentBusy, owner: a, runtime: a.runtimeVault, organizations: append([]vaultwarden.Organization(nil), a.organizations...), collections: append([]vaultwarden.Collection(nil), a.collections...), entries: entries}
+	c := &orgServicesController{
+		emergencyOnly: emergencyOnly,
+		snapshot: orgServiceSnapshot{
+			session: session,
+			vault:   a.vault,
+			lease:   lease,
+			epoch:   a.epoch,
+			runtime: a.runtimeVault != nil,
+			storage: storage,
+		},
+		ctx:           ctx,
+		cancel:        cancel,
+		dispatch:      dispatch,
+		baseStorage:   baseStorage,
+		busy:          a.componentBusy,
+		owner:         a,
+		runtime:       a.runtimeVault,
+		organizations: append([]vaultwarden.Organization(nil), a.organizations...),
+		collections:   append([]vaultwarden.Collection(nil), a.collections...),
+		entries:       entries,
+	}
 	if len(c.organizations) > 0 {
 		c.selectedOrg = c.organizations[0].ID
 	}
@@ -485,7 +511,7 @@ func (c *orgServicesController) loadMembers() {
 				return
 			}
 			if err != nil {
-				c.status = err.Error()
+				c.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			c.members = choices
@@ -566,7 +592,16 @@ func (c *orgServicesController) View(uiContext *ui.Context) {
 		}
 	}
 	ui.Row(uiContext).Wrap().Gap(6).Children(func() {
-		for _, action := range []struct{ id, label string }{{"state", i18n.T("org.ops.open")}, {"copy", i18n.T("org.transfer.copy_open")}, {"collections", i18n.T("org.transfer.assign_collections")}, {"export", i18n.T("org.transfer.export_open")}, {"events", i18n.T("org.events.title")}, {"cipher-events", i18n.T("org.events.selected_item")}, {"api-key", i18n.T("org.apikey.title")}, {"directory", i18n.T("org.directory.title")}} {
+		for _, action := range []struct{ id, label string }{
+			{"state", i18n.T("org.ops.open")},
+			{"copy", i18n.T("org.transfer.copy_open")},
+			{"collections", i18n.T("org.transfer.assign_collections")},
+			{"export", i18n.T("org.transfer.export_open")},
+			{"events", i18n.T("org.events.title")},
+			{"cipher-events", i18n.T("org.events.selected_item")},
+			{"api-key", i18n.T("org.apikey.title")},
+			{"directory", i18n.T("org.directory.title")},
+		} {
 			disabled := c.owner.pending != 0 || c.selectedOrg == "" || ((action.id == "copy" || action.id == "collections" || action.id == "cipher-events") && c.selectedItem == "")
 			if ui.Button(uiContext, action.label).Disabled(disabled).Clicked() {
 				c.selectAction(action.id)

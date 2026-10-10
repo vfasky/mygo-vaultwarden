@@ -105,7 +105,11 @@ func ReadOrgResourceImportPlan(ctx context.Context, path string) (*vaultwarden.R
 // prepareOrgResourceCopy validates every source binary before creating the new
 // metadata. Its returned plan remains owned by the caller for explicit per-file
 // restore/verification, including when a create response is ambiguous.
-func PrepareOrgResourceCopy(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, sourceID, targetOrgID, targetCollectionID string, grant *vaultwarden.ItemAuthorization, lease func() error, persist func(vaultwarden.SessionCheckpoint) error) (*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error) {
+func PrepareOrgResourceCopy(
+	ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData,
+	sourceID, targetOrgID, targetCollectionID string, grant *vaultwarden.ItemAuthorization,
+	lease func() error, persist func(vaultwarden.SessionCheckpoint) error,
+) (*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 	if session == nil {

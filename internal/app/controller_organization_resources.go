@@ -84,7 +84,7 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 				return
 			}
 			if err != nil {
-				c.status = err.Error()
+				c.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			execute := func(ctx context.Context, plan *vaultwarden.OrganizationImportPlan, mappings map[string]string) (vaultwarden.OrganizationOperationResult, error) {
@@ -117,7 +117,7 @@ func (c *orgServicesController) openImportMode(continuing bool) {
 				}, c.deliver)
 				if e != nil {
 					resourcePlan.Clear()
-					c.status = e.Error()
+					c.status = vaultwarden.ErrorMessage(e)
 					return
 				}
 				c.replacePanel(panel)
@@ -188,10 +188,14 @@ func (c *orgServicesController) refreshResources(ctx context.Context) error {
 		if !valid {
 			err = vaultwarden.ErrCancelled
 		} else {
-			reply = env.storage(localstore.Request{Operation: "publishVault", ExpectedRevision: prior.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
+			reply = env.storage(localstore.Request{Operation: localstore.OperationPublishVault, ExpectedRevision: prior.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
 			if !reply.OK {
 				err = reply.Failure()
-			} else if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != fresh.Scope || fresh.Scope != *original.Scope || !reply.State.Available || reply.State.Revision == "" || reply.State.Revision == prior.Revision || reply.State.SnapshotID == "" || reply.Vault == nil || !reply.Vault.PreservesPendingPolicies(env.vault) {
+			} else if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != fresh.Scope || fresh.Scope != *original.Scope || !reply.State.Available {
+				err = vaultwarden.ErrIdentity
+			} else if reply.State.Revision == "" || reply.State.Revision == prior.Revision || reply.State.SnapshotID == "" {
+				err = vaultwarden.ErrIdentity
+			} else if reply.Vault == nil || !reply.Vault.PreservesPendingPolicies(env.vault) {
 				err = vaultwarden.ErrIdentity
 			}
 			if err == nil {

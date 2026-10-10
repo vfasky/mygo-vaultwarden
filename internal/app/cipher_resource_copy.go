@@ -45,7 +45,7 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 		var plan *vaultwarden.ResourceImportPlan
 		var created vaultwarden.CipherDocument
 		var err error
-		state := storage(localstore.Request{Operation: "status"})
+		state := storage(localstore.Request{Operation: localstore.OperationStatus})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			err = vaultwarden.ErrConflict
 		}
@@ -72,7 +72,7 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 		}
 		attempted := false
 		if err == nil {
-			state := storage(localstore.Request{Operation: "status"})
+			state := storage(localstore.Request{Operation: localstore.OperationStatus})
 			if !state.OK || !backupLease(state.State, scope, revision) {
 				err = vaultwarden.ErrConflict
 			}
@@ -92,13 +92,13 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 				plan.Clear()
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			if !attempted {
 				plan.Clear()
 				if err != nil {
-					a.status = err.Error()
+					a.status = vaultwarden.ErrorMessage(err)
 				}
 				return
 			}
@@ -117,7 +117,7 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 			a.backupEditor = editor
 			a.status = i18n.T("vault.copy.status_incomplete")
 			if err != nil {
-				a.status = err.Error() + " " + a.status
+				a.status = vaultwarden.ErrorMessage(err) + " " + a.status
 			}
 			if a.sessionOwnsSnapshot() {
 				refresh()
