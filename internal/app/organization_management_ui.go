@@ -210,10 +210,10 @@ func (a *app) organizationEditorView(c *ui.Context) {
 					label := i18n.T("org.settings.confirm_leave")
 					if e.confirmation == "delete" {
 						label = i18n.T("org.settings.confirm_delete")
-						ui.Text(c, i18n.T("org.settings.delete_hint")).MaxLines(4)
+						ui.Text(c, i18n.T("org.settings.confirm_delete_hint")).MaxLines(4)
 						ui.TextInput(c, &e.password).Label(i18n.T("org.settings.master_password")).Password().Disabled(disabled)
 					} else {
-						ui.Text(c, i18n.T("org.settings.leave_hint")).MaxLines(4)
+						ui.Text(c, i18n.T("org.settings.confirm_leave_hint")).MaxLines(4)
 					}
 					if kit.Action(c, label, "", true, disabled || (e.confirmation == "delete" && e.password == "")).Key("organization-danger-confirm").Clicked() {
 						a.runOrganizationManagement(e.confirmation)

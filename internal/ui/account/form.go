@@ -267,7 +267,7 @@ func FormView(c *ui.Context, f *Form) {
 			ui.Text(c, accountImpact(f.plan.Kind())).MaxLines(6)
 		}
 		ui.Text(c, i18n.T("account.form.confirm_submission_impact")).MaxLines(4)
-		if ui.Button(c, i18n.T("account.form.confirm_execute")).Disabled(disabled).Clicked() {
+		if ui.Button(c, i18n.T("account.form.confirm_security_change")).Disabled(disabled).Clicked() {
 			if f.confirmAction != "" {
 				f.dispatch(f.confirmAction)
 			} else {
@@ -321,7 +321,7 @@ func FormView(c *ui.Context, f *Form) {
 				f.dispatch("register-finish")
 			}
 		default:
-			ui.TextInput(c, &f.password).Label(i18n.T("account.form.current_password")).Password().Disabled(disabled)
+			ui.TextInput(c, &f.password).Label(i18n.T("common.current_master_password")).Password().Disabled(disabled)
 			switch f.Mode {
 			case "password":
 				accountNewPasswordView(c, f, disabled)

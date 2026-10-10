@@ -94,7 +94,7 @@ func (a *app) bulkEditorView(c *ui.Context) {
 					if kit.Action(c, i18n.T("vault.bulk.confirm_action"), "", true, a.pending != 0).Clicked() {
 						a.mutateBulk()
 					}
-					if kit.Action(c, i18n.T("vault.bulk.cancel_confirm"), "", false, a.pending != 0).Clicked() {
+					if kit.Action(c, i18n.T("vault.bulk.cancel_confirmation"), "", false, a.pending != 0).Clicked() {
 						e.confirm = false
 					}
 				} else if kit.Action(c, i18n.T("vault.bulk.continue"), "", true, a.pending != 0).Clicked() {
@@ -194,7 +194,7 @@ func (a *app) completeBulkMutation(epoch uint64, e *bulkEditor, checkpoint *loca
 	e.results = nil
 	for _, item := range e.candidates {
 		if e.selected[item.ID] {
-			e.results = append(e.results, i18n.Tf("vault.bulk.item_unverified", item.Title))
+			e.results = append(e.results, i18n.Tf("vault.bulk.status_item_unverified", item.Title))
 		}
 	}
 	a.status = i18n.T("vault.bulk.status_syncing")
@@ -239,10 +239,10 @@ func (a *app) reconcileBulk() {
 		case vaultwarden.CipherDeletePermanently:
 			ok = !exists
 		}
-		result := i18n.T("vault.bulk.item_unmatched")
+		result := i18n.T("vault.bulk.status_item_unmatched")
 		if ok {
 			matched++
-			result = i18n.T("vault.bulk.item_matched")
+			result = i18n.T("vault.bulk.status_item_matched")
 		}
 		e.results = append(e.results, item.Title+"："+result)
 	}

@@ -57,7 +57,7 @@ func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disable
 	ui.Text(c, i18n.T("org.member.invite_accept_hint")).MaxLines(4)
 	if e.invitationAcceptance == nil {
 		ui.TextInput(c, &e.invitationLink).Label(i18n.T("org.member.invite_link")).Password().Disabled(disabled)
-		if kit.Action(c, i18n.T("org.member.invite_verify_policy"), "", true, disabled || e.invitationLink == "").Key("member-accept").Clicked() {
+		if kit.Action(c, i18n.T("org.member.verify_invitation_policy"), "", true, disabled || e.invitationLink == "").Key("member-accept").Clicked() {
 			a.runOrganizationManagement("invitation-load")
 		}
 	}
@@ -67,7 +67,7 @@ func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disable
 		if e.invitationAcceptance.RecoveryRequired() {
 			ui.Text(c, i18n.T("org.member.invite_recovery_hint")).MaxLines(8)
 			ui.TextInput(c, &e.trustedRecoveryKey).Label(i18n.T("org.member.trusted_recovery_public_key")).Disabled(disabled)
-			label = i18n.T("org.member.invite_accept_recovery")
+			label = i18n.T("org.member.accept_invitation_with_recovery")
 		}
 		if kit.Action(c, label, "", true, disabled || (e.invitationAcceptance.RecoveryRequired() && e.trustedRecoveryKey != e.invitationAcceptance.RecoveryPublicKey())).Key("member-accept-confirm").Clicked() {
 			e.confirmation = "member-accept"
@@ -99,15 +99,15 @@ func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disable
 func memberRoleName(role int) string {
 	switch role {
 	case 0:
-		return "org.member.role_owner"
+		return "role.owner"
 	case 1:
-		return "org.member.role_admin"
+		return "role.admin"
 	case 2:
-		return "org.member.role_user"
+		return "role.user"
 	case 4:
-		return "org.member.role_collection_manager"
+		return "role.collection_manager"
 	}
-	return "org.member.role_unknown"
+	return "role.unknown"
 }
 func memberStatusName(status int) string {
 	switch status {
@@ -144,7 +144,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 		}
 	}
 	ui.Text(c, i18n.T("org.member.invite_permissions_hint")).MaxLines(3)
-	if kit.Action(c, i18n.T("org.member.invite_send"), "", true, disabled || e.inviteEmail == "").Key("member-invite").Clicked() {
+	if kit.Action(c, i18n.T("org.member.send_invitation"), "", true, disabled || e.inviteEmail == "").Key("member-invite").Clicked() {
 		e.confirmation = "member-invite"
 		e.memberID = ""
 	}
@@ -160,7 +160,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 		}
 		operations := []struct{ operation, label string }{}
 		if member.Status == 0 {
-			operations = append(operations, struct{ operation, label string }{"member-reinvite", i18n.T("org.member.invite_resend")})
+			operations = append(operations, struct{ operation, label string }{"member-reinvite", i18n.T("org.member.resend_invitation")})
 		}
 		if member.Status == 1 && (e.owner || member.Type == 2) {
 			if kit.Action(c, i18n.T("org.member.verify_member_key"), "", false, disabled).Key("member-prepare-" + member.ID).Clicked() {

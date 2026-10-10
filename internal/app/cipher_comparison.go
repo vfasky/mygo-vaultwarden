@@ -106,14 +106,14 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 				ui.Text(c, i18n.T("vault.compare.uncertain_hint"))
 			}
 			if len(e.changes) == 0 {
-				ui.Text(c, i18n.T("vault.compare.no_changes"))
+				ui.Text(c, i18n.T("vault.compare.status_no_changes"))
 			}
 			for _, change := range e.changes {
-				text := i18n.Tf("vault.compare.remote_changed", comparisonFieldLabel(change.Path))
+				text := i18n.Tf("vault.compare.status_remote_changed", comparisonFieldLabel(change.Path))
 				if change.Local {
-					text = i18n.Tf("vault.compare.local_changed", comparisonFieldLabel(change.Path))
+					text = i18n.Tf("vault.compare.status_local_changed", comparisonFieldLabel(change.Path))
 					if change.Remote {
-						text = i18n.Tf("vault.compare.both_changed", comparisonFieldLabel(change.Path))
+						text = i18n.Tf("vault.compare.status_both_changed", comparisonFieldLabel(change.Path))
 					}
 				}
 				if change.SameValue {

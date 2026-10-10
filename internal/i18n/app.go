@@ -2,6 +2,8 @@
 
 package i18n
 
+// Application shell, settings, login, and unlock screens.
+
 func init() {
 	register("app", app)
 	register("login", login)
@@ -22,7 +24,6 @@ var app = map[string]text{
 	"app.detail.status_secret_copied":           {"已复制已保存的内容；最多 30 秒后尽力清除。", "Saved content copied. Clearing will be attempted within 30 seconds."},
 	"app.detail.status_username_copied":         {"用户名已复制。", "Username copied."},
 	"app.detail.view_edit":                      {"查看与编辑", "View & edit"},
-	"app.detail.website":                        {"网站", "Website"},
 	"app.list.clear_search":                     {"清除搜索", "Clear search"},
 	"app.list.empty_hint":                       {"同步后，项目会显示在这里", "Your items will appear here after syncing"},
 	"app.list.items":                            {"密码库项目", "Vault items"},
@@ -41,7 +42,6 @@ var app = map[string]text{
 	"app.settings.about":                        {"MyGo Vaultwarden · macOS 原生\n支持个人八类型项目编辑；组织与更多功能仍在开发。", "MyGo Vaultwarden · Native macOS app\nSupports editing all eight personal item types. Organizations and more features are still in development."},
 	"app.settings.account_replacement_hint":     {"需要系统认证原缓存；原账号仍有策略、组织隔离或恢复事项时将先拒绝。写入确认前保留旧密文与密钥，未知结果只检查同一次切换，不自动重试。", "System authentication is required for the original cache. The change is blocked if the original account has outstanding policy, organization quarantine, or recovery issues. The old encrypted data and keys are retained until the write is confirmed. If the result is unknown, only this same switch is checked; it is not retried automatically."},
 	"app.settings.account_replacement_summary":  {"原本机账号：%s / %s\n新账号：%s / %s", "Previous account on this Mac: %s / %s\nNew account: %s / %s"},
-	"app.settings.account_security":             {"账号与安全", "Account & security"},
 	"app.settings.account_services":             {"账号服务", "Account services"},
 	"app.settings.autofill":                     {"自动填充设置", "AutoFill settings"},
 	"app.settings.autofill_pending_hint":        {"系统候选尚未确认同步，请刷新状态或认证更新。", "Sync of system AutoFill suggestions is not yet confirmed. Refresh the status or authenticate to update them."},
@@ -52,8 +52,6 @@ var app = map[string]text{
 	"app.settings.confirm_account_replacement":  {"明确同意替换以上本机账号", "I agree to replace the local account above"},
 	"app.settings.connect_vault":                {"连接密码库", "Connect to vault"},
 	"app.settings.credentials_hint":             {"登录凭据在本地加密保存，解锁后可同步；也可连接其他服务器与账号。", "Login credentials are encrypted and saved locally so you can sync after unlocking. You can also connect to another server or account."},
-	"app.settings.devices":                      {"设备与登录审批", "Devices & login approvals"},
-	"app.settings.emergency_access":             {"紧急访问", "Emergency access"},
 	"app.settings.end_temporary_session":        {"结束临时在线会话（保留原缓存）", "End temporary session (keep original cache)"},
 	"app.settings.err_credentials_changed":      {"登录凭据已更新，请重新打开此页面。", "Login credentials have changed. Reopen this page."},
 	"app.settings.last_synced":                  {"最近同步：%s", "Last synced: %s"},
@@ -86,9 +84,7 @@ var app = map[string]text{
 	"app.sidebar.folder_missing":                {"文件夹已不存在", "Folder no longer exists"},
 	"app.sidebar.folders":                       {"文件夹", "Folders"},
 	"app.sidebar.items":                         {"项目", "Items"},
-	"app.sidebar.manage_folder":                 {"管理文件夹", "Manage folder"},
 	"app.sidebar.manage_organization":           {"管理当前组织", "Manage organization"},
-	"app.sidebar.new_folder":                    {"新建文件夹", "New folder"},
 	"app.sidebar.organizations":                 {"组织", "Organization"},
 	"app.sidebar.permissions_changed":           {"组织权限已变化", "Organization permissions changed"},
 	"app.sidebar.personal_vault":                {"个人密码库", "My vault"},
@@ -112,8 +108,7 @@ var app = map[string]text{
 	"app.sync.summary":                          {"已同步 %d 个项目；可填充登录 %d。填充排除：未授权组织 %d、其他类型 %d、再次验证 %d、归档 %d、权限受限 %d；不支持的网址规则 %d。", "Synced items: %d; logins available for AutoFill: %d. Excluded from AutoFill: unauthorized organizations %d, other types %d, master password re-prompt %d, archived %d, restricted permissions %d; unsupported URI rules %d."},
 	"app.sync.unlock_again_hint":                {"%s 请重新解锁后再同步。", "%s Unlock again before syncing."},
 	"app.toolbar.add":                           {"新增", "Add"},
-	"app.toolbar.bulk_actions":                  {"批量管理", "Bulk actions"},
-	"app.toolbar.empty_trash":                   {"清空回收站", "Empty trash"},
+	"app.toolbar.empty_trash":                   {"清空回收站", "Empty Trash"},
 	"app.toolbar.import_export":                 {"导入导出", "Import & export"},
 	"app.toolbar.status_locked":                 {"未解锁", "Locked"},
 	"app.toolbar.status_sync_ready":             {"可同步", "Ready to sync"},
@@ -122,7 +117,7 @@ var app = map[string]text{
 
 var login = map[string]text{
 	"login.account_switch.authentication_required_hint": {"请先系统认证检查这次账号切换。", "Complete system authentication to inspect this account switch first."},
-	"login.account_switch.confirm":                      {"确认采用新账号并退休旧缓存密钥", "Confirm new account and retire old cache keys"},
+	"login.account_switch.confirm_replace_account":      {"确认采用新账号并退休旧缓存密钥", "Confirm new account and retire old cache keys"},
 	"login.account_switch.inspect":                      {"系统认证检查账号切换", "Authenticate to inspect account switch"},
 	"login.account_switch.login_hint":                   {"继续登录将切换本机账号，并替换已有离线快照。", "Continuing will switch the account on this Mac and replace the existing offline snapshot."},
 	"login.account_switch.pending_hint":                 {"本机账号替换已写入或回执未知。原账号加密副本与密钥在确认前保留，不会盲重试或回滚新状态。", "The local account replacement has been written, or its receipt is unknown. The original account's encrypted copy and keys are retained until confirmation. The operation will not be retried blindly, and the new state will not be rolled back."},
@@ -135,7 +130,6 @@ var login = map[string]text{
 	"login.device.end":                                  {"结束设备登录", "End device login"},
 	"login.device.hint":                                 {"通过已登记的另一台设备批准登录", "Approve login from another registered device"},
 	"login.device.link":                                 {"设备", "Log in with device"},
-	"login.device.use_another":                          {"通过另一台设备登录", "Log in with another device"},
 	"login.err_email_required":                          {"请输入登录邮箱。", "Enter your login email."},
 	"login.err_password_required":                       {"请输入主密码。", "Enter your master password."},
 	"login.err_password_too_long":                       {"主密码过长，请检查输入。", "The master password is too long. Check your input."},
@@ -144,7 +138,6 @@ var login = map[string]text{
 	"login.log_in_again":                                {"重新登录", "Log in again"},
 	"login.master_password":                             {"主密码", "Master password"},
 	"login.master_password_placeholder":                 {"输入主密码", "Enter master password"},
-	"login.mfa.code":                                    {"验证码", "Verification code"},
 	"login.mfa.code_placeholder":                        {"6 位数字验证码", "6-digit verification code"},
 	"login.mfa.description":                             {"选择此服务器提供的验证方式", "Choose an authentication method offered by this server"},
 	"login.mfa.err_code_required":                       {"请输入 6 位数字验证码。", "Enter the 6-digit verification code."},
@@ -159,9 +152,8 @@ var login = map[string]text{
 	"login.recovery.pending_hint":                       {"此账号有未完成的安全变更恢复记录，旧库与自动填充已暂停。普通登录、同步和退出不能清除此记录。", "This account has an unfinished recovery record for a security change. The old vault and AutoFill are suspended. Normal login, sync, and logout cannot clear this record."},
 	"login.recovery.title":                              {"恢复目标账号", "Recover target account"},
 	"login.recovery.verify_as_owner":                    {"目标本人登录并核验跨账号恢复", "Verify cross-account recovery as the owner"},
-	"login.register_password_hint":                      {"注册 / 密码提示", "Sign up / Password hint"},
+	"login.register_password_hint":                      {"注册 / 密码提示", "Sign up / password hint"},
 	"login.retry_connection":                            {"重试连接", "Retry connection"},
-	"login.server_url":                                  {"服务器地址", "Server URL"},
 	"login.sso.hint":                                    {"SSO 认证后仍需主密码解锁；新建 SSO 账号和 Key Connector 暂不支持。", "Your master password is still required to unlock after SSO authentication. Creating SSO accounts and Key Connector are not yet supported."},
 	"login.sso.submit":                                  {"SSO 登录", "Log in with SSO"},
 	"login.status_syncing":                              {"正在登录并同步…", "Logging in and syncing…"},

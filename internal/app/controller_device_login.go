@@ -245,7 +245,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 func (a *app) deviceLoginSetupView(c *ui.Context) {
 	busy := a.pending != 0
 	ui.Text(c, i18n.T("account.device_login.title")).FontSize(20)
-	ui.TextInput(c, &a.serverURL).Label(i18n.T("account.device_login.server_url")).Disabled(busy)
+	ui.TextInput(c, &a.serverURL).Label(i18n.T("common.server_url")).Disabled(busy)
 	ui.TextInput(c, &a.email).Label(i18n.T("account.device_login.account_email")).Disabled(busy)
 	ui.TextInput(c, &a.deviceAccountID).Label(i18n.T("account.device_login.known_account_id")).Disabled(busy)
 	ui.Text(c, i18n.T("account.device_login.temporary_session_hint")).MaxLines(7)

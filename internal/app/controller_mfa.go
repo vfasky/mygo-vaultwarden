@@ -201,7 +201,7 @@ func (a *app) mfaLoginView(c *ui.Context) {
 		m.sendEmail()
 	}
 	ui.Text(c, i18n.T("account.mfa.no_device_token_hint"))
-	if ui.Button(c, i18n.T("account.mfa.cancel_login")).Clicked() {
+	if ui.Button(c, i18n.T("login.cancel")).Clicked() {
 		a.runStorage("lock")
 	}
 }

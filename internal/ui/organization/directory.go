@@ -90,7 +90,7 @@ func (p *APIKeyPanel) View(c *ui.Context) {
 		ui.Text(c, i18n.T("org.apikey.owner_only_hint"))
 	}
 	disabled := p.Flow.blocked() || p.Flow.confirm || !p.allowed
-	ui.TextInput(c, &p.password).Label(i18n.T("org.apikey.current_password")).Password().Disabled(disabled)
+	ui.TextInput(c, &p.password).Label(i18n.T("common.current_master_password")).Password().Disabled(disabled)
 	if kit.Action(c, i18n.T("org.apikey.read"), "", !p.rotate, disabled).Key("org-key-read").Clicked() {
 		p.rotate = false
 	}

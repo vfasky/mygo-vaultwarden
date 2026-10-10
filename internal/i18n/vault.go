@@ -2,17 +2,153 @@
 
 package i18n
 
+// Vault fields, editors, attachments, folders, and item operations.
+
 func init() {
-	register("vault.field", vaultField)
-	register("vault.editor", vaultEditor)
-	register("vault.compare", vaultCompare)
-	register("vault.share_recovery", vaultShareRecovery)
-	register("vault.copy", vaultCopy)
-	register("vault.uri", vaultUri)
-	register("vault.history", vaultHistory)
 	register("vault.attachment", vaultAttachment)
-	register("vault.folder", vaultFolder)
 	register("vault.bulk", vaultBulk)
+	register("vault.compare", vaultCompare)
+	register("vault.copy", vaultCopy)
+	register("vault.editor", vaultEditor)
+	register("vault.field", vaultField)
+	register("vault.folder", vaultFolder)
+	register("vault.history", vaultHistory)
+	register("vault.share_recovery", vaultShareRecovery)
+	register("vault.uri", vaultUri)
+}
+
+var vaultAttachment = map[string]text{
+	"vault.attachment.cancel":                            {"取消附件操作", "Cancel attachment operation"},
+	"vault.attachment.confirm_delete":                    {"确认永久删除附件", "Confirm permanent attachment deletion"},
+	"vault.attachment.confirm_delete_hint":               {"永久删除此附件？此操作无法撤销。", "Permanently delete this attachment? This cannot be undone."},
+	"vault.attachment.delete":                            {"删除附件…", "Delete attachment…"},
+	"vault.attachment.description":                       {"文件单独加密传输，最大 512 MiB。下载会保存为新的明文文件，不覆盖已有文件；当前需要联网。上传和删除前请先保存项目草稿。", "Files are encrypted separately for transfer, up to 512 MiB. Downloads are saved as new plaintext files without overwriting existing files. An internet connection is currently required. Save the item draft before uploading or deleting."},
+	"vault.attachment.download":                          {"下载并另存为…", "Download and save as…"},
+	"vault.attachment.empty":                             {"此项目没有附件。", "This item has no attachments."},
+	"vault.attachment.encrypted_size":                    {"加密大小：%d 字节", "Encrypted size: %d bytes"},
+	"vault.attachment.err_unsaved_draft":                 {"请先保存项目更改，再上传或删除附件。", "Save item changes before uploading or deleting attachments."},
+	"vault.attachment.err_verify_list":                   {"%s 请同步核对附件列表，不要重复提交。", "%s Sync to verify the attachment list. Do not submit again."},
+	"vault.attachment.keep":                              {"保留附件", "Keep attachment"},
+	"vault.attachment.migration.cancel":                  {"取消附件迁移", "Cancel attachment migration"},
+	"vault.attachment.migration.confirm_copy":            {"确认创建所选旧附件的独立加密副本（保留原件）", "Confirm separately encrypted copy (keep original)"},
+	"vault.attachment.migration.confirm_delete_original": {"确认核验所选两个编号并永久删除旧附件", "Verify both IDs and delete original permanently"},
+	"vault.attachment.migration.description":             {"旧附件迁移：先创建独立加密副本，同步后重新打开此处；明确选中旧、新两个编号，服务器下载校验内容一致后才删除旧件。项目编号保留，附件编号改变。全部完成后再共享。取消、失败及重开后请先同步核对，不要重复创建。临时文件受权限保护，磁盘不承诺安全擦除。", "Legacy attachment migration: create a separately encrypted copy, sync, then reopen this view. Select both the old and new IDs. The old attachment is deleted only after downloads from the server are verified to have matching content. The item ID stays the same; attachment IDs change. Complete all migrations before sharing. After cancellation, failure, or reopening, sync and verify first; do not create duplicates. Temporary files have restricted permissions, but secure erasure from disk is not guaranteed."},
+	"vault.attachment.migration.err_unsaved_draft":       {"请先保存项目更改，再迁移附件。", "Save item changes before migrating attachments."},
+	"vault.attachment.migration.original":                {"原附件 · %s", "Original attachment · %s"},
+	"vault.attachment.migration.prepare":                 {"准备旧附件的安全共享迁移", "Prepare legacy attachments for secure sharing"},
+	"vault.attachment.migration.replacement":             {"独立加密附件 · %s", "Separately encrypted attachment · %s"},
+	"vault.attachment.migration.result":                  {"原编号 %s；替代编号 %s；已确认元数据=%t、上传=%t、核对=%t、内容一致=%t、删除回执=%t。请同步核对后再继续。", "Original ID %s; replacement ID %s; confirmed metadata=%t, upload=%t, reconciliation=%t, matching content=%t, deletion receipt=%t. Sync and verify before continuing."},
+	"vault.attachment.migration.sync_reopen":             {"同步核对，然后重新打开项目", "Sync and verify, then reopen item"},
+	"vault.attachment.refresh":                           {"加载或刷新附件列表", "Load or refresh attachments"},
+	"vault.attachment.result_id":                         {"%s 附件编号：%s", "%s Attachment ID: %s"},
+	"vault.attachment.status_cancel_requested":           {"已请求取消；已经发出的上传或删除仍需同步核对。", "Cancellation requested. Uploads or deletions already sent still require syncing to verify."},
+	"vault.attachment.status_confirmed":                  {"附件操作已确认，正在同步更新密码库。", "Attachment operation confirmed. Syncing to update the vault."},
+	"vault.attachment.status_downloaded":                 {"附件已校验并保存为新的明文文件。", "Attachment verified and saved as a new plaintext file."},
+	"vault.attachment.status_list_verified":              {"附件列表已验证。", "Attachment list verified."},
+	"vault.attachment.status_transferring":               {"正在验证权限并传输附件，请稍候…", "Verifying permissions and transferring the attachment. Please wait…"},
+	"vault.attachment.title":                             {"附件", "Attachment"},
+	"vault.attachment.upload":                            {"选择并上传文件…", "Choose and upload file…"},
+}
+
+var vaultBulk = map[string]text{
+	"vault.bulk.cancel_confirmation":    {"取消批量确认", "Cancel bulk confirmation"},
+	"vault.bulk.close":                  {"关闭批量管理", "Close bulk management"},
+	"vault.bulk.confirm_action":         {"确认执行批量操作", "Confirm bulk action"},
+	"vault.bulk.confirm_action_hint":    {"确认对选中的项目执行操作？", "Apply this action to the selected items?"},
+	"vault.bulk.confirm_delete_hint":    {"永久删除选中的回收站项目及其附件，无法恢复。确认继续？", "Permanently delete the selected items in Trash and their attachments? This cannot be undone."},
+	"vault.bulk.continue":               {"继续批量操作", "Continue bulk action"},
+	"vault.bulk.description":            {"当前仅管理个人项目。请选择项目及操作；永久删除仅允许个人回收站中的项目，需要再次验证的项目请单独处理。", "Only personal items can be managed here. Select items and an action. Permanent deletion is limited to personal items in Trash. Handle items requiring master password re-prompt individually."},
+	"vault.bulk.err_reprompt_required":  {"所选项目需要再次验证主密码，请在单项编辑中完成操作。未发送批量请求。", "A selected item requires master password re-prompt. Complete the action in its item editor. No bulk request was sent."},
+	"vault.bulk.err_revision_changed":   {"密码库版本已变化，请重新选择项目。", "The vault version has changed. Select the items again."},
+	"vault.bulk.err_selection_required": {"请先选择项目。", "Select items first."},
+	"vault.bulk.err_trash_required":     {"永久删除仅允许回收站中的项目。", "Only items in Trash can be permanently deleted."},
+	"vault.bulk.move_to_folder":         {"移动到文件夹", "Move to folder"},
+	"vault.bulk.status_applying":        {"正在执行批量操作…", "Applying bulk action…"},
+	"vault.bulk.status_item_matched":    {"当前状态已符合目标", "Current state matches the target"},
+	"vault.bulk.status_item_unmatched":  {"当前状态未符合目标，请检查后重新选择操作", "Current state does not match the target. Review it before choosing another action"},
+	"vault.bulk.status_item_unverified": {"%s：尚未核对", "%s: not yet verified"},
+	"vault.bulk.status_syncing":         {"批量操作已结束，正在同步逐项核对（服务器可能只完成部分项目）…", "Bulk action finished. Syncing to verify each item (the server may have completed only some items)…"},
+	"vault.bulk.status_verified":        {"已同步核对 %d 项，其中 %d 项当前状态符合目标。", "Items verified by sync: %d; items currently matching the target: %d."},
+	"vault.bulk.submitted_hint":         {"本批操作不会再次提交。以下为同步后的逐项状态；若尚未核对，请同步后查看。", "This batch will not be submitted again. Individual item states after syncing are shown below. If not yet verified, sync and check again."},
+	"vault.bulk.sync_verify":            {"同步核对批量结果", "Sync and verify batch results"},
+	"vault.bulk.title":                  {"批量管理", "Bulk actions"},
+}
+
+var vaultCompare = map[string]text{
+	"vault.compare.add_row":                {"作为独立新增行", "Add as a separate row"},
+	"vault.compare.back_keep_draft":        {"返回，保留原草稿", "Back; keep original draft"},
+	"vault.compare.description":            {"默认隐藏秘密内容，可经认证短时显示逐行对照。默认采用远端值；选中的本地改动会重新应用到最新项目，其他内容保持最新版本。", "Secrets are hidden by default. Authenticate to briefly show a row-by-row comparison. Remote values are used by default. Selected local changes are reapplied to the latest item; all other content keeps the latest version."},
+	"vault.compare.draft_preserved_hint":   {"草稿已保留。先同步核实结果，再比较改动；不会自动重试。秘密比较仅显示是否更改。", "Your draft has been kept. Sync to verify the result, then compare changes. There is no automatic retry. Secret comparisons only indicate whether values changed."},
+	"vault.compare.err_expired":            {"比较版本已失效，请重新同步和比较：%s", "The comparison is out of date. Sync and compare again: %s"},
+	"vault.compare.err_unavailable":        {"暂时无法比较：%s 项目已删除、归属、密钥或权限变化时，请取消草稿并重新打开最新项目。", "Cannot compare right now: %s If the item was deleted, or its ownership, key, or permissions changed, cancel the draft and reopen the latest item."},
+	"vault.compare.hide_rows":              {"隐藏逐行内容", "Hide row contents"},
+	"vault.compare.item_content":           {"项目内容", "Item content"},
+	"vault.compare.keep_remote_row":        {"保留远端，不应用此本地行", "Keep remote; skip this local row"},
+	"vault.compare.local":                  {"本地", "Local"},
+	"vault.compare.local_row":              {"本地 · %s", "Local · %s"},
+	"vault.compare.local_selected":         {"✓ 采用我的修改（点击改用远端）", "✓ Use my changes (click to use remote)"},
+	"vault.compare.match_remote_row":       {"明确对应远端第 %d 行", "Match remote row %d"},
+	"vault.compare.password_history":       {"密码历史（仅删除原先观察到的记录）", "Password history (delete only previously observed entries)"},
+	"vault.compare.reapply_selections":     {"按以上选择重新应用到草稿", "Reapply selections to draft"},
+	"vault.compare.remote":                 {"远端", "Remote"},
+	"vault.compare.remote_row":             {"远端 · %s", "Remote · %s"},
+	"vault.compare.reveal_rows":            {"经认证显示本地与远端逐行内容（30 秒）", "Authenticate to show local and remote rows (30 seconds)"},
+	"vault.compare.row_details":            {"%s第 %d 行 · %s · %s", "%s row %d · %s · %s"},
+	"vault.compare.row_extensions_hint":    {"此行含未显示的扩展；匹配时会保留远端扩展，冲突不会静默覆盖。", "This row has extensions that are not shown. Matching preserves remote extensions; conflicts will not be silently overwritten."},
+	"vault.compare.row_matching_hint":      {"列表没有固定行 ID。逐行明确选择对应关系；未选择的远端行及其扩展始终保留。点击选择按钮循环：保留远端、作为新增、对应远端各行。删除请继续后在新表单中确认。", "Lists have no stable row IDs. Choose each row's correspondence explicitly. Unselected remote rows and their extensions are always kept. Click to cycle through keeping the remote row, adding a new row, and matching each remote row. To delete rows, continue and confirm in the new form."},
+	"vault.compare.same_value":             {"%s（双方当前值相同）", "%s (current values match on both sides)"},
+	"vault.compare.status_applied":         {"已采用最新版本并保留所选修改，请检查表单后明确保存。", "The latest version is now in use with your selected changes kept. Review the form and save explicitly."},
+	"vault.compare.status_both_changed":    {"%s：双方均已改", "%s: changed on both sides"},
+	"vault.compare.status_local_changed":   {"%s：本地已改；远端未改", "%s: changed locally; unchanged remotely"},
+	"vault.compare.status_no_changes":      {"未发现可编辑字段的差异，可以采用远端版本。", "No differences found in editable fields. You can use the remote version."},
+	"vault.compare.status_remote_changed":  {"%s：本地未改；远端已改", "%s: unchanged locally; changed remotely"},
+	"vault.compare.status_review_required": {"请核对双方改动，明确选择要重新应用的字段；继续后还需要再次保存。", "Review both sets of changes and select the fields to reapply. You will still need to save after continuing."},
+	"vault.compare.title":                  {"比较本地与远端改动", "Compare local and remote changes"},
+	"vault.compare.uncertain_hint":         {"上次写入结果未知。下表是同步核实后的状态；若远端已包含你的更改，请采用远端版本，避免重复提交。", "The previous write result is unknown. The state below was verified by syncing. If the remote version already includes your changes, use it to avoid submitting them again."},
+	"vault.compare.use_local":              {"采用我的修改", "Use my changes"},
+	"vault.compare.use_remote":             {"采用远端版本，放弃本地修改", "Use remote; discard local changes"},
+	"vault.compare.version_conflict_hint":  {"服务器按整秒差值大于 1 检测旧版本（不足两秒可能不拒绝），无法保证比较后没有其他客户端再次修改。保存若再次冲突，会保留草稿供重新比较。", "The server detects stale versions when the difference in whole seconds exceeds 1 (differences under two seconds may be accepted). Another client may change the item after comparison. If saving conflicts again, your draft will be kept for another comparison."},
+	"vault.compare.websites":               {"网站及匹配规则", "Websites and match rules"},
+}
+
+var vaultCopy = map[string]text{
+	"vault.copy.confirm_copy":      {"将项目复制为独立条目，原项目不变。副本保留文件夹、收藏、密码历史和通行密钥数据，恢复为未归档状态。含附件时请先保存草稿；验证源文件并创建副本后，还需逐文件恢复和核验才算完成。未知扩展不会被默默丢弃。", "Create an independent copy without changing the original item. The copy keeps its folder, favorite status, password history, and passkey data, and is unarchived. For items with attachments, save the draft first. After verifying the source files and creating the copy, restore and verify each file to finish. Unknown extensions will not be silently discarded."},
+	"vault.copy.create_item":       {"复制为新项目", "Copy as new item"},
+	"vault.copy.err_unsaved_draft": {"复制含附件项目之前，请先保存草稿；完整复制使用已保存版本。", "Save your draft before copying an item with attachments. The complete copy uses the saved version."},
+	"vault.copy.status_incomplete": {"副本尚未完成：请逐文件恢复并核验。源项目及其附件保留；创建结果未知时先同步核对目标编号，勿再次创建。", "The copy is incomplete. Restore and verify each file. The source item and its attachments are kept. If creation has an unknown result, sync and check the target ID first; do not create another copy."},
+}
+
+var vaultEditor = map[string]text{
+	"vault.editor.add_boolean_field":              {"添加布尔字段", "Add boolean field"},
+	"vault.editor.add_favorite":                   {"加入收藏", "Add to favorites"},
+	"vault.editor.add_hidden_field":               {"添加隐藏字段", "Add hidden field"},
+	"vault.editor.add_linked_field":               {"添加关联字段", "Add linked field"},
+	"vault.editor.add_text_field":                 {"添加文本字段", "Add text field"},
+	"vault.editor.add_title":                      {"新增%s", "Add %s"},
+	"vault.editor.add_website":                    {"添加网站", "Add website"},
+	"vault.editor.cancel_operation":               {"取消操作", "Cancel operation"},
+	"vault.editor.confirm_delete_permanently":     {"永久删除无法恢复。确认删除此项目及其附件？", "Permanent deletion cannot be undone. Delete this item and its attachments?"},
+	"vault.editor.confirm_trash":                  {"确认将项目移入回收站？", "Move this item to Trash?"},
+	"vault.editor.copy_current_code":              {"复制当前验证码", "Copy current code"},
+	"vault.editor.copy_saved_password":            {"复制已保存密码", "Copy saved password"},
+	"vault.editor.delete_field":                   {"删除字段", "Delete field"},
+	"vault.editor.edit_title":                     {"编辑%s", "Edit %s"},
+	"vault.editor.err_authorization_expired":      {"项目授权已到期，请重新验证主密码。", "Item authorization has expired. Verify your master password again."},
+	"vault.editor.err_revision_changed":           {"密码库版本已变化，已保留表单内容。请核对最新项目后重新编辑。", "The vault version has changed. Your form has been kept. Check the latest item before editing again."},
+	"vault.editor.err_select_writable_collection": {"请先选择可写集合，再新增组织项目。", "Select a writable collection before adding an organization item."},
+	"vault.editor.move_to_trash":                  {"移入回收站", "Move to Trash"},
+	"vault.editor.organization_sync_hint":         {"组织权限以最新同步为准；同步会关闭此表单并清除未保存更改。", "Organization permissions reflect the latest sync. Syncing will close this form and discard unsaved changes."},
+	"vault.editor.remove":                         {"移除", "Remove"},
+	"vault.editor.remove_favorite":                {"取消收藏", "Remove from favorites"},
+	"vault.editor.secret_display_hint":            {"显示与复制使用已保存内容，最多显示 30 秒；剪贴板可被其他应用读取。", "Show and copy use saved values. Values stay visible for up to 30 seconds. Other apps can read the clipboard."},
+	"vault.editor.show_current_code":              {"显示当前验证码", "Show current code"},
+	"vault.editor.show_saved_password":            {"显示已保存密码", "Show saved password"},
+	"vault.editor.status_saving":                  {"正在保存修改…", "Saving changes…"},
+	"vault.editor.status_submitted":               {"修改已提交，正在同步核对…", "Changes submitted. Syncing to verify…"},
+	"vault.editor.sync_latest":                    {"同步最新版本", "Sync latest version"},
+	"vault.editor.sync_verify":                    {"同步核对", "Sync and verify"},
+	"vault.editor.uncertain_hint":                 {"请先同步核对服务器结果，当前表单不会重复提交。", "Sync to check the server result first. This form will not be submitted again."},
+	"vault.editor.website_number":                 {"网站 %d", "Website %d"},
 }
 
 var vaultField = map[string]text{
@@ -52,7 +188,7 @@ var vaultField = map[string]text{
 	"vault.field.identity.phone":                          {"电话", "Phone"},
 	"vault.field.identity.postal_code":                    {"邮编", "Postal code"},
 	"vault.field.identity.social_security_number":         {"社会保障号码", "Social security number"},
-	"vault.field.identity.state":                          {"省/州", "State / Province"},
+	"vault.field.identity.state":                          {"省/州", "State / province"},
 	"vault.field.identity.title":                          {"称谓", "Title"},
 	"vault.field.issue_date":                              {"签发日期", "Issue date"},
 	"vault.field.issuing_authority":                       {"签发机关", "Issuing authority"},
@@ -76,77 +212,33 @@ var vaultField = map[string]text{
 	"vault.field.ssh.private_key":                         {"私钥", "Private key"},
 	"vault.field.ssh.public_key":                          {"公钥", "Public key"},
 	"vault.field.title":                                   {"标题", "Name"},
+	"vault.field.uri":                                     {"网址", "URI"},
 	"vault.field.website":                                 {"网站", "Website"},
 }
 
-var vaultEditor = map[string]text{
-	"vault.editor.add_boolean_field":              {"添加布尔字段", "Add boolean field"},
-	"vault.editor.add_favorite":                   {"加入收藏", "Add to favorites"},
-	"vault.editor.add_hidden_field":               {"添加隐藏字段", "Add hidden field"},
-	"vault.editor.add_linked_field":               {"添加关联字段", "Add linked field"},
-	"vault.editor.add_text_field":                 {"添加文本字段", "Add text field"},
-	"vault.editor.add_title":                      {"新增%s", "Add %s"},
-	"vault.editor.add_website":                    {"添加网站", "Add website"},
-	"vault.editor.cancel_operation":               {"取消操作", "Cancel operation"},
-	"vault.editor.confirm_delete_permanently":     {"永久删除无法恢复。确认删除此项目及其附件？", "Permanent deletion cannot be undone. Delete this item and its attachments?"},
-	"vault.editor.confirm_trash":                  {"确认将项目移入回收站？", "Move this item to Trash?"},
-	"vault.editor.copy_current_code":              {"复制当前验证码", "Copy current code"},
-	"vault.editor.copy_saved_password":            {"复制已保存密码", "Copy saved password"},
-	"vault.editor.delete_field":                   {"删除字段", "Delete field"},
-	"vault.editor.edit_title":                     {"编辑%s", "Edit %s"},
-	"vault.editor.err_authorization_expired":      {"项目授权已到期，请重新验证主密码。", "Item authorization has expired. Verify your master password again."},
-	"vault.editor.err_revision_changed":           {"密码库版本已变化，已保留表单内容。请核对最新项目后重新编辑。", "The vault version has changed. Your form has been kept. Check the latest item before editing again."},
-	"vault.editor.err_select_writable_collection": {"请先选择可写集合，再新增组织项目。", "Select a writable collection before adding an organization item."},
-	"vault.editor.move_to_trash":                  {"移入回收站", "Move to Trash"},
-	"vault.editor.organization_sync_hint":         {"组织权限以最新同步为准；同步会关闭此表单并清除未保存更改。", "Organization permissions reflect the latest sync. Syncing will close this form and discard unsaved changes."},
-	"vault.editor.remove":                         {"移除", "Remove"},
-	"vault.editor.remove_favorite":                {"取消收藏", "Remove from favorites"},
-	"vault.editor.secret_display_hint":            {"显示与复制使用已保存内容，最多显示 30 秒；剪贴板可被其他应用读取。", "Show and copy use saved values. Values stay visible for up to 30 seconds. Other apps can read the clipboard."},
-	"vault.editor.show_current_code":              {"显示当前验证码", "Show current code"},
-	"vault.editor.show_saved_password":            {"显示已保存密码", "Show saved password"},
-	"vault.editor.status_saving":                  {"正在保存修改…", "Saving changes…"},
-	"vault.editor.status_submitted":               {"修改已提交，正在同步核对…", "Changes submitted. Syncing to verify…"},
-	"vault.editor.sync_latest":                    {"同步最新版本", "Sync latest version"},
-	"vault.editor.sync_verify":                    {"同步核对", "Sync and verify"},
-	"vault.editor.uncertain_hint":                 {"请先同步核对服务器结果，当前表单不会重复提交。", "Sync to check the server result first. This form will not be submitted again."},
-	"vault.editor.website_number":                 {"网站 %d", "Website %d"},
+var vaultFolder = map[string]text{
+	"vault.folder.add_title":            {"新建文件夹", "New folder"},
+	"vault.folder.cancel_delete":        {"取消删除", "Cancel deletion"},
+	"vault.folder.close":                {"关闭文件夹编辑", "Close folder editor"},
+	"vault.folder.confirm_delete":       {"确认删除文件夹", "Confirm folder deletion"},
+	"vault.folder.confirm_delete_hint":  {"删除文件夹后，项目会变为无文件夹，项目本身不会删除。确认继续？", "Deleting this folder moves its items to No folder. The items themselves are not deleted. Continue?"},
+	"vault.folder.delete":               {"删除文件夹", "Delete folder"},
+	"vault.folder.err_revision_changed": {"密码库版本已变化，文件夹表单已保留。请核对最新状态后重新编辑。", "The vault version has changed. Your folder form has been kept. Check the latest state before editing again."},
+	"vault.folder.manage_title":         {"管理文件夹", "Manage folder"},
+	"vault.folder.name":                 {"文件夹名称", "Folder name"},
+	"vault.folder.save":                 {"保存文件夹", "Save folder"},
+	"vault.folder.status_saving":        {"正在保存文件夹…", "Saving folder…"},
+	"vault.folder.status_submitted":     {"文件夹修改已提交，正在同步核对…", "Folder changes submitted. Syncing to verify…"},
+	"vault.folder.uncertain_hint":       {"请先同步核对结果。此表单不会再次提交。", "Sync to verify the result first. This form will not be submitted again."},
 }
 
-var vaultCompare = map[string]text{
-	"vault.compare.add_row":                {"作为独立新增行", "Add as a separate row"},
-	"vault.compare.back_keep_draft":        {"返回，保留原草稿", "Back; keep original draft"},
-	"vault.compare.both_changed":           {"%s：双方均已改", "%s: changed on both sides"},
-	"vault.compare.description":            {"默认隐藏秘密内容，可经认证短时显示逐行对照。默认采用远端值；选中的本地改动会重新应用到最新项目，其他内容保持最新版本。", "Secrets are hidden by default. Authenticate to briefly show a row-by-row comparison. Remote values are used by default. Selected local changes are reapplied to the latest item; all other content keeps the latest version."},
-	"vault.compare.draft_preserved_hint":   {"草稿已保留。先同步核实结果，再比较改动；不会自动重试。秘密比较仅显示是否更改。", "Your draft has been kept. Sync to verify the result, then compare changes. There is no automatic retry. Secret comparisons only indicate whether values changed."},
-	"vault.compare.err_expired":            {"比较版本已失效，请重新同步和比较：%s", "The comparison is out of date. Sync and compare again: %s"},
-	"vault.compare.err_unavailable":        {"暂时无法比较：%s 项目已删除、归属、密钥或权限变化时，请取消草稿并重新打开最新项目。", "Cannot compare right now: %s If the item was deleted, or its ownership, key, or permissions changed, cancel the draft and reopen the latest item."},
-	"vault.compare.hide_rows":              {"隐藏逐行内容", "Hide row contents"},
-	"vault.compare.item_content":           {"项目内容", "Item content"},
-	"vault.compare.keep_remote_row":        {"保留远端，不应用此本地行", "Keep remote; skip this local row"},
-	"vault.compare.local":                  {"本地", "Local"},
-	"vault.compare.local_changed":          {"%s：本地已改；远端未改", "%s: changed locally; unchanged remotely"},
-	"vault.compare.local_row":              {"本地 · %s", "Local · %s"},
-	"vault.compare.local_selected":         {"✓ 采用我的修改（点击改用远端）", "✓ Use my changes (click to use remote)"},
-	"vault.compare.match_remote_row":       {"明确对应远端第 %d 行", "Match remote row %d"},
-	"vault.compare.no_changes":             {"未发现可编辑字段的差异，可以采用远端版本。", "No differences found in editable fields. You can use the remote version."},
-	"vault.compare.password_history":       {"密码历史（仅删除原先观察到的记录）", "Password history (delete only previously observed entries)"},
-	"vault.compare.reapply_selections":     {"按以上选择重新应用到草稿", "Reapply selections to draft"},
-	"vault.compare.remote":                 {"远端", "Remote"},
-	"vault.compare.remote_changed":         {"%s：本地未改；远端已改", "%s: unchanged locally; changed remotely"},
-	"vault.compare.remote_row":             {"远端 · %s", "Remote · %s"},
-	"vault.compare.reveal_rows":            {"经认证显示本地与远端逐行内容（30 秒）", "Authenticate to show local and remote rows (30 seconds)"},
-	"vault.compare.row_details":            {"%s第 %d 行 · %s · %s", "%s row %d · %s · %s"},
-	"vault.compare.row_extensions_hint":    {"此行含未显示的扩展；匹配时会保留远端扩展，冲突不会静默覆盖。", "This row has extensions that are not shown. Matching preserves remote extensions; conflicts will not be silently overwritten."},
-	"vault.compare.row_matching_hint":      {"列表没有固定行 ID。逐行明确选择对应关系；未选择的远端行及其扩展始终保留。点击选择按钮循环：保留远端、作为新增、对应远端各行。删除请继续后在新表单中确认。", "Lists have no stable row IDs. Choose each row's correspondence explicitly. Unselected remote rows and their extensions are always kept. Click to cycle through keeping the remote row, adding a new row, and matching each remote row. To delete rows, continue and confirm in the new form."},
-	"vault.compare.same_value":             {"%s（双方当前值相同）", "%s (current values match on both sides)"},
-	"vault.compare.status_applied":         {"已采用最新版本并保留所选修改，请检查表单后明确保存。", "The latest version is now in use with your selected changes kept. Review the form and save explicitly."},
-	"vault.compare.status_review_required": {"请核对双方改动，明确选择要重新应用的字段；继续后还需要再次保存。", "Review both sets of changes and select the fields to reapply. You will still need to save after continuing."},
-	"vault.compare.title":                  {"比较本地与远端改动", "Compare local and remote changes"},
-	"vault.compare.uncertain_hint":         {"上次写入结果未知。下表是同步核实后的状态；若远端已包含你的更改，请采用远端版本，避免重复提交。", "The previous write result is unknown. The state below was verified by syncing. If the remote version already includes your changes, use it to avoid submitting them again."},
-	"vault.compare.use_local":              {"采用我的修改", "Use my changes"},
-	"vault.compare.use_remote":             {"采用远端版本，放弃本地修改", "Use remote; discard local changes"},
-	"vault.compare.version_conflict_hint":  {"服务器按整秒差值大于 1 检测旧版本（不足两秒可能不拒绝），无法保证比较后没有其他客户端再次修改。保存若再次冲突，会保留草稿供重新比较。", "The server detects stale versions when the difference in whole seconds exceeds 1 (differences under two seconds may be accepted). Another client may change the item after comparison. If saving conflicts again, your draft will be kept for another comparison."},
-	"vault.compare.websites":               {"网站及匹配规则", "Websites and match rules"},
+var vaultHistory = map[string]text{
+	"vault.history.clear":              {"清除密码历史", "Clear password history"},
+	"vault.history.confirm_clear":      {"确认清除历史", "Confirm history deletion"},
+	"vault.history.confirm_clear_hint": {"确认清除全部密码历史？仅在保存项目后提交；同时修改密码仍会记录本次替换的旧密码。", "Clear all password history? This takes effect only when you save the item. If you also change the password, the password being replaced will still be recorded."},
+	"vault.history.hide":               {"隐藏密码历史", "Hide password history"},
+	"vault.history.keep":               {"保留历史", "Keep history"},
+	"vault.history.show_saved":         {"显示已保存密码历史明文（%d）", "Show saved password history in plaintext (%d)"},
 }
 
 var vaultShareRecovery = map[string]text{
@@ -168,105 +260,12 @@ var vaultShareRecovery = map[string]text{
 	"vault.share_recovery.title":                  {"共享迁移恢复核对", "Verify sharing migration recovery"},
 }
 
-var vaultCopy = map[string]text{
-	"vault.copy.confirm_copy":      {"将项目复制为独立条目，原项目不变。副本保留文件夹、收藏、密码历史和通行密钥数据，恢复为未归档状态。含附件时请先保存草稿；验证源文件并创建副本后，还需逐文件恢复和核验才算完成。未知扩展不会被默默丢弃。", "Create an independent copy without changing the original item. The copy keeps its folder, favorite status, password history, and passkey data, and is unarchived. For items with attachments, save the draft first. After verifying the source files and creating the copy, restore and verify each file to finish. Unknown extensions will not be silently discarded."},
-	"vault.copy.create_item":       {"复制为新项目", "Copy as new item"},
-	"vault.copy.err_unsaved_draft": {"复制含附件项目之前，请先保存草稿；完整复制使用已保存版本。", "Save your draft before copying an item with attachments. The complete copy uses the saved version."},
-	"vault.copy.status_incomplete": {"副本尚未完成：请逐文件恢复并核验。源项目及其附件保留；创建结果未知时先同步核对目标编号，勿再次创建。", "The copy is incomplete. Restore and verify each file. The source item and its attachments are kept. If creation has an unknown result, sync and check the target ID first; do not create another copy."},
-}
-
 var vaultUri = map[string]text{
 	"vault.uri.autofill_hint":       {"起始部分仅在系统提供完整网址时按原字符串匹配，不进入快捷建议；正则表达式会保留，但不用于当前系统填充。", "Starts with matches the original string only when the system provides a full URL, and is excluded from quick suggestions. Regular expressions are preserved but are not used by the current system AutoFill implementation."},
 	"vault.uri.base_domain":         {"基本域名", "Base domain"},
-	"vault.uri.default":             {"默认", "Default"},
 	"vault.uri.default_policy_hint": {"当前默认：%s；保留默认会随组织策略更新。显式规则保持不变。", "Current default: %s. Keeping Default follows organization policy updates. Explicit rules stay unchanged."},
-	"vault.uri.exact":               {"完全匹配", "Exact"},
-	"vault.uri.host":                {"主机", "Host"},
 	"vault.uri.match_label":         {"匹配方式：%s", "Match detection: %s"},
 	"vault.uri.never":               {"从不填充", "Never"},
-	"vault.uri.regular_expression":  {"正则表达式", "Regular expression"},
 	"vault.uri.starts_with":         {"起始部分", "Starts with"},
 	"vault.uri.unknown":             {"未知策略（保留）", "Unknown match rule (preserved)"},
-}
-
-var vaultHistory = map[string]text{
-	"vault.history.clear":              {"清除密码历史", "Clear password history"},
-	"vault.history.confirm_clear":      {"确认清除历史", "Confirm history deletion"},
-	"vault.history.confirm_clear_hint": {"确认清除全部密码历史？仅在保存项目后提交；同时修改密码仍会记录本次替换的旧密码。", "Clear all password history? This takes effect only when you save the item. If you also change the password, the password being replaced will still be recorded."},
-	"vault.history.hide":               {"隐藏密码历史", "Hide password history"},
-	"vault.history.keep":               {"保留历史", "Keep history"},
-	"vault.history.show_saved":         {"显示已保存密码历史明文（%d）", "Show saved password history in plaintext (%d)"},
-}
-
-var vaultAttachment = map[string]text{
-	"vault.attachment.cancel":                            {"取消附件操作", "Cancel attachment operation"},
-	"vault.attachment.confirm_delete":                    {"确认永久删除附件", "Confirm permanent attachment deletion"},
-	"vault.attachment.confirm_delete_hint":               {"永久删除此附件？此操作无法撤销。", "Permanently delete this attachment? This cannot be undone."},
-	"vault.attachment.delete":                            {"删除附件…", "Delete attachment…"},
-	"vault.attachment.description":                       {"文件单独加密传输，最大 512 MiB。下载会保存为新的明文文件，不覆盖已有文件；当前需要联网。上传和删除前请先保存项目草稿。", "Files are encrypted separately for transfer, up to 512 MiB. Downloads are saved as new plaintext files without overwriting existing files. An internet connection is currently required. Save the item draft before uploading or deleting."},
-	"vault.attachment.download":                          {"下载并另存为…", "Download and save as…"},
-	"vault.attachment.empty":                             {"此项目没有附件。", "This item has no attachments."},
-	"vault.attachment.encrypted_size":                    {"加密大小：%d 字节", "Encrypted size: %d bytes"},
-	"vault.attachment.err_unsaved_draft":                 {"请先保存项目更改，再上传或删除附件。", "Save item changes before uploading or deleting attachments."},
-	"vault.attachment.err_verify_list":                   {"%s 请同步核对附件列表，不要重复提交。", "%s Sync to verify the attachment list. Do not submit again."},
-	"vault.attachment.keep":                              {"保留附件", "Keep attachment"},
-	"vault.attachment.migration.cancel":                  {"取消附件迁移", "Cancel attachment migration"},
-	"vault.attachment.migration.confirm_copy":            {"确认创建所选旧附件的独立加密副本（保留原件）", "Confirm separately encrypted copy (keep original)"},
-	"vault.attachment.migration.confirm_delete_original": {"确认核验所选两个编号并永久删除旧附件", "Verify both IDs and delete original permanently"},
-	"vault.attachment.migration.description":             {"旧附件迁移：先创建独立加密副本，同步后重新打开此处；明确选中旧、新两个编号，服务器下载校验内容一致后才删除旧件。项目编号保留，附件编号改变。全部完成后再共享。取消、失败及重开后请先同步核对，不要重复创建。临时文件受权限保护，磁盘不承诺安全擦除。", "Legacy attachment migration: create a separately encrypted copy, sync, then reopen this view. Select both the old and new IDs. The old attachment is deleted only after downloads from the server are verified to have matching content. The item ID stays the same; attachment IDs change. Complete all migrations before sharing. After cancellation, failure, or reopening, sync and verify first; do not create duplicates. Temporary files have restricted permissions, but secure erasure from disk is not guaranteed."},
-	"vault.attachment.migration.err_unsaved_draft":       {"请先保存项目更改，再迁移附件。", "Save item changes before migrating attachments."},
-	"vault.attachment.migration.original":                {"原附件 · %s", "Original attachment · %s"},
-	"vault.attachment.migration.prepare":                 {"准备旧附件的安全共享迁移", "Prepare legacy attachments for secure sharing"},
-	"vault.attachment.migration.replacement":             {"独立加密附件 · %s", "Separately encrypted attachment · %s"},
-	"vault.attachment.migration.result":                  {"原编号 %s；替代编号 %s；已确认元数据=%t、上传=%t、核对=%t、内容一致=%t、删除回执=%t。请同步核对后再继续。", "Original ID %s; replacement ID %s; confirmed metadata=%t, upload=%t, reconciliation=%t, matching content=%t, deletion receipt=%t. Sync and verify before continuing."},
-	"vault.attachment.migration.sync_reopen":             {"同步核对，然后重新打开项目", "Sync and verify, then reopen item"},
-	"vault.attachment.refresh":                           {"加载或刷新附件列表", "Load or refresh attachments"},
-	"vault.attachment.result_id":                         {"%s 附件编号：%s", "%s Attachment ID: %s"},
-	"vault.attachment.status_cancel_requested":           {"已请求取消；已经发出的上传或删除仍需同步核对。", "Cancellation requested. Uploads or deletions already sent still require syncing to verify."},
-	"vault.attachment.status_confirmed":                  {"附件操作已确认，正在同步更新密码库。", "Attachment operation confirmed. Syncing to update the vault."},
-	"vault.attachment.status_downloaded":                 {"附件已校验并保存为新的明文文件。", "Attachment verified and saved as a new plaintext file."},
-	"vault.attachment.status_list_verified":              {"附件列表已验证。", "Attachment list verified."},
-	"vault.attachment.status_transferring":               {"正在验证权限并传输附件，请稍候…", "Verifying permissions and transferring the attachment. Please wait…"},
-	"vault.attachment.title":                             {"附件", "Attachment"},
-	"vault.attachment.upload":                            {"选择并上传文件…", "Choose and upload file…"},
-}
-
-var vaultFolder = map[string]text{
-	"vault.folder.add_title":            {"新建文件夹", "New folder"},
-	"vault.folder.cancel_delete":        {"取消删除", "Cancel deletion"},
-	"vault.folder.close":                {"关闭文件夹编辑", "Close folder editor"},
-	"vault.folder.confirm_delete":       {"确认删除文件夹", "Confirm folder deletion"},
-	"vault.folder.confirm_delete_hint":  {"删除文件夹后，项目会变为无文件夹，项目本身不会删除。确认继续？", "Deleting this folder moves its items to No folder. The items themselves are not deleted. Continue?"},
-	"vault.folder.delete":               {"删除文件夹", "Delete folder"},
-	"vault.folder.err_revision_changed": {"密码库版本已变化，文件夹表单已保留。请核对最新状态后重新编辑。", "The vault version has changed. Your folder form has been kept. Check the latest state before editing again."},
-	"vault.folder.manage_title":         {"管理文件夹", "Manage folder"},
-	"vault.folder.name":                 {"文件夹名称", "Folder name"},
-	"vault.folder.save":                 {"保存文件夹", "Save folder"},
-	"vault.folder.status_saving":        {"正在保存文件夹…", "Saving folder…"},
-	"vault.folder.status_submitted":     {"文件夹修改已提交，正在同步核对…", "Folder changes submitted. Syncing to verify…"},
-	"vault.folder.uncertain_hint":       {"请先同步核对结果。此表单不会再次提交。", "Sync to verify the result first. This form will not be submitted again."},
-}
-
-var vaultBulk = map[string]text{
-	"vault.bulk.cancel_confirm":         {"取消批量确认", "Cancel bulk confirmation"},
-	"vault.bulk.close":                  {"关闭批量管理", "Close bulk management"},
-	"vault.bulk.confirm_action":         {"确认执行批量操作", "Confirm bulk action"},
-	"vault.bulk.confirm_action_hint":    {"确认对选中的项目执行操作？", "Apply this action to the selected items?"},
-	"vault.bulk.confirm_delete_hint":    {"永久删除选中的回收站项目及其附件，无法恢复。确认继续？", "Permanently delete the selected items in Trash and their attachments? This cannot be undone."},
-	"vault.bulk.continue":               {"继续批量操作", "Continue bulk action"},
-	"vault.bulk.description":            {"当前仅管理个人项目。请选择项目及操作；永久删除仅允许个人回收站中的项目，需要再次验证的项目请单独处理。", "Only personal items can be managed here. Select items and an action. Permanent deletion is limited to personal items in Trash. Handle items requiring master password re-prompt individually."},
-	"vault.bulk.err_reprompt_required":  {"所选项目需要再次验证主密码，请在单项编辑中完成操作。未发送批量请求。", "A selected item requires master password re-prompt. Complete the action in its item editor. No bulk request was sent."},
-	"vault.bulk.err_revision_changed":   {"密码库版本已变化，请重新选择项目。", "The vault version has changed. Select the items again."},
-	"vault.bulk.err_selection_required": {"请先选择项目。", "Select items first."},
-	"vault.bulk.err_trash_required":     {"永久删除仅允许回收站中的项目。", "Only items in Trash can be permanently deleted."},
-	"vault.bulk.item_matched":           {"当前状态已符合目标", "Current state matches the target"},
-	"vault.bulk.item_unmatched":         {"当前状态未符合目标，请检查后重新选择操作", "Current state does not match the target. Review it before choosing another action"},
-	"vault.bulk.item_unverified":        {"%s：尚未核对", "%s: not yet verified"},
-	"vault.bulk.move_to_folder":         {"移动到文件夹", "Move to folder"},
-	"vault.bulk.status_applying":        {"正在执行批量操作…", "Applying bulk action…"},
-	"vault.bulk.status_syncing":         {"批量操作已结束，正在同步逐项核对（服务器可能只完成部分项目）…", "Bulk action finished. Syncing to verify each item (the server may have completed only some items)…"},
-	"vault.bulk.status_verified":        {"已同步核对 %d 项，其中 %d 项当前状态符合目标。", "Items verified by sync: %d; items currently matching the target: %d."},
-	"vault.bulk.submitted_hint":         {"本批操作不会再次提交。以下为同步后的逐项状态；若尚未核对，请同步后查看。", "This batch will not be submitted again. Individual item states after syncing are shown below. If not yet verified, sync and check again."},
-	"vault.bulk.sync_verify":            {"同步核对批量结果", "Sync and verify batch results"},
-	"vault.bulk.title":                  {"批量管理", "Bulk actions"},
 }

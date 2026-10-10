@@ -312,7 +312,7 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 			}
 		}
 		if p.operation == "enroll" {
-			ui.TextInput(c, &p.password).Label(i18n.T("account.form.current_password")).Password().Disabled(disabled)
+			ui.TextInput(c, &p.password).Label(i18n.T("common.current_master_password")).Password().Disabled(disabled)
 			ui.TextInput(c, &p.otp).Label(i18n.T("account.recovery.protected_email_otp")).Password().Disabled(disabled)
 		}
 		if p.operation == "administrator" {
