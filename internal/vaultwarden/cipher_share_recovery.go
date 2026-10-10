@@ -35,6 +35,39 @@ type cipherShareRecoveryPayload struct {
 	Target   json.RawMessage `json:"target"`
 	ItemKey  string          `json:"itemKey"`
 }
+
+// Share recovery states classify a fresh inspection; they are not recovery-file fields.
+const (
+	ShareRecoveryMissing         = "missing"
+	ShareRecoveryExternalChange  = "external_change"
+	ShareRecoveryOldPersonal     = "old_personal"
+	ShareRecoveryNewOrganization = "new_organization"
+	ShareRecoveryOldWrapping     = "old_wrapping"
+	ShareRecoveryNewWrapping     = "new_wrapping"
+	ShareRecoveryRemoteAdded     = "remote_added"
+)
+
+func ShareRecoveryStateText(state string) string {
+	switch state {
+	case ShareRecoveryMissing:
+		return i18n.T("state.share.missing")
+	case ShareRecoveryExternalChange:
+		return i18n.T("state.share.external_change")
+	case ShareRecoveryOldPersonal:
+		return i18n.T("state.share.old_personal")
+	case ShareRecoveryNewOrganization:
+		return i18n.T("state.share.new_organization")
+	case ShareRecoveryOldWrapping:
+		return i18n.T("state.share.old_wrapping")
+	case ShareRecoveryNewWrapping:
+		return i18n.T("state.share.new_wrapping")
+	case ShareRecoveryRemoteAdded:
+		return i18n.T("state.share.remote_added")
+	default:
+		return state
+	}
+}
+
 type CipherShareRecoveryAttachment struct{ ID, State string }
 type CipherShareRecoveryInspection struct {
 	CipherID, OrganizationID, OperationID, CipherState string
@@ -194,7 +227,7 @@ func shareRecoveryAttachmentSnapshots(object map[string]any) (map[string]map[str
 }
 
 func inspectShareRecovery(payload cipherShareRecoveryPayload, current CipherDocument) (CipherShareRecoveryInspection, error) {
-	result := CipherShareRecoveryInspection{CipherID: payload.CipherID, OrganizationID: payload.OrganizationID, OperationID: payload.OperationID, CipherState: i18n.Key("缺失")}
+	result := CipherShareRecoveryInspection{CipherID: payload.CipherID, OrganizationID: payload.OrganizationID, OperationID: payload.OperationID, CipherState: ShareRecoveryMissing}
 	if len(current.JSON) == 0 {
 		return result, nil
 	}
@@ -210,12 +243,12 @@ func inspectShareRecovery(payload cipherShareRecoveryPayload, current CipherDocu
 	if err != nil {
 		return result, err
 	}
-	result.CipherState = i18n.Key("外部修改")
+	result.CipherState = ShareRecoveryExternalChange
 	if reflect.DeepEqual(shareRecoveryComparable(actual), shareRecoveryComparable(old)) {
-		result.CipherState = i18n.Key("旧个人")
+		result.CipherState = ShareRecoveryOldPersonal
 	}
 	if reflect.DeepEqual(shareRecoveryComparable(actual), shareRecoveryComparable(target)) {
-		result.CipherState = i18n.Key("新组织")
+		result.CipherState = ShareRecoveryNewOrganization
 	}
 	originals, err := shareRecoveryAttachmentSnapshots(old)
 	if err != nil {
@@ -229,29 +262,29 @@ func inspectShareRecovery(payload cipherShareRecoveryPayload, current CipherDocu
 	if err != nil {
 		return result, err
 	}
-	safe := result.CipherState == i18n.Key("旧个人") || result.CipherState == i18n.Key("新组织")
+	safe := result.CipherState == ShareRecoveryOldPersonal || result.CipherState == ShareRecoveryNewOrganization
 	needsRepair := false
 	for id, original := range originals {
-		state := i18n.Key("外部修改")
+		state := ShareRecoveryExternalChange
 		if observed[id] == nil {
-			state = i18n.Key("缺失")
+			state = ShareRecoveryMissing
 		} else if reflect.DeepEqual(observed[id], original) {
-			state = i18n.Key("旧包装")
+			state = ShareRecoveryOldWrapping
 		} else if reflect.DeepEqual(observed[id], desired[id]) {
-			state = i18n.Key("新包装")
+			state = ShareRecoveryNewWrapping
 		}
 		result.Attachments = append(result.Attachments, CipherShareRecoveryAttachment{ID: id, State: state})
-		if state == i18n.Key("外部修改") || state == i18n.Key("缺失") {
+		if state == ShareRecoveryExternalChange || state == ShareRecoveryMissing {
 			safe = false
 		}
-		if (result.CipherState == i18n.Key("旧个人") && state == i18n.Key("新包装")) || (result.CipherState == i18n.Key("新组织") && state == i18n.Key("旧包装")) {
+		if (result.CipherState == ShareRecoveryOldPersonal && state == ShareRecoveryNewWrapping) || (result.CipherState == ShareRecoveryNewOrganization && state == ShareRecoveryOldWrapping) {
 			needsRepair = true
 		}
 	}
 	for id := range observed {
 		if originals[id] == nil {
 			safe = false
-			result.Attachments = append(result.Attachments, CipherShareRecoveryAttachment{ID: id, State: i18n.Key("远端新增")})
+			result.Attachments = append(result.Attachments, CipherShareRecoveryAttachment{ID: id, State: ShareRecoveryRemoteAdded})
 		}
 	}
 	result.CanRepair = safe && needsRepair
@@ -374,7 +407,7 @@ func (s *Session) RepairCipherShareRecovery(ctx context.Context, vault *VaultDat
 		return ErrConflict
 	}
 	desiredRaw := payload.Original
-	if inspection.CipherState == i18n.Key("新组织") {
+	if inspection.CipherState == ShareRecoveryNewOrganization {
 		desiredRaw = payload.Target
 	}
 	desired, err := documentObject(CipherDocument{JSON: desiredRaw})

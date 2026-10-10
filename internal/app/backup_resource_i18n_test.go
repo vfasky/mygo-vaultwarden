@@ -16,7 +16,7 @@ func TestBackupResourceRestoreEnglishKeepsVerifiedState(t *testing.T) {
 	resources := &backupResourceEditor{
 		rows: []organization.ResourceRow{{
 			Resource: vaultwarden.BackupResource{FileName: "example.txt", CipherID: "source", AttachmentID: "attachment"},
-			Target:   "target", State: i18n.Key("已核验"),
+			Target:   "target", State: organization.ResourceVerified,
 		}},
 	}
 	a := &app{backupEditor: &backupEditor{resources: resources}}
@@ -28,7 +28,7 @@ func TestBackupResourceRestoreEnglishKeepsVerifiedState(t *testing.T) {
 	if !view.HasText("Confirm one upload to this target") {
 		t.Fatal("resource action was not rendered in English")
 	}
-	if resources.rows[0].State != "已核验" {
+	if resources.rows[0].State != organization.ResourceVerified {
 		t.Fatal("rendering changed the resource state")
 	}
 	if target, ready := resourceTrashTarget(resources, "source"); target != "target" || !ready {

@@ -127,9 +127,9 @@ func (a *app) cipherShareRecoveryView(c *ui.Context, e *backupEditor) {
 				a.runCipherShareRecovery(false)
 			}
 			if r.inspected {
-				ui.Text(c, i18n.Tf("当前项目：%s · %s", i18n.T(r.inspection.CipherState), r.inspection.CipherID))
+				ui.Text(c, i18n.Tf("当前项目：%s · %s", vaultwarden.ShareRecoveryStateText(r.inspection.CipherState), r.inspection.CipherID))
 				for _, attachment := range r.inspection.Attachments {
-					ui.Text(c, attachment.ID+"："+i18n.T(attachment.State)).FontSize(12)
+					ui.Text(c, attachment.ID+"："+vaultwarden.ShareRecoveryStateText(attachment.State)).FontSize(12)
 				}
 				if r.attempted {
 					ui.Text(c, i18n.T("本轮修复已尝试，请同步并再次核对。结果未知时不重复发请求；继续修复需重新打开文件、认证和确认。"))

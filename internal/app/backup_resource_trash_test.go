@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
 )
 
 func preparedResourceTrash(t *testing.T) *resourceControllerFixture {
@@ -17,7 +18,7 @@ func preparedResourceTrash(t *testing.T) *resourceControllerFixture {
 	for i := range m.rows {
 		f.file(i, false)
 		f.file(i, true)
-		if m.rows[i].State != "已核验" {
+		if m.rows[i].State != organization.ResourceVerified {
 			t.Fatal(f.a.status)
 		}
 	}
@@ -86,7 +87,7 @@ func TestResourceControllerTrashPreflightCanBeExplicitlyRetried(t *testing.T) {
 				t.Fatal("accepted deleted state not reconciled")
 			}
 			for _, row := range m.rows {
-				if row.Target != "card-1" || row.AttachmentID == "" || row.State != "已核验" || row.Resource.CipherID != "card-1" {
+				if row.Target != "card-1" || row.AttachmentID == "" || row.State != organization.ResourceVerified || row.Resource.CipherID != "card-1" {
 					t.Fatalf("lost recovery evidence: %+v", row)
 				}
 			}

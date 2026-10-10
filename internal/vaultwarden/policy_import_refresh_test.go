@@ -74,7 +74,7 @@ func TestPolicyImportRefreshStopsAfterKnownPartialSuccess(t *testing.T) {
 	if !errors.Is(err, ErrExpired) {
 		t.Fatal("refresh did not invalidate import", err)
 	}
-	if len(result.Entries) != 2 || result.Entries[0].ID != "created-folder" || result.Entries[0].State != "已创建" || result.Entries[1].ID != "" || result.Entries[1].State != "已停止，请同步核对" {
+	if len(result.Entries) != 2 || result.Entries[0].ID != "created-folder" || result.Entries[0].State != ImportStateCreated || result.Entries[1].ID != "" || result.Entries[1].State != ImportStateStopped {
 		t.Fatal("lost known partial result", result)
 	}
 	if reads.Load() != 1 || folders.Load() != 1 || ciphers.Load() != 0 || refreshes.Load() != 1 || checkpoints.Load() != 1 || s.writePolicies != nil {

@@ -72,7 +72,7 @@ type cipherEditor struct {
 }
 
 // Type names also form organization selector keys; translate only for display.
-var cipherTypeNames = []string{"", i18n.Key("登录"), i18n.Key("安全笔记"), i18n.Key("支付卡"), i18n.Key("身份"), i18n.Key("SSH 密钥"), i18n.Key("银行账户"), i18n.Key("驾驶证"), i18n.Key("护照")}
+var cipherTypeNames = []string{"", "itemtype.login", "itemtype.note", "itemtype.card", "itemtype.identity", "itemtype.ssh_key", "itemtype.bank", "itemtype.license", "itemtype.passport"}
 var editorSpecs = map[int][]editorField{
 	1: {{key: "username", label: i18n.T("用户名")}, {key: "password", label: i18n.T("密码"), secret: true}, {key: "totp", label: i18n.T("验证码密钥"), secret: true}},
 	2: {},

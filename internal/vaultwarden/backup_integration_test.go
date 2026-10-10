@@ -93,7 +93,7 @@ func testLiveBackups(t *testing.T, ctx context.Context, s *Session, scope Scope,
 	}
 	imported := []string{}
 	for _, entry := range result.Entries {
-		if entry.Kind == "项目" {
+		if entry.Kind == ImportKindItem {
 			imported = append(imported, entry.ID)
 		}
 	}

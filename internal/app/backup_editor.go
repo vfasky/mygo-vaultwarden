@@ -163,7 +163,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 			} else {
 				ui.Text(c, i18n.T("本次导入已提交，不可再次提交。请按下面的结果核对密码库；结果未知的项目需人工核对，勿重复导入。")).MaxLines(4)
 				for _, r := range e.results {
-					ui.Text(c, i18n.T(r.Kind)+" · "+r.Name+"："+i18n.T(r.State)).MaxLines(3).FontSize(12)
+					ui.Text(c, vaultwarden.ImportKindText(r.Kind)+" · "+r.Name+"："+vaultwarden.ImportStateText(r.State)).MaxLines(3).FontSize(12)
 				}
 				a.backupResourceRestoreView(c, e)
 				if kit.Action(c, i18n.T("同步核对导入结果"), "sync", false, busy).Clicked() {
@@ -477,7 +477,7 @@ func (a *app) reconcileImport(continuations ...*backupContinuation) {
 			continue
 		}
 		found := ids[r.ID]
-		if r.Kind == i18n.Key("文件夹") {
+		if r.Kind == vaultwarden.ImportKindFolder {
 			found = folders[r.ID]
 		}
 		if found {

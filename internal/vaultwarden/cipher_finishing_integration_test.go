@@ -280,7 +280,7 @@ func TestLiveVaultFinishing(t *testing.T) {
 	defer clear(recovery)
 	vault = syncVault()
 	inspection, err := owner.InspectCipherShareRecovery(ctx, vault, recovery, nil, nil)
-	if err == nil && inspection.CipherState != "新组织" {
+	if err == nil && inspection.CipherState != ShareRecoveryNewOrganization {
 		payload, e := decodeCipherShareRecovery(recovery, vault.Scope, owner.key)
 		if e == nil {
 			expected, _ := documentObject(CipherDocument{JSON: payload.Target})
@@ -305,7 +305,7 @@ func TestLiveVaultFinishing(t *testing.T) {
 			clear(payload.Target)
 		}
 	}
-	if err != nil || inspection.CipherState != "新组织" || inspection.CanRepair {
+	if err != nil || inspection.CipherState != ShareRecoveryNewOrganization || inspection.CanRepair {
 		t.Fatal("real share classification", inspection, err)
 	}
 	orgData, err := owner.organizationVaultLocked(vault)

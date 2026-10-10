@@ -111,7 +111,7 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 			json.Unmarshal(created.JSON, &metadata)
 			if metadata.ID != "" {
 				resources.targets[id] = metadata.ID
-				editor.results = []vaultwarden.ImportEntry{{Kind: i18n.Key("项目"), Name: e.fields.Name, ID: metadata.ID, SourceID: id, State: i18n.Key("副本元数据已创建，附件待恢复核验")}}
+				editor.results = []vaultwarden.ImportEntry{{Kind: vaultwarden.ImportKindItem, Name: e.fields.Name, ID: metadata.ID, SourceID: id, State: vaultwarden.ImportStateMetadataCopied}}
 			}
 			a.editor = nil
 			a.backupEditor = editor

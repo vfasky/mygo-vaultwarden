@@ -30,7 +30,7 @@ type backupResourceEditor struct {
 func resourceEditor(plan *vaultwarden.ResourceImportPlan) *backupResourceEditor {
 	e := &backupResourceEditor{plan: plan, targets: map[string]string{}, finalized: map[string]bool{}, trashPending: map[string]bool{}, trash: plan.DeferredTrashIDs()}
 	for _, resource := range plan.Resources() {
-		e.rows = append(e.rows, organization.ResourceRow{Resource: resource, State: i18n.Key("未执行")})
+		e.rows = append(e.rows, organization.ResourceRow{Resource: resource, State: organization.ResourceNotStarted})
 	}
 	return e
 }
@@ -224,16 +224,16 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 		if row.Target == "" {
 			row.Target = m.targets[row.Resource.CipherID]
 		}
-		ui.Text(c, i18n.Tf("%s · 来源 %s/%s · %s", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, i18n.T(row.State))).MaxLines(3)
+		ui.Text(c, i18n.Tf("%s · 来源 %s/%s · %s", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, organization.ResourceStateText(row.State))).MaxLines(3)
 		if row.Problem != "" {
 			ui.Text(c, row.Problem).MaxLines(3)
 		}
-		ui.TextInput(c, &row.Target).Label(i18n.T("明确选择的目标项目编号")).Disabled(busy || row.State == i18n.Key("已核验"))
-		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("核对的目标附件编号（上传回执或同步后填写）")).Disabled(busy || row.State == i18n.Key("已核验"))
-		if kit.Action(c, i18n.T("确认向此目标上传一次"), "", false, busy || row.Target == "" || row.State != i18n.Key("未执行")).Clicked() {
+		ui.TextInput(c, &row.Target).Label(i18n.T("明确选择的目标项目编号")).Disabled(busy || row.State == organization.ResourceVerified)
+		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("核对的目标附件编号（上传回执或同步后填写）")).Disabled(busy || row.State == organization.ResourceVerified)
+		if kit.Action(c, i18n.T("确认向此目标上传一次"), "", false, busy || row.Target == "" || row.State != organization.ResourceNotStarted).Clicked() {
 			a.runResourceRestore(i, false, "")
 		}
-		if kit.Action(c, i18n.T("下载并核验此附件的文件名、长度和完整内容"), "", false, busy || row.Target == "" || row.AttachmentID == "" || row.State == i18n.Key("已核验")).Clicked() {
+		if kit.Action(c, i18n.T("下载并核验此附件的文件名、长度和完整内容"), "", false, busy || row.Target == "" || row.AttachmentID == "" || row.State == organization.ResourceVerified).Clicked() {
 			a.runResourceRestore(i, true, "")
 		}
 	}
@@ -263,7 +263,7 @@ func resourceTrashTarget(m *backupResourceEditor, source string) (string, bool) 
 	target := ""
 	for _, row := range m.rows {
 		if row.Resource.CipherID == source {
-			if row.State != i18n.Key("已核验") || (target != "" && target != row.Target) {
+			if row.State != organization.ResourceVerified || (target != "" && target != row.Target) {
 				return "", false
 			}
 			target = row.Target
@@ -302,7 +302,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 		a.status = i18n.T("请先明确目标项目及待核验的附件编号；不会自动重发上传。")
 		return
 	}
-	if trashSource == "" && ((!verify && m.rows[index].State != i18n.Key("未执行")) || m.rows[index].State == i18n.Key("已核验")) {
+	if trashSource == "" && ((!verify && m.rows[index].State != organization.ResourceNotStarted) || m.rows[index].State == organization.ResourceVerified) {
 		a.status = i18n.T("此文件已执行过操作，请同步后按明确附件编号核验；不会重复上传。")
 		return
 	}
@@ -400,10 +400,10 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 				m.finalized[trashSource] = false // acknowledgement alone is not reconciliation
 			} else if verify {
 				if err == nil {
-					m.rows[index].State = i18n.Key("已核验")
+					m.rows[index].State = organization.ResourceVerified
 				}
 			} else if attempted {
-				m.rows[index].State = i18n.Key("待同步核对")
+				m.rows[index].State = organization.ResourcePendingSync
 				m.rows[index].AttachmentID = result.AttachmentID
 			}
 			a.status = i18n.T("附件操作结束；请同步核对，未知结果不会自动重发。")

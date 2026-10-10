@@ -41,7 +41,7 @@ type ResourceRestorePanel struct {
 func NewResourceRestorePanel(plan *vaultwarden.ResourceImportPlan, targets map[string]string, copyOnly bool, callbacks ResourceCallbacks) *ResourceRestorePanel {
 	panel := &ResourceRestorePanel{plan: plan, Callbacks: callbacks}
 	for _, resource := range plan.Resources() {
-		panel.rows = append(panel.rows, ResourceRow{Resource: resource, Target: targets[resource.CipherID], State: i18n.Key("未执行")})
+		panel.rows = append(panel.rows, ResourceRow{Resource: resource, Target: targets[resource.CipherID], State: ResourceNotStarted})
 	}
 	if !copyOnly {
 		for _, state := range plan.ItemStates() {
@@ -108,7 +108,7 @@ func (p *ResourceRestorePanel) Run(work func(context.Context) (func(), error)) {
 }
 func (p *ResourceRestorePanel) filesVerified(source, target string) bool {
 	for _, row := range p.rows {
-		if row.Resource.CipherID == source && (row.State != i18n.Key("已核验") || row.Target != target) {
+		if row.Resource.CipherID == source && (row.State != ResourceVerified || row.Target != target) {
 			return false
 		}
 	}
@@ -123,10 +123,10 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 	busy := p.running
 	for i := range p.rows {
 		row := &p.rows[i]
-		ui.Text(c, i18n.Tf("%s · 来源 %s/%s · %s", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, i18n.T(row.State))).MaxLines(3)
-		ui.TextInput(c, &row.Target).Label(i18n.T("已创建或明确选择的目标项目编号")).Disabled(busy || row.State == i18n.Key("已核验"))
-		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("待核对的目标附件编号")).Disabled(busy || row.State == i18n.Key("已核验"))
-		if kit.Action(c, i18n.T("确认向目标上传一次（保留源文件）"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.State != i18n.Key("未执行") || p.Callbacks.File == nil).Key(fmt.Sprintf("org-resource-upload-%d", i)).Clicked() {
+		ui.Text(c, i18n.Tf("%s · 来源 %s/%s · %s", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, ResourceStateText(row.State))).MaxLines(3)
+		ui.TextInput(c, &row.Target).Label(i18n.T("已创建或明确选择的目标项目编号")).Disabled(busy || row.State == ResourceVerified)
+		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("待核对的目标附件编号")).Disabled(busy || row.State == ResourceVerified)
+		if kit.Action(c, i18n.T("确认向目标上传一次（保留源文件）"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.State != ResourceNotStarted || p.Callbacks.File == nil).Key(fmt.Sprintf("org-resource-upload-%d", i)).Clicked() {
 			index, target := i, row.Target
 			plan, execute := p.plan, p.Callbacks.File
 			p.Run(func(ctx context.Context) (func(), error) {
@@ -137,19 +137,19 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 						return
 					}
 					p.rows[index].AttachmentID = result.AttachmentID
-					p.rows[index].State = i18n.Key("待核对")
+					p.rows[index].State = ResourcePendingVerify
 					p.NeedsRefresh = true
 				}, err
 			})
 		}
-		if kit.Action(c, i18n.T("下载并核验所选附件"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.AttachmentID == "" || row.State == i18n.Key("已核验") || p.Callbacks.File == nil).Key(fmt.Sprintf("org-resource-verify-%d", i)).Clicked() {
+		if kit.Action(c, i18n.T("下载并核验所选附件"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.AttachmentID == "" || row.State == ResourceVerified || p.Callbacks.File == nil).Key(fmt.Sprintf("org-resource-verify-%d", i)).Clicked() {
 			index, target, id := i, row.Target, row.AttachmentID
 			plan, execute := p.plan, p.Callbacks.File
 			p.Run(func(ctx context.Context) (func(), error) {
 				_, err := execute(ctx, plan, index, target, id, true)
 				return func() {
 					if err == nil {
-						p.rows[index].State = i18n.Key("已核验")
+						p.rows[index].State = ResourceVerified
 					}
 				}, err
 			})
@@ -169,7 +169,7 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 				continue
 			}
 			labels := map[string]string{"folder": i18n.T("文件夹映射"), "archive": i18n.T("归档状态"), "trash": i18n.T("回收站状态")}
-			ui.Text(c, fmt.Sprintf("%s: %s", labels[step], i18n.T(row.steps[step])))
+			ui.Text(c, fmt.Sprintf("%s: %s", labels[step], ResourceStateText(row.steps[step])))
 			disabled := busy || p.NeedsRefresh || !p.filesVerified(row.source.SourceID, row.target) || p.Callbacks.State == nil || (step == "folder" && row.folder == "")
 			if kit.Action(c, i18n.Tf("确认恢复%s", labels[step]), "", false, disabled || row.steps[step] != "").Clicked() {
 				index, source, target, folder, operation := i, row.source, row.target, row.folder, step
@@ -206,19 +206,19 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 						if errors.As(err, &preparation) {
 							return
 						}
-						p.states[index].steps[operation] = i18n.Key("待同步核对")
+						p.states[index].steps[operation] = ResourcePendingSync
 						p.NeedsRefresh = true
 					}, err
 				})
 			}
-			if kit.Action(c, i18n.Tf("核对%s", labels[step]), "", false, disabled || row.steps[step] == i18n.Key("已核验")).Clicked() {
+			if kit.Action(c, i18n.Tf("核对%s", labels[step]), "", false, disabled || row.steps[step] == ResourceVerified).Clicked() {
 				index, source, target, folder, operation := i, row.source, row.target, row.folder, step
 				execute := p.Callbacks.State
 				p.Run(func(ctx context.Context) (func(), error) {
 					err := execute(ctx, source, target, folder, "check-"+operation)
 					return func() {
 						if err == nil {
-							p.states[index].steps[operation] = i18n.Key("已核验")
+							p.states[index].steps[operation] = ResourceVerified
 						}
 					}, err
 				})
