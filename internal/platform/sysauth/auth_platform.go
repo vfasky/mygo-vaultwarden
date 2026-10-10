@@ -15,8 +15,8 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-var errAuthUnavailable = errors.New(i18n.T("系统认证不可用；WebAuthn 需要受签名 associated domains 与服务器 AASA 支持，请保留服务器其它认证方法"))
-var errAuthFailed = errors.New(i18n.T("系统认证已取消或失败"))
+var errAuthUnavailable = errors.New(i18n.T("sysauth.err_unavailable"))
+var errAuthFailed = errors.New(i18n.T("sysauth.err_failed"))
 
 const authMaxBytes = 131072
 

@@ -83,7 +83,7 @@ func (s *Session) CipherAttachmentMigrationInfo(vault *VaultData, id string, gra
 		}
 		name, ok := row["fileName"].(string)
 		if !ok || name == "" || len(name) > 4096 || !utf8.ValidString(name) || strings.ContainsAny(name, "/\\\x00\r\n") {
-			return nil, fmt.Errorf(i18n.T("附件 %s 的文件名包含当前上传接口不支持的路径、控制字符或长度，无法无损迁移：%w"), attachmentID, ErrUnsupportedEdit)
+			return nil, fmt.Errorf(i18n.T("server.attachment.err_migration_filename"), attachmentID, ErrUnsupportedEdit)
 		}
 		wrapped, _ := row["key"].(string)
 		if row["key"] != nil && row["key"] != "" && wrapped == "" {

@@ -146,7 +146,7 @@ func (s *Session) backupResourceDescriptions(vault *VaultData, ids []string, gra
 			name, ok := row["fileName"].(string)
 			if !ok || name == "" || len(name) > 4096 || strings.ContainsAny(name, "/\\\x00\r\n") {
 				clear(key)
-				return nil, fmt.Errorf(i18n.T("附件 %s 的文件名无法通过当前上传接口无损恢复，请保留原件并明确处理文件名：%w"), id, ErrUnsupportedEdit)
+				return nil, fmt.Errorf(i18n.T("server.backup.err_attachment_filename"), id, ErrUnsupportedEdit)
 			}
 			result = append(result, BackupResource{CipherID: meta.ID, AttachmentID: id, FileName: name, Path: fmt.Sprintf("files/%06d.bin", len(result))})
 			if len(result) > 10000 {

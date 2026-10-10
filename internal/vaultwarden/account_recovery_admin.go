@@ -174,7 +174,7 @@ func (s *Session) PrepareAdministratorRecovery(ctx context.Context, vault *Vault
 			return nil, err
 		}
 	}
-	impact := i18n.T("管理员恢复会通知目标用户，并使旧授权失效；重置密码后必须重新登录、完整同步和核验。重置 MFA 可能启用邮件回退或触发组织策略，最终由服务器校验。HTTP 失败也可能部分成功，不能重试。")
+	impact := i18n.T("server.recovery.admin_impact")
 	p, err := s.recoveryPlanLocked("administrator-recovery", "PUT", "/api/organizations/"+orgID+"/users/"+memberID+"/recover-account", memberID, target.UserID, impact, payload)
 	if err != nil {
 		return nil, err

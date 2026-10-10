@@ -55,14 +55,14 @@ func (s *Session) WithCipherComparisonRows(vault *VaultData, revision string, pl
 			value := CipherRowPreview{Index: i}
 			known := map[string]bool{"name": true, "value": true, "type": true, "linkedId": true}
 			if path == "login.uris" {
-				value.Name = i18n.T("网址")
+				value.Name = i18n.T("server.rebase.uri")
 				value.Value, _ = row["uri"].(string)
-				value.Metadata = i18n.Tf("匹配规则 %v", row["match"])
+				value.Metadata = i18n.Tf("server.rebase.match_rule", row["match"])
 				known = map[string]bool{"uri": true, "match": true, "uriChecksum": true}
 			} else {
 				value.Name, _ = row["name"].(string)
 				value.Value, _ = row["value"].(string)
-				value.Metadata = i18n.Tf("类型 %v；关联 %v", row["type"], row["linkedId"])
+				value.Metadata = i18n.Tf("server.rebase.field_metadata", row["type"], row["linkedId"])
 			}
 			for key := range row {
 				if !known[key] {

@@ -404,7 +404,7 @@ func (s *Session) OrganizationEntries(vault *VaultData) ([]VaultEntry, error) {
 		if m.OrganizationID == nil || data.keys[*m.OrganizationID] == nil || policies.restricts(m.OrganizationID, m.Type) {
 			continue
 		}
-		entry := VaultEntry{ID: m.ID, OrganizationID: *m.OrganizationID, CollectionIDs: m.CollectionIDs, Type: m.Type, Title: i18n.T("受保护或暂不支持的组织项目"), Favorite: m.Favorite, Archived: m.ArchivedDate != nil, Deleted: m.DeletedDate != nil}
+		entry := VaultEntry{ID: m.ID, OrganizationID: *m.OrganizationID, CollectionIDs: m.CollectionIDs, Type: m.Type, Title: i18n.T("server.item.protected_organization_title"), Favorite: m.Favorite, Archived: m.ArchivedDate != nil, Deleted: m.DeletedDate != nil}
 		if m.FolderID != nil {
 			entry.FolderID = *m.FolderID
 		}

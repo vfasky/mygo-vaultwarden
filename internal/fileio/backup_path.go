@@ -26,7 +26,7 @@ func BackupOutputPath(path string, format vaultwarden.BackupFormat) (string, err
 		return path + extension, nil
 	}
 	if strings.ToLower(filepath.Ext(path)) != extension {
-		return "", fmt.Errorf(i18n.T("此格式请使用 %s 文件扩展名，未写入文件。"), extension)
+		return "", fmt.Errorf(i18n.T("file.backup.err_extension"), extension)
 	}
 	return path, nil
 }

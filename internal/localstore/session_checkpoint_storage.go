@@ -19,7 +19,7 @@ func SaveSessionCheckpoint(prior *SnapshotStatus, checkpoint vaultwarden.Session
 	}
 	if reply.State == nil || !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != checkpoint.Scope ||
 		reply.State.Revision == "" || reply.State.Revision == prior.Revision || reply.State.SnapshotID != prior.SnapshotID {
-		return reply, (&Failure{Code: "invalid_reply", Message: i18n.T("未能确认登录凭据的保存结果，请重新解锁。")})
+		return reply, (&Failure{Code: "invalid_reply", Message: i18n.T("store.session.err_checkpoint_unconfirmed")})
 	}
 	if err := checkpoint.AcceptAuthenticatedReceipt(reply.Vault, prior.Revision, reply.State.Revision); err != nil {
 		return reply, err
