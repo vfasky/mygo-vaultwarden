@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"time"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
@@ -40,7 +41,7 @@ func (a *app) copyPersonalSecret(kind string, storage func(localstore.Request) l
 		a.status = err.Error()
 		return
 	}
-	a.status = "已复制已保存的内容；最多 30 秒后尽力清除。"
+	a.status = i18n.T("已复制已保存的内容；最多 30 秒后尽力清除。")
 }
 
 func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) localstore.Reply) {
