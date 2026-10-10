@@ -26,7 +26,7 @@ func validateFIDO2Credentials(raw any) error {
 		return ErrProtocol
 	}
 	if len(values) > 100 {
-		return fmt.Errorf(i18n.T("单条项目超过本客户端 100 条通行密钥的资源限值：%w"), ErrValidation)
+		return fmt.Errorf(i18n.T("server.item.err_passkey_limit"), ErrValidation)
 	}
 	allowed := append(append([]string(nil), fido2SecretFields...), "creationDate")
 	for _, raw := range values {

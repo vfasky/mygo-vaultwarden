@@ -53,11 +53,11 @@ func cipherArrayLabels(path string, value any) []string {
 	for i, row := range rows {
 		// Do not expose URI query strings, hidden values or custom names here. The
 		// row position corresponds to the user's already visible source form.
-		label := i18n.T("网址与匹配规则")
+		label := i18n.T("server.rebase.uris_and_match_rules")
 		if path == "fields" {
-			label = i18n.Tf("自定义字段（类型 %v）", row["type"])
+			label = i18n.Tf("server.rebase.custom_field_type", row["type"])
 		}
-		labels[i] = i18n.Tf("第 %d 行 · %s", i+1, label)
+		labels[i] = i18n.Tf("server.rebase.row_label", i+1, label)
 	}
 	return labels
 }

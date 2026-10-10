@@ -122,7 +122,7 @@ func (s *Session) SaveOrganization(ctx context.Context, vault *VaultData, orgID 
 			return OrganizationProfile{}, err
 		}
 		if policies.singleOrganization {
-			return OrganizationProfile{}, fmt.Errorf(i18n.T("单一组织策略或待核验的策略变更禁止创建其他组织：%w"), ErrPermission)
+			return OrganizationProfile{}, fmt.Errorf(i18n.T("server.organization.err_single_organization_policy"), ErrPermission)
 		}
 		previousGuard := guard
 		guard = func() error {

@@ -18,7 +18,7 @@ import (
 	"strings"
 )
 
-var ErrRecoveryUnverified = errors.New(i18n.T("恢复核验尚未完成；保留原记录与旧新材料，不重放请求"))
+var ErrRecoveryUnverified = errors.New(i18n.T("server.recovery.err_unverified"))
 
 type AccountRecoveryEvidenceKind string
 
@@ -63,11 +63,11 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		return fresh, report, ErrRecoveryUnverified
 	}
 	if record.Version != 1 || record.Scope != fresh.Scope || record.OperationID == "" || record.OldUnlock == nil || len(record.OldUnlock.Key) != 32 || s.passwordUnlock == nil || s.runtimeOnly {
-		return reject(i18n.T("身份或持久密码材料不匹配"))
+		return reject(i18n.T("server.recovery.err_identity_or_password_mismatch"))
 	}
 	var old savedSession
 	if strictJSON(record.OldSession) != nil || json.Unmarshal(record.OldSession, &old) != nil || old.Version != 1 || len(old.UserKey) != 64 || old.Scope != record.Scope || old.PasswordUnlock == nil || len(old.PasswordUnlock.Key) != 32 || old.PasswordUnlock.Config != record.OldUnlock.Config || subtle.ConstantTimeCompare(old.PasswordUnlock.Key, record.OldUnlock.Key) != 1 || old.Email != record.OldUnlock.Config.Email {
-		return reject(i18n.T("原认证材料不可核验"))
+		return reject(i18n.T("server.recovery.err_original_auth_unverifiable"))
 	}
 	defer clear(old.UserKey)
 	if old.PasswordUnlock != nil {
@@ -75,91 +75,91 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 	}
 	var prior VaultData
 	if strictJSON(record.OldVault) != nil || json.Unmarshal(record.OldVault, &prior) != nil || prior.Scope != record.Scope || (prior.Version != 1 && prior.Version != 2) {
-		return reject(i18n.T("原完整密码库不可核验"))
+		return reject(i18n.T("server.recovery.err_original_vault_unverifiable"))
 	}
 	var previous, current map[string]json.RawMessage
 	if json.Unmarshal(prior.Sync, &previous) != nil || json.Unmarshal(fresh.Vault.Sync, &current) != nil {
-		return reject(i18n.T("完整资源数据不可核验"))
+		return reject(i18n.T("server.recovery.err_resources_unverifiable"))
 	}
 	var oldProfile, newProfile struct{ ID, Key, PrivateKey, Email string }
 	if json.Unmarshal(previous["profile"], &oldProfile) != nil || json.Unmarshal(current["profile"], &newProfile) != nil || oldProfile.ID != record.Scope.Account || oldProfile.Key != old.WrappedKey || newProfile.Key != s.wrapped || newProfile.ID != record.Scope.Account {
-		return reject(i18n.T("权威账号包装不匹配"))
+		return reject(i18n.T("server.recovery.err_account_wrapping_mismatch"))
 	}
 	unchangedAttempt := phase == "not-dispatched"
 	if record.Kind != AccountRotateKey || unchangedAttempt {
 		if subtle.ConstantTimeCompare(old.UserKey, s.key) != 1 {
-			return reject(i18n.T("非用户密钥轮换操作改变了实际user key"))
+			return reject(i18n.T("server.recovery.err_unexpected_user_key_change"))
 		}
 		expectedWrapper := record.NewWrappedKey
 		if expectedWrapper == "" || unchangedAttempt {
 			expectedWrapper = old.WrappedKey
 		}
 		if s.wrapped != expectedWrapper {
-			return reject(i18n.T("尚未观察到本次凭据请求的权威包装"))
+			return reject(i18n.T("server.recovery.err_credential_wrapping_unobserved"))
 		}
 		if unchangedAttempt && (old.PasswordUnlock.Config != s.passwordUnlock.Config || subtle.ConstantTimeCompare(old.PasswordUnlock.Key, s.passwordUnlock.Key) != 1) {
-			return reject(i18n.T("原主密码/KDF授权关系不匹配"))
+			return reject(i18n.T("server.recovery.err_original_authorization_mismatch"))
 		}
 		if !unchangedAttempt && record.NewUnlock != nil && (record.NewUnlock.Config != s.passwordUnlock.Config || subtle.ConstantTimeCompare(record.NewUnlock.Key, s.passwordUnlock.Key) != 1) {
-			return reject(i18n.T("新邮箱/KDF/密码包装未匹配"))
+			return reject(i18n.T("server.recovery.err_new_credentials_mismatch"))
 		}
 		if record.Kind == AccountDelete && !unchangedAttempt {
-			return reject(i18n.T("删除账号须使用已确认删除的专用本机清理流程"))
+			return reject(i18n.T("server.recovery.err_deletion_cleanup_required"))
 		}
 		if record.Kind == AccountSecurityStamp && phase != "confirmed" && !unchangedAttempt {
-			return reject(i18n.T("注销会话结果未知，不能从一次新登录推断旧会话已全部撤销"))
+			return reject(i18n.T("server.recovery.err_session_revocation_unknown"))
 		}
 		if record.Kind == AccountPurge && !unchangedAttempt {
 			if !emptyPersonalRecoveryInventory(current["ciphers"]) || !jsonEmptyArray(current["folders"]) {
-				return reject(i18n.T("个人条目或文件夹尚未清空"))
+				return reject(i18n.T("server.recovery.err_personal_vault_not_empty"))
 			}
 			if !sameOrganizationRecoveryInventory(previous["ciphers"], current["ciphers"]) {
-				return reject(i18n.T("组织资源发生外部变化"))
+				return reject(i18n.T("server.recovery.err_organization_resources_changed"))
 			}
 		} else if !unchangedAttempt {
 			if !AccountRotationCipherInventoryEqual(previous["ciphers"], current["ciphers"]) || !rawJSONEqual(previous["folders"], current["folders"]) {
-				return reject(i18n.T("条目或文件夹发生变化，须保留恢复记录核对"))
+				return reject(i18n.T("server.recovery.err_items_or_folders_changed"))
 			}
 		}
 		if !unchangedAttempt && !rawJSONEqual(previous["sends"], current["sends"]) {
-			return reject(i18n.T("Send资源发生变化"))
+			return reject(i18n.T("server.recovery.err_send_resources_changed"))
 		}
 		if !unchangedAttempt && oldProfile.PrivateKey != newProfile.PrivateKey {
-			return reject(i18n.T("账户私钥包装发生外部变化"))
+			return reject(i18n.T("server.recovery.err_private_key_wrapping_changed"))
 		}
 		if unchangedAttempt {
 			private, privateErr := accountPrivateKey(current["profile"], s.key)
 			if privateErr != nil {
-				return reject(i18n.T("当前账户RSA私钥不可核验"))
+				return reject(i18n.T("server.recovery.err_current_private_key_unverifiable"))
 			}
 			publicDER, marshalErr := x509.MarshalPKIXPublicKey(&private.PublicKey)
 			clearAccountPrivateKey(private)
 			status, body, readErr := s.authenticatedLocked(ctx, "GET", "/api/accounts/keys", "", "", persist)
 			var keys struct{ Key, PrivateKey, PublicKey string }
 			if readErr != nil || status != 200 || strictJSON(body) != nil || json.Unmarshal(body, &keys) != nil || keys.Key != s.wrapped || keys.PrivateKey != newProfile.PrivateKey {
-				return reject(i18n.T("当前权威账户密钥不匹配"))
+				return reject(i18n.T("server.recovery.err_current_account_key_mismatch"))
 			}
 			expectedDER, decodeErr := base64.StdEncoding.Strict().DecodeString(keys.PublicKey)
 			if marshalErr != nil || decodeErr != nil || !bytes.Equal(publicDER, expectedDER) {
-				return reject(i18n.T("当前账户RSA公私钥不一致"))
+				return reject(i18n.T("server.recovery.err_current_key_pair_mismatch"))
 			}
 		}
 		if _, err = AnalyzeAccountRotationCipherResources(ctx, AccountRotationInput{Scope: fresh.Scope, Sync: fresh.Vault.Sync, OldUserKey: s.key}); err != nil {
-			return reject(i18n.T("完整cipher/folder加密字段未通过核验"))
+			return reject(i18n.T("server.recovery.err_encrypted_fields_unverified"))
 		}
 		rows, e := sendRotationRows(fresh.Vault.Sync, fresh.Scope)
 		if e != nil {
-			return reject(i18n.T("完整Send清单未通过核验"))
+			return reject(i18n.T("server.recovery.err_send_inventory_unverified"))
 		}
 		for _, row := range rows {
 			_, wire, e := sendRotationOwner(row)
 			if e != nil {
-				return reject(i18n.T("Send结构未通过核验"))
+				return reject(i18n.T("server.recovery.err_send_structure_unverified"))
 			}
 			seed, e := sendRotationSeed(wire, s.key)
 			clear(seed)
 			if e != nil {
-				return reject(i18n.T("Send种子包装未通过核验"))
+				return reject(i18n.T("server.recovery.err_send_seed_unverified"))
 			}
 		}
 		report.AuthorityEvidence = []string{"fresh-login-and-sync: expected account/wrapper/unlock configuration; unchanged authenticated user key"}
@@ -188,62 +188,62 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 	}
 	evidence := record.RotationEvidence
 	if evidence == nil || evidence.Version != 1 {
-		return reject(i18n.T("缺少本次轮换的已认证版本与收件人证据"))
+		return reject(i18n.T("server.rotation.err_evidence_missing"))
 	}
 	version, commit, e := s.client.rotationCompatibility(ctx)
 	if e != nil || version != evidence.ServerVersion || commit != evidence.GitHash {
-		return reject(i18n.T("无法确认固定Vaultwarden轮换写入顺序"))
+		return reject(i18n.T("server.rotation.err_write_order_unconfirmed"))
 	}
 	hash := sha256.Sum256(record.Request)
 	if hex.EncodeToString(hash[:]) != evidence.RequestDigest {
-		return reject(i18n.T("轮换证据不属于原始单次请求"))
+		return reject(i18n.T("server.rotation.err_request_evidence_mismatch"))
 	}
 	var request AccountRotationRequest
 	if strictJSON(record.Request) != nil || json.Unmarshal(record.Request, &request) != nil || len(record.NewUserKey) != 64 || subtle.ConstantTimeCompare(record.NewUserKey, old.UserKey) == 1 || subtle.ConstantTimeCompare(s.key, record.NewUserKey) != 1 {
-		return reject(i18n.T("本次新user key的唯一性或权威关系不成立"))
+		return reject(i18n.T("server.rotation.err_new_user_key_unproven"))
 	}
 	if record.NewWrappedKey == "" || request.Unlock.Master.Key != record.NewWrappedKey || s.wrapped != record.NewWrappedKey || s.wrapped == old.WrappedKey || request.Keys.PrivateKey == "" || request.Keys.PrivateKey != newProfile.PrivateKey || request.Keys.PrivateKey == oldProfile.PrivateKey {
-		return reject(i18n.T("缺少本次唯一最终双包装写入见证"))
+		return reject(i18n.T("server.rotation.err_final_wrapping_witness_missing"))
 	}
 	if old.PasswordUnlock == nil || old.PasswordUnlock.Config != s.passwordUnlock.Config || subtle.ConstantTimeCompare(old.PasswordUnlock.Key, s.passwordUnlock.Key) != 1 {
-		return reject(i18n.T("用户key轮换意外改变主密码/KDF"))
+		return reject(i18n.T("server.rotation.err_master_credentials_changed"))
 	}
 	status, raw, e := s.authenticatedLocked(ctx, "GET", "/api/accounts/keys", "", "", persist)
 	var keys struct{ Key, PrivateKey, PublicKey string }
 	if e != nil || status != 200 || strictJSON(raw) != nil || json.Unmarshal(raw, &keys) != nil || keys.Key != s.wrapped || keys.PrivateKey != request.Keys.PrivateKey || keys.PublicKey != request.Keys.PublicKey {
-		return reject(i18n.T("权威账户密钥读回不匹配"))
+		return reject(i18n.T("server.rotation.err_account_key_readback_mismatch"))
 	}
 	oldDER, e := vaultcrypto.DecryptString(oldProfile.PrivateKey, old.UserKey)
 	if e != nil {
-		return reject(i18n.T("原账户私钥不可解包"))
+		return reject(i18n.T("server.rotation.err_original_private_key_unwrap"))
 	}
 	defer clear(oldDER)
 	newDER, e := vaultcrypto.DecryptString(keys.PrivateKey, s.key)
 	if e != nil {
-		return reject(i18n.T("新账户私钥不可解包"))
+		return reject(i18n.T("server.rotation.err_new_private_key_unwrap"))
 	}
 	defer clear(newDER)
 	if !bytes.Equal(oldDER, newDER) {
-		return reject(i18n.T("账户RSA私钥发生非预期变化"))
+		return reject(i18n.T("server.rotation.err_private_key_changed"))
 	}
 	private, e := accountPrivateKey(current["profile"], s.key)
 	if e != nil {
-		return reject(i18n.T("新私钥解析失败"))
+		return reject(i18n.T("server.rotation.err_new_private_key_parse"))
 	}
 	publicDER, e := x509.MarshalPKIXPublicKey(&private.PublicKey)
 	clearAccountPrivateKey(private)
 	expectedDER, decodeErr := base64.StdEncoding.Strict().DecodeString(request.Keys.PublicKey)
 	if e != nil || decodeErr != nil || !bytes.Equal(publicDER, expectedDER) {
-		return reject(i18n.T("账户RSA公私钥不一致"))
+		return reject(i18n.T("server.rotation.err_key_pair_mismatch"))
 	}
 	report.AuthorityEvidence = append(report.AuthorityEvidence, "fresh-login + sync + accounts/keys: unique expected master-userKey and privateKey ciphertext; new userKey distinct; unchanged RSA pair")
 	report.CipherResources, e = VerifyAccountRotationCipherResources(ctx, RotationCipherVerificationInput{Scope: record.Scope, CurrentScope: fresh.Scope, OriginalSync: prior.Sync, CurrentSync: fresh.Vault.Sync, Target: RotationCipherResources{Ciphers: request.Data.Ciphers, Folders: request.Data.Folders}, OldUserKey: old.UserKey, NewUserKey: s.key})
 	if e != nil || report.CipherResources.State != RotationCipherNew {
-		return reject(i18n.T("cipher/folder缺失、混合或外部变化"))
+		return reject(i18n.T("server.rotation.err_items_or_folders_changed"))
 	}
 	report.SendResources, e = VerifySendRotationResources(ctx, SendRotationVerificationInput{Scope: record.Scope, FreshScope: fresh.Scope, OldSync: prior.Sync, FreshSync: fresh.Vault.Sync, RequestSends: request.Data.Sends, OldUserKey: old.UserKey, NewUserKey: s.key})
 	if e != nil || !report.SendResources.Enumerated || report.SendResources.State != SendRotationNew {
-		return reject(i18n.T("Send缺失、混合或外部变化"))
+		return reject(i18n.T("server.rotation.err_sends_changed"))
 	}
 	report.ResourceEvidence = append(report.ResourceEvidence, "read-back verified: complete cipher/folder/Send metadata and preserved independent content keys; binary content not downloaded")
 	read := func(ctx context.Context, path string) (json.RawMessage, error) {
@@ -263,7 +263,7 @@ func (s *Session) SyncVerifiedAccountRecovery(ctx context.Context, record Accoun
 		return body, nil
 	}
 	if e = verifyRotationRecipients(ctx, read, fresh.Vault, request, evidence); e != nil {
-		return reject(i18n.T("恢复收件人、登记、身份、可信公钥或完整清单发生变化"))
+		return reject(i18n.T("server.rotation.err_recovery_inventory_changed"))
 	}
 	report.ResourceEvidence = append(report.ResourceEvidence, "protocol-ordered commit evidence: Vaultwarden 1.37.4/7c188967 saves all enumerated EA/recovery wrappers before the unique final account double-wrapper witness; hidden wrappers were not independently read back")
 	if ctx.Err() != nil {

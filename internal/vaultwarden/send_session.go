@@ -362,7 +362,7 @@ type SendUploadError struct {
 }
 
 func (e *SendUploadError) Error() string {
-	return i18n.T("文件 Send 已创建，但上传未确认；请同步核对或明确删除。")
+	return i18n.T("server.send.status_upload_unconfirmed")
 }
 func (e *SendUploadError) Unwrap() error { return e.Cause }
 func (s *Session) DeleteSend(ctx context.Context, d *SendDraft, persist func(SessionCheckpoint) error) error {

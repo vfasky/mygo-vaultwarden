@@ -16,7 +16,7 @@ import (
 	"strings"
 )
 
-var ErrInvitationAlreadyAccepted = errors.New(i18n.T("此邀请已接受，不能重复提交；请同步核对成员确认与账号恢复登记状态"))
+var ErrInvitationAlreadyAccepted = errors.New(i18n.T("server.member.err_invitation_already_accepted"))
 
 // InvitationAcceptance binds consent to the authenticated account, snapshot,
 // invitation, policies and exact recovery public key. It contains no user key.

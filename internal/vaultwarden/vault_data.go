@@ -115,7 +115,7 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 		if metadata.OrganizationID != nil || policies.restricts(nil, metadata.Type) {
 			continue
 		}
-		entry := VaultEntry{ID: metadata.ID, Type: metadata.Type, Title: i18n.T("受保护或暂不支持的项目"), Favorite: metadata.Favorite, Archived: metadata.ArchivedDate != nil, Deleted: metadata.DeletedDate != nil}
+		entry := VaultEntry{ID: metadata.ID, Type: metadata.Type, Title: i18n.T("server.item.protected_title"), Favorite: metadata.Favorite, Archived: metadata.ArchivedDate != nil, Deleted: metadata.DeletedDate != nil}
 		if metadata.FolderID != nil {
 			entry.FolderID = *metadata.FolderID
 		}

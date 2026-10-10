@@ -33,7 +33,7 @@ var (
 type MutationUncertainError struct{ Cause error }
 
 func (e *MutationUncertainError) Error() string {
-	return i18n.T("无法确认服务器是否已保存修改，请同步核对后再操作")
+	return i18n.T("server.err_save_unconfirmed")
 }
 func (e *MutationUncertainError) Unwrap() error { return e.Cause }
 

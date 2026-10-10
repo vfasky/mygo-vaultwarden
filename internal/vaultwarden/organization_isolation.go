@@ -31,7 +31,7 @@ func (s *Session) IsolatedOrganizations(vault *VaultData) ([]Organization, error
 	}
 	result := make([]Organization, 0, len(vault.QuarantinedOrganizations))
 	for _, id := range vault.QuarantinedOrganizations {
-		name := i18n.T("已退出或删除的组织")
+		name := i18n.T("server.organization.left_or_deleted")
 		for _, org := range data.Profile.Organizations {
 			if org.ID == id {
 				name = org.Name

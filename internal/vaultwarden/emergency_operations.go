@@ -84,7 +84,7 @@ func (s *Session) PrepareEmergencyOperation(ctx context.Context, vault *VaultDat
 	target := s.account
 	var payload any = struct{}{}
 	var selected EmergencyContact
-	impact := i18n.T("此操作会通知对方并改变紧急访问授权。服务器可能先保存再发送邮件；未知结果必须核对，不能重试。")
+	impact := i18n.T("server.emergency.authorization_impact")
 	switch r.Action {
 	case "invite":
 		email := strings.ToLower(strings.TrimSpace(r.Email))
@@ -151,7 +151,7 @@ func (s *Session) PrepareEmergencyOperation(ctx context.Context, vault *VaultDat
 			payload = struct {
 				Key string `json:"key"`
 			}{wrapped}
-			impact = i18n.T("确认后将把当前用户密钥加密给此受托人。获批后对方可以查看个人密码库，或接管账号。请独立核对公钥、对象、类型及等待天数。")
+			impact = i18n.T("server.emergency.confirm_impact")
 		case "update":
 			if r.Type < 0 || r.Type > 1 || r.WaitTimeDays < 0 || r.WaitTimeDays > 365 {
 				return nil, ErrValidation
