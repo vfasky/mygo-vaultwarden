@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/egoist/mygo"
+	"github.com/vfasky/mygo-vaultwarden/internal/fileio"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
@@ -28,20 +29,22 @@ func ConfigureDialogs(parent *mygo.Window, host *Host) {
 		if e != nil {
 			return nil, 0, "", vaultwarden.ErrPermission
 		}
-		return vaultwarden.OpenSendSource(paths[0])
+		file, e := fileio.OpenAttachmentInput(paths[0])
+		if e != nil {
+			return nil, 0, "", e
+		}
+		info, e := file.Stat()
+		if e != nil {
+			file.Close()
+			return nil, 0, "", vaultwarden.ErrPermission
+		}
+		return file, info.Size(), filepath.Base(paths[0]), nil
 	}
 	host.ChooseDestination = func(ctx context.Context, name string) (string, error) {
 		if ctx.Err() != nil {
 			return "", vaultwarden.ErrCancelled
 		}
-		path, e := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Title: i18n.T("send.file.save_title"), DefaultPath: sendSaveName(name), Message: i18n.T("send.file.save_hint")})
-		if ctx.Err() != nil || path == "" {
-			return "", vaultwarden.ErrCancelled
-		}
-		if e != nil {
-			return "", vaultwarden.ErrPermission
-		}
-		return path, nil
+		return ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, Title: i18n.T("send.file.save_title"), DefaultPath: sendSaveName(name), Message: i18n.T("send.file.save_hint")})
 	}
 }
 func sendSaveName(name string) string {

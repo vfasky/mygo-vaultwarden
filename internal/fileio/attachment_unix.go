@@ -15,16 +15,10 @@ import (
 )
 
 func OpenAttachmentInput(path string) (*os.File, error) {
-	dir, name, err := openBackupParent(path)
+	file, err := openSelectedInput(path)
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(dir)
-	raw, err := unix.Openat(dir, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, errBackupFile
-	}
-	file := os.NewFile(uintptr(raw), "attachment-input")
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() < 0 || info.Size() > 512*1024*1024 {
 		file.Close()

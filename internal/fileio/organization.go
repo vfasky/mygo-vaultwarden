@@ -10,16 +10,6 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-// exportOrgBackupFile is the safe-save binding for the independent organization
-// export form. The host must hold its authenticated snapshot lease for this call,
-// propagate lock/scope cancellation, and obtain explicit plaintext-file consent.
-func exportOrgBackupFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed bool, persist func(vaultwarden.SessionCheckpoint) error) error {
-	if session == nil {
-		return vaultwarden.ErrExpired
-	}
-	return ExportOrgBackupFormatFile(ctx, session, vault, orgID, path, grants, confirmed, false, persist)
-}
-
 func ExportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session, vault *vaultwarden.VaultData, orgID, path string, grants map[string]*vaultwarden.ItemAuthorization, confirmed, official bool, persist func(vaultwarden.SessionCheckpoint) error, leases ...func() error) error {
 	if session == nil {
 		return vaultwarden.ErrExpired
@@ -49,10 +39,6 @@ func ExportOrgBackupFormatFile(ctx context.Context, session *vaultwarden.Session
 		}
 		return stage.Commit()
 	}, persist)
-}
-
-func readOrgImportPlan(ctx context.Context, path string) (*vaultwarden.OrganizationImportPlan, error) {
-	return ReadOrgImportFormatPlan(ctx, path, false)
 }
 
 func ReadOrgImportFormatPlan(ctx context.Context, path string, official bool) (*vaultwarden.OrganizationImportPlan, error) {
