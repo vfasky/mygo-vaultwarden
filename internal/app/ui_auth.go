@@ -188,7 +188,7 @@ func (a *app) serverLogin(c *ui.Context) {
 		}
 		a.authStatus(c)
 		ui.Row(c).Justify(ui.Center).Children(func() {
-			if authLink(c, i18n.T("设备"), !ready).Tooltip(i18n.T("通过已登记的另一台设备批准登录")).Clicked() {
+			if authLink(c, i18n.Tc("login", "设备"), !ready).Tooltip(i18n.T("通过已登记的另一台设备批准登录")).Clicked() {
 				a.deviceLoginSetup = true
 			}
 			if authLink(c, i18n.T("注册 / 密码提示"), !ready).Clicked() {

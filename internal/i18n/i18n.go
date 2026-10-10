@@ -96,6 +96,19 @@ func T(source string) string {
 	return source
 }
 
+// Tc translates source where its English depends on context, such as a
+// sidebar heading ("Items") whose source also names one item elsewhere
+// ("Item"). The catalog key is context+"\x04"+source; without such an
+// entry it falls back to T(source).
+func Tc(context, source string) string {
+	if Current() == English {
+		if t, ok := english[context+"\x04"+source]; ok {
+			return t
+		}
+	}
+	return T(source)
+}
+
 // Tf translates format and formats it with args as fmt.Sprintf does.
 func Tf(format string, args ...any) string {
 	return fmt.Sprintf(T(format), args...)

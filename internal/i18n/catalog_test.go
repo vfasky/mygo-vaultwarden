@@ -96,7 +96,7 @@ func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) 
 					}
 				}
 			}
-			wrapped := map[*ast.BasicLit]bool{}
+			wrapped := map[*ast.BasicLit]string{} // literal -> context prefix
 			ast.Inspect(file, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
 				if !ok || len(call.Args) == 0 || local == "" {
@@ -112,7 +112,15 @@ func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) 
 				switch sel.Sel.Name {
 				case "T", "Tf", "Key":
 					if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-						wrapped[lit] = true
+						wrapped[lit] = ""
+					}
+				case "Tc":
+					ctx, ok1 := call.Args[0].(*ast.BasicLit)
+					if len(call.Args) == 2 && ok1 && ctx.Kind == token.STRING {
+						if lit, ok := call.Args[1].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+							c, _ := strconv.Unquote(ctx.Value)
+							wrapped[lit] = c + "\x04"
+						}
 					}
 				}
 				return true
@@ -128,9 +136,10 @@ func scan(t *testing.T, root string, dirs []string) (keys []use, bare []string) 
 				}
 				pos := fset.Position(lit.Pos())
 				where := filepath.ToSlash(rel) + ":" + strconv.Itoa(pos.Line)
+				prefix, isWrapped := wrapped[lit]
 				switch {
-				case wrapped[lit]:
-					keys = append(keys, use{s, where})
+				case isWrapped:
+					keys = append(keys, use{prefix + s, where})
 				case !ignored[pos.Line]:
 					bare = append(bare, where+" "+strconv.Quote(s))
 				}
@@ -249,6 +258,15 @@ func TestTranslate(t *testing.T) {
 	}
 	if got := T("未翻译"); got != "未翻译" {
 		t.Fatal(got)
+	}
+	register("test-context", map[string]string{"nav\x04测试": "Tests", "测试": "Test"})
+	defer func() { delete(catalogs, "test-context"); delete(english, "nav\x04测试"); delete(english, "测试") }()
+	if Tc("nav", "测试") != "Tests" || Tc("other", "测试") != "Test" {
+		t.Fatal(Tc("nav", "测试"), Tc("other", "测试"))
+	}
+	Set(Chinese)
+	if Tc("nav", "测试") != "测试" {
+		t.Fatal("Tc must keep the Chinese source")
 	}
 	if Key("已核验") != "已核验" {
 		t.Fatal("Key must not translate")

@@ -519,8 +519,8 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 					}
 				}
 			}
-			categoryGroup(i18n.T("项目"), false)
-			categoryGroup(i18n.T("类型"), true)
+			categoryGroup(i18n.Tc("sidebar", "项目"), false)
+			categoryGroup(i18n.Tc("sidebar", "类型"), true)
 			if organizationUIEnabled {
 				section(i18n.T("组织"), nil)
 				if navItem(c, i18n.T("创建或加入组织"), "plus", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
@@ -545,7 +545,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 					}
 				}
 			}
-			section(i18n.T("文件夹"), func() {
+			section(i18n.Tc("sidebar", "文件夹"), func() {
 				if kit.SidebarAction(c, i18n.T("新建文件夹"), "plus", folderBusy).Clicked() {
 					a.openFolderEditor("")
 				}
