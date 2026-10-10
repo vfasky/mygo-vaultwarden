@@ -107,9 +107,9 @@ func (a *app) openSendWith(dispatch func(func()), storage func(localstore.Reques
 		})
 	}
 	if dialogs {
-		send.ConfigureDialogs(a.window, &host)
+		send.ConfigureDialogs(a.accountParent(), &host)
 	}
 	a.sendPanel = send.NewPanel(session, client, vault, scope, host)
-	a.category, a.showSettings = "send", false
+	a.selectAccountTab(accountTabSend)
 	a.sendPanel.Offline()
 }

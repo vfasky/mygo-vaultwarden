@@ -146,7 +146,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 				lifetime.active.Store(false)
 				return
 			}
-			platform := sysauth.NewAuthenticationPlatform(a.window)
+			platform := sysauth.NewAuthenticationPlatform(a.mainWindow)
 			var panel *account.DeviceLoginPanel
 			host := account.DeviceLoginHost{Check: lifetime.check, Platform: platform.MFA(server, epoch), AcceptingMessage: i18n.T("account.device_login.status_verifying_policy")}
 			host.Dispatch = func(f func()) { dispatch(func() { f(); a.retainDeviceWarnings(panel) }) }
@@ -216,7 +216,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 							return
 						}
 						a.itemsRevision = cap.Revision()
-						a.showLogin, a.showSettings = false, false
+						a.showLogin = false
 						panel.Close()
 						a.retainDeviceWarnings(panel)
 						a.deviceLoginPanel = nil

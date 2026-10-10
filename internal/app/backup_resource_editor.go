@@ -59,7 +59,7 @@ func (a *app) chooseResourceImportFile() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++
-	scope, revision, parent := *a.liveScope, e.revision, a.window
+	scope, revision, parent := *a.liveScope, e.revision, a.mainWindow
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(vaultwarden.MyGoResources)}})
 		var resources *vaultwarden.ResourceImportPlan
@@ -79,7 +79,7 @@ func (a *app) chooseResourceImportFile() {
 				}
 			}
 		}
-		a.window.Update(func() {
+		a.postUI(func() {
 			a.pending--
 			defer cancel()
 			if !a.backupCurrent(e, epoch) || ctx.Err() != nil || err != nil {
@@ -130,7 +130,7 @@ func (a *app) chooseResourceExportFile() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++
-	scope, revision, vault, parent, prior := *a.liveScope, e.revision, a.vault, a.window, a.snapshot
+	scope, revision, vault, parent, prior := *a.liveScope, e.revision, a.vault, a.mainWindow, a.snapshot
 	go func() {
 		defer clear(password)
 		var checkpoint *localstore.SnapshotStatus
@@ -170,7 +170,7 @@ func (a *app) chooseResourceExportFile() {
 				})
 			}
 		}
-		a.window.Update(func() {
+		a.postUI(func() {
 			a.pending--
 			defer cancel()
 			defer stage.Close()
@@ -272,7 +272,7 @@ func resourceTrashTarget(m *backupResourceEditor, source string) (string, bool) 
 	return target, target != ""
 }
 func (a *app) runResourceRestore(index int, verify bool, trashSource string) {
-	a.runResourceRestoreWith(index, verify, trashSource, a.window.Update, localstore.Call, func() { a.syncVault(false) })
+	a.runResourceRestoreWith(index, verify, trashSource, a.postUI, localstore.Call, func() { a.syncVault(false) })
 }
 
 // Explicit side effects keep the native form controller testable with a queued

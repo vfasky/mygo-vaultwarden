@@ -135,7 +135,7 @@ func (a *app) runAttachmentOperation(operation string, attachment vaultwarden.At
 	a.cancel = cancel
 	a.pending++
 	e.attachmentBusy = true
-	id, grant, vault, parent, scope, revision, prior := e.fields.ID, e.authorization, a.vault, a.window, *a.liveScope, e.revision, a.snapshot
+	id, grant, vault, parent, scope, revision, prior := e.fields.ID, e.authorization, a.vault, a.mainWindow, *a.liveScope, e.revision, a.snapshot
 	go func() {
 		var checkpoint *localstore.SnapshotStatus
 		var storage localstore.Reply

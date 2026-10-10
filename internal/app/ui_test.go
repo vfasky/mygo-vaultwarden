@@ -118,7 +118,7 @@ func TestVaultSidebarToggle(t *testing.T) {
 		t.Fatal("collapsed category navigation failed")
 	}
 	uitest.Click(t, tt, "我的密码库")
-	if a.category != "personal" || a.showSettings {
+	if a.category != "personal" {
 		t.Fatal("collapsed vault navigation failed")
 	}
 	uitest.Click(t, tt, "展开侧栏")
@@ -146,7 +146,7 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 	}
 	for _, category := range vaultCategories {
 		uitest.Click(t, tt, category.title)
-		if a.category != category.id || a.showSettings {
+		if a.category != category.id {
 			t.Fatalf("collapsed navigation failed for %s", category.title)
 		}
 		// Texts includes accessibility labels; each icon button keeps its label,
@@ -162,12 +162,12 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 		}
 	}
 	uitest.Click(t, tt, "账号与设置")
-	if !a.showSettings {
+	if !a.windows.settingsOpen {
 		t.Fatal("collapsed sidebar settings did not open")
 	}
 	uitest.Click(t, tt, "我的密码库")
-	if a.category != "personal" || a.showSettings {
-		t.Fatal("collapsed vault navigation did not close settings")
+	if a.category != "personal" || !a.windows.settingsOpen {
+		t.Fatal("vault navigation changed the settings window")
 	}
 }
 
@@ -285,12 +285,12 @@ func TestVaultSettingsAndSafeLinks(t *testing.T) {
 		t.Fatal("unsafe URL opened")
 	}
 	uitest.Click(t, tt, "账号与设置")
-	if !a.showSettings || !slices.Contains(tt.Texts(), "连接密码库") {
-		t.Fatal("settings did not open")
+	if !a.windows.settingsOpen || slices.Contains(tt.Texts(), "连接密码库") {
+		t.Fatal("settings did not open in its own window")
 	}
-	uitest.Click(t, tt, "关闭设置")
-	if a.showSettings {
-		t.Fatal("settings did not close")
+	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	if !slices.Contains(settings.Texts(), "连接密码库") {
+		t.Fatal("settings window content missing")
 	}
 }
 
@@ -312,7 +312,7 @@ func TestVaultVisualPreviews(t *testing.T) {
 			a.selectedID = "3"
 			switch state {
 			case "settings":
-				a.showSettings = true
+				a.windows.settingsOpen = true
 			case "login":
 				a = &app{snapshot: &localstore.SnapshotStatus{Revision: "empty"}, deviceID: "preview",
 					serverURL: "https://vault.example.com", email: "alex@example.com", masterPassword: "fixture-password"}
@@ -335,7 +335,11 @@ func TestVaultVisualPreviews(t *testing.T) {
 			case "empty-search":
 				a.query = "no such item"
 			}
-			tt := ui.NewTester(a.view, size[0], size[1])
+			view := a.view
+			if state == "settings" {
+				view = a.settingsWindowView
+			}
+			tt := ui.NewTester(view, size[0], size[1])
 			path := filepath.Join(dir, fmt.Sprintf("vault-%s-%d.png", state, size[0]))
 			f, err := os.Create(path)
 			if err != nil {

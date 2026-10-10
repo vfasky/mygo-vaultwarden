@@ -68,7 +68,9 @@ func TestServerLoginCanReturnWithoutSwitchingAccount(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1280, 820)
 	uitest.Click(t, tt, "账号与设置")
-	uitest.Click(t, tt, "登录服务器")
+	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	uitest.Click(t, settings, "登录服务器")
+	tt.Frame()
 	assertVaultHidden(t, tt)
 	if !a.unlocked() {
 		t.Fatal("opening login changed the current account before submission")

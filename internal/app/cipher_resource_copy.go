@@ -18,7 +18,7 @@ func cipherHasAttachments(document vaultwarden.CipherDocument) bool {
 	return json.Unmarshal(document.JSON, &meta) == nil && len(meta.Attachments) > 0
 }
 func (a *app) startResourceCipherCopy(session *vaultwarden.Session, e *cipherEditor) {
-	a.startResourceCipherCopyWith(session, e, a.window.Update, localstore.Call, func() { a.syncVault(false) })
+	a.startResourceCipherCopyWith(session, e, a.postUI, localstore.Call, func() { a.syncVault(false) })
 }
 
 func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *cipherEditor, dispatch func(func()), storage func(localstore.Request) localstore.Reply, refresh func()) {

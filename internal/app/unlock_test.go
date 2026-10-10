@@ -26,11 +26,11 @@ func TestLockImmediatelyHidesVaultAndClearsSecrets(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.masterPassword, a.verificationCode, a.query = "fixture-password", "123456", "secret search"
-	a.showSettings, a.showLogin = true, true
+	a.showLogin = true
 	version := a.secretInputVersion
 	a.lockInterface()
 	assertSessionRevoked(t, a, session)
-	if ctx.Err() == nil || a.masterPassword != "" || a.verificationCode != "" || a.query != "" || a.showSettings || a.showLogin || a.secretInputVersion == version {
+	if ctx.Err() == nil || a.masterPassword != "" || a.verificationCode != "" || a.query != "" || a.showLogin || a.secretInputVersion == version {
 		t.Fatal("lock retained work, form secrets or navigation state")
 	}
 	tt := ui.NewTester(a.view, 1060, 700)

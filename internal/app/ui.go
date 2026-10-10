@@ -8,12 +8,10 @@ import (
 	"slices"
 	"sort"
 	"strings"
-	"time"
 	"unicode/utf8"
 
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
-	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 )
 
@@ -41,21 +39,6 @@ var vaultCategories = []vaultCategory{
 var categoryKinds = map[string]int{"login": 1, "note": 2, "card": 3, "identity": 4, "ssh": 5, "bank": 6, "license": 7, "passport": 8}
 
 func (a *app) currentCategory() vaultCategory {
-	if a.category == "org-services" {
-		return vaultCategory{"org-services", i18n.T("account.emergency.title"), "vault", true}
-	}
-	if a.category == "mfa" {
-		return vaultCategory{"mfa", i18n.T("app.settings.mfa"), "shield", true}
-	}
-	if a.category == "account" {
-		return vaultCategory{"account", i18n.T("account.form.title"), "user", true}
-	}
-	if a.category == "devices" {
-		return vaultCategory{"devices", i18n.T("account.device.title"), "shield", true}
-	}
-	if a.category == "send" {
-		return vaultCategory{"send", "Send", "send", true}
-	}
 	if a.category == "personal" {
 		return vaultCategory{"personal", i18n.T("common.my_vault"), "user", true}
 	}
@@ -192,30 +175,11 @@ func (a *app) unlocked() bool {
 	return a.snapshot != nil && a.snapshot.Available && a.itemsRevision != "" && a.itemsRevision == a.snapshot.Revision
 }
 
+// view is the main window: authentication while locked, otherwise the vault
+// browser and its editors. Settings and account services have windows of
+// their own (window_settings.go, window_account.go).
 func (a *app) view(c *ui.Context) {
-	if a.orgServices != nil && (a.category != "org-services" || a.showSettings) {
-		a.advanceEpoch()
-	}
-	if runtime := a.runtimeVault; runtime != nil {
-		if err := runtime.sourceCheck(runtime.source, *a.liveScope); err != nil {
-			a.stopNetwork()
-			a.status = i18n.T("app.sync.err_runtime_source_changed")
-		} else {
-			c.After(time.Second)
-		}
-	}
-	if a.authManagement != nil && (a.category != "mfa" || a.showSettings) {
-		a.advanceEpoch()
-	}
-	if a.accountForm != nil && a.accountForm.Mode != "register" && (a.category != "account" || a.showSettings) {
-		a.advanceEpoch()
-	}
-	if a.devicePanel != nil && (a.category != "devices" || a.showSettings) {
-		a.advanceEpoch()
-	}
-	if a.sendPanel != nil && (a.category != "send" || a.showSettings) {
-		a.advanceEpoch()
-	}
+	a.framePrelude(c)
 	c.SetTheme(kit.Theme)
 	c.Root().Background(ui.Transparent)
 	if a.showLogin || !a.unlocked() {
@@ -235,71 +199,6 @@ func (a *app) view(c *ui.Context) {
 }
 
 func (a *app) body(c *ui.Context) {
-	if a.category == "org-services" && !a.showSettings {
-		ui.Scroll(c).Grow(1).Children(func() {
-			if a.orgServices != nil {
-				a.orgServices.View(c)
-			} else {
-				ui.Text(c, a.status)
-				if ui.Button(c, i18n.T("app.settings.open_emergency_access")).Disabled(a.pending != 0).Clicked() {
-					a.openEmergencyServices()
-				}
-			}
-		})
-		return
-	}
-	if a.category == "mfa" && !a.showSettings {
-		ui.Scroll(c).Grow(1).Children(func() {
-			if a.authManagement != nil {
-				account.AuthManagementView(c, a.authManagement)
-			} else {
-				ui.Text(c, a.status)
-				if ui.Button(c, i18n.T("app.settings.open_mfa")).Disabled(a.pending != 0).Clicked() {
-					a.openAuthenticationManagement()
-				}
-			}
-		})
-		return
-	}
-	if a.category == "account" && !a.showSettings {
-		ui.Scroll(c).Grow(1).Children(func() {
-			if a.accountForm != nil {
-				account.FormView(c, a.accountForm)
-			} else {
-				ui.Text(c, a.status)
-				if ui.Button(c, i18n.T("app.settings.open_account_security")).Disabled(a.pending != 0).Clicked() {
-					a.openAccount()
-				}
-			}
-		})
-		return
-	}
-	if a.category == "devices" && !a.showSettings {
-		ui.Scroll(c).Grow(1).Children(func() {
-			if a.devicePanel != nil {
-				a.devicePanel.View(c)
-			} else {
-				ui.Text(c, a.status)
-				if ui.Button(c, i18n.T("app.settings.open_devices")).Disabled(a.pending != 0).Clicked() {
-					a.openDevices()
-				}
-			}
-		})
-		return
-	}
-	if a.category == "send" && !a.showSettings {
-		ui.Scroll(c).Grow(1).Children(func() {
-			if a.sendPanel != nil {
-				a.sendPanel.View(c)
-			} else {
-				ui.Text(c, a.status)
-				if ui.Button(c, i18n.T("app.settings.open_send")).Disabled(a.pending != 0).Clicked() {
-					a.openSend()
-				}
-			}
-		})
-		return
-	}
 	ui.Row(c).Grow(1).MinHeight(0).Gap(16).AlignItems(ui.Stretch).Children(func() {
 		items := a.filteredItems()
 		a.reconcileSelection(items)
@@ -315,8 +214,6 @@ func (a *app) body(c *ui.Context) {
 				a.folderEditorView(c)
 			} else if a.editor != nil {
 				a.cipherEditorView(c)
-			} else if a.showSettings {
-				a.settings(c)
 			} else if a.selectedRow >= 0 && a.selectedRow < len(items) {
 				a.credentialDetail(c, items[a.selectedRow])
 			} else {
@@ -393,7 +290,7 @@ func (a *app) header(c *ui.Context) {
 		if ui.Button(c, "").Label(i18n.T("app.settings.title")).Tooltip(i18n.T("app.settings.title")).Size(32, 32).Padding(7).Radius(16).
 			Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55)).
 			Children(func() { kit.Icon(c, "settings", 16) }).Clicked() {
-			a.showSettings = !a.showSettings
+			a.showSettingsWindow("")
 		}
 	})
 }
@@ -500,8 +397,8 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	ui.Scroll(c).Grow(1).MinHeight(0).ScrollbarInsets(2, 3, 2, 0).Children(func() {
 		ui.Column(c).Gap(2).Padding(0, inset, 8, inset).Children(func() {
 			section(i18n.T("app.sidebar.all_vaults"), nil)
-			if navItem(c, i18n.T("common.my_vault"), "user", "", a.category == "personal" && !a.showSettings, false).Clicked() {
-				a.category, a.query, a.showSettings = "personal", "", false
+			if navItem(c, i18n.T("common.my_vault"), "user", "", a.category == "personal", false).Clicked() {
+				a.category, a.query = "personal", ""
 			}
 			categoryGroup := func(title string, types bool) {
 				section(title, nil)
@@ -509,12 +406,12 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 					if (categoryKinds[category.id] != 0) != types {
 						continue
 					}
-					b := navItem(c, category.title, category.symbol, count(category.id), a.currentCategory().id == category.id && !a.showSettings, false)
+					b := navItem(c, category.title, category.symbol, count(category.id), a.currentCategory().id == category.id, false)
 					if !category.supported && !collapsed {
 						b.Tooltip(i18n.T("app.sidebar.status_not_synced"))
 					}
 					if b.Clicked() {
-						a.category, a.showSettings = category.id, false
+						a.category = category.id
 						a.listState.ScrollTo(0, ui.Start)
 					}
 				}
@@ -531,11 +428,11 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 				}
 				for _, org := range a.organizations {
 					if navItem(c, org.Name, "building", "", a.category == "org:"+org.ID, false).Clicked() {
-						a.category, a.showSettings = "org:"+org.ID, false
+						a.category = "org:" + org.ID
 					}
 					for _, collection := range a.collections {
 						if collection.OrganizationID == org.ID && navItem(c, "  "+collection.Name, "folder", "", a.category == "collection:"+collection.ID, false).Clicked() {
-							a.category, a.showSettings = "collection:"+collection.ID, false
+							a.category = "collection:" + collection.ID
 						}
 					}
 				}
@@ -550,12 +447,12 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 					a.openFolderEditor("")
 				}
 			})
-			if navItem(c, i18n.T("common.no_folder"), "inbox", count("folder:"), a.category == "folder:" && !a.showSettings, false).Clicked() {
-				a.category, a.showSettings = "folder:", false
+			if navItem(c, i18n.T("common.no_folder"), "inbox", count("folder:"), a.category == "folder:", false).Clicked() {
+				a.category = "folder:"
 			}
 			for _, f := range a.folders {
-				if navItem(c, f.Name, "folder", count("folder:"+f.ID), a.category == "folder:"+f.ID && !a.showSettings, false).Clicked() {
-					a.category, a.showSettings = "folder:"+f.ID, false
+				if navItem(c, f.Name, "folder", count("folder:"+f.ID), a.category == "folder:"+f.ID, false).Clicked() {
+					a.category = "folder:" + f.ID
 				}
 			}
 			// The rail has no section titles to carry the add action.
@@ -571,8 +468,8 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	})
 	ui.Column(c).Gap(6).Shrink(0).Padding(0, inset).Children(func() {
 		ui.Box(c).Height(1).Margin(0, 4).Background(ui.RGBA(38, 30, 62, .08))
-		if navItem(c, i18n.T("app.settings.title"), "settings", "", a.showSettings, false).Clicked() {
-			a.showSettings = !a.showSettings
+		if navItem(c, i18n.T("app.settings.title"), "settings", "", false, false).Clicked() {
+			a.showSettingsWindow("")
 		}
 	})
 }
@@ -665,7 +562,6 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 			c.SetTheme(kit.Theme)
 			if list.Changed() && a.selectedRow >= 0 && a.selectedRow < len(items) {
 				a.selectedID = items[a.selectedRow].ID
-				a.showSettings = false
 			}
 		}
 		ui.Text(c, i18n.Tf("app.list.loaded_count", a.releaseItemCount())).FontSize(11).TextColor(kit.Muted).Padding(4, 8)
@@ -781,128 +677,4 @@ func (a *app) emptyDetail(c *ui.Context) {
 
 func openAutoFillSettings(c *ui.Context) {
 	c.OpenURL("x-apple.systempreferences:com.apple.Passwords-Settings.extension")
-}
-
-func (a *app) settings(c *ui.Context) {
-	ready := a.snapshot != nil && a.pending == 0
-	available := a.snapshot != nil && a.snapshot.Available
-	ui.Scroll(c.Key("settings")).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Gap(18).Padding(10, 8).Children(func() {
-			ui.Row(c).Children(func() {
-				ui.Text(c, i18n.T("app.settings.title")).FontSize(26).FontWeight(650)
-				ui.Spacer(c)
-				if kit.IconButton(c, i18n.T("app.settings.close"), "close").Clicked() {
-					a.showSettings = false
-				}
-			})
-			kit.DetailCard(c, i18n.T("app.settings.account_services"), func() {
-				if warning := a.mfaWarnings.warning(a.serverURL, a.email); warning != "" {
-					ui.Text(c, warning).MaxLines(4)
-				}
-				if a.runtimeVault != nil {
-					ui.Column(c.Key(a.secretInputVersion)).Padding(16).Gap(8).Children(func() {
-						ui.Text(c, i18n.T("app.settings.runtime_vault_hint")).MaxLines(4)
-						if a.diskSnapshot != nil && a.diskSnapshot.Scope != nil && a.liveScope != nil && *a.diskSnapshot.Scope != *a.liveScope {
-							oldAccount := a.diskSnapshot.Scope.Account
-							if a.diskSnapshot.PasswordUnlock != nil {
-								oldAccount = a.diskSnapshot.PasswordUnlock.Email
-							}
-							ui.Text(c, i18n.Tf("app.settings.account_replacement_summary", a.diskSnapshot.Scope.Server, oldAccount, a.liveScope.Server, a.email)).MaxLines(5)
-							ui.Text(c, i18n.T("app.settings.account_replacement_hint")).MaxLines(6)
-							label := i18n.T("app.settings.confirm_account_replacement")
-							if a.runtimeReplaceConfirmed {
-								label = i18n.T("app.settings.withdraw_account_replacement")
-							}
-							if kit.Action(c, label, "user", false, a.pending != 0).Clicked() {
-								a.runtimeReplaceConfirmed = !a.runtimeReplaceConfirmed
-							}
-						}
-						ui.TextInput(c, &a.masterPassword).Label(i18n.T("app.settings.bind_master_password_label")).Password().Disabled(a.pending != 0)
-						if kit.Action(c, i18n.T("app.settings.bind_master_password_sync"), "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
-							a.bindRuntimePasswordWith(a.window.Update, localstore.Call)
-						}
-					})
-				}
-				ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
-					if kit.Action(c, i18n.T("app.settings.verify_target_recovery"), "vault", false, a.pending != 0).Clicked() {
-						a.openTargetRecovery()
-					}
-					if kit.Action(c, i18n.T("account.emergency.title"), "vault", false, !ready).Clicked() {
-						a.openEmergencyServices()
-					}
-					if kit.Action(c, "Send", "send", false, !ready).Clicked() {
-						a.openSend()
-					}
-					if kit.Action(c, i18n.T("account.device.title"), "shield", false, !ready).Clicked() {
-						a.openDevices()
-					}
-					if kit.Action(c, i18n.T("account.form.title"), "user", false, !ready).Clicked() {
-						a.openAccount()
-					}
-					if kit.Action(c, i18n.T("app.settings.mfa"), "shield", false, !ready).Clicked() {
-						a.openAuthenticationManagement()
-					}
-				})
-			})
-			kit.DetailCard(c, i18n.T("app.settings.connect_vault"), func() {
-				ui.Column(c).Padding(16).Gap(13).Children(func() {
-					ui.Text(c, a.connectedServer()).FontSize(14).MaxLines(2)
-					ui.Text(c, i18n.T("app.settings.credentials_hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
-					if kit.Action(c, i18n.T("login.title"), "user", true, a.pending != 0).Clicked() {
-						a.resetLoginForm()
-						a.showLogin = true
-						a.status = ""
-					}
-				})
-			})
-			kit.DetailCard(c, i18n.T("app.settings.local_storage_autofill"), func() {
-				ui.Column(c).Padding(16).Gap(12).Children(func() {
-					state := i18n.T("app.settings.no_snapshot")
-					if available {
-						state = i18n.Tf("app.settings.snapshot_count", a.snapshot.Count)
-					}
-					ui.Text(c, state).FontSize(13)
-					if available && a.snapshot.UpdatedAt > 0 {
-						ui.Text(c, i18n.Tf("app.settings.last_synced", time.UnixMilli(a.snapshot.UpdatedAt).Format("2006-01-02 15:04"))).FontSize(11).TextColor(kit.Muted)
-					}
-					ui.Row(c).Gap(8).Wrap().Children(func() {
-						if kit.Action(c, i18n.T("app.settings.unlock_offline"), "lock", false, !ready || !available).Clicked() {
-							a.runStorage("list")
-						}
-						if kit.Action(c, i18n.T("app.settings.refresh_status"), "sync", false, a.pending != 0).Clicked() {
-							a.runStorage("status")
-						}
-					})
-					ui.Divider(c)
-					if a.snapshot != nil && a.snapshot.IndexPending {
-						ui.Text(c, i18n.T("app.settings.autofill_pending_hint")).FontSize(12).TextColor(kit.Purple)
-					}
-					ui.Row(c).Gap(8).Wrap().Children(func() {
-						if kit.Action(c, i18n.T("app.settings.autofill"), "settings", false, false).Clicked() {
-							openAutoFillSettings(c)
-						}
-						if kit.Action(c, i18n.T("app.settings.update_autofill"), "shield", false, !ready || !available).Clicked() {
-							a.runStorage("reindex")
-						}
-					})
-					if a.snapshot != nil && a.snapshot.CleanupPending {
-						ui.Text(c, i18n.T("app.settings.cleanup_pending_hint")).FontSize(12).TextColor(kit.Purple)
-						if kit.Action(c, i18n.T("app.settings.retry_cleanup"), "sync", false, !ready).Clicked() {
-							a.runStorage("retryCleanup")
-						}
-					}
-				})
-			})
-			ui.Row(c).Gap(8).Wrap().Children(func() {
-				logoutLabel := i18n.T("app.settings.log_out")
-				if a.runtimeVault != nil {
-					logoutLabel = i18n.T("app.settings.end_temporary_session")
-				}
-				if kit.Action(c, logoutLabel, "user", false, a.snapshot == nil).Clicked() {
-					a.runStorage("logout")
-				}
-			})
-			ui.Text(c, i18n.T("app.settings.about")).FontSize(11).TextColor(kit.Muted).LineHeight(1.6)
-		})
-	})
 }

@@ -43,7 +43,6 @@ func (a *app) openBulkEditor(emptyTrash bool) {
 		e.action = vaultwarden.CipherMove
 	}
 	a.bulkEditor = e
-	a.showSettings = false
 }
 
 var bulkActions = []struct {

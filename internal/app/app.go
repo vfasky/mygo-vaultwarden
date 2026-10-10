@@ -18,11 +18,12 @@ import (
 
 type app struct {
 	category, selectedID                      string
-	showSettings, showLogin                   bool
+	showLogin                                 bool
 	sidebarCollapsed                          bool
 	listState                                 ui.ListState
 	selectedRow                               int
-	window                                    *mygo.Window
+	windows                                   windowSet // which windows are open and their native handles (windows.go)
+	mainWindow                                *mygo.Window
 	uiDispatcher                              func(func())                              // immutable after controller construction
 	storageBackend                            func(localstore.Request) localstore.Reply // immutable after construction
 	serverURL, email, query, status, deviceID string
@@ -81,7 +82,7 @@ type app struct {
 
 func (a *app) lockInterface() {
 	a.stopNetwork()
-	a.showLogin, a.showSettings = false, false
+	a.showLogin = false
 	a.query = ""
 }
 
@@ -181,8 +182,8 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 			}
 		}
 		a.itemsRevision = reply.State.Revision
-		a.showSettings, a.showLogin = false, false
-		a.startNotifications(a.window.Update, localstore.Call)
+		a.showLogin = false
+		a.startNotifications(a.postUI, localstore.Call)
 		return
 	}
 	switch request.Operation {
@@ -210,7 +211,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 				return
 			}
 			a.itemsRevision = reply.State.Revision
-			a.showLogin, a.showSettings = false, false
+			a.showLogin = false
 			a.startNotifications(a.dispatchUI, a.storageCall)
 		}
 	case "lock":
@@ -227,14 +228,13 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 // Run starts the MyGo Vaultwarden application and blocks until it quits.
 func Run() {
 	a := &app{status: i18n.T("app.sync.status_reading_storage"), notificationsEnabled: true}
+	useUpdater(func() { a.invalidateWindows(nil) })
 	mygo.App.WhenReady(func() {
-		// Pinning the traffic lights where hiddenInset puts them makes the
-		// title bar exactly as tall as their row, centered on them, so the
-		// sidebar toggle and toolbar can center on c.TitleBar().Height.
-		a.window = mygo.NewWindow(mygo.WindowOptions{Title: "MyGo Vaultwarden", Width: 1280, Height: 820, MinWidth: 1060, MinHeight: 700, StateKey: "main", TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 18, Y: 18}, Content: ui.View(a.view)})
+		a.windows.native = true
+		a.openMainWindow()
 		a.runStorage("settings")
-		mygo.Power.OnLockScreen(func() { a.window.Update(func() { a.runStorage("lock") }) })
-		mygo.Power.OnSuspend(func() { a.window.Update(func() { a.runStorage("lock") }) })
+		mygo.Power.OnLockScreen(func() { a.postUI(func() { a.runStorage("lock") }) })
+		mygo.Power.OnSuspend(func() { a.postUI(func() { a.runStorage("lock") }) })
 	})
 	mygo.App.OnWillQuit(func(_ *mygo.QuitEvent) { a.stopNetwork() })
 	if err := mygo.App.Run(); err != nil {

@@ -78,7 +78,7 @@ func (a *app) chooseCipherShareRecovery() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
-	parent := a.window
+	parent := a.mainWindow
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
 		var data []byte
@@ -91,7 +91,7 @@ func (a *app) chooseCipherShareRecovery() {
 				err = vaultwarden.ErrProtocol
 			}
 		}
-		a.window.Update(func() {
+		a.postUI(func() {
 			a.pending--
 			defer cancel()
 			if !a.backupCurrent(e, epoch) || ctx.Err() != nil {
@@ -212,7 +212,7 @@ func (a *app) runCipherShareRecovery(repair bool) {
 				inspection, err = session.InspectCipherShareRecovery(ctx, vault, raw, grant, persist)
 			}
 		}
-		a.window.Update(func() {
+		a.postUI(func() {
 			a.pending--
 			defer cancel()
 			if a.backupEditor != e || e.recovery != r || a.epoch != epoch {

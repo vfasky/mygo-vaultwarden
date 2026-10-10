@@ -48,7 +48,6 @@ var app = map[string]text{
 	"app.settings.bind_master_password_label":   {"显式绑定当前账号主密码", "Explicitly bind this account's master password"},
 	"app.settings.bind_master_password_sync":    {"绑定主密码并重新同步", "Bind master password and sync again"},
 	"app.settings.cleanup_pending_hint":         {"旧密钥清理尚未完成。", "Old key cleanup is not yet complete."},
-	"app.settings.close":                        {"关闭设置", "Close settings"},
 	"app.settings.confirm_account_replacement":  {"明确同意替换以上本机账号", "I agree to replace the local account above"},
 	"app.settings.connect_vault":                {"连接密码库", "Connect to vault"},
 	"app.settings.credentials_hint":             {"登录凭据在本地加密保存，解锁后可同步；也可连接其他服务器与账号。", "Login credentials are encrypted and saved locally so you can sync after unlocking. You can also connect to another server or account."},

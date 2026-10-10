@@ -58,14 +58,14 @@ func (a *app) accountRecoveryView(c *ui.Context) {
 		f.confirmed = !f.confirmed
 	}
 	if ui.Button(c, i18n.T("account.recovery.login_verify")).Disabled(f.busy || !f.confirmed || f.oldPassword == "" || f.currentPassword == "").Clicked() {
-		a.resolveAccountRecoveryWith(false, a.window.Update, localstore.Call)
+		a.resolveAccountRecoveryWith(false, a.postUI, localstore.Call)
 	}
 	ui.Text(c, i18n.T("account.recovery.delete_local_copy_hint")).MaxLines(3)
 	if ui.Button(c, i18n.T("account.recovery.confirm_delete_local_copy")).Disabled(f.busy).Clicked() {
 		f.deleteConfirmed = !f.deleteConfirmed
 	}
 	if f.deleteConfirmed && ui.Button(c, i18n.T("account.recovery.delete_local_copy")).Disabled(f.busy || f.oldPassword == "").Clicked() {
-		a.resolveAccountRecoveryWith(true, a.window.Update, localstore.Call)
+		a.resolveAccountRecoveryWith(true, a.postUI, localstore.Call)
 	}
 	if ui.Button(c, i18n.T("account.recovery.cancel_keep_records")).Clicked() {
 		a.runStorage("lock")
@@ -102,7 +102,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 	a.pending++
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	f.cancel = cancel
-	platform := sysauth.NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.mainWindow)
 	go func() {
 		defer clear(oldPassword)
 		defer clear(password)
@@ -226,7 +226,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 				return
 			}
 			a.itemsRevision = reply.State.Revision
-			a.showLogin, a.showSettings = false, false
+			a.showLogin = false
 			a.status = i18n.Tf("account.recovery.status_verified_receipt", strings.Join(verified.ResourceEvidence, "；"))
 			a.startNotifications(dispatch, storage)
 		})

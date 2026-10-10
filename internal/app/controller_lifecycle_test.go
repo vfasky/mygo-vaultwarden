@@ -82,13 +82,13 @@ func TestControllerSendNavigationAndClose(t *testing.T) {
 	storage := func(localstore.Request) localstore.Reply { return localstore.Reply{OK: true, State: &state} }
 	queue := make(chan func(), 8)
 	a.openSendWith(func(f func()) { queue <- f }, storage, false)
-	if a.sendPanel == nil || a.category != "send" {
+	if a.sendPanel == nil || !a.windows.accountOpen || a.windows.accountTab != accountTabSend {
 		t.Fatal("navigation")
 	}
 	p := a.sendPanel
-	tt := ui.NewTester(a.view, 1280, 1800)
+	tt := ui.NewTester(a.accountWindowView, 1280, 1800)
 	if !tt.HasText("新建文本") {
-		t.Fatal("main Send body missing")
+		t.Fatal("account center Send page missing")
 	}
 	p.New(0)
 	p.Fields.Text = "private send"
@@ -96,7 +96,7 @@ func TestControllerSendNavigationAndClose(t *testing.T) {
 	draft := p.Draft
 	p.Draft = nil
 	p.Run(func(context.Context) send.Result { return send.Result{Draft: draft} })
-	a.category = "personal"
+	a.windows.accountTab = accountTabDevices
 	tt.Frame()
 	select {
 	case f := <-queue:
