@@ -39,10 +39,10 @@
 
 | 组件 | 固定版本 / 来源 | 许可证全文 |
 |---|---|---|
-| Dropbox zxcvbn | npm 4.4.2，未经修改的完整 dist 与词典；版权 2012–2016 Dropbox, Inc. | [MIT](internal/passwordstrength/third_party/zxcvbn/LICENSE.txt) |
-| dop251/goja | v0.0.0-20261007120015-921e62952efd | [MIT](internal/passwordstrength/third_party/licenses/goja.txt) |
-| dlclark/regexp2/v2 | v2.8.1 | [MIT](internal/passwordstrength/third_party/licenses/regexp2.txt) |
-| go-sourcemap/sourcemap | v2.1.3+incompatible | [BSD-2-Clause](internal/passwordstrength/third_party/licenses/sourcemap.txt) |
-| google/pprof | v0.0.0-20230207041349-798e818bf904 | [Apache-2.0](internal/passwordstrength/third_party/licenses/pprof.txt) |
+| Dropbox zxcvbn | npm 4.4.2，未经修改的完整 dist 与词典；版权 2012–2016 Dropbox, Inc. | [MIT](third_party/zxcvbn/LICENSE.txt) |
+| dop251/goja | v0.0.0-20261007120015-921e62952efd | [MIT](third_party/licenses/goja.txt) |
+| dlclark/regexp2/v2 | v2.8.1 | [MIT](third_party/licenses/regexp2.txt) |
+| go-sourcemap/sourcemap | v2.1.3+incompatible | [BSD-2-Clause](third_party/licenses/sourcemap.txt) |
+| google/pprof | v0.0.0-20230207041349-798e818bf904 | [Apache-2.0](third_party/licenses/pprof.txt) |
 
 版本、完整性校验、官方客户端来源和输入/Unicode/资源边界见[评分模块说明](internal/passwordstrength/README.md)。Go module 依赖由 go.mod/go.sum 固定；未把额外第三方源码复制进项目，除上述许可证与 zxcvbn 原始发布文件。
