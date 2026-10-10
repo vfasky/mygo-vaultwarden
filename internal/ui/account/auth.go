@@ -47,7 +47,7 @@ func (f *AuthForm) Dispatch() {
 	}
 	if f.Provider == 8 && !f.Confirming {
 		f.Confirming = true
-		f.Status = i18n.T("恢复码会删除此账号的全部双重验证及恢复码。确认后需要重新设置 MFA。")
+		f.Status = i18n.T("account.mfa.confirm_recovery_code_impact")
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -70,9 +70,9 @@ func (f *AuthForm) complete(scope vaultwarden.Scope, epoch, sequence uint64, err
 	f.Busy = false
 	f.Token = ""
 	if err != nil {
-		f.Status = i18n.T("验证失败或结果未知；恢复码可能已关闭全部 MFA，请先核验账号状态。")
+		f.Status = i18n.T("account.mfa.err_verification_uncertain")
 	} else {
-		f.Status = i18n.T("认证响应已完成，等待账号与保险库核验。")
+		f.Status = i18n.T("account.mfa.status_response_completed")
 	}
 	return true
 }
@@ -86,7 +86,7 @@ func AuthFormView(c *ui.Context, f *AuthForm, providers map[int]string) {
 			continue
 		}
 		if p == 8 {
-			label = i18n.T("使用恢复码（关闭全部 MFA）")
+			label = i18n.T("account.mfa.use_recovery_code")
 		}
 		if ui.Button(c, label).Disabled(f.Busy).Clicked() {
 			f.Provider = p
@@ -94,21 +94,21 @@ func AuthFormView(c *ui.Context, f *AuthForm, providers map[int]string) {
 			f.Confirming = false
 		}
 	}
-	ui.TextInput(c, &f.Token).Label(i18n.T("验证响应 / 恢复码")).Password().Disabled(f.Busy)
-	if !f.DisableRemember && ui.Button(c, i18n.T("记住此设备")).Disabled(f.Busy || f.Provider == 8).Clicked() {
+	ui.TextInput(c, &f.Token).Label(i18n.T("account.mfa.verification_response")).Password().Disabled(f.Busy)
+	if !f.DisableRemember && ui.Button(c, i18n.T("account.mfa.remember_device")).Disabled(f.Busy || f.Provider == 8).Clicked() {
 		f.remember = !f.remember
 	}
 	if f.remember {
-		ui.Text(c, i18n.T("此设备将在安全存储中保存 MFA 设备令牌"))
+		ui.Text(c, i18n.T("account.mfa.remember_device_hint"))
 	}
-	label := i18n.T("继续验证")
+	label := i18n.T("account.mfa.continue_verification")
 	if f.Confirming {
-		label = i18n.T("确认关闭全部 MFA 并登录")
+		label = i18n.T("account.mfa.confirm_disable_all_login")
 	}
 	if ui.Button(c, label).Disabled(f.Busy).Clicked() {
 		f.Dispatch()
 	}
-	if ui.Button(c, i18n.T("取消并清除输入")).Clicked() {
+	if ui.Button(c, i18n.T("account.mfa.cancel_clear_input")).Clicked() {
 		f.Close()
 	}
 	ui.Text(c, f.Status).MaxLines(5)

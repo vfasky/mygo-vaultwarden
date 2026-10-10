@@ -15,17 +15,17 @@ import (
 )
 
 func (c *orgServicesController) emergencyView(view *ui.Context) {
-	ui.Text(view, i18n.T("紧急访问")).FontSize(22)
-	if ui.Button(view, i18n.T("我授权的紧急联系人")).Disabled(c.owner.pending != 0).Clicked() {
+	ui.Text(view, i18n.T("account.emergency.title")).FontSize(22)
+	if ui.Button(view, i18n.T("account.emergency.show_trusted_contacts")).Disabled(c.owner.pending != 0).Clicked() {
 		c.loadEmergency(true)
 	}
-	if ui.Button(view, i18n.T("授予我的紧急访问")).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(view, i18n.T("account.emergency.show_granted_access")).Disabled(c.owner.pending != 0).Clicked() {
 		c.loadEmergency(false)
 	}
 	if !c.emergencyTrusted {
 		for _, contact := range c.emergencyContacts {
 			if vaultwarden.EmergencyActionAllowed(contact, false, "view") {
-				if ui.Button(view, i18n.Tf("只读查看：%s · %s", contact.Name, contact.Email)).Disabled(c.owner.pending != 0).Clicked() {
+				if ui.Button(view, i18n.Tf("account.emergency.view_contact", contact.Name, contact.Email)).Disabled(c.owner.pending != 0).Clicked() {
 					c.openEmergencyView(contact)
 				}
 			}
@@ -176,13 +176,13 @@ func (c *orgServicesController) commitRecovery(ctx context.Context, plan *vaultw
 		operationErr = recordErr
 	}
 	if result.IsolationAttempted {
-		message := i18n.Tf("恢复操作 %s 已建立持久隔离；请核对原账号的恢复记录，不会重放。", description.OperationID)
+		message := i18n.Tf("account.recovery.status_quarantined", description.OperationID)
 		if result.Confirmed && recordErr == nil {
-			message = i18n.T("恢复请求及服务器确认已记录；目标仍须本人重新登录、同步和核验。")
+			message = i18n.T("account.recovery.status_request_recorded")
 		} else if !result.Dispatched && recordErr == nil {
-			message = i18n.T("原操作确定未派发；若已隔离目标，须由其本人重新认证解除本机预隔离。")
+			message = i18n.T("account.recovery.status_not_dispatched")
 		} else if recordErr != nil {
-			message = i18n.T("原恢复操作的最终持久结果未确认；保留日志/隔离，勿重新提交。")
+			message = i18n.T("account.recovery.status_durable_result_unknown")
 		}
 		c.dispatch(func() {
 			a := c.owner
@@ -195,7 +195,7 @@ func (c *orgServicesController) commitRecovery(ctx context.Context, plan *vaultw
 				if receipt != nil {
 					a.snapshot = receipt
 				}
-				a.status = i18n.Tf("%s 请重新登录。", message)
+				a.status = i18n.Tf("account.recovery.status_login_required", message)
 				return
 			}
 			if receipt != nil && a.adoptSessionCheckpoint(receipt) {
@@ -245,7 +245,7 @@ func (c *orgServicesController) loadRecoveryMembers() {
 		var choices []account.RecoveryMemberChoice
 		if err == nil {
 			for _, org := range organizations {
-				choices = append(choices, account.RecoveryMemberChoice{OrganizationID: org.ID, MemberID: org.OrganizationUserID, Label: i18n.Tf("%s · 自身恢复登记", org.Name)})
+				choices = append(choices, account.RecoveryMemberChoice{OrganizationID: org.ID, MemberID: org.OrganizationUserID, Label: i18n.Tf("account.recovery.self_enrollment", org.Name)})
 				if org.Type != 0 && org.Type != 1 {
 					continue
 				}

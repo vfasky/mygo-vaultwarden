@@ -66,7 +66,7 @@ func (f *AuthManagementForm) dispatch() {
 	sensitive := f.operation != "list" && f.operation != "request-otp" && f.operation != "verify-otp"
 	if sensitive && !f.confirming {
 		f.confirming = true
-		f.status = i18n.T("确认读取认证秘密或更改双重验证设置。关闭最后一种方式将降低账号保护；请先保管恢复码。")
+		f.status = i18n.T("account.mfa.confirm_settings_impact")
 		return
 	}
 	fields := map[string]json.RawMessage{}
@@ -99,11 +99,11 @@ func (f *AuthManagementForm) Complete(scope vaultwarden.Scope, epoch, sequence u
 	f.clear()
 	if err != nil {
 		f.uncertain = true
-		f.status = i18n.T("操作失败或结果未知。请重新读取服务器设置核验，避免重复启停或注册。")
+		f.status = i18n.T("account.mfa.err_settings_uncertain")
 	} else {
 		f.uncertain = false
 		f.result = result
-		f.status = i18n.T("服务器已返回结果；认证秘密默认隐藏。")
+		f.status = i18n.T("account.mfa.status_settings_received")
 	}
 	return true
 }
@@ -113,12 +113,12 @@ var authManagementOperations = []struct {
 	label  string
 	fields []string
 }{
-	{"list", i18n.T("读取双重验证列表"), nil}, {"get-authenticator", i18n.T("准备验证器"), nil}, {"authenticator", i18n.T("启用验证器"), []string{"key", "token"}},
-	{"get-email", i18n.T("读取邮件验证设置"), nil}, {"send-email", i18n.T("发送邮件设置验证码"), []string{"email"}}, {"email", i18n.T("启用邮件验证"), []string{"email", "token"}},
-	{"get-duo", i18n.T("读取 Duo 设置"), nil}, {"duo", i18n.T("保存 Duo 设置"), []string{"host", "clientId", "clientSecret"}},
-	{"get-yubikey", i18n.T("读取 YubiKey 设置"), nil}, {"yubikey", i18n.T("保存 YubiKey OTP"), []string{"key1", "key2", "key3", "key4", "key5"}},
-	{"get-webauthn", i18n.T("读取安全密钥列表"), nil}, {"get-webauthn-challenge", i18n.T("注册平台安全密钥"), []string{"id", "name"}}, {"delete-webauthn", i18n.T("删除安全密钥"), []string{"id"}},
-	{"get-recover", i18n.T("查看恢复码"), nil}, {"disable", i18n.T("关闭一种双重验证"), []string{"type"}}, {"request-otp", i18n.T("发送敏感操作邮件 OTP"), nil}, {"verify-otp", i18n.T("一次性核验敏感 OTP"), []string{"otp"}},
+	{"list", i18n.T("account.mfa.load_methods"), nil}, {"get-authenticator", i18n.T("account.mfa.prepare_authenticator"), nil}, {"authenticator", i18n.T("account.mfa.enable_authenticator"), []string{"key", "token"}},
+	{"get-email", i18n.T("account.mfa.load_email_settings"), nil}, {"send-email", i18n.T("account.mfa.send_email_setup_code"), []string{"email"}}, {"email", i18n.T("account.mfa.enable_email"), []string{"email", "token"}},
+	{"get-duo", i18n.T("account.mfa.load_duo"), nil}, {"duo", i18n.T("account.mfa.save_duo"), []string{"host", "clientId", "clientSecret"}},
+	{"get-yubikey", i18n.T("account.mfa.load_yubikey"), nil}, {"yubikey", i18n.T("account.mfa.save_yubikey"), []string{"key1", "key2", "key3", "key4", "key5"}},
+	{"get-webauthn", i18n.T("account.mfa.load_security_keys"), nil}, {"get-webauthn-challenge", i18n.T("account.mfa.register_security_key"), []string{"id", "name"}}, {"delete-webauthn", i18n.T("account.mfa.delete_security_key"), []string{"id"}},
+	{"get-recover", i18n.T("account.mfa.view_recovery_code"), nil}, {"disable", i18n.T("account.mfa.disable_method"), []string{"type"}}, {"request-otp", i18n.T("account.mfa.send_sensitive_otp"), nil}, {"verify-otp", i18n.T("account.mfa.verify_sensitive_otp"), []string{"otp"}},
 }
 
 func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
@@ -132,9 +132,9 @@ func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
 			f.operation = entry.op
 		}
 	}
-	ui.TextInput(c, &f.password).Label(i18n.T("主密码（仅在本机生成验证证明）")).Password().Disabled(f.busy)
-	ui.TextInput(c, &f.otp).Label(i18n.T("或敏感操作邮件 OTP；与主密码二选一")).Password().Disabled(f.busy)
-	labels := map[string]string{"name": i18n.T("安全密钥名称"), "key": i18n.T("验证器密钥"), "token": i18n.T("验证码"), "email": i18n.T("接收邮箱"), "host": i18n.T("Duo 主机"), "clientId": i18n.T("Duo 客户端 ID"), "clientSecret": i18n.T("Duo 客户端秘密"), "id": i18n.T("安全密钥编号（1–5）"), "type": i18n.T("验证方式编号（0/1/2/3/7）")}
+	ui.TextInput(c, &f.password).Label(i18n.T("account.mfa.master_password_hint")).Password().Disabled(f.busy)
+	ui.TextInput(c, &f.otp).Label(i18n.T("account.mfa.sensitive_email_otp")).Password().Disabled(f.busy)
+	labels := map[string]string{"name": i18n.T("account.mfa.security_key_name"), "key": i18n.T("account.mfa.authenticator_key"), "token": i18n.T("account.mfa.verification_code"), "email": i18n.T("account.mfa.recipient_email"), "host": i18n.T("account.mfa.duo_host"), "clientId": i18n.T("account.mfa.duo_client_id"), "clientSecret": i18n.T("account.mfa.duo_client_secret"), "id": i18n.T("account.mfa.security_key_id"), "type": i18n.T("account.mfa.method_id")}
 	for _, entry := range authManagementOperations {
 		if entry.op != f.operation {
 			continue
@@ -143,29 +143,29 @@ func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
 			value := f.values[field]
 			label := labels[field]
 			if label == "" {
-				label = i18n.Tf("OTP / YubiKey 槽位 %s", field)
+				label = i18n.Tf("account.mfa.otp_slot", field)
 			}
 			ui.TextInput(c, &value).Label(label).Password().Disabled(f.busy)
 			f.values[field] = value
 		}
 	}
-	label := i18n.T("继续")
+	label := i18n.T("common.continue")
 	if f.confirming {
-		label = i18n.T("确认操作")
+		label = i18n.T("account.mfa.confirm_operation")
 	}
 	if ui.Button(c, label).Disabled(f.busy || (f.uncertain && f.operation != vaultwarden.MFAList)).Clicked() {
 		f.dispatch()
 	}
 	if f.result != "" {
-		if ui.Button(c, i18n.T("显示 / 隐藏认证结果")).Clicked() {
+		if ui.Button(c, i18n.T("account.mfa.toggle_result")).Clicked() {
 			f.reveal = !f.reveal
 		}
-		field := ui.TextInput(c, &f.result).Label(i18n.T("认证结果")).Disabled(true)
+		field := ui.TextInput(c, &f.result).Label(i18n.T("account.mfa.authentication_result")).Disabled(true)
 		if !f.reveal {
 			field.Password()
 		}
 	}
-	if ui.Button(c, i18n.T("取消并清除认证信息")).Clicked() {
+	if ui.Button(c, i18n.T("account.mfa.cancel_clear_authentication")).Clicked() {
 		f.Close()
 	}
 	ui.Text(c, f.status).MaxLines(5)

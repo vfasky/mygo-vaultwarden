@@ -17,7 +17,7 @@ import (
 
 func authenticationSummary(raw json.RawMessage) (string, error) {
 	if len(raw) == 0 {
-		return i18n.T("请求已完成，请重新读取设置核验。"), nil
+		return i18n.T("account.mfa.status_request_completed"), nil
 	}
 	var data struct {
 		Enabled      *bool  `json:"enabled"`
@@ -41,21 +41,21 @@ func authenticationSummary(raw json.RawMessage) (string, error) {
 	}
 	var lines []string
 	if data.Enabled != nil {
-		lines = append(lines, i18n.Tf("已启用：%t", *data.Enabled))
+		lines = append(lines, i18n.Tf("account.mfa.enabled_status", *data.Enabled))
 	}
-	for _, field := range []struct{ label, value string }{{i18n.T("验证器密钥"), data.Key}, {i18n.T("邮箱"), data.Email}, {i18n.T("恢复码"), data.RecoveryCode}, {i18n.T("Duo 主机"), data.Host}, {i18n.T("Duo 客户端 ID"), data.ClientID}, {i18n.T("Duo 客户端秘密"), data.ClientSecret}} {
+	for _, field := range []struct{ label, value string }{{i18n.T("account.mfa.authenticator_key"), data.Key}, {i18n.T("common.email"), data.Email}, {i18n.T("account.mfa.recovery_code"), data.RecoveryCode}, {i18n.T("account.mfa.duo_host"), data.Host}, {i18n.T("account.mfa.duo_client_id"), data.ClientID}, {i18n.T("account.mfa.duo_client_secret"), data.ClientSecret}} {
 		if field.value != "" {
 			lines = append(lines, field.label+"："+field.value)
 		}
 	}
 	for _, key := range data.Keys {
-		lines = append(lines, i18n.Tf("安全密钥 %d：%s", key.ID, key.Name))
+		lines = append(lines, i18n.Tf("account.mfa.security_key_summary", key.ID, key.Name))
 	}
 	for _, provider := range data.Data {
-		lines = append(lines, i18n.Tf("验证方式 %d，已启用：%t", provider.Type, provider.Enabled))
+		lines = append(lines, i18n.Tf("account.mfa.method_summary", provider.Type, provider.Enabled))
 	}
 	if len(lines) == 0 {
-		return i18n.T("服务器已返回；没有已启用的验证方式或额外设置。"), nil
+		return i18n.T("account.mfa.status_no_settings"), nil
 	}
 	return strings.Join(lines, "\n"), nil
 }

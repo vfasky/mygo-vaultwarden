@@ -37,9 +37,9 @@ func (w *mfaRecoveryWarnings) warning(server, email string) string {
 		return ""
 	}
 	if confirmed {
-		return i18n.T("此账号已关闭全部两步验证；请核验并重新设置。")
+		return i18n.T("account.mfa.status_account_all_disabled")
 	}
-	return i18n.T("此账号可能已关闭全部两步验证；登录失败或取消不能证明未执行，请核验并重新设置。")
+	return i18n.T("account.mfa.status_account_all_maybe_disabled")
 }
 
 type controllerMFA struct {
@@ -98,7 +98,7 @@ func (a *app) requestMFA(ctx context.Context, server, email string, epoch uint64
 			deliver(vaultwarden.MFAResponse{Provider: r.Response.Provider, Token: append([]byte(nil), r.Response.Token...), ConfirmRemoveAllMFA: r.Response.ConfirmRemoveAllMFA})
 		})
 		m.form.DisableRemember = true
-		labels := map[int]string{0: i18n.T("验证器验证码"), 1: i18n.T("邮件验证码"), 2: i18n.T("Duo 系统浏览器"), 3: "YubiKey OTP", 7: i18n.T("系统安全密钥")}
+		labels := map[int]string{0: i18n.T("account.mfa.authenticator_code"), 1: i18n.T("account.mfa.email_code"), 2: i18n.T("account.mfa.duo_browser"), 3: "YubiKey OTP", 7: i18n.T("account.mfa.system_security_key")}
 		for raw := range ch.Providers {
 			id, err := strconv.Atoi(raw)
 			if err != nil {
@@ -153,7 +153,7 @@ func (a *app) requestMFA(ctx context.Context, server, email string, epoch uint64
 							if err != nil {
 								m.form.Status = err.Error()
 							} else {
-								m.form.Status = i18n.T("邮件验证码已请求。")
+								m.form.Status = i18n.T("account.mfa.status_email_code_requested")
 							}
 						}
 					})
@@ -197,11 +197,11 @@ func (a *app) mfaLoginView(c *ui.Context) {
 			}
 		}
 	}
-	if m.sendEmail != nil && ui.Button(c, i18n.T("发送邮件验证码")).Disabled(m.form.Busy).Clicked() {
+	if m.sendEmail != nil && ui.Button(c, i18n.T("account.mfa.send_email_code")).Disabled(m.form.Busy).Clicked() {
 		m.sendEmail()
 	}
-	ui.Text(c, i18n.T("本次登录不保存两步验证设备令牌。"))
-	if ui.Button(c, i18n.T("取消登录")).Clicked() {
+	ui.Text(c, i18n.T("account.mfa.no_device_token_hint"))
+	if ui.Button(c, i18n.T("account.mfa.cancel_login")).Clicked() {
 		a.runStorage("lock")
 	}
 }

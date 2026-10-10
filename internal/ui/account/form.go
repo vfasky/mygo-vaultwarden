@@ -90,7 +90,7 @@ func (f *Form) cancel() {
 	f.confirmAction = ""
 	f.busy = false
 	f.sequence++
-	f.Status = i18n.T("已取消；尚未派发的操作不会提交")
+	f.Status = i18n.T("account.form.status_cancelled")
 }
 func (f *Form) accept(scope vaultwarden.Scope, epoch, sequence uint64) bool {
 	return f != nil && !f.closed && f.scope == scope && f.epoch == epoch && f.sequence == sequence
@@ -104,16 +104,16 @@ func (f *Form) Prepared(scope vaultwarden.Scope, epoch, sequence uint64, plan *v
 	f.clearSecrets()
 	if err != nil {
 		plan.Close()
-		f.Status = i18n.T("准备失败，请核对身份、密码、策略及同步状态")
+		f.Status = i18n.T("account.form.err_preparation_failed_hint")
 		return false
 	}
 	if plan == nil {
-		f.Status = i18n.T("准备失败")
+		f.Status = i18n.T("account.form.err_preparation_failed")
 		return false
 	}
 	f.plan = plan
 	f.confirming = true
-	f.Status = i18n.T("核对影响后再次确认")
+	f.Status = i18n.T("account.form.status_review_impact")
 	return true
 }
 func (f *Form) Completed(scope vaultwarden.Scope, epoch, sequence uint64, result vaultwarden.AccountChangeResult, err error) bool {
@@ -129,9 +129,9 @@ func (f *Form) Completed(scope vaultwarden.Scope, epoch, sequence uint64, result
 	if result.Dispatched {
 		f.uncertain = true
 		if result.Confirmed {
-			f.Status = i18n.T("服务器已确认。请重新登录并同步；恢复记录在核验完成前保留")
+			f.Status = i18n.T("account.form.status_confirmed")
 		} else {
-			f.Status = i18n.T("结果未知，可能已部分执行。恢复材料已保留，请核验服务器；不要重试")
+			f.Status = i18n.T("account.form.status_partially_executed")
 		}
 		return true
 	}
@@ -139,12 +139,12 @@ func (f *Form) Completed(scope vaultwarden.Scope, epoch, sequence uint64, result
 		var uncertain *vaultwarden.MutationUncertainError
 		if errors.As(err, &uncertain) {
 			f.uncertain = true
-			f.Status = i18n.T("结果未知，请先核验服务器状态，不要重复提交")
+			f.Status = i18n.T("account.form.status_result_unknown")
 			return true
 		}
-		f.Status = i18n.T("操作未提交，请重新准备")
+		f.Status = i18n.T("account.form.status_not_submitted")
 	} else {
-		f.Status = i18n.T("已完成")
+		f.Status = i18n.T("account.form.status_completed")
 	}
 	return true
 }
@@ -155,14 +155,14 @@ func (f *Form) Registration(scope vaultwarden.Scope, epoch, sequence uint64, r v
 	f.busy = false
 	if err != nil {
 		f.clearSecrets()
-		f.Status = i18n.T("请求失败或结果未知，请检查邮箱后再继续")
+		f.Status = i18n.T("account.form.err_registration_request")
 		return true
 	}
 	if r.EmailSent {
-		f.Status = i18n.Key("验证邮件已请求发送，请输入邮件中的注册令牌")
+		f.Status = i18n.T("account.form.status_registration_email_requested")
 	} else {
 		f.token = r.Token
-		f.Status = i18n.T("服务器已返回注册验证令牌，可以完成注册")
+		f.Status = i18n.T("account.form.status_registration_token_received")
 	}
 	return true
 }
@@ -171,7 +171,7 @@ func (f *Form) dispatch(operation string) {
 		return
 	}
 	if (operation == "prepare-delete" || operation == "prepare-rotate-user-key") && !f.legacyRecoveryReviewed {
-		f.Status = i18n.T("请先处理未决旧附件共享恢复文件，并确认其依赖当前user key的限制。")
+		f.Status = i18n.T("account.rotation.err_pending_share_recovery")
 		return
 	}
 	if operation == "commit" && (!f.confirming || f.plan == nil) {
@@ -185,23 +185,23 @@ func (f *Form) dispatch(operation string) {
 		var err error
 		kdf.Type, err = strconv.Atoi(f.kdfType)
 		if err != nil {
-			f.Status = i18n.T("KDF 类型无效")
+			f.Status = i18n.T("account.form.err_kdf_type")
 			return
 		}
 		kdf.Iterations, err = strconv.Atoi(f.iterations)
 		if err != nil {
-			f.Status = i18n.T("KDF 迭代数无效")
+			f.Status = i18n.T("account.form.err_kdf_iterations")
 			return
 		}
 		if kdf.Type == 1 {
 			kdf.Memory, err = strconv.Atoi(f.memory)
 			if err != nil {
-				f.Status = i18n.T("KDF 内存无效")
+				f.Status = i18n.T("account.form.err_kdf_memory")
 				return
 			}
 			kdf.Parallelism, err = strconv.Atoi(f.parallelism)
 			if err != nil {
-				f.Status = i18n.T("KDF 并行度无效")
+				f.Status = i18n.T("account.form.err_kdf_parallelism")
 				return
 			}
 		}
@@ -209,11 +209,11 @@ func (f *Form) dispatch(operation string) {
 	if operation == "prepare-password" || operation == "register-finish" {
 		password := f.newPassword
 		if password != f.repeatPassword {
-			f.Status = i18n.T("两次主密码不一致")
+			f.Status = i18n.T("account.form.err_password_mismatch")
 			return
 		}
 		if err := f.policy.Check(context.Background(), []byte(password), f.Email, false); err != nil {
-			f.Status = i18n.T("主密码不符合组织策略")
+			f.Status = i18n.T("account.form.err_password_policy")
 			return
 		}
 	}
@@ -249,7 +249,7 @@ func (f *Form) evaluate() {
 	r, err := passwordstrength.Evaluate(context.Background(), f.newPassword, f.Email, nil)
 	if err != nil {
 		f.score = -1
-		f.Status = i18n.T("无法评估主密码")
+		f.Status = i18n.T("account.form.err_password_evaluation")
 		return
 	}
 	f.score = r.Score
@@ -258,23 +258,23 @@ func FormView(c *ui.Context, f *Form) {
 	if f == nil || f.closed {
 		return
 	}
-	ui.Text(c, i18n.T("账号与安全")).FontSize(20)
+	ui.Text(c, i18n.T("account.form.title")).FontSize(20)
 	disabled := f.busy || f.uncertain
 	if f.confirming {
 		if f.confirmAction != "" {
-			ui.Text(c, i18n.T("个人 API key 是敏感凭据；轮换会使旧 key 失效。请确认后继续。")).MaxLines(4)
+			ui.Text(c, i18n.T("account.apikey.confirm_impact")).MaxLines(4)
 		} else {
 			ui.Text(c, accountImpact(f.plan.Kind())).MaxLines(6)
 		}
-		ui.Text(c, i18n.T("提交前必须安全保存恢复材料并暂停旧离线访问。服务器可能部分执行；提交后不能取消远端结果。")).MaxLines(4)
-		if ui.Button(c, i18n.T("确认执行")).Disabled(disabled).Clicked() {
+		ui.Text(c, i18n.T("account.form.confirm_submission_impact")).MaxLines(4)
+		if ui.Button(c, i18n.T("account.form.confirm_execute")).Disabled(disabled).Clicked() {
 			if f.confirmAction != "" {
 				f.dispatch(f.confirmAction)
 			} else {
 				f.dispatch("commit")
 			}
 		}
-		if ui.Button(c, i18n.T("取消")).Disabled(f.busy).Clicked() {
+		if ui.Button(c, i18n.T("common.cancel")).Disabled(f.busy).Clicked() {
 			f.cancel()
 		}
 	} else {
@@ -290,72 +290,72 @@ func FormView(c *ui.Context, f *Form) {
 		}
 		switch f.Mode {
 		case "profile":
-			ui.TextInput(c, &f.name).Label(i18n.T("显示名称（最多 50 字节）")).Disabled(disabled)
-			ui.TextInput(c, &f.avatar).Label(i18n.T("头像颜色 #RRGGBB")).Disabled(disabled)
-			if ui.Button(c, i18n.T("保存资料")).Disabled(disabled).Clicked() {
+			ui.TextInput(c, &f.name).Label(i18n.T("account.form.profile_name")).Disabled(disabled)
+			ui.TextInput(c, &f.avatar).Label(i18n.T("account.form.avatar_color")).Disabled(disabled)
+			if ui.Button(c, i18n.T("account.form.save_profile")).Disabled(disabled).Clicked() {
 				f.dispatch("profile")
 			}
-			if ui.Button(c, i18n.T("保存头像")).Disabled(disabled).Clicked() {
+			if ui.Button(c, i18n.T("account.form.save_avatar")).Disabled(disabled).Clicked() {
 				f.dispatch("avatar")
 			}
-			if ui.Button(c, i18n.T("请求验证邮箱")).Disabled(disabled).Clicked() {
+			if ui.Button(c, i18n.T("account.form.request_email_verification")).Disabled(disabled).Clicked() {
 				f.dispatch("verify-email")
 			}
-			ui.TextInput(c, &f.token).Label(i18n.T("验证邮件令牌")).Password().Disabled(disabled)
-			if ui.Button(c, i18n.T("确认邮件验证令牌")).Disabled(disabled || f.token == "").Clicked() {
+			ui.TextInput(c, &f.token).Label(i18n.T("account.form.verification_email_token")).Password().Disabled(disabled)
+			if ui.Button(c, i18n.T("account.form.confirm_email_token")).Disabled(disabled || f.token == "").Clicked() {
 				f.dispatch("verify-email-token")
 			}
 		case "register":
-			ui.TextInput(c, &f.Email).Label(i18n.T("注册邮箱")).Disabled(disabled)
-			ui.TextInput(c, &f.name).Label(i18n.T("显示名称")).Disabled(disabled)
-			if ui.Button(c, i18n.T("发送主密码提示")).Disabled(disabled || f.Email == "").Clicked() {
+			ui.TextInput(c, &f.Email).Label(i18n.T("account.form.registration_email")).Disabled(disabled)
+			ui.TextInput(c, &f.name).Label(i18n.T("account.form.display_name")).Disabled(disabled)
+			if ui.Button(c, i18n.T("account.form.send_password_hint")).Disabled(disabled || f.Email == "").Clicked() {
 				f.dispatch("password-hint")
 			}
-			if ui.Button(c, i18n.T("发送注册验证邮件")).Disabled(disabled).Clicked() {
+			if ui.Button(c, i18n.T("account.form.send_registration_email")).Disabled(disabled).Clicked() {
 				f.dispatch("register-send")
 			}
-			ui.TextInput(c, &f.token).Label(i18n.T("注册验证令牌")).Password().Disabled(disabled)
+			ui.TextInput(c, &f.token).Label(i18n.T("account.form.registration_token")).Password().Disabled(disabled)
 			accountNewPasswordView(c, f, disabled)
 			accountKDFView(c, f, disabled)
-			if ui.Button(c, i18n.T("完成注册")).Disabled(disabled || f.token == "").Clicked() {
+			if ui.Button(c, i18n.T("account.form.finish_registration")).Disabled(disabled || f.token == "").Clicked() {
 				f.dispatch("register-finish")
 			}
 		default:
-			ui.TextInput(c, &f.password).Label(i18n.T("当前主密码")).Password().Disabled(disabled)
+			ui.TextInput(c, &f.password).Label(i18n.T("account.form.current_password")).Password().Disabled(disabled)
 			switch f.Mode {
 			case "password":
 				accountNewPasswordView(c, f, disabled)
 			case "email":
-				ui.TextInput(c, &f.Email).Label(i18n.T("新邮箱")).Disabled(disabled)
-				if ui.Button(c, i18n.T("请求邮箱变更验证码")).Disabled(disabled).Clicked() {
+				ui.TextInput(c, &f.Email).Label(i18n.T("account.form.new_email")).Disabled(disabled)
+				if ui.Button(c, i18n.T("account.form.request_email_change_code")).Disabled(disabled).Clicked() {
 					f.dispatch("email-token")
 				}
-				ui.TextInput(c, &f.token).Label(i18n.T("邮箱验证码")).Password().Disabled(disabled)
+				ui.TextInput(c, &f.token).Label(i18n.T("account.form.email_change_code")).Password().Disabled(disabled)
 			case "kdf":
 				accountKDFView(c, f, disabled)
 			case "rotate-user-key":
-				if ui.Button(c, i18n.T("读取轮换收件人与组织恢复登记")).Disabled(disabled).Clicked() {
+				if ui.Button(c, i18n.T("account.rotation.load_recipients")).Disabled(disabled).Clicked() {
 					f.dispatch("rotation-recipients")
 				}
-				ui.Text(c, i18n.T("从可信独立渠道取得下列完整SPKI公钥；不把本次服务器返回值直接当成信任依据。")).MaxLines(4)
+				ui.Text(c, i18n.T("account.rotation.trusted_keys_hint")).MaxLines(4)
 				for _, recipient := range f.RotationRequirements.Users {
 					value := f.rotationTrust.Users[recipient.ID]
-					ui.TextInput(c, &value).Label(i18n.Tf("受托人 %s · %s 的可信公钥", recipient.Email, recipient.ID)).Disabled(disabled)
+					ui.TextInput(c, &value).Label(i18n.Tf("account.rotation.trustee_public_key", recipient.Email, recipient.ID)).Disabled(disabled)
 					f.rotationTrust.Users[recipient.ID] = value
 				}
 				for _, recipient := range f.RotationRequirements.Organizations {
 					value := f.rotationTrust.Organizations[recipient.ID]
-					ui.TextInput(c, &value).Label(i18n.Tf("组织 %s · %s 的可信公钥", recipient.Name, recipient.ID)).Disabled(disabled)
+					ui.TextInput(c, &value).Label(i18n.Tf("account.rotation.organization_public_key", recipient.Name, recipient.ID)).Disabled(disabled)
 					f.rotationTrust.Organizations[recipient.ID] = value
 				}
 			case "api-key", "security-stamp", "purge", "delete":
-				ui.TextInput(c, &f.otp).Label(i18n.T("或受保护操作邮件 OTP（与主密码二选一）")).Password().Disabled(disabled)
+				ui.TextInput(c, &f.otp).Label(i18n.T("account.form.protected_email_otp")).Password().Disabled(disabled)
 			}
 			if f.Mode == "rotate-user-key" || f.Mode == "delete" {
-				ui.Text(c, i18n.T(".mygoshare-recovery 文件只依赖当时user key，不能仅用旧主密码独立解锁。请先通过导入导出的共享恢复入口处理所有未决迁移；轮换或删除后旧文件可能无法恢复。")).MaxLines(6)
-				label := i18n.T("确认已处理未决共享恢复文件")
+				ui.Text(c, i18n.T("account.rotation.share_recovery_hint")).MaxLines(6)
+				label := i18n.T("account.rotation.confirm_share_recovery")
 				if f.legacyRecoveryReviewed {
-					label = i18n.T("已确认旧恢复文件限制（点击撤回）")
+					label = i18n.T("account.rotation.revoke_share_recovery_confirmation")
 				}
 				if ui.Button(c, label).Disabled(disabled).Clicked() {
 					f.legacyRecoveryReviewed = !f.legacyRecoveryReviewed
@@ -363,102 +363,102 @@ func FormView(c *ui.Context, f *Form) {
 			}
 			ui.Text(c, accountImpact(vaultwarden.AccountChangeKind(f.Mode))).MaxLines(5)
 			if f.Mode == "api-key" {
-				if ui.Button(c, i18n.T("查看 API key")).Disabled(disabled).Clicked() {
+				if ui.Button(c, i18n.T("account.apikey.view")).Disabled(disabled).Clicked() {
 					f.confirmAction = "api-key"
 					f.confirming = true
 				}
-				if ui.Button(c, i18n.T("轮换 API key")).Disabled(disabled).Clicked() {
+				if ui.Button(c, i18n.T("account.apikey.rotate")).Disabled(disabled).Clicked() {
 					f.confirmAction = "rotate-api-key"
 					f.confirming = true
 				}
-			} else if ui.Button(c, i18n.T("继续并核对影响")).Disabled(disabled).Clicked() {
+			} else if ui.Button(c, i18n.T("account.form.continue_review_impact")).Disabled(disabled).Clicked() {
 				f.dispatch("prepare-" + f.Mode)
 			}
 		}
-		if ui.Button(c, i18n.T("取消并清除敏感输入")).Disabled(f.busy).Clicked() {
+		if ui.Button(c, i18n.T("account.form.cancel_clear_secrets")).Disabled(f.busy).Clicked() {
 			f.cancel()
 		}
 	}
 	if f.apiKey != "" {
-		field := ui.TextInput(c, &f.apiKey).Label(i18n.T("个人 API key（离开或取消后清除）")).Disabled(true)
+		field := ui.TextInput(c, &f.apiKey).Label(i18n.T("account.apikey.secret_value")).Disabled(true)
 		if !f.apiKeyVisible {
 			field.Password()
 		}
-		label := i18n.T("显示 API key")
+		label := i18n.T("account.apikey.show")
 		if f.apiKeyVisible {
-			label = i18n.T("隐藏 API key")
+			label = i18n.T("account.apikey.hide")
 		}
 		if ui.Button(c, label).Clicked() {
 			f.apiKeyVisible = !f.apiKeyVisible
 		}
 	}
 	for _, preparation := range f.RotationPreparations {
-		ui.Text(c, i18n.Tf("需迁移条目 %s / 附件 %s", preparation.CipherID, preparation.AttachmentID)).MaxLines(3)
+		ui.Text(c, i18n.Tf("account.rotation.attachment_to_migrate", preparation.CipherID, preparation.AttachmentID)).MaxLines(3)
 		if preparation.Deleted {
-			ui.Text(c, i18n.T("此项在回收站：只有明确恢复并重新同步后才能升级旧附件；不会自动恢复或删除。")).MaxLines(4)
+			ui.Text(c, i18n.T("account.rotation.trash_attachment_hint")).MaxLines(4)
 		}
-		if f.OpenRotationPreparation != nil && ui.Button(c.Key(preparation.CipherID+"/"+preparation.AttachmentID), i18n.T("打开对应条目进行明确迁移")).Disabled(f.busy).Clicked() {
+		if f.OpenRotationPreparation != nil && ui.Button(c.Key(preparation.CipherID+"/"+preparation.AttachmentID), i18n.T("account.rotation.open_item_migration")).Disabled(f.busy).Clicked() {
 			f.OpenRotationPreparation(preparation.CipherID, preparation.Deleted)
 		}
 	}
-	ui.Text(c, i18n.T(f.Status)).MaxLines(5)
+	ui.Text(c, f.Status).MaxLines(5)
 }
 func accountNewPasswordView(c *ui.Context, f *Form, disabled bool) {
-	ui.TextInput(c, &f.newPassword).Label(i18n.T("新主密码（至少 12 字符）")).Password().Disabled(disabled)
-	ui.TextInput(c, &f.repeatPassword).Label(i18n.T("再次输入新主密码")).Password().Disabled(disabled)
-	ui.TextInput(c, &f.hint).Label(i18n.T("主密码提示（不要填写密码本身）")).Disabled(disabled)
-	if ui.Button(c, i18n.T("评估密码强度")).Disabled(disabled).Clicked() {
+	ui.TextInput(c, &f.newPassword).Label(i18n.T("account.form.new_password")).Password().Disabled(disabled)
+	ui.TextInput(c, &f.repeatPassword).Label(i18n.T("account.form.repeat_password")).Password().Disabled(disabled)
+	ui.TextInput(c, &f.hint).Label(i18n.T("account.form.password_hint")).Disabled(disabled)
+	if ui.Button(c, i18n.T("account.form.evaluate_password")).Disabled(disabled).Clicked() {
 		f.evaluate()
 	}
 	if f.score >= 0 {
-		ui.Text(c, i18n.Tf("密码强度 %d/4", f.score))
+		ui.Text(c, i18n.Tf("account.form.password_strength", f.score))
 	}
-	ui.Text(c, i18n.Tf("组织策略：最低评分 %d，最短 %d；大小写、数字和符号要求在提交前验证。服务器将重新返回当前适用策略。", f.policy.MinComplexity, f.policy.MinLength)).MaxLines(4)
+	ui.Text(c, i18n.Tf("account.form.password_policy_hint", f.policy.MinComplexity, f.policy.MinLength)).MaxLines(4)
 }
 func accountKDFView(c *ui.Context, f *Form, disabled bool) {
 	ui.TextInput(c, &f.kdfType).Label("KDF：0 PBKDF2 / 1 Argon2id").Disabled(disabled)
-	ui.TextInput(c, &f.iterations).Label(i18n.T("迭代次数")).Disabled(disabled)
+	ui.TextInput(c, &f.iterations).Label(i18n.T("account.form.kdf_iterations")).Disabled(disabled)
 	if f.kdfType == "1" {
-		ui.TextInput(c, &f.memory).Label(i18n.T("内存 MiB（16–256）")).Disabled(disabled)
-		ui.TextInput(c, &f.parallelism).Label(i18n.T("并行度（1–16）")).Disabled(disabled)
+		ui.TextInput(c, &f.memory).Label(i18n.T("account.form.kdf_memory")).Disabled(disabled)
+		ui.TextInput(c, &f.parallelism).Label(i18n.T("account.form.kdf_parallelism")).Disabled(disabled)
 	}
 }
 func accountModeLabel(mode string) string {
 	switch mode {
 	case "register":
-		return i18n.T("注册账号")
+		return i18n.T("account.form.register")
 	case "profile":
-		return i18n.T("账号资料")
+		return i18n.T("account.form.profile")
 	case "password":
-		return i18n.T("更改主密码")
+		return i18n.T("account.form.change_password")
 	case "email":
-		return i18n.T("更改邮箱")
+		return i18n.T("account.form.change_email")
 	case "kdf":
-		return i18n.T("更改 KDF")
+		return i18n.T("account.form.change_kdf")
 	case "api-key":
-		return i18n.T("个人 API key")
+		return i18n.T("account.apikey.title")
 	case "security-stamp":
-		return i18n.T("注销所有会话")
+		return i18n.T("account.form.revoke_sessions")
 	case "purge":
-		return i18n.T("清空个人密码库")
+		return i18n.T("account.form.purge_vault")
 	case "delete":
-		return i18n.T("删除账号")
+		return i18n.T("account.form.delete_account")
 	case "rotate-user-key":
-		return i18n.T("轮换用户密钥")
+		return i18n.T("account.rotation.rotate_user_key")
 	}
-	return i18n.T("账号操作")
+	return i18n.T("account.form.operation_title")
 }
 func accountImpact(kind vaultwarden.AccountChangeKind) string {
 	switch kind {
 	case vaultwarden.AccountDelete:
-		return i18n.T("删除账号将删除个人数据，无法撤销。请先确认备份与组织所有权。")
+		return i18n.T("account.form.confirm_delete_impact")
 	case vaultwarden.AccountPurge:
-		return i18n.T("清空全部个人密码库，包括非回收站条目及文件夹；无法撤销。")
+		return i18n.T("account.form.confirm_purge_impact")
 	case vaultwarden.AccountRotateKey:
-		return i18n.T("必须转换全部个人条目、文件夹、Send、紧急访问与组织恢复包装。缺少任何转换器都不能提交；中断可能导致部分数据使用新密钥。")
+		return i18n.T("account.rotation.confirm_impact")
 	case vaultwarden.AccountSecurityStamp:
-		return i18n.T("重置安全戳将注销现有会话，随后必须重新登录。")
+		return i18n.T("account.form.confirm_revoke_sessions_impact")
 	default:
-		return i18n.T("凭据变更会使旧会话失效。新登录、完整同步和安全存储核验完成前保留旧恢复材料。")
+		return i18n.T("account.form.credentials_change_hint")
 	}
 }
