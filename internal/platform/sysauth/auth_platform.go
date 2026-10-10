@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+
+// Package sysauth bridges WebAuthn, Duo, SSO and other interactive MFA steps
+// to macOS system authentication through the bundled Swift bridge.
+package sysauth
 
 import (
 	"context"

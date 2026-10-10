@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -114,7 +115,7 @@ func (p *targetRecoveryController) inspect() {
 	ctx, epoch, generation := p.ctx, p.epoch, p.generation
 	a := p.owner
 	device := a.deviceID
-	platform := NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.window)
 	clock := &a.workerEpoch
 	p.running = true
 	a.pending++

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -76,7 +77,7 @@ func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage fu
 	epoch, scope := a.epoch, *a.liveScope
 	ctx, cancel := context.WithCancel(context.Background())
 	a.componentCancel = cancel
-	platform := NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.window)
 	f := newAuthManagementForm(scope, epoch, nil)
 	complete := a.componentDispatch(session, lease, epoch, dispatch)
 	f.submit = func(r authManagementRequest) {

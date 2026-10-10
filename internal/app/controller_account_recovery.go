@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -98,7 +99,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 	a.pending++
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	f.cancel = cancel
-	platform := NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.window)
 	go func() {
 		defer clear(oldPassword)
 		defer clear(password)

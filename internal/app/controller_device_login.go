@@ -8,6 +8,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -141,7 +142,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(storageReq
 				lifetime.active.Store(false)
 				return
 			}
-			platform := NewAuthenticationPlatform(a.window)
+			platform := sysauth.NewAuthenticationPlatform(a.window)
 			var panel *DeviceLoginPanel
 			host := DeviceLoginHost{Check: lifetime.check, Platform: platform.MFA(server, epoch), AcceptingMessage: "设备凭据已验证，正在核对本机策略与恢复屏障…"}
 			host.Dispatch = func(f func()) { dispatch(func() { f(); a.retainDeviceWarnings(panel) }) }

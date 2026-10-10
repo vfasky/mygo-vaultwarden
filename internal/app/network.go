@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -188,7 +189,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(stor
 	// Capture on the UI thread; only the successful authenticated publication
 	// below may consume this continuation. Status observations cannot mint one.
 	backupContinuation := a.captureBackupContinuation(epoch)
-	platform := NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.window)
 	go func() {
 		defer clear(password)
 		var session vaultSession = existing
