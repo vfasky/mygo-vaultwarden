@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"testing"
 )
@@ -28,11 +29,11 @@ func TestFolderNavigationEditorAndLock(t *testing.T) {
 	a.editor = nil
 	a.openFolderEditor("folder-1")
 	tt := ui.NewTester(a.view, 1280, 820)
-	clickUI(t, tt, "删除文件夹")
+	uitest.Click(t, tt, "删除文件夹")
 	if !a.folderEditor.confirm || a.pending != 0 {
 		t.Fatal("delete confirmation missing")
 	}
-	clickUI(t, tt, "取消删除")
+	uitest.Click(t, tt, "取消删除")
 	if a.folderEditor.confirm {
 		t.Fatal("cancel failed")
 	}

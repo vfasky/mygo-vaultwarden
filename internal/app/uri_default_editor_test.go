@@ -4,6 +4,7 @@ package app
 import (
 	"encoding/json"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 )
 
@@ -34,8 +35,8 @@ func TestNativeEditorShowsPolicyDefaultWithoutFreezingInheritedRule(t *testing.T
 		if u.source["match"] != nil {
 			t.Fatal("inherited default frozen")
 		}
-		clickUI(t, tt, "匹配方式：默认")
-		clickUI(t, tt, "基本域名")
+		uitest.Click(t, tt, "匹配方式：默认")
+		uitest.Click(t, tt, "基本域名")
 		if u.source["match"] != json.Number("0") {
 			t.Fatal("explicit selection overridden")
 		}

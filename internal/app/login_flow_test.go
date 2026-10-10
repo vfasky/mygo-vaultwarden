@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"sync"
 	"testing"
 	"time"
@@ -96,13 +97,13 @@ func TestInlineVerificationSubmissionAndRetry(t *testing.T) {
 	if !tt.HasText("两步验证") || tt.HasText("主密码") || a.masterPassword != "" {
 		t.Fatal("challenge did not replace password form")
 	}
-	clickUI(t, tt, "验证码")
+	uitest.Click(t, tt, "验证码")
 	tt.Type("12a")
-	clickUI(t, tt, "验证并登录")
+	uitest.Click(t, tt, "验证并登录")
 	if !tt.HasText("请输入 6 位数字验证码。") || a.loginChallenge == nil {
 		t.Fatal("invalid code advanced the challenge")
 	}
-	clickUI(t, tt, "验证码")
+	uitest.Click(t, tt, "验证码")
 	tt.Key(ui.Cmd, ui.KeyA)
 	tt.Type("123 456")
 	tt.Key(0, ui.KeyEnter)
@@ -124,7 +125,7 @@ func TestInlineVerificationSubmissionAndRetry(t *testing.T) {
 	if !tt.HasText("验证码错误或已过期") {
 		t.Fatal("retry message missing")
 	}
-	clickUI(t, tt, "验证码")
+	uitest.Click(t, tt, "验证码")
 	tt.Key(ui.Cmd, ui.KeyZ)
 	if a.verificationCode != "" {
 		t.Fatal("undo restored the previous code in a new challenge")
@@ -152,7 +153,7 @@ func TestPasswordFieldMasksCopyAndResetsUndo(t *testing.T) {
 	a := &app{snapshot: &snapshotStatus{Revision: "empty"}, deviceID: "fixture",
 		serverURL: "https://vault.example.com", email: "invalid"}
 	tt := ui.NewTester(a.view, 1060, 700)
-	clickUI(t, tt, "主密码")
+	uitest.Click(t, tt, "主密码")
 	tt.Type("fixture-secret")
 	if a.masterPassword != "fixture-secret" || tt.HasText("fixture-secret") {
 		t.Fatal("password input did not mask typed content")
@@ -165,7 +166,7 @@ func TestPasswordFieldMasksCopyAndResetsUndo(t *testing.T) {
 	}
 	a.resetLoginForm()
 	tt.Frame()
-	clickUI(t, tt, "主密码")
+	uitest.Click(t, tt, "主密码")
 	tt.Key(ui.Cmd, ui.KeyZ)
 	if a.masterPassword != "" {
 		t.Fatal("undo restored a cleared password")
@@ -173,7 +174,7 @@ func TestPasswordFieldMasksCopyAndResetsUndo(t *testing.T) {
 
 	a.email = "person@example.invalid"
 	tt.Frame()
-	clickUI(t, tt, "登录并同步")
+	uitest.Click(t, tt, "登录并同步")
 	if a.pending != 0 || a.status != "请输入主密码。" {
 		t.Fatal("empty password reached native storage or network")
 	}

@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"strings"
 	"testing"
 
@@ -46,13 +47,13 @@ func TestPasswordUnlockFormAndValidation(t *testing.T) {
 		}
 	}
 	assertVaultHidden(t, tt)
-	clickUI(t, tt, "解锁密码库")
+	uitest.Click(t, tt, "解锁密码库")
 	if a.status != "请输入主密码。" || a.pending != 0 {
 		t.Fatal("empty password was not validated locally")
 	}
 	a.status = ""
 	tt.Frame()
-	clickUI(t, tt, "主密码")
+	uitest.Click(t, tt, "主密码")
 	tt.Key(0, ui.KeyEnter)
 	if a.status != "请输入主密码。" {
 		t.Fatal("Enter did not submit the password form")
@@ -65,8 +66,8 @@ func TestPasswordUnlockFormAndValidation(t *testing.T) {
 	// Pending authentication must disable both routes, including Enter.
 	a.pending, a.status = 1, "pending"
 	tt.Frame()
-	clickUI(t, tt, "处理中…")
-	clickUI(t, tt, "使用 Touch ID 解锁")
+	uitest.Click(t, tt, "处理中…")
+	uitest.Click(t, tt, "使用 Touch ID 解锁")
 	tt.Key(0, ui.KeyEnter)
 	if a.status != "pending" || a.pending != 1 {
 		t.Fatal("duplicate authentication was started")
@@ -80,11 +81,11 @@ func TestLegacySnapshotOffersMigrationAndRetainsTouchID(t *testing.T) {
 	if !tt.HasText("使用 Touch ID 解锁") || !tt.HasText("此密码库需重新登录一次") {
 		t.Fatal("legacy snapshot has no supported unlock route or migration guidance")
 	}
-	clickUI(t, tt, "解锁密码库")
+	uitest.Click(t, tt, "解锁密码库")
 	if a.pending != 0 {
 		t.Fatal("legacy snapshot started unsupported password unlock")
 	}
-	clickUI(t, tt, "重新登录")
+	uitest.Click(t, tt, "重新登录")
 	if !a.showLogin || a.serverURL != "https://vault.example.com" {
 		t.Fatal("migration did not open login for the last server")
 	}

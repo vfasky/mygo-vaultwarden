@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -38,11 +39,11 @@ func TestOrganizationMemberCanConfirmLeaveWithoutOwnerControls(t *testing.T) {
 	if a.organizationEditor == nil || a.organizationEditor.owner || tt.HasText("保存组织") || tt.HasText("删除组织") {
 		t.Fatal("member owner controls")
 	}
-	clickUI(t, tt, "退出组织")
+	uitest.Click(t, tt, "退出组织")
 	if a.organizationEditor.confirmation != "leave" || a.pending != 0 {
 		t.Fatal("leave did not require confirmation")
 	}
-	clickUI(t, tt, "取消组织操作")
+	uitest.Click(t, tt, "取消组织操作")
 	if a.organizationEditor.confirmation != "" || a.pending != 0 {
 		t.Fatal("leave cancel")
 	}

@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -16,17 +17,17 @@ func TestCopyConfirmationKeepsDraftAndHonorsRevision(t *testing.T) {
 	e := a.editor
 	e.fields.Name = "local copy title"
 	tt := ui.NewTester(func(c *ui.Context) { a.cipherStateButtons(c, e) }, 900, 500)
-	clickUI(t, tt, "复制为新项目")
+	uitest.Click(t, tt, "复制为新项目")
 	if e.confirm != copyCipherAction || a.pending != 0 {
 		t.Fatal("copy without confirmation")
 	}
-	clickUI(t, tt, "取消操作")
+	uitest.Click(t, tt, "取消操作")
 	if e.confirm != "" || e.fields.Name != "local copy title" {
 		t.Fatal("cancel lost draft")
 	}
-	clickUI(t, tt, "复制为新项目")
+	uitest.Click(t, tt, "复制为新项目")
 	e.revision = "stale"
-	clickUI(t, tt, "确认")
+	uitest.Click(t, tt, "确认")
 	if a.pending != 0 || a.editor != e {
 		t.Fatal("copy bypassed revision or lost draft")
 	}

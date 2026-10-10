@@ -4,6 +4,7 @@ package app
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -91,7 +92,7 @@ func TestLegacyUnlockSyncButtonOpensLoginWithoutDeletingVault(t *testing.T) {
 	a.completeStorage(storageRequest{Operation: "list", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1,
 		storageReply{OK: true, State: a.snapshot, Items: []displayCredential{{ID: "one"}}})
 	tt := ui.NewTester(a.view, 1060, 700)
-	clickUI(t, tt, "同步")
+	uitest.Click(t, tt, "同步")
 	if !a.showLogin || !a.unlocked() || a.pending != 0 || !tt.HasText("登录服务器") {
 		t.Fatal("legacy sync stayed disabled or deleted the vault on navigation")
 	}

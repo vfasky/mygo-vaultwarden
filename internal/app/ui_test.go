@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -30,13 +31,6 @@ func previewApp() *app {
 			{ID: "7", Title: "Vercel", Username: "alex-dev", URL: "https://vercel.com"},
 			{ID: "8", Title: "工作邮箱", Username: "alex@work.example.com", URL: "https://mail.example.com"},
 		},
-	}
-}
-
-func clickUI(t *testing.T, tt *ui.Tester, label string) {
-	t.Helper()
-	if err := tt.Click(label); err != nil {
-		t.Fatal(err)
 	}
 }
 
@@ -101,7 +95,7 @@ func TestVaultSidebarToggle(t *testing.T) {
 	if r, ok := tt.Find("折叠侧栏"); !ok || r.X < 88 || r.X+r.W > 236 || r.Y < 0 || r.Y+r.H > 52 {
 		t.Fatal("expanded toggle must remain in sidebar title bar past native window controls")
 	}
-	clickUI(t, tt, "折叠侧栏")
+	uitest.Click(t, tt, "折叠侧栏")
 	if !a.sidebarCollapsed {
 		t.Fatal("sidebar did not collapse")
 	}
@@ -118,15 +112,15 @@ func TestVaultSidebarToggle(t *testing.T) {
 			t.Fatalf("collapsed sidebar retained text %q", text)
 		}
 	}
-	clickUI(t, tt, "支付卡")
+	uitest.Click(t, tt, "支付卡")
 	if a.category != "card" {
 		t.Fatal("collapsed category navigation failed")
 	}
-	clickUI(t, tt, "我的密码库")
+	uitest.Click(t, tt, "我的密码库")
 	if a.category != "personal" || a.showSettings {
 		t.Fatal("collapsed vault navigation failed")
 	}
-	clickUI(t, tt, "展开侧栏")
+	uitest.Click(t, tt, "展开侧栏")
 	if a.sidebarCollapsed || !slices.Contains(tt.Texts(), "所有密码库") {
 		t.Fatal("sidebar did not expand")
 	}
@@ -150,7 +144,7 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 		t.Fatal("collapsed sidebar retained count badge")
 	}
 	for _, category := range vaultCategories {
-		clickUI(t, tt, category.title)
+		uitest.Click(t, tt, category.title)
 		if a.category != category.id || a.showSettings {
 			t.Fatalf("collapsed navigation failed for %s", category.title)
 		}
@@ -166,11 +160,11 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 			t.Fatalf("collapsed button %q has %d labels/texts, want 1", category.title, count)
 		}
 	}
-	clickUI(t, tt, "账号与设置")
+	uitest.Click(t, tt, "账号与设置")
 	if !a.showSettings {
 		t.Fatal("collapsed sidebar settings did not open")
 	}
-	clickUI(t, tt, "我的密码库")
+	uitest.Click(t, tt, "我的密码库")
 	if a.category != "personal" || a.showSettings {
 		t.Fatal("collapsed vault navigation did not close settings")
 	}
@@ -183,15 +177,15 @@ func TestCollapsedSidebarBaselineNavigationAndRevocation(t *testing.T) {
 	a.folders = []vaultwarden.Folder{{ID: "folder-1", Name: "测试文件夹"}}
 	tt := ui.NewTester(a.view, 1280, 820)
 	if organizationUIEnabled {
-		clickUI(t, tt, "团队组织")
+		uitest.Click(t, tt, "团队组织")
 		if a.category != "org:organization-1" || len(a.filteredItems()) != 1 {
 			t.Fatal("collapsed organization navigation lost baseline filter")
 		}
-		clickUI(t, tt, "  团队集合")
+		uitest.Click(t, tt, "  团队集合")
 		if a.category != "collection:collection-1" {
 			t.Fatal("collapsed collection navigation lost destination")
 		}
-		clickUI(t, tt, "查看与编辑")
+		uitest.Click(t, tt, "查看与编辑")
 		if a.editor == nil || a.editor.inputs[1].value != "org secret" {
 			t.Fatal("collapsed navigation lost authorized editor")
 		}
@@ -200,11 +194,11 @@ func TestCollapsedSidebarBaselineNavigationAndRevocation(t *testing.T) {
 		t.Fatal("deferred organization UI exposed")
 	}
 	tt.Frame()
-	clickUI(t, tt, "测试文件夹")
+	uitest.Click(t, tt, "测试文件夹")
 	if a.category != "folder:folder-1" {
 		t.Fatal("collapsed folder navigation lost filter")
 	}
-	clickUI(t, tt, "我的密码库")
+	uitest.Click(t, tt, "我的密码库")
 	for _, item := range a.filteredItems() {
 		if item.ID == "organization-item" {
 			t.Fatal("personal navigation leaked organization item")
@@ -223,19 +217,19 @@ func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 	if a.selectedID != "1" {
 		t.Fatalf("initial selection = %s", a.selectedID)
 	}
-	clickUI(t, tt, "GitHub")
+	uitest.Click(t, tt, "GitHub")
 	if a.selectedID != "3" {
 		t.Fatalf("clicked selection = %s", a.selectedID)
 	}
-	clickUI(t, tt, "复制用户名")
+	uitest.Click(t, tt, "复制用户名")
 	if tt.Clipboard() != "alex-dev" {
 		t.Fatal("copy did not use selected credential")
 	}
-	clickUI(t, tt, "打开网站")
+	uitest.Click(t, tt, "打开网站")
 	if !slices.Equal(tt.OpenedURLs(), []string{"https://github.com/login"}) {
 		t.Fatal("wrong site opened")
 	}
-	clickUI(t, tt, "GitHub")
+	uitest.Click(t, tt, "GitHub")
 	tt.Key(0, ui.KeyDown)
 	if a.selectedID != "4" {
 		t.Fatalf("keyboard selection = %s", a.selectedID)
@@ -249,12 +243,12 @@ func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 	if a.selectedID != "" || slices.Contains(tt.Texts(), "alex.design@example.com") {
 		t.Fatal("search retained stale detail")
 	}
-	clickUI(t, tt, "清除搜索")
-	clickUI(t, tt, "支付卡")
+	uitest.Click(t, tt, "清除搜索")
+	uitest.Click(t, tt, "支付卡")
 	if a.selectedID != "" || len(a.filteredItems()) != 0 {
 		t.Fatal("empty card category showed login credentials")
 	}
-	clickUI(t, tt, "登录")
+	uitest.Click(t, tt, "登录")
 	if a.selectedID == "" {
 		t.Fatal("returning to logins did not select item")
 	}
@@ -268,7 +262,7 @@ func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 func TestVaultSelectionSurvivesReplacement(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1060, 700)
-	clickUI(t, tt, "Figma")
+	uitest.Click(t, tt, "Figma")
 	a.items = append([]displayCredential{{ID: "0", Title: "A new login"}}, a.items...)
 	tt.Frame()
 	if a.selectedID != "2" {
@@ -285,15 +279,15 @@ func TestVaultSettingsAndSafeLinks(t *testing.T) {
 	a := previewApp()
 	a.items[0].URL = "javascript:alert(1)"
 	tt := ui.NewTester(a.view, 1060, 700)
-	clickUI(t, tt, "打开网站")
+	uitest.Click(t, tt, "打开网站")
 	if len(tt.OpenedURLs()) != 0 {
 		t.Fatal("unsafe URL opened")
 	}
-	clickUI(t, tt, "账号与设置")
+	uitest.Click(t, tt, "账号与设置")
 	if !a.showSettings || !slices.Contains(tt.Texts(), "连接密码库") {
 		t.Fatal("settings did not open")
 	}
-	clickUI(t, tt, "关闭设置")
+	uitest.Click(t, tt, "关闭设置")
 	if a.showSettings {
 		t.Fatal("settings did not close")
 	}

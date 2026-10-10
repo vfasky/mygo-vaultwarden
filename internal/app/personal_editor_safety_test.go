@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"testing"
 )
@@ -58,16 +59,16 @@ func TestHistoryDeletionRequiresConfirmationAndStaysInDraft(t *testing.T) {
 	e := a.editor
 	e.fields.PasswordHistory = []map[string]any{{"password": "fixture", "lastUsedDate": "2026-01-01T00:00:00Z"}}
 	tester := ui.NewTester(func(c *ui.Context) { a.passwordHistoryView(c, e) }, 600, 400)
-	clickUI(t, tester, "清除密码历史")
+	uitest.Click(t, tester, "清除密码历史")
 	if !e.confirmHistoryDelete || len(e.fields.PasswordHistory) != 1 || a.pending != 0 {
 		t.Fatal("history changed before confirmation")
 	}
-	clickUI(t, tester, "保留历史")
+	uitest.Click(t, tester, "保留历史")
 	if e.confirmHistoryDelete || len(e.fields.PasswordHistory) != 1 {
 		t.Fatal("cancel removed history")
 	}
-	clickUI(t, tester, "清除密码历史")
-	clickUI(t, tester, "确认清除历史")
+	uitest.Click(t, tester, "清除密码历史")
+	uitest.Click(t, tester, "确认清除历史")
 	if len(e.fields.PasswordHistory) != 0 || a.pending != 0 {
 		t.Fatal("confirmation should only edit draft")
 	}

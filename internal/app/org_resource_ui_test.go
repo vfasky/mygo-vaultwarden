@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"io"
 	"os"
 	"testing"
@@ -60,7 +61,7 @@ func TestOrgResourceExportRequiresExplicitFormatAndConfirmation(t *testing.T) {
 	panel := newOrgExportPanelWithResources("Org", true, func(context.Context, string, bool) error { normal++; return nil }, func(context.Context, string) error { resources++; return nil }, func(f func()) { q <- f })
 	panel.path = "/tmp/not-written-by-test.mygoresources"
 	tester := ui.NewTester(panel.View, 1000, 700)
-	clickUI(t, tester, "MyGo 完整组织资源备份（附件与通行密钥，非官方格式）")
+	uitest.Click(t, tester, "MyGo 完整组织资源备份（附件与通行密钥，非官方格式）")
 	panel.start()
 	if panel.flow.running || normal != 0 || resources != 0 {
 		t.Fatal("unconfirmed export")
@@ -139,19 +140,19 @@ func TestOrgResourceRestoreUnknownUploadSyncAndVerify(t *testing.T) {
 		}, refresh: func(context.Context) error { syncs++; return nil }, dispatch: func(f func()) { q <- f },
 	})
 	tester := ui.NewTester(panel.View, 1100, 1000)
-	clickUI(t, tester, "确认向目标上传一次（保留源文件）")
+	uitest.Click(t, tester, "确认向目标上传一次（保留源文件）")
 	orgUIComplete(t, q)
 	tester.Frame()
 	if uploads != 1 || panel.rows[0].attachmentID != "server-file" || panel.rows[0].state != "待核对" || !panel.needsRefresh {
 		t.Fatal("partial upload not retained")
 	}
-	clickUI(t, tester, "同步并刷新权限后继续")
+	uitest.Click(t, tester, "同步并刷新权限后继续")
 	orgUIComplete(t, q)
 	tester.Frame()
 	if syncs != 1 || panel.needsRefresh {
 		t.Fatal("refresh gate")
 	}
-	clickUI(t, tester, "下载并核验所选附件")
+	uitest.Click(t, tester, "下载并核验所选附件")
 	orgUIComplete(t, q)
 	tester.Frame()
 	if verifications != 1 || uploads != 1 || panel.rows[0].state != "已核验" || !panel.filesVerified("source-item", "target-item") {

@@ -9,6 +9,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -59,22 +60,22 @@ func TestNativeOrganizationNavigationReadWriteAndLock(t *testing.T) {
 	a := organizationUIFixture(t, true, true, 0)
 	defer a.stopNetwork()
 	tt := ui.NewTester(a.view, 1280, 820)
-	clickUI(t, tt, "团队组织")
+	uitest.Click(t, tt, "团队组织")
 	if len(a.filteredItems()) != 1 || a.filteredItems()[0].Title != "组织条目" {
 		t.Fatal("organization filter")
 	}
-	clickUI(t, tt, "查看与编辑")
+	uitest.Click(t, tt, "查看与编辑")
 	if a.editor == nil || a.editor.fields.OrganizationID == nil || a.editor.inputs[1].value != "org secret" {
 		t.Fatal("organization editor")
 	}
 	a.editor = nil
 	a.category = "collection:collection-1"
 	tt.Frame()
-	clickUI(t, tt, "新增")
+	uitest.Click(t, tt, "新增")
 	if a.editor == nil || a.editor.organizationID != "organization-1" || a.editor.collectionID != "collection-1" {
 		t.Fatal("organization creation destination")
 	}
-	clickUI(t, tt, "类型：支付卡")
+	uitest.Click(t, tt, "类型：支付卡")
 	if a.editor.fields.Type != 3 || len(a.editor.inputs) != len(editorSpecs[3]) {
 		t.Fatal("organization type selector")
 	}
@@ -166,12 +167,12 @@ func TestNativeOrganizationShareRequiresDestinationConfirmation(t *testing.T) {
 	a.openCipherEditor("card-1", 3)
 	tt := ui.NewTester(a.view, 1280, 820)
 	tt.Scroll(1100, 600, 0, 3000)
-	clickUI(t, tt, "共享到 团队组织 / 团队集合")
+	uitest.Click(t, tt, "共享到 团队组织 / 团队集合")
 	if a.editor.shareCollectionID != "collection-1" || a.editor.shareOrganizationID != "organization-1" || a.pending != 0 || !tt.HasText("确认共享到组织") {
 		t.Fatal("share confirmation missing")
 	}
 	tt.Scroll(1100, 600, 0, 1500)
-	clickUI(t, tt, "取消共享")
+	uitest.Click(t, tt, "取消共享")
 	if a.editor.shareCollectionID != "" || a.pending != 0 {
 		t.Fatalf("share cancel mutation: collection=%q pending=%d", a.editor.shareCollectionID, a.pending)
 	}

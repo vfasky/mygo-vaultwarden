@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -40,8 +41,8 @@ func writableUIFixture(t *testing.T) *app {
 func TestNativeEditorUsesAuthenticatedVaultAndClearsOnLock(t *testing.T) {
 	a := writableUIFixture(t)
 	tt := ui.NewTester(a.view, 1280, 820)
-	clickUI(t, tt, "支付卡")
-	clickUI(t, tt, "查看与编辑")
+	uitest.Click(t, tt, "支付卡")
+	uitest.Click(t, tt, "查看与编辑")
 	if a.editor == nil || !tt.HasText("编辑支付卡") {
 		t.Fatal("editor unreachable")
 	}
@@ -49,11 +50,11 @@ func TestNativeEditorUsesAuthenticatedVaultAndClearsOnLock(t *testing.T) {
 		t.Fatal("authenticated decryption missing")
 	}
 	tt.Scroll(1100, 600, 0, 2000)
-	clickUI(t, tt, "移入回收站")
+	uitest.Click(t, tt, "移入回收站")
 	if a.editor.confirm != vaultwarden.CipherTrash || !tt.HasText("确认将项目移入回收站？") {
 		t.Fatal("destructive action lacks confirmation")
 	}
-	clickUI(t, tt, "取消操作")
+	uitest.Click(t, tt, "取消操作")
 	if a.pending != 0 || a.editor.confirm != "" {
 		t.Fatal("confirmation cancellation mutated vault")
 	}
@@ -121,7 +122,7 @@ func TestNativeEightTypeCreationAndArchiveCategories(t *testing.T) {
 		a.category = category.id
 		a.editor = nil
 		tt := ui.NewTester(a.view, 1280, 820)
-		clickUI(t, tt, "新增")
+		uitest.Click(t, tt, "新增")
 		if a.editor == nil || a.editor.fields.Type != category.kind {
 			t.Fatalf("wrong create type %s", category.id)
 		}

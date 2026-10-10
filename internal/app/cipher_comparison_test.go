@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -86,15 +87,15 @@ func TestCipherComparisonNativeEntryMaskedAndExplicit(t *testing.T) {
 	publishComparisonFixture(t, a, func(o map[string]any) { o["futureExtension"] = "remote opaque" })
 	tt := ui.NewTester(a.view, 1280, 820)
 	tt.Scroll(1100, 600, 0, 4000)
-	clickUI(t, tt, "比较本地与远端改动")
+	uitest.Click(t, tt, "比较本地与远端改动")
 	if draft.comparison == nil || !tt.HasText("比较本地与远端改动") || !tt.HasText("标题：本地已改；远端未改") {
 		t.Fatal("comparison not reachable")
 	}
 	if tt.HasText("local-sensitive-title") || tt.HasText("4242424242424242") {
 		t.Fatal("comparison exposes secret values")
 	}
-	clickUI(t, tt, "采用我的修改")
-	clickUI(t, tt, "按以上选择重新应用到草稿")
+	uitest.Click(t, tt, "采用我的修改")
+	uitest.Click(t, tt, "按以上选择重新应用到草稿")
 	if a.editor != draft || draft.comparison != nil || draft.revision != a.sessionRevision || draft.fields.Name != "local-sensitive-title" || draft.fields.RevisionDate != "2026-01-02T00:00:00Z" || a.pending != 0 || draft.conflict || draft.uncertain {
 		t.Fatal("reapply did not produce unsent current draft")
 	}
@@ -163,7 +164,7 @@ func TestCipherComparisonCancelLockAndSecondSync(t *testing.T) {
 			switch scenario {
 			case "return":
 				tt := ui.NewTester(a.view, 1280, 820)
-				clickUI(t, tt, "返回，保留原草稿")
+				uitest.Click(t, tt, "返回，保留原草稿")
 				if e.comparison != nil || e.fields.Name != "local" || e.revision == a.sessionRevision {
 					t.Fatal("return lost old draft")
 				}

@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -36,11 +37,11 @@ func TestNativeAttachmentsActionsConfirmationAndCancellation(t *testing.T) {
 	if !tt.HasText("附件") || !tt.HasText("fixture.txt") || !tt.HasText("选择并上传文件…") || !tt.HasText("下载并另存为…") {
 		t.Fatal("attachment entry unavailable")
 	}
-	clickUI(t, tt, "删除附件…")
+	uitest.Click(t, tt, "删除附件…")
 	if e.attachmentDelete != "attachment-1" || !tt.HasText("永久删除此附件？此操作无法撤销。") {
 		t.Fatal("missing deletion confirmation")
 	}
-	clickUI(t, tt, "保留附件")
+	uitest.Click(t, tt, "保留附件")
 	if e.attachmentDelete != "" || a.pending != 0 {
 		t.Fatal("cancel deletion changed state")
 	}
@@ -53,7 +54,7 @@ func TestNativeAttachmentsActionsConfirmationAndCancellation(t *testing.T) {
 	if !tt.HasText("正在验证权限并传输附件，请稍候…") {
 		t.Fatal("missing progress state")
 	}
-	clickUI(t, tt, "取消附件操作")
+	uitest.Click(t, tt, "取消附件操作")
 	if ctx.Err() == nil {
 		t.Fatal("cancel did not reach transfer context")
 	}

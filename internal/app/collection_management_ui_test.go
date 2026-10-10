@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 
 	"github.com/egoist/mygo/ui"
@@ -59,11 +60,11 @@ func TestCollectionAccessNativeConfirmationAndLock(t *testing.T) {
 	if !tt.HasText("成员：甲 · a@example.invalid") || !tt.HasText("服务器未启用群组。") {
 		t.Fatal("friendly directory/feature boundary absent")
 	}
-	clickUI(t, tt, "管理集合：否")
+	uitest.Click(t, tt, "管理集合：否")
 	if !draft.Access[0].Manage || draft.Access[0].ReadOnly || draft.Access[0].HidePasswords {
 		t.Fatal("inconsistent manage flags")
 	}
-	clickUI(t, tt, "保存集合")
+	uitest.Click(t, tt, "保存集合")
 	if a.pending != 0 || a.organizationEditor.confirmation != "collection-access-save" || !tt.HasText("确认保存访问配置") {
 		t.Fatal("access save omitted confirmation")
 	}

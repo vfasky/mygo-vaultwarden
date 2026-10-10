@@ -3,6 +3,7 @@ package app
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"testing"
 )
@@ -36,7 +37,7 @@ func TestMemberNativeAdminEntryAndInvitationConfirmation(t *testing.T) {
 	if a.pending != 0 || !tt.HasText("确认接受邀请") {
 		t.Fatal("accept omitted consent")
 	}
-	clickUI(t, tt, "取消接受邀请")
+	uitest.Click(t, tt, "取消接受邀请")
 	if a.organizationEditor.confirmation != "" {
 		t.Fatal("cancel")
 	}

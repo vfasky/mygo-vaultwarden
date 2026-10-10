@@ -3,6 +3,7 @@ package app
 
 import (
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"testing"
 )
@@ -27,19 +28,19 @@ func TestGroupNativeScopeConsentCancelAndLock(t *testing.T) {
 	if !tt.HasText("成员：甲 · a@example.invalid") || !tt.HasText("集合：工程集合") {
 		t.Fatal("business labels absent")
 	}
-	clickUI(t, tt, "保存群组")
+	uitest.Click(t, tt, "保存群组")
 	if a.organizationEditor.confirmation != "" {
 		t.Fatal("unset scope accepted")
 	}
-	clickUI(t, tt, "仅选定集合：否")
+	uitest.Click(t, tt, "仅选定集合：否")
 	if draft.AccessScope != vaultwarden.GroupSelectedCollections {
 		t.Fatal("scope choice")
 	}
-	clickUI(t, tt, "保存群组")
+	uitest.Click(t, tt, "保存群组")
 	if a.organizationEditor.groupConsent == nil || a.organizationEditor.confirmation != "group-save" || a.pending != 0 {
 		t.Fatal("missing consent phase")
 	}
-	clickUI(t, tt, "取消群组确认")
+	uitest.Click(t, tt, "取消群组确认")
 	if a.organizationEditor.groupConsent != nil || draft.Name != "Group" || a.pending != 0 {
 		t.Fatal("cancel lost draft or dispatched")
 	}

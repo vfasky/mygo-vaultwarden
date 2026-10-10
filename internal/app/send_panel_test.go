@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 	"time"
 
@@ -32,7 +33,7 @@ func sendPanelFixture(t *testing.T) (*SendPanel, chan func()) {
 func TestSendPanelNativeFormAndLock(t *testing.T) {
 	p, _ := sendPanelFixture(t)
 	tt := ui.NewTester(p.View, 1100, 1700)
-	clickUI(t, tt, "新建文本")
+	uitest.Click(t, tt, "新建文本")
 	if p.draft == nil || p.fields.Type != 0 || !tt.HasText("此服务器版本不支持邮件验证型 Send。") {
 		t.Fatal("native form absent")
 	}
@@ -41,11 +42,11 @@ func TestSendPanelNativeFormAndLock(t *testing.T) {
 	p.password = "private password"
 	p.receivePassword = "private receiver password"
 	p.link = "private fragment"
-	clickUI(t, tt, "禁用：false")
+	uitest.Click(t, tt, "禁用：false")
 	if !p.fields.Disabled {
 		t.Fatal("disable control")
 	}
-	clickUI(t, tt, "隐藏邮箱：false")
+	uitest.Click(t, tt, "隐藏邮箱：false")
 	if !p.fields.HideEmail {
 		t.Fatal("hide email control")
 	}

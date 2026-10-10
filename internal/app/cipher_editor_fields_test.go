@@ -4,6 +4,7 @@ package app
 import (
 	"encoding/json"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"reflect"
 	"testing"
@@ -15,7 +16,7 @@ func TestCustomFieldControlsAndLosslessMerge(t *testing.T) {
 	f := editorCustom{source: source, name: "checked", value: "false", kind: "2", editable: true}
 	e := &cipherEditor{fields: vaultwarden.CipherFields{Type: 1}, custom: []editorCustom{f}}
 	tt := ui.NewTester(func(c *ui.Context) { a.customValueEditor(c, e, &e.custom[0]) }, 500, 400)
-	clickUI(t, tt, "布尔值：否")
+	uitest.Click(t, tt, "布尔值：否")
 	e.applyInputs()
 	if e.fields.Fields[0]["value"] != "true" || e.fields.Fields[0]["future"] != "opaque" || source["value"] != "false" {
 		t.Fatal("boolean merge changed source/extension")
@@ -23,8 +24,8 @@ func TestCustomFieldControlsAndLosslessMerge(t *testing.T) {
 	linked := map[string]any{"type": json.Number("3"), "name": "linked", "value": nil, "linkedId": json.Number("100"), "future": "opaque"}
 	e.custom = []editorCustom{{source: linked, name: "linked", kind: "3", linkedID: "100", editable: true}}
 	tt = ui.NewTester(func(c *ui.Context) { a.customValueEditor(c, e, &e.custom[0]) }, 500, 400)
-	clickUI(t, tt, "关联到：用户名")
-	clickUI(t, tt, "密码")
+	uitest.Click(t, tt, "关联到：用户名")
+	uitest.Click(t, tt, "密码")
 	e.applyInputs()
 	if e.fields.Fields[0]["linkedId"] != json.Number("101") || e.fields.Fields[0]["value"] != nil || linked["linkedId"] != json.Number("100") {
 		t.Fatal("linked merge")
@@ -43,8 +44,8 @@ func TestURIMatchPickerKeepsSourceAndUnsupportedStrategy(t *testing.T) {
 	source := map[string]any{"uri": "https://example.invalid/", "match": json.Number("4"), "future": "opaque"}
 	u := editorURI{source: source, value: "https://example.invalid/"}
 	tt := ui.NewTester(func(c *ui.Context) { a.uriMatchPicker(c, &u, false) }, 650, 600)
-	clickUI(t, tt, "匹配方式：正则表达式")
-	clickUI(t, tt, "完全匹配")
+	uitest.Click(t, tt, "匹配方式：正则表达式")
+	uitest.Click(t, tt, "完全匹配")
 	if u.source["match"] != json.Number("3") || source["match"] != json.Number("4") || u.source["future"] != "opaque" {
 		t.Fatal("URI strategy lost/changed original")
 	}
@@ -62,7 +63,7 @@ func TestHistoryIsHiddenUntilExplicitReveal(t *testing.T) {
 	if tt.HasText("historical-secret") {
 		t.Fatal("history shown without reveal")
 	}
-	clickUI(t, tt, "显示已保存密码历史明文（1）")
+	uitest.Click(t, tt, "显示已保存密码历史明文（1）")
 	if tt.HasText("historical-secret") {
 		t.Fatal("history revealed without current snapshot/native authorization")
 	}

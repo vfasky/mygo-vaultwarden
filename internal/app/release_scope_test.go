@@ -4,6 +4,7 @@ package app
 import (
 	"bytes"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func TestPersonalReleaseHidesOrganizationUIWithoutDroppingSyncData(t *testing.T)
 			t.Fatal("organization item presented as personal")
 		}
 	}
-	clickUI(t, tester, "账号与设置")
+	uitest.Click(t, tester, "账号与设置")
 	if tester.HasText("组织条目、资源与审计") || tester.HasText("组织恢复登记与管理员恢复") {
 		t.Fatal("organization management entry exposed")
 	}

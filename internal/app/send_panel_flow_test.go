@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -56,7 +57,7 @@ func TestSendPanelReceivePasswordIsolationAndHiddenText(t *testing.T) {
 	if tt.HasText("This is a test") || !tt.HasText("发送者：sender@example.invalid") {
 		t.Fatal("hidden text/sender")
 	}
-	clickUI(t, tt, "显示分享文本")
+	uitest.Click(t, tt, "显示分享文本")
 	if !tt.HasText("This is a test") {
 		t.Fatal("reveal")
 	}

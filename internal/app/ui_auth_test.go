@@ -2,6 +2,7 @@
 package app
 
 import (
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"slices"
 	"testing"
 
@@ -36,7 +37,7 @@ func TestAuthenticationRoutesAndNavigation(t *testing.T) {
 		t.Fatal("locked snapshot did not show unlock page")
 	}
 	assertVaultHidden(t, tt)
-	clickUI(t, tt, "使用其他账号")
+	uitest.Click(t, tt, "使用其他账号")
 	if !a.showLogin || !tt.HasText("登录服务器") || a.serverURL != "https://vault.example.com" {
 		t.Fatal("switch account did not open/prepopulate server login")
 	}
@@ -44,13 +45,13 @@ func TestAuthenticationRoutesAndNavigation(t *testing.T) {
 		t.Fatal("account replacement warning missing")
 	}
 	assertVaultHidden(t, tt)
-	clickUI(t, tt, "返回解锁")
+	uitest.Click(t, tt, "返回解锁")
 	if a.showLogin || !tt.HasText("密码库已锁定") {
 		t.Fatal("back did not return to locked vault")
 	}
 	a.pending = 1
 	tt.Frame()
-	clickUI(t, tt, "使用其他账号")
+	uitest.Click(t, tt, "使用其他账号")
 	if a.showLogin {
 		t.Fatal("changed account while authentication was pending")
 	}
@@ -65,13 +66,13 @@ func TestAuthenticationRoutesAndNavigation(t *testing.T) {
 func TestServerLoginCanReturnWithoutSwitchingAccount(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1280, 820)
-	clickUI(t, tt, "账号与设置")
-	clickUI(t, tt, "登录服务器")
+	uitest.Click(t, tt, "账号与设置")
+	uitest.Click(t, tt, "登录服务器")
 	assertVaultHidden(t, tt)
 	if !a.unlocked() {
 		t.Fatal("opening login changed the current account before submission")
 	}
-	clickUI(t, tt, "返回密码库")
+	uitest.Click(t, tt, "返回密码库")
 	if a.showLogin || !a.unlocked() || !tt.HasText("账号与设置") {
 		t.Fatal("cancelled navigation lost existing vault")
 	}
@@ -83,20 +84,20 @@ func TestServerLoginValidationAndAvailability(t *testing.T) {
 	a := &app{snapshot: &snapshotStatus{Revision: "empty"}, deviceID: "fixture",
 		serverURL: "https://vault.example.com", email: "invalid"}
 	tt := ui.NewTester(a.view, 1060, 700)
-	clickUI(t, tt, "登录并同步")
+	uitest.Click(t, tt, "登录并同步")
 	if a.status != "请输入登录邮箱。" || a.pending != 0 {
 		t.Fatal("login did not validate before native authentication")
 	}
 	a.status = ""
 	tt.Frame()
-	clickUI(t, tt, "服务器地址")
+	uitest.Click(t, tt, "服务器地址")
 	tt.Key(0, ui.KeyEnter)
 	if a.status != "请输入登录邮箱。" {
 		t.Fatal("Enter did not submit login form")
 	}
 	a.status, a.deviceID = "安全存储组件不可用。", ""
 	tt.Frame()
-	clickUI(t, tt, "登录并同步")
+	uitest.Click(t, tt, "登录并同步")
 	if a.status != "安全存储组件不可用。" || a.pending != 0 {
 		t.Fatal("login attempted without secure storage identity")
 	}

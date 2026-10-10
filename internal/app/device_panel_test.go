@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"testing"
 	"time"
 
@@ -23,7 +24,7 @@ func TestDevicePanelNativeConfirmationAndLock(t *testing.T) {
 	p, _ := devicePanelFixture(t)
 	p.requests = []vaultwarden.AuthRequest{{ID: "request", PublicKey: "dGVzdA==", RequestDeviceType: "Desktop", RequestIPAddress: "127.0.0.1"}}
 	tt := ui.NewTester(p.View, 1100, 1700)
-	clickUI(t, tt, "查看登录请求 · Desktop · 127.0.0.1")
+	uitest.Click(t, tt, "查看登录请求 · Desktop · 127.0.0.1")
 	if p.selected == nil || p.verified {
 		t.Fatal("approval selected automatically")
 	}
@@ -31,19 +32,19 @@ func TestDevicePanelNativeConfirmationAndLock(t *testing.T) {
 	if p.busy {
 		t.Fatal("unverified dispatched")
 	}
-	clickUI(t, tt, "我已在请求设备核对完整指纹")
+	uitest.Click(t, tt, "我已在请求设备核对完整指纹")
 	if !p.verified {
 		t.Fatal("confirmation unavailable")
 	}
-	clickUI(t, tt, "取消审批")
+	uitest.Click(t, tt, "取消审批")
 	if p.selected != nil || p.verified {
 		t.Fatal("cancel did not clear approval")
 	}
-	clickUI(t, tt, "清除当前设备推送登记")
+	uitest.Click(t, tt, "清除当前设备推送登记")
 	if p.confirm != "push" || p.busy {
 		t.Fatal("push wrote without confirmation")
 	}
-	clickUI(t, tt, "取消")
+	uitest.Click(t, tt, "取消")
 	p.Close()
 	tt.Frame()
 	if !tt.HasText("面板已关闭") || p.selected != nil || p.devices != nil {
