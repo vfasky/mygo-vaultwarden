@@ -161,7 +161,7 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 			t.Fatalf("collapsed button %q has %d labels/texts, want 1", category.title, count)
 		}
 	}
-	uitest.Click(t, tt, "账号与设置")
+	uitest.Click(t, tt, "设置")
 	if !a.windows.settingsOpen {
 		t.Fatal("collapsed sidebar settings did not open")
 	}
@@ -284,7 +284,7 @@ func TestVaultSettingsAndSafeLinks(t *testing.T) {
 	if len(tt.OpenedURLs()) != 0 {
 		t.Fatal("unsafe URL opened")
 	}
-	uitest.Click(t, tt, "账号与设置")
+	uitest.Click(t, tt, "设置")
 	if !a.windows.settingsOpen || slices.Contains(tt.Texts(), "连接密码库") {
 		t.Fatal("settings did not open in its own window")
 	}

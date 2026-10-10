@@ -265,15 +265,11 @@ func (a *app) header(c *ui.Context) {
 			state = i18n.T("app.toolbar.status_sync_ready")
 		}
 		kit.Pill(c, state, kit.Lavender, kit.Purple)
-		if kit.ToolbarButton(c, i18n.T("app.toolbar.import_export"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
-			a.openBackupEditor()
+		if kit.ToolbarButton(c, i18n.T("app.toolbar.import_export"), "vault", false, a.pending != 0 || a.vault == nil || a.mainEditorOpen()).Clicked() {
+			a.runMenuCommand(menuBackup)
 		}
-		if kit.ToolbarButton(c, i18n.T("app.toolbar.add"), "key", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
-			kind := categoryKinds[a.category]
-			if kind == 0 {
-				kind = 1
-			}
-			a.openCipherEditor("", kind)
+		if kit.ToolbarButton(c, i18n.T("app.toolbar.add"), "key", false, a.pending != 0 || a.vault == nil || a.mainEditorOpen()).Clicked() {
+			a.runMenuCommand(menuNew)
 		}
 		if kit.ToolbarButton(c, i18n.T("vault.bulk.title"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBulkEditor(false)
@@ -282,12 +278,12 @@ func (a *app) header(c *ui.Context) {
 			a.openBulkEditor(true)
 		}
 		if kit.ToolbarButton(c, i18n.T("common.sync"), "sync", false, a.pending != 0).Clicked() {
-			a.syncVault(false)
+			a.runMenuCommand(menuSync)
 		}
 		if kit.ToolbarButton(c, i18n.T("common.lock"), "lock", true, false).Clicked() {
-			a.runStorage("lock")
+			a.runMenuCommand(menuLock)
 		}
-		if ui.Button(c, "").Label(i18n.T("app.settings.title")).Tooltip(i18n.T("app.settings.title")).Size(32, 32).Padding(7).Radius(16).
+		if ui.Button(c, "").Label(i18n.T("app.window.settings_title")).Tooltip(i18n.T("app.window.settings_title")).Size(32, 32).Padding(7).Radius(16).
 			Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55)).
 			Children(func() { kit.Icon(c, "settings", 16) }).Clicked() {
 			a.showSettingsWindow("")
@@ -468,7 +464,10 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	})
 	ui.Column(c).Gap(6).Shrink(0).Padding(0, inset).Children(func() {
 		ui.Box(c).Height(1).Margin(0, 4).Background(ui.RGBA(38, 30, 62, .08))
-		if navItem(c, i18n.T("app.settings.title"), "settings", "", false, false).Clicked() {
+		if navItem(c, i18n.T("app.window.account_center_title"), "user", "", false, !a.unlocked() || a.showLogin || a.pending != 0 || a.mainEditorOpen()).Clicked() {
+			a.runMenuCommand(menuAccount)
+		}
+		if navItem(c, i18n.T("app.window.settings_title"), "settings", "", false, false).Clicked() {
 			a.showSettingsWindow("")
 		}
 	})
