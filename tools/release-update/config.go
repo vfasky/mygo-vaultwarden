@@ -70,8 +70,12 @@ func (u *updates) validate() error {
 	}
 	if u.URL != "" {
 		parsed, err := url.Parse(u.URL)
-		if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || strings.ContainsAny(u.URL, "\"'\r\n\t ") {
-			return fmt.Errorf("updates.url must be an HTTPS base URL without credentials, query, fragment, quotes or whitespace")
+		// The manifest and archive names are appended to the URL, so even an
+		// empty query or fragment would move them out of the path, and MyGo
+		// reads {version} as the placeholder of a GitHub feed (ResolveFeed).
+		if err != nil || parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" ||
+			strings.ContainsAny(u.URL, "\"'\r\n\t ?#{}") || strings.Contains(parsed.Path, "{version}") {
+			return fmt.Errorf("updates.url must be an HTTPS base URL without credentials, query, fragment, braces, quotes or whitespace")
 		}
 	}
 	if u.GitHub != "" && !regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9_.-]+$`).MatchString(u.GitHub) {

@@ -72,7 +72,7 @@ bash scripts/release-update.sh \
 - `mygo-vaultwarden-0.1.0-<target>.tar.gz`：根目录恰好一个 `.app`，保留相对符号链接和权限、归一化所有者。绝对链接、越界链接、无法解析的链接及文件/目录/符号链接以外类型会被拒绝。使用 gzip 最佳压缩；不保留扩展属性，staple 与签名应通过解压后系统验收确认。
 - `update-<target>.json`：`version`、Markdown `notes`、RFC3339 UTC `date`、下载 `url`、归档字节 `size`、Ed25519 `signature`。签名的是压缩包 SHA-256 摘要，不是 JSON。本工具暂无 delta，也不下载或生成旧版本差分。
 
-默认 feed 是 `https://github.com/vfasky/mygo-vaultwarden/releases/latest/download/update-<target>.json`，归档来自 `https://github.com/vfasky/mygo-vaultwarden/releases/download/v0.1.0/<archive>`。正式发布应标记为 latest；本项目无需配置其他 tag 前缀。
+默认 feed 是 `https://github.com/vfasky/mygo-vaultwarden/releases/latest/download/update-<target>.json`，归档来自 `https://github.com/vfasky/mygo-vaultwarden/releases/download/v0.1.0/<archive>`。正式发布应标记为 latest；本项目无需配置其他 tag 前缀。GitHub 的 `releases/latest` 只指向已公开、非草稿、非 prerelease 的最新 release：草稿和 prerelease 不会进入应用的更新通道，可用来在公开前核对产物；本流程不提供单独的测试版通道。
 
 脚本末尾按上述配置打印 `gh release create v<version> --repo vfasky/mygo-vaultwarden` 等示例，**不会执行上传**。推荐先创建草稿并上传归档，最后上传 manifest，审核全部目标产物后再公开草稿。例如：
 
@@ -94,7 +94,7 @@ gh release edit v0.1.0 --repo vfasky/mygo-vaultwarden --draft=false --latest
 
 本仓库的单元测试使用假的 `.app` 检查归档解压规则、相对符号链接、执行权限、签名、manifest、URL、配置、发布说明与 Mach-O 识别，不证明真实 macOS 更新安装成功。首次发布前应在隔离安装中验证从旧版本检查、下载、替换、重启，以及 AutoFill 与本机快照仍可使用。发布前还应对解出的 bundle 再次执行代码签名与 staple 验证。
 
-整个 bundle 更新包含 AutoFill 扩展；更新后系统会重新注册扩展，必要时检查：
+整个 bundle 更新包含 AutoFill 扩展。替换 bundle 后系统是否及时重新注册扩展尚未实测，是发布前验收项；更新后检查：
 
 ```sh
 pluginkit -m -v -i yz.sh.mygo-vaultwarden.autofill

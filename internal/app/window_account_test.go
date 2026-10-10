@@ -9,6 +9,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -65,6 +66,30 @@ func TestAccountCenterCloseRevokesLease(t *testing.T) {
 	}
 	if err := lease.check(a.storageBackend); !errors.Is(err, vaultwarden.ErrCancelled) {
 		t.Fatal("closed window lease remains valid", err)
+	}
+}
+
+// Logging in from Settings hides the account center's page, so its panel and
+// lease end then, and returning to the vault does not bring the draft back.
+func TestAccountCenterLoginFromSettingsRevokesPanel(t *testing.T) {
+	a := accountCenterFixture(t)
+	panel, lease := a.sendPanel, a.componentLease
+	panel.New(0)
+	panel.Fields.Text = "private send"
+	main := ui.NewTester(a.view, 1280, 820)
+	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	uitest.Click(t, settings, "登录服务器")
+	main.Frame()
+	if !a.showLogin || a.sendPanel != nil || !panel.Closed || panel.Fields.Text != "" {
+		t.Fatal("login page retained the account center panel")
+	}
+	if err := lease.check(a.storageBackend); !errors.Is(err, vaultwarden.ErrCancelled) {
+		t.Fatal("login page left the lease valid", err)
+	}
+	uitest.Click(t, main, "返回密码库")
+	account := ui.NewTester(a.accountWindowView, 1080, 720)
+	if a.showLogin || !a.unlocked() || a.sendPanel != nil || account.HasText("private send") || !account.HasText(i18n.T("accountcenter.open_page_hint")) {
+		t.Fatal("returning to the vault revived the account center panel")
 	}
 }
 

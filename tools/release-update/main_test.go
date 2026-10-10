@@ -274,6 +274,12 @@ func TestConfigAndURLs(t *testing.T) {
 		func(u *updates) { u.GitHub = "/repo" }, func(u *updates) { u.GitHub = "owner/" }, func(u *updates) { u.GitHub = "owner/repo/extra" },
 		func(u *updates) { u.GitHub = ""; u.URL = "http://example.com" }, func(u *updates) { u.GitHub = ""; u.URL = "https:///missing" },
 		func(u *updates) { u.GitHub = ""; u.URL = "https://example.com?query=1" },
+		// An empty query or fragment, or MyGo's GitHub version placeholder,
+		// would move or break the manifest name appended to the URL.
+		func(u *updates) { u.GitHub = ""; u.URL = "https://example.com/updates?" },
+		func(u *updates) { u.GitHub = ""; u.URL = "https://example.com/updates#" },
+		func(u *updates) { u.GitHub = ""; u.URL = "https://example.com/{version}" },
+		func(u *updates) { u.GitHub = ""; u.URL = "https://example.com/%7Bversion%7D" },
 	} {
 		invalid := *u
 		change(&invalid)

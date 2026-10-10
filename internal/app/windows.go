@@ -153,9 +153,11 @@ func (a *app) framePrelude(c *ui.Context) {
 
 // reconcileAccountPanels keeps at most the panel of the shown account center
 // page. The panels share one controller lease, so closing one revokes all.
+// While the vault is locked or the login page is up, the account center shows
+// no page, so no panel survives to reappear afterwards.
 func (a *app) reconcileAccountPanels() {
 	shown := accountTab("")
-	if a.windows.accountOpen {
+	if a.windows.accountOpen && a.unlocked() && !a.showLogin {
 		shown = a.windows.accountTab
 	}
 	switch {
