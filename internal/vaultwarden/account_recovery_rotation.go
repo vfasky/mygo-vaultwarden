@@ -4,7 +4,6 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"reflect"
 	"sort"
@@ -12,7 +11,7 @@ import (
 
 const emergencyAvailabilityPath = "/api/emergency-access/00000000-0000-0000-0000-000000000000"
 
-var ErrEmergencyUnavailable = errors.New(i18n.T("server.rotation.err_emergency_inventory_unavailable"))
+var ErrEmergencyUnavailable = i18n.Error("server.rotation.err_emergency_inventory_unavailable")
 
 // The reserved GET is a capability probe, never an access request. 1.37.4
 // checks enabled BEFORE record lookup; only the exact known missing-record

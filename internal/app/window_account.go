@@ -48,7 +48,7 @@ func (a *app) accountPanelOpen() bool {
 	case accountTabDevices:
 		return a.devicePanel != nil
 	case accountTabSecurity:
-		return a.accountForm != nil && a.accountForm.Mode != "register"
+		return a.accountForm != nil && !a.accountForm.SignedOut()
 	case accountTabMFA:
 		return a.authManagement != nil
 	case accountTabEmergency:

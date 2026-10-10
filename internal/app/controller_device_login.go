@@ -13,6 +13,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -249,10 +250,10 @@ func (a *app) deviceLoginSetupView(c *ui.Context) {
 	ui.TextInput(c, &a.email).Label(i18n.T("account.device_login.account_email")).Disabled(busy)
 	ui.TextInput(c, &a.deviceAccountID).Label(i18n.T("account.device_login.known_account_id")).Disabled(busy)
 	ui.Text(c, i18n.T("account.device_login.temporary_session_hint")).MaxLines(7)
-	if authPrimary(c, i18n.T("account.device_login.request_approval"), busy).Clicked() {
+	if kit.WidePrimary(c, i18n.T("account.device_login.request_approval"), busy).Clicked() {
 		a.openDeviceLogin()
 	}
-	if authLink(c, i18n.T("account.device_login.back_to_password"), false).Clicked() {
+	if kit.TextLink(c, i18n.T("account.device_login.back_to_password"), false).Clicked() {
 		a.stopNetwork()
 		a.showLogin = true
 	}

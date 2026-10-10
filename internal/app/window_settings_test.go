@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
@@ -116,5 +117,27 @@ func TestSettingsWindowLoginServer(t *testing.T) {
 	}
 	if !tt.HasText(i18n.T("settings.show_main_window")) || tt.HasText(i18n.T("app.settings.connect_vault")) {
 		t.Fatal("settings retained account details after opening login")
+	}
+}
+
+// General works while locked, and a language chosen there applies at once,
+// to the menu bar and window titles too (frame).
+func TestSettingsWindowGeneralLanguage(t *testing.T) {
+	defer i18n.SetPreference("")
+	a := passwordLockedApp()
+	a.windows.language = i18n.Current()
+	tt := ui.NewTester(a.frame(func() *mygo.Window { return nil }, a.settingsWindowView), 720, 560)
+	uitest.Click(t, tt, "通用")
+	if a.windows.settingsTab != settingsTabGeneral || !tt.HasText("简体中文") {
+		t.Fatalf("general tab missing while locked: %q", tt.Texts())
+	}
+	// The card is titled 语言 too; the picker shows the current language.
+	uitest.Click(t, tt, "简体中文")
+	if err := tt.ChooseMenuItem("English"); err != nil {
+		t.Fatal(err)
+	}
+	tt.Frame()
+	if i18n.Current() != i18n.English || !tt.HasText("General") || !tt.HasText("Account") || a.windows.language != i18n.English {
+		t.Fatalf("language did not apply to the window and its titles: %q", tt.Texts())
 	}
 }

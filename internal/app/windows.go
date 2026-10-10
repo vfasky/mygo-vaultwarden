@@ -32,6 +32,7 @@ import (
 type settingsTab string
 
 const (
+	settingsTabGeneral settingsTab = "general"
 	settingsTabAccount settingsTab = "account"
 	settingsTabStorage settingsTab = "storage"
 	settingsTabUpdates settingsTab = "updates"
@@ -64,6 +65,8 @@ type windowSet struct {
 
 	// signature is the shared state the windows last drew (see frame).
 	signature uiSignature
+	// language is the one the menu bar and window titles are in (applyLanguage).
+	language i18n.Lang
 }
 
 // postUI runs f on the main thread, then redraws every window. Workers and
@@ -109,6 +112,7 @@ type uiSignature struct {
 	settingsOpen, accountOpen bool
 	settingsTab               settingsTab
 	accountTab                accountTab
+	language                  i18n.Lang
 }
 
 func (a *app) signature() uiSignature {
@@ -120,7 +124,7 @@ func (a *app) signature() uiSignature {
 		secretInputVersion: a.secretInputVersion, editing: a.mainEditorOpen(), targetRecovery: a.targetRecovery,
 		send: a.sendPanel, devices: a.devicePanel, accountForm: a.accountForm, authManagement: a.authManagement,
 		orgServices: a.orgServices, settingsOpen: a.windows.settingsOpen, accountOpen: a.windows.accountOpen,
-		settingsTab: a.windows.settingsTab, accountTab: a.windows.accountTab,
+		settingsTab: a.windows.settingsTab, accountTab: a.windows.accountTab, language: i18n.Current(),
 	}
 }
 
@@ -129,10 +133,31 @@ func (a *app) signature() uiSignature {
 func (a *app) frame(self func() *mygo.Window, view func(c *ui.Context)) func(c *ui.Context) {
 	return func(c *ui.Context) {
 		view(c)
+		if i18n.Current() != a.windows.language {
+			a.applyLanguage()
+		}
 		if sig := a.signature(); sig != a.windows.signature {
 			a.windows.signature = sig
 			a.invalidateWindows(self())
 		}
+	}
+}
+
+// applyLanguage words what the windows' Content does not draw, the menu bar
+// and the window titles, in the language in force. The language pickers of
+// Settings and the login page change it at once; the update window keeps the
+// language it started with.
+func (a *app) applyLanguage() {
+	a.windows.language = i18n.Current()
+	if !a.windows.native {
+		return
+	}
+	mygo.App.SetMenu(a.menu())
+	if w := a.windows.settings; w != nil && !w.IsDestroyed() {
+		w.SetTitle(settingsWindowOptions().Title)
+	}
+	if w := a.windows.account; w != nil && !w.IsDestroyed() {
+		w.SetTitle(accountWindowOptions().Title)
 	}
 }
 
@@ -163,7 +188,7 @@ func (a *app) reconcileAccountPanels() {
 	switch {
 	case a.orgServices != nil && shown != accountTabEmergency,
 		a.authManagement != nil && shown != accountTabMFA,
-		a.accountForm != nil && a.accountForm.Mode != "register" && shown != accountTabSecurity,
+		a.accountForm != nil && !a.accountForm.SignedOut() && shown != accountTabSecurity,
 		a.devicePanel != nil && shown != accountTabDevices,
 		a.sendPanel != nil && shown != accountTabSend:
 		a.advanceEpoch()

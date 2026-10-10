@@ -4,7 +4,6 @@ package vaultwarden
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
@@ -12,7 +11,7 @@ import (
 	"strings"
 )
 
-var ErrGroupsDisabled = errors.New(i18n.T("server.group.err_disabled"))
+var ErrGroupsDisabled = i18n.Error("server.group.err_disabled")
 
 // GroupScope has an explicit unset state: Vaultwarden 1.37.4 never returns
 // accessAll, although every group PUT overwrites it.

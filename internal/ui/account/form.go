@@ -11,6 +11,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strconv"
+	"unicode/utf8"
 )
 
 // accountForm is an independent native component. The app integration owns
@@ -36,6 +37,8 @@ type Form struct {
 	apiKey                                                                       string
 	apiKeyVisible                                                                bool
 	plan                                                                         *vaultwarden.AccountChangePlan
+	step                                                                         int  // registration step
+	tokenFromServer, kdfOpen                                                     bool // registration
 	Submit                                                                       func(FormRequest)
 }
 type FormRequest struct {
@@ -126,6 +129,13 @@ func (f *Form) Completed(scope vaultwarden.Scope, epoch, sequence uint64, result
 	f.plan = nil
 	f.confirming = false
 	f.confirmAction = ""
+	if err != nil && f.Mode == "register" && f.step == registerPassword {
+		// The token was cleared on submission; ask for it again.
+		f.step = registerVerify
+		if f.tokenFromServer {
+			f.step = registerDetails
+		}
+	}
 	if result.Dispatched {
 		f.uncertain = true
 		if result.Confirmed {
@@ -158,11 +168,13 @@ func (f *Form) Registration(scope vaultwarden.Scope, epoch, sequence uint64, r v
 		f.Status = i18n.T("account.form.err_registration_request")
 		return true
 	}
+	f.Status = ""
 	if r.EmailSent {
-		f.Status = i18n.T("account.form.status_registration_email_requested")
+		f.step, f.tokenFromServer = registerVerify, false
 	} else {
+		// Servers without email verification return the token directly.
 		f.token = r.Token
-		f.Status = i18n.T("account.form.status_registration_token_received")
+		f.step, f.tokenFromServer = registerPassword, true
 	}
 	return true
 }
@@ -208,6 +220,10 @@ func (f *Form) dispatch(operation string) {
 	}
 	if operation == "prepare-password" || operation == "register-finish" {
 		password := f.newPassword
+		if utf8.RuneCountInString(password) < minMasterPassword {
+			f.Status = i18n.T("account.register.err_password_too_short")
+			return
+		}
 		if password != f.repeatPassword {
 			f.Status = i18n.T("account.form.err_password_mismatch")
 			return
@@ -280,7 +296,7 @@ func FormView(c *ui.Context, f *Form) {
 	} else {
 		modes := f.Modes
 		if modes == nil {
-			modes = []string{"register", "profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
+			modes = []string{"profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
 		}
 		for _, mode := range modes {
 			if ui.Button(c, accountModeLabel(mode)).Disabled(disabled).Clicked() {
@@ -304,21 +320,6 @@ func FormView(c *ui.Context, f *Form) {
 			ui.TextInput(c, &f.token).Label(i18n.T("account.form.verification_email_token")).Password().Disabled(disabled)
 			if ui.Button(c, i18n.T("account.form.confirm_email_token")).Disabled(disabled || f.token == "").Clicked() {
 				f.dispatch("verify-email-token")
-			}
-		case "register":
-			ui.TextInput(c, &f.Email).Label(i18n.T("account.form.registration_email")).Disabled(disabled)
-			ui.TextInput(c, &f.name).Label(i18n.T("account.form.display_name")).Disabled(disabled)
-			if ui.Button(c, i18n.T("account.form.send_password_hint")).Disabled(disabled || f.Email == "").Clicked() {
-				f.dispatch("password-hint")
-			}
-			if ui.Button(c, i18n.T("account.form.send_registration_email")).Disabled(disabled).Clicked() {
-				f.dispatch("register-send")
-			}
-			ui.TextInput(c, &f.token).Label(i18n.T("account.form.registration_token")).Password().Disabled(disabled)
-			accountNewPasswordView(c, f, disabled)
-			accountKDFView(c, f, disabled)
-			if ui.Button(c, i18n.T("account.form.finish_registration")).Disabled(disabled || f.token == "").Clicked() {
-				f.dispatch("register-finish")
 			}
 		default:
 			ui.TextInput(c, &f.password).Label(i18n.T("common.current_master_password")).Password().Disabled(disabled)
@@ -425,8 +426,6 @@ func accountKDFView(c *ui.Context, f *Form, disabled bool) {
 }
 func accountModeLabel(mode string) string {
 	switch mode {
-	case "register":
-		return i18n.T("account.form.register")
 	case "profile":
 		return i18n.T("account.form.profile")
 	case "password":

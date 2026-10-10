@@ -9,14 +9,13 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
-var ErrInvitationAlreadyAccepted = errors.New(i18n.T("server.member.err_invitation_already_accepted"))
+var ErrInvitationAlreadyAccepted = i18n.Error("server.member.err_invitation_already_accepted")
 
 // InvitationAcceptance binds consent to the authenticated account, snapshot,
 // invitation, policies and exact recovery public key. It contains no user key.

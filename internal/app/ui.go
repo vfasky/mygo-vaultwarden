@@ -20,19 +20,23 @@ type vaultCategory struct {
 	supported         bool
 }
 
-var vaultCategories = []vaultCategory{
-	{"all", i18n.T("app.sidebar.all_items"), "grid", true},
-	{"favorites", i18n.T("app.sidebar.favorites"), "star", true},
-	{"login", i18n.T("itemtype.login"), "globe", true},
-	{"card", i18n.T("itemtype.card"), "card", true},
-	{"identity", i18n.T("itemtype.identity"), "identity", true},
-	{"note", i18n.T("itemtype.note"), "note", true},
-	{"ssh", i18n.T("itemtype.ssh_key"), "key", true},
-	{"bank", i18n.T("itemtype.bank"), "bank", true},
-	{"license", i18n.T("itemtype.license"), "car", true},
-	{"passport", i18n.T("itemtype.passport"), "passport", true},
-	{"archive", i18n.T("common.archive"), "archive", true},
-	{"trash", i18n.T("app.sidebar.trash"), "trash", true},
+// vaultCategories builds the categories on each call so their titles follow
+// a language change.
+func vaultCategories() []vaultCategory {
+	return []vaultCategory{
+		{"all", i18n.T("app.sidebar.all_items"), "grid", true},
+		{"favorites", i18n.T("app.sidebar.favorites"), "star", true},
+		{"login", i18n.T("itemtype.login"), "globe", true},
+		{"card", i18n.T("itemtype.card"), "card", true},
+		{"identity", i18n.T("itemtype.identity"), "identity", true},
+		{"note", i18n.T("itemtype.note"), "note", true},
+		{"ssh", i18n.T("itemtype.ssh_key"), "key", true},
+		{"bank", i18n.T("itemtype.bank"), "bank", true},
+		{"license", i18n.T("itemtype.license"), "car", true},
+		{"passport", i18n.T("itemtype.passport"), "passport", true},
+		{"archive", i18n.T("common.archive"), "archive", true},
+		{"trash", i18n.T("app.sidebar.trash"), "trash", true},
+	}
 }
 
 // categoryKinds maps type categories to Bitwarden cipher types.
@@ -67,12 +71,12 @@ func (a *app) currentCategory() vaultCategory {
 		}
 		return vaultCategory{a.category, i18n.T("app.sidebar.folder_missing"), "vault", false}
 	}
-	for _, category := range vaultCategories {
+	for _, category := range vaultCategories() {
 		if category.id == a.category {
 			return category
 		}
 	}
-	return vaultCategories[0]
+	return vaultCategories()[0]
 }
 
 func (a *app) releaseItemCount() int {
@@ -119,7 +123,7 @@ func (a *app) sidebarCounts() map[string]int {
 		return counts
 	}
 	for _, item := range a.items {
-		for _, category := range vaultCategories {
+		for _, category := range vaultCategories() {
 			if itemInCategory(item, category.id) {
 				counts[category.id]++
 			}
@@ -398,7 +402,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 			}
 			categoryGroup := func(title string, types bool) {
 				section(title, nil)
-				for _, category := range vaultCategories {
+				for _, category := range vaultCategories() {
 					if (categoryKinds[category.id] != 0) != types {
 						continue
 					}

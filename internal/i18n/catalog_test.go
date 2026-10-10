@@ -112,7 +112,7 @@ func scan(t *testing.T, root string, paths []string) scanResult {
 				if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != local {
 					return true
 				}
-				if sel.Sel.Name != "T" && sel.Sel.Name != "Tf" {
+				if sel.Sel.Name != "T" && sel.Sel.Name != "Tf" && sel.Sel.Name != "Error" {
 					return true
 				}
 				if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
@@ -173,7 +173,7 @@ func TestCatalogCoverage(t *testing.T) {
 			unknown = append(unknown, k.where+" "+strconv.Quote(k.value))
 		}
 	}
-	report(t, "keys passed to i18n.T/Tf are not defined", unknown)
+	report(t, "keys passed to i18n.T/Tf/Error are not defined", unknown)
 	var chinese []string
 	for _, c := range r.chinese {
 		chinese = append(chinese, c.where+" "+strconv.Quote(c.value))
@@ -292,4 +292,32 @@ func TestDefaultsToChineseInTests(t *testing.T) {
 func TestPreferredLanguagesReadable(t *testing.T) {
 	tags := preferredLanguages()
 	t.Logf("preferred languages: %q -> %s", tags, Match(tags))
+}
+
+func TestErrorFollowsLanguage(t *testing.T) {
+	defer Set(Current())
+	err := Error("common.save")
+	Set(Chinese)
+	if err.Error() != "保存" {
+		t.Fatal(err)
+	}
+	Set(English)
+	if err.Error() != "Save" {
+		t.Fatal(err)
+	}
+}
+
+func TestPreferenceInTests(t *testing.T) {
+	defer SetPreference("")
+	SetPreference(English)
+	if Preference() != English || Current() != English {
+		t.Fatal("English preference")
+	}
+	SetPreference("")
+	if Preference() != "" || Current() != Chinese {
+		t.Fatal("following the system in tests")
+	}
+	if Chinese.Name() != "简体中文" || English.Name() != "English" {
+		t.Fatal("language names")
+	}
 }

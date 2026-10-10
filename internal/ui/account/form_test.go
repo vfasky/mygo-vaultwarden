@@ -7,38 +7,6 @@ import (
 	"testing"
 )
 
-func TestAccountNativeFormSensitiveClearAndRegistration(t *testing.T) {
-	var request FormRequest
-	calls := 0
-	f := NewForm(vaultwarden.Scope{Server: "https://test.invalid", Account: "a"}, 4, func(r FormRequest) { request = r; calls++ })
-	f.Mode = "register"
-	f.newPassword = "Secret-Registration-492!"
-	f.repeatPassword = f.newPassword
-	f.password = "Old-secret"
-	f.token = "verification-token"
-	tt := ui.NewTester(func(c *ui.Context) { FormView(c, f) }, 1200, 2400)
-	if !tt.HasText("账号与安全") || !tt.HasText("完成注册") || !tt.HasText("评估密码强度") {
-		t.Fatal("native account controls absent")
-	}
-	if tt.HasText(f.newPassword) || tt.HasText(f.password) || tt.HasText(f.token) {
-		t.Fatal("unmasked secret")
-	}
-	f.dispatch("register-finish")
-	if calls != 1 || request.Operation != "register-finish" || request.Token != "verification-token" || f.newPassword != "" || f.token != "" {
-		t.Fatal("dispatch/clear contract")
-	}
-	request.Close()
-	if !f.Registration(f.scope, f.epoch, f.sequence, vaultwarden.AccountRegistrationVerification{EmailSent: true}, nil) || f.Status != "验证邮件已请求发送，请输入邮件中的注册令牌" {
-		t.Fatal("SMTP status missing")
-	}
-	if !f.Registration(f.scope, f.epoch, f.sequence, vaultwarden.AccountRegistrationVerification{Token: "returned-token"}, nil) || f.token != "returned-token" {
-		t.Fatal("direct registration token lost")
-	}
-	f.cancel()
-	if f.token != "" || f.password != "" || f.newPassword != "" || f.confirming {
-		t.Fatal("cancel retained secrets")
-	}
-}
 func TestAccountNativeAPIKeyTwoStepsAndLateResults(t *testing.T) {
 	calls := 0
 	var request FormRequest

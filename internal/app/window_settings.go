@@ -28,6 +28,7 @@ func (a *app) settingsWindowView(c *ui.Context) {
 				tab         settingsTab
 				label, icon string
 			}{
+				{settingsTabGeneral, i18n.T("settings.tab.general"), "globe"},
 				{settingsTabAccount, i18n.T("settings.tab.account"), "user"},
 				{settingsTabStorage, i18n.T("app.settings.local_storage_autofill"), "vault"},
 				{settingsTabUpdates, i18n.T("settings.tab.updates"), "sync"},
@@ -106,11 +107,24 @@ func (a *app) settingsAbout(c *ui.Context) {
 	})
 }
 
+// settingsGeneral works while the vault is locked, as the language picker of
+// the login and unlock pages does.
+func (a *app) settingsGeneral(c *ui.Context) {
+	kit.DetailCard(c, i18n.T("app.language.title"), func() {
+		ui.Column(c).Padding(16).Gap(10).AlignItems(ui.Start).Children(func() {
+			languageMenu(c).Background(kit.Panel)
+			ui.Text(c, i18n.T("app.language.hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
+		})
+	})
+}
+
 func (a *app) settings(c *ui.Context) {
-	if a.windows.settingsTab == settingsTabUpdates || a.windows.settingsTab == settingsTabAbout {
+	if a.windows.settingsTab == settingsTabGeneral || a.windows.settingsTab == settingsTabUpdates || a.windows.settingsTab == settingsTabAbout {
 		ui.Scroll(c.Key(string(a.windows.settingsTab))).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(18).Padding(10, 8).Children(func() {
-				if a.windows.settingsTab == settingsTabUpdates {
+				if a.windows.settingsTab == settingsTabGeneral {
+					a.settingsGeneral(c)
+				} else if a.windows.settingsTab == settingsTabUpdates {
 					a.settingsUpdates(c)
 				} else {
 					a.settingsAbout(c)

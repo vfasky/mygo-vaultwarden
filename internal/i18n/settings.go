@@ -13,6 +13,7 @@ var settings = map[string]text{
 	"settings.show_main_window":            {"前往主窗口", "Go to main window"},
 	"settings.tab.about":                   {"关于", "About"},
 	"settings.tab.account":                 {"账号", "Account"},
+	"settings.tab.general":                 {"通用", "General"},
 	"settings.tab.updates":                 {"更新", "Updates"},
 	"settings.updates.automatic_checks":    {"自动检查更新", "Automatically check for updates"},
 	"settings.updates.automatic_downloads": {"自动下载并安装更新", "Automatically download and install updates"},

@@ -235,7 +235,7 @@ func Run() {
 	mygo.App.WhenReady(func() {
 		a.windows.native = true
 		a.openMainWindow()
-		mygo.App.SetMenu(a.menu())
+		a.applyLanguage()
 		a.runStorage("settings")
 		mygo.Power.OnLockScreen(func() { a.postUI(func() { a.runStorage("lock") }) })
 		mygo.Power.OnSuspend(func() { a.postUI(func() { a.runStorage("lock") }) })

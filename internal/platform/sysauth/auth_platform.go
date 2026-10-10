@@ -7,7 +7,6 @@ package sysauth
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"time"
 
@@ -15,8 +14,8 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-var errAuthUnavailable = errors.New(i18n.T("sysauth.err_unavailable"))
-var errAuthFailed = errors.New(i18n.T("sysauth.err_failed"))
+var errAuthUnavailable = i18n.Error("sysauth.err_unavailable")
+var errAuthFailed = i18n.Error("sysauth.err_failed")
 
 const authMaxBytes = 131072
 

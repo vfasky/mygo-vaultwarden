@@ -15,6 +15,16 @@ import (
 
 func (a *app) openAccount()      { a.openAccountWith(a.dispatchUI, a.storageCall, false) }
 func (a *app) openRegistration() { a.openAccountWith(a.dispatchUI, a.storageCall, true) }
+
+// openPasswordHint asks the server to email the master password hint; it
+// needs no session, as registration does.
+func (a *app) openPasswordHint() {
+	prior := a.accountForm
+	a.openRegistration()
+	if f := a.accountForm; f != nil && f != prior {
+		f.Mode, f.Modes = "hint", []string{"hint"}
+	}
+}
 func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply, registration bool) {
 	if a.pending != 0 {
 		return
@@ -216,10 +226,23 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 					}
 				case r.Operation == "api-key" || r.Operation == "rotate-api-key":
 					f.APIKeyCompleted(scope, epoch, r.Sequence, key, err)
+				case r.Operation == "password-hint":
+					// Servers answer alike whether or not the address has an
+					// account, so the result never says which.
+					if f.Completed(scope, epoch, r.Sequence, result, err) {
+						f.Status = i18n.T("account.hint.status_sent")
+						if err != nil {
+							f.Status = i18n.T("account.hint.err_failed")
+						}
+					}
 				default:
 					f.Completed(scope, epoch, r.Sequence, result, err)
 					if err == nil && r.Operation == "register-finish" {
-						f.Status = i18n.T("account.form.status_registration_completed")
+						// Back to the login page, ready for the new account.
+						email := f.Email
+						a.advanceEpoch()
+						a.email, a.masterPassword = email, ""
+						a.status = i18n.T("account.register.status_created")
 					}
 				}
 			})

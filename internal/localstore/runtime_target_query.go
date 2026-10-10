@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"sync/atomic"
 	"time"
@@ -13,7 +12,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-var ErrRuntimeTargetBlocked = errors.New(i18n.T("store.recovery.err_target_blocked"))
+var ErrRuntimeTargetBlocked = i18n.Error("store.recovery.err_target_blocked")
 
 func SameStorageSource(a, b *SnapshotStatus) bool {
 	if a == nil || b == nil || a.Revision != b.Revision || a.SnapshotID != b.SnapshotID || a.Available != b.Available || a.RecoveryPending != b.RecoveryPending || a.AccountSwitchPending != b.AccountSwitchPending || a.TargetRecoveryPresent != b.TargetRecoveryPresent {

@@ -144,7 +144,7 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 	if slices.Contains(tt.Texts(), "8") {
 		t.Fatal("collapsed sidebar retained count badge")
 	}
-	for _, category := range vaultCategories {
+	for _, category := range vaultCategories() {
 		uitest.Click(t, tt, category.title)
 		if a.category != category.id {
 			t.Fatalf("collapsed navigation failed for %s", category.title)
