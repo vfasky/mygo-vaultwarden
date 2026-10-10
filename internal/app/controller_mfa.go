@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -41,7 +42,7 @@ func (w *mfaRecoveryWarnings) warning(server, email string) string {
 }
 
 type controllerMFA struct {
-	form              *authForm
+	form              *account.AuthForm
 	providers         map[int]string
 	platformProviders map[int]string
 	platform          func(int)
@@ -88,14 +89,14 @@ func (a *app) requestMFA(ctx context.Context, server, email string, epoch uint64
 			a.mfaLogin.Close()
 		}
 		m := &controllerMFA{cancel: cancel, providers: map[int]string{}, platformProviders: map[int]string{}}
-		m.form = newAuthForm(vaultwarden.Scope{Server: server}, epoch, func(r authRequest) {
+		m.form = account.NewAuthForm(vaultwarden.Scope{Server: server}, epoch, func(r account.AuthRequest) {
 			defer r.Close()
 			// Remember is optional and stays disabled until account/device-scoped
 			// protected token storage is available.
 			r.Response.Remember = false
 			deliver(vaultwarden.MFAResponse{Provider: r.Response.Provider, Token: append([]byte(nil), r.Response.Token...), ConfirmRemoveAllMFA: r.Response.ConfirmRemoveAllMFA})
 		})
-		m.form.disableRemember = true
+		m.form.DisableRemember = true
 		labels := map[int]string{0: "验证器验证码", 1: "邮件验证码", 2: "Duo 系统浏览器", 3: "YubiKey OTP", 7: "系统安全密钥"}
 		for raw := range ch.Providers {
 			id, err := strconv.Atoi(raw)
@@ -110,26 +111,26 @@ func (a *app) requestMFA(ctx context.Context, server, email string, epoch uint64
 				m.providers[id] = labels[id]
 			}
 		}
-		m.form.provider = 8
+		m.form.Provider = 8
 		for _, id := range []int{0, 1, 3} {
 			if _, ok := m.providers[id]; ok {
-				m.form.provider = id
+				m.form.Provider = id
 				break
 			}
 		}
 		m.platform = func(id int) {
-			if m.form.busy || m.form.closed {
+			if m.form.Busy || m.form.Closed {
 				return
 			}
-			m.form.busy = true
+			m.form.Busy = true
 			go func() {
 				r, err := platform(ctx, ch, id)
 				if err != nil {
 					clear(r.Token)
 					dispatch(func() {
 						if a.mfaLogin == m && ctx.Err() == nil {
-							m.form.busy = false
-							m.form.status = err.Error()
+							m.form.Busy = false
+							m.form.Status = err.Error()
 						}
 					})
 					return
@@ -139,19 +140,19 @@ func (a *app) requestMFA(ctx context.Context, server, email string, epoch uint64
 		}
 		if ch.SendEmail != nil {
 			m.sendEmail = func() {
-				if m.form.busy || m.form.closed {
+				if m.form.Busy || m.form.Closed {
 					return
 				}
-				m.form.busy = true
+				m.form.Busy = true
 				go func() {
 					err := ch.SendEmail(ctx)
 					dispatch(func() {
 						if a.mfaLogin == m && ctx.Err() == nil {
-							m.form.busy = false
+							m.form.Busy = false
 							if err != nil {
-								m.form.status = err.Error()
+								m.form.Status = err.Error()
 							} else {
-								m.form.status = "邮件验证码已请求。"
+								m.form.Status = "邮件验证码已请求。"
 							}
 						}
 					})
@@ -183,19 +184,19 @@ func (a *app) mfaLoginView(c *ui.Context) {
 	if m == nil {
 		return
 	}
-	authFormView(c, m.form, m.providers)
-	if m.form.closed {
+	account.AuthFormView(c, m.form, m.providers)
+	if m.form.Closed {
 		m.cancel()
 		return
 	}
 	for _, id := range []int{2, 7} {
 		if label, ok := m.platformProviders[id]; ok {
-			if ui.Button(c, label).Disabled(m.form.busy).Clicked() {
+			if ui.Button(c, label).Disabled(m.form.Busy).Clicked() {
 				m.platform(id)
 			}
 		}
 	}
-	if m.sendEmail != nil && ui.Button(c, "发送邮件验证码").Disabled(m.form.busy).Clicked() {
+	if m.sendEmail != nil && ui.Button(c, "发送邮件验证码").Disabled(m.form.Busy).Clicked() {
 		m.sendEmail()
 	}
 	ui.Text(c, "本次登录不保存两步验证设备令牌。")

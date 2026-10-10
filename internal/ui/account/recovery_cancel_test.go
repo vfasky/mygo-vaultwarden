@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -30,7 +30,7 @@ func TestRecoveryCancelQueuedPreparation(t *testing.T) {
 			t.Run(next+map[bool]string{false: "/success", true: "/error"}[lateError], func(t *testing.T) {
 				q := make(chan func(), 2)
 				plans := make(chan *vaultwarden.RecoveryPlan, 2)
-				p := newEmergencyPanel(nil, true, func(context.Context, recoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
+				p := NewEmergencyPanel(nil, true, func(context.Context, RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
 					plan := &vaultwarden.RecoveryPlan{}
 					plans <- plan
 					if lateError {
@@ -38,24 +38,24 @@ func TestRecoveryCancelQueuedPreparation(t *testing.T) {
 					}
 					return plan, nil
 				}, nil, func(f func()) { q <- f })
-				p.preparePlan()
+				p.PreparePlan()
 				old := recoveryQueuedCompletion(t, q)
 				oldPlan := <-plans
 				p.password = "secret"
 				p.token = "token"
 				p.cancelOperation()
-				if p.running || p.cancel != nil || p.plan != nil || p.password != "" || p.token != "" {
+				if p.running || p.cancel != nil || p.Plan != nil || p.password != "" || p.token != "" {
 					t.Fatal("cancel retained preparation state")
 				}
 				if next == "restart" {
-					p.preparePlan()
+					p.PreparePlan()
 				}
 				if next == "lock" {
 					p.Close()
 				}
-				status := p.status
+				status := p.Status
 				old()
-				if p.plan != nil || p.status != status {
+				if p.Plan != nil || p.Status != status {
 					t.Fatal("cancelled preparation restored plan or status")
 				}
 				// No exported closed accessor exists; inspect only the consumed bit to
@@ -69,7 +69,7 @@ func TestRecoveryCancelQueuedPreparation(t *testing.T) {
 					}
 					recoveryQueuedCompletion(t, q)()
 					<-plans
-					if !lateError && p.plan == nil {
+					if !lateError && p.Plan == nil {
 						t.Fatal("fresh attempt not accepted")
 					}
 				}
@@ -85,7 +85,7 @@ func TestEmergencyCancelQueuedView(t *testing.T) {
 			t.Run(next+map[bool]string{false: "/success", true: "/error"}[lateError], func(t *testing.T) {
 				q := make(chan func(), 2)
 				results := make(chan []vaultwarden.CipherFields, 2)
-				v := newEmergencyViewer(vaultwarden.EmergencyContact{ID: "fixture", Status: 4, Type: 0}, func(context.Context, string) ([]vaultwarden.CipherFields, error) {
+				v := NewEmergencyViewer(vaultwarden.EmergencyContact{ID: "fixture", Status: 4, Type: 0}, func(context.Context, string) ([]vaultwarden.CipherFields, error) {
 					rows := []vaultwarden.CipherFields{{ID: "item", Name: "secret", Login: map[string]any{"password": "fixture secret"}}}
 					results <- rows
 					if lateError {
@@ -138,7 +138,7 @@ func TestRecoveryCancelSubmitPreservesHostResult(t *testing.T) {
 				q := make(chan func(), 1)
 				started := make(chan struct{})
 				recorded := make(chan vaultwarden.RecoveryOperationResult, 1)
-				p := newEmergencyPanel(nil, true, nil, func(ctx context.Context, plan *vaultwarden.RecoveryPlan, _ string) (vaultwarden.RecoveryOperationResult, error) {
+				p := NewEmergencyPanel(nil, true, nil, func(ctx context.Context, plan *vaultwarden.RecoveryPlan, _ string) (vaultwarden.RecoveryOperationResult, error) {
 					close(started)
 					<-ctx.Done()
 					result := vaultwarden.RecoveryOperationResult{Dispatched: true, Confirmed: !unknown, Unknown: unknown}
@@ -149,8 +149,8 @@ func TestRecoveryCancelSubmitPreservesHostResult(t *testing.T) {
 					recorded <- result
 					return result, nil
 				}, func(f func()) { q <- f })
-				p.plan = &vaultwarden.RecoveryPlan{}
-				p.commitPlan()
+				p.Plan = &vaultwarden.RecoveryPlan{}
+				p.CommitPlan()
 				<-started
 				generation := p.generation
 				p.cancelOperation()
@@ -166,7 +166,7 @@ func TestRecoveryCancelSubmitPreservesHostResult(t *testing.T) {
 					t.Fatal("host lost operation result")
 				}
 				if lock {
-					if p.status != "" || !p.closed {
+					if p.Status != "" || !p.closed {
 						t.Fatal("late submit restored closed UI")
 					}
 				} else if !p.terminal || p.running || p.submitting {

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-type authManagementRequest struct {
+type AuthManagementRequest struct {
 	Scope           vaultwarden.Scope
 	Epoch, Sequence uint64
 	Operation       vaultwarden.MFAManageOperation
@@ -18,7 +18,7 @@ type authManagementRequest struct {
 	Context         context.Context
 }
 
-func (r *authManagementRequest) Close() {
+func (r *AuthManagementRequest) Close() {
 	clear(r.Input.Password)
 	r.Input.Password = nil
 	r.Input.OTP = ""
@@ -28,7 +28,7 @@ func (r *authManagementRequest) Close() {
 	clear(r.Fields)
 }
 
-type authManagementForm struct {
+type AuthManagementForm struct {
 	scope                                       vaultwarden.Scope
 	epoch, sequence                             uint64
 	operation                                   vaultwarden.MFAManageOperation
@@ -36,20 +36,20 @@ type authManagementForm struct {
 	values                                      map[string]string
 	busy, closed, confirming, uncertain, reveal bool
 	cancel                                      context.CancelFunc
-	submit                                      func(authManagementRequest)
+	Submit                                      func(AuthManagementRequest)
 }
 
-func newAuthManagementForm(scope vaultwarden.Scope, epoch uint64, submit func(authManagementRequest)) *authManagementForm {
-	return &authManagementForm{scope: scope, epoch: epoch, operation: vaultwarden.MFAList, values: map[string]string{}, submit: submit}
+func NewAuthManagementForm(scope vaultwarden.Scope, epoch uint64, submit func(AuthManagementRequest)) *AuthManagementForm {
+	return &AuthManagementForm{scope: scope, epoch: epoch, operation: vaultwarden.MFAList, values: map[string]string{}, Submit: submit}
 }
-func (f *authManagementForm) clear() {
+func (f *AuthManagementForm) clear() {
 	f.password = ""
 	f.otp = ""
 	clear(f.values)
 	f.result = ""
 	f.reveal = false
 }
-func (f *authManagementForm) Close() {
+func (f *AuthManagementForm) Close() {
 	if f.cancel != nil {
 		f.cancel()
 	}
@@ -58,8 +58,8 @@ func (f *authManagementForm) Close() {
 	f.sequence++
 	f.busy = false
 }
-func (f *authManagementForm) dispatch() {
-	if f.closed || f.busy || (f.uncertain && f.operation != vaultwarden.MFAList) || f.submit == nil {
+func (f *AuthManagementForm) dispatch() {
+	if f.closed || f.busy || (f.uncertain && f.operation != vaultwarden.MFAList) || f.Submit == nil {
 		return
 	}
 	sensitive := f.operation != "list" && f.operation != "request-otp" && f.operation != "verify-otp"
@@ -81,12 +81,12 @@ func (f *authManagementForm) dispatch() {
 	f.cancel = cancel
 	f.sequence++
 	f.busy = true
-	request := authManagementRequest{Scope: f.scope, Epoch: f.epoch, Sequence: f.sequence, Operation: f.operation, Input: vaultwarden.AccountSensitiveInput{Password: []byte(f.password), OTP: f.otp}, Fields: fields, Confirmed: f.confirming, Context: ctx}
+	request := AuthManagementRequest{Scope: f.scope, Epoch: f.epoch, Sequence: f.sequence, Operation: f.operation, Input: vaultwarden.AccountSensitiveInput{Password: []byte(f.password), OTP: f.otp}, Fields: fields, Confirmed: f.confirming, Context: ctx}
 	f.clear()
 	f.confirming = false
-	f.submit(request)
+	f.Submit(request)
 }
-func (f *authManagementForm) complete(scope vaultwarden.Scope, epoch, sequence uint64, result string, err error) bool {
+func (f *AuthManagementForm) Complete(scope vaultwarden.Scope, epoch, sequence uint64, result string, err error) bool {
 	if f.closed || scope != f.scope || epoch != f.epoch || sequence != f.sequence {
 		return false
 	}
@@ -120,7 +120,7 @@ var authManagementOperations = []struct {
 	{"get-recover", "查看恢复码", nil}, {"disable", "关闭一种双重验证", []string{"type"}}, {"request-otp", "发送敏感操作邮件 OTP", nil}, {"verify-otp", "一次性核验敏感 OTP", []string{"otp"}},
 }
 
-func authManagementView(c *ui.Context, f *authManagementForm) {
+func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
 	if f == nil || f.closed {
 		return
 	}

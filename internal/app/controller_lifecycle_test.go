@@ -125,13 +125,13 @@ func TestControllerMFACancelAndRecoveryAccountBinding(t *testing.T) {
 		t.Fatal("prompt")
 	}
 	f := a.mfaLogin.form
-	f.provider = 8
-	f.token = "recovery"
-	f.dispatch()
-	if !f.confirming {
+	f.Provider = 8
+	f.Token = "recovery"
+	f.Dispatch()
+	if !f.Confirming {
 		t.Fatal("missing explicit confirmation")
 	}
-	f.dispatch()
+	f.Dispatch()
 	r := <-done
 	defer clear(r.Token)
 	if r.Provider != 8 || !r.ConfirmRemoveAllMFA || r.Remember {

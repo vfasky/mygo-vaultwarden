@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -44,7 +45,7 @@ type orgServicesController struct {
 	organizations                                           []vaultwarden.Organization
 	collections                                             []vaultwarden.Collection
 	entries                                                 []vaultwarden.VaultEntry
-	members                                                 []recoveryMemberChoice
+	members                                                 []account.RecoveryMemberChoice
 	emergencyContacts                                       []vaultwarden.EmergencyContact
 	emergencyTrusted                                        bool
 	emergencyOnly                                           bool
@@ -301,10 +302,10 @@ func (c *orgServicesController) replacePanel(panel connectedPanel) {
 	}
 	c.panel = panel
 	switch p := panel.(type) {
-	case *recoveryPanel:
-		p.busy = c.busy
-	case *emergencyViewer:
-		p.busy = c.busy
+	case *account.RecoveryPanel:
+		p.Busy = c.busy
+	case *account.EmergencyViewer:
+		p.Busy = c.busy
 	case *orgOperationsPanel:
 		p.busy = c.busy
 	case *orgEventsPanel:
@@ -442,7 +443,7 @@ func (c *orgServicesController) loadMembers() {
 	orgID := c.selectedOrg
 	c.busy(true)
 	go func() {
-		var choices []recoveryMemberChoice
+		var choices []account.RecoveryMemberChoice
 		ctx, done, env, err := c.operation(c.ctx)
 		defer done()
 		// Filled through the typed directory API; no free-form membership IDs.
@@ -451,7 +452,7 @@ func (c *orgServicesController) loadMembers() {
 			err = e
 			if e == nil {
 				for _, member := range directory.Members() {
-					choices = append(choices, recoveryMemberChoice{OrganizationID: orgID, MemberID: member.ID, Label: member.Email})
+					choices = append(choices, account.RecoveryMemberChoice{OrganizationID: orgID, MemberID: member.ID, Label: member.Email})
 				}
 				directory.Close()
 			}

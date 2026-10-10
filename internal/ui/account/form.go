@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+// Package account provides account, authentication, recovery, and device user interfaces.
+package account
 
 import (
 	"context"
@@ -15,29 +16,29 @@ import (
 // accountForm is an independent native component. The app integration owns
 // network scheduling and authenticated storage receipts; no global/app state is
 // changed here. Every completion carries scope + UI epoch and a request sequence.
-type accountForm struct {
+type Form struct {
 	scope                                                                        vaultwarden.Scope
 	epoch, sequence                                                              uint64
-	mode                                                                         string
-	modes                                                                        []string
-	rotationRequirements                                                         vaultwarden.RotationTrustRequirements
+	Mode                                                                         string
+	Modes                                                                        []string
+	RotationRequirements                                                         vaultwarden.RotationTrustRequirements
 	rotationTrust                                                                vaultwarden.RecoveryRotationTrust
 	legacyRecoveryReviewed                                                       bool
-	rotationPreparations                                                         []vaultwarden.RotationCipherPreparation
-	openRotationPreparation                                                      func(string, bool)
-	email, name, hint, avatar, password, newPassword, repeatPassword, token, otp string
+	RotationPreparations                                                         []vaultwarden.RotationCipherPreparation
+	OpenRotationPreparation                                                      func(string, bool)
+	Email, name, hint, avatar, password, newPassword, repeatPassword, token, otp string
 	kdfType, iterations, memory, parallelism                                     string
 	policy                                                                       vaultwarden.AccountPasswordPolicy
 	score                                                                        int
-	status                                                                       string
+	Status                                                                       string
 	busy, confirming, uncertain, closed                                          bool
 	confirmAction                                                                string
 	apiKey                                                                       string
 	apiKeyVisible                                                                bool
 	plan                                                                         *vaultwarden.AccountChangePlan
-	submit                                                                       func(accountFormRequest)
+	Submit                                                                       func(FormRequest)
 }
-type accountFormRequest struct {
+type FormRequest struct {
 	Scope                                 vaultwarden.Scope
 	Epoch, Sequence                       uint64
 	Operation                             string
@@ -49,7 +50,7 @@ type accountFormRequest struct {
 	RotationTrust                         vaultwarden.RecoveryRotationTrust
 }
 
-func (r *accountFormRequest) Close() {
+func (r *FormRequest) Close() {
 	clear(r.Password)
 	clear(r.NewPassword)
 	r.Password = nil
@@ -57,10 +58,10 @@ func (r *accountFormRequest) Close() {
 	r.Token = ""
 	r.OTP = ""
 }
-func newAccountForm(scope vaultwarden.Scope, epoch uint64, submit func(accountFormRequest)) *accountForm {
-	return &accountForm{scope: scope, epoch: epoch, mode: "profile", score: -1, kdfType: "0", iterations: "600000", memory: "64", parallelism: "4", submit: submit, rotationTrust: vaultwarden.RecoveryRotationTrust{Users: map[string]string{}, Organizations: map[string]string{}}}
+func NewForm(scope vaultwarden.Scope, epoch uint64, submit func(FormRequest)) *Form {
+	return &Form{scope: scope, epoch: epoch, Mode: "profile", score: -1, kdfType: "0", iterations: "600000", memory: "64", parallelism: "4", Submit: submit, rotationTrust: vaultwarden.RecoveryRotationTrust{Users: map[string]string{}, Organizations: map[string]string{}}}
 }
-func (f *accountForm) clearSecrets() {
+func (f *Form) clearSecrets() {
 	f.password = ""
 	f.newPassword = ""
 	f.repeatPassword = ""
@@ -69,7 +70,7 @@ func (f *accountForm) clearSecrets() {
 	f.apiKey = ""
 	f.apiKeyVisible = false
 }
-func (f *accountForm) Close() {
+func (f *Form) Close() {
 	if f == nil {
 		return
 	}
@@ -81,7 +82,7 @@ func (f *accountForm) Close() {
 	f.confirming = false
 	f.sequence++
 }
-func (f *accountForm) cancel() {
+func (f *Form) cancel() {
 	f.clearSecrets()
 	f.plan.Close()
 	f.plan = nil
@@ -89,12 +90,12 @@ func (f *accountForm) cancel() {
 	f.confirmAction = ""
 	f.busy = false
 	f.sequence++
-	f.status = "已取消；尚未派发的操作不会提交"
+	f.Status = "已取消；尚未派发的操作不会提交"
 }
-func (f *accountForm) accept(scope vaultwarden.Scope, epoch, sequence uint64) bool {
+func (f *Form) accept(scope vaultwarden.Scope, epoch, sequence uint64) bool {
 	return f != nil && !f.closed && f.scope == scope && f.epoch == epoch && f.sequence == sequence
 }
-func (f *accountForm) prepared(scope vaultwarden.Scope, epoch, sequence uint64, plan *vaultwarden.AccountChangePlan, err error) bool {
+func (f *Form) Prepared(scope vaultwarden.Scope, epoch, sequence uint64, plan *vaultwarden.AccountChangePlan, err error) bool {
 	if !f.accept(scope, epoch, sequence) {
 		plan.Close()
 		return false
@@ -103,19 +104,19 @@ func (f *accountForm) prepared(scope vaultwarden.Scope, epoch, sequence uint64, 
 	f.clearSecrets()
 	if err != nil {
 		plan.Close()
-		f.status = "准备失败，请核对身份、密码、策略及同步状态"
+		f.Status = "准备失败，请核对身份、密码、策略及同步状态"
 		return false
 	}
 	if plan == nil {
-		f.status = "准备失败"
+		f.Status = "准备失败"
 		return false
 	}
 	f.plan = plan
 	f.confirming = true
-	f.status = "核对影响后再次确认"
+	f.Status = "核对影响后再次确认"
 	return true
 }
-func (f *accountForm) completed(scope vaultwarden.Scope, epoch, sequence uint64, result vaultwarden.AccountChangeResult, err error) bool {
+func (f *Form) Completed(scope vaultwarden.Scope, epoch, sequence uint64, result vaultwarden.AccountChangeResult, err error) bool {
 	if !f.accept(scope, epoch, sequence) {
 		return false
 	}
@@ -128,9 +129,9 @@ func (f *accountForm) completed(scope vaultwarden.Scope, epoch, sequence uint64,
 	if result.Dispatched {
 		f.uncertain = true
 		if result.Confirmed {
-			f.status = "服务器已确认。请重新登录并同步；恢复记录在核验完成前保留"
+			f.Status = "服务器已确认。请重新登录并同步；恢复记录在核验完成前保留"
 		} else {
-			f.status = "结果未知，可能已部分执行。恢复材料已保留，请核验服务器；不要重试"
+			f.Status = "结果未知，可能已部分执行。恢复材料已保留，请核验服务器；不要重试"
 		}
 		return true
 	}
@@ -138,39 +139,39 @@ func (f *accountForm) completed(scope vaultwarden.Scope, epoch, sequence uint64,
 		var uncertain *vaultwarden.MutationUncertainError
 		if errors.As(err, &uncertain) {
 			f.uncertain = true
-			f.status = "结果未知，请先核验服务器状态，不要重复提交"
+			f.Status = "结果未知，请先核验服务器状态，不要重复提交"
 			return true
 		}
-		f.status = "操作未提交，请重新准备"
+		f.Status = "操作未提交，请重新准备"
 	} else {
-		f.status = "已完成"
+		f.Status = "已完成"
 	}
 	return true
 }
-func (f *accountForm) registration(scope vaultwarden.Scope, epoch, sequence uint64, r vaultwarden.AccountRegistrationVerification, err error) bool {
+func (f *Form) Registration(scope vaultwarden.Scope, epoch, sequence uint64, r vaultwarden.AccountRegistrationVerification, err error) bool {
 	if !f.accept(scope, epoch, sequence) {
 		return false
 	}
 	f.busy = false
 	if err != nil {
 		f.clearSecrets()
-		f.status = "请求失败或结果未知，请检查邮箱后再继续"
+		f.Status = "请求失败或结果未知，请检查邮箱后再继续"
 		return true
 	}
 	if r.EmailSent {
-		f.status = "验证邮件已请求发送，请输入邮件中的注册令牌"
+		f.Status = "验证邮件已请求发送，请输入邮件中的注册令牌"
 	} else {
 		f.token = r.Token
-		f.status = "服务器已返回注册验证令牌，可以完成注册"
+		f.Status = "服务器已返回注册验证令牌，可以完成注册"
 	}
 	return true
 }
-func (f *accountForm) dispatch(operation string) {
-	if f.closed || f.busy || f.uncertain || f.submit == nil {
+func (f *Form) dispatch(operation string) {
+	if f.closed || f.busy || f.uncertain || f.Submit == nil {
 		return
 	}
 	if (operation == "prepare-delete" || operation == "prepare-rotate-user-key") && !f.legacyRecoveryReviewed {
-		f.status = "请先处理未决旧附件共享恢复文件，并确认其依赖当前user key的限制。"
+		f.Status = "请先处理未决旧附件共享恢复文件，并确认其依赖当前user key的限制。"
 		return
 	}
 	if operation == "commit" && (!f.confirming || f.plan == nil) {
@@ -184,23 +185,23 @@ func (f *accountForm) dispatch(operation string) {
 		var err error
 		kdf.Type, err = strconv.Atoi(f.kdfType)
 		if err != nil {
-			f.status = "KDF 类型无效"
+			f.Status = "KDF 类型无效"
 			return
 		}
 		kdf.Iterations, err = strconv.Atoi(f.iterations)
 		if err != nil {
-			f.status = "KDF 迭代数无效"
+			f.Status = "KDF 迭代数无效"
 			return
 		}
 		if kdf.Type == 1 {
 			kdf.Memory, err = strconv.Atoi(f.memory)
 			if err != nil {
-				f.status = "KDF 内存无效"
+				f.Status = "KDF 内存无效"
 				return
 			}
 			kdf.Parallelism, err = strconv.Atoi(f.parallelism)
 			if err != nil {
-				f.status = "KDF 并行度无效"
+				f.Status = "KDF 并行度无效"
 				return
 			}
 		}
@@ -208,16 +209,16 @@ func (f *accountForm) dispatch(operation string) {
 	if operation == "prepare-password" || operation == "register-finish" {
 		password := f.newPassword
 		if password != f.repeatPassword {
-			f.status = "两次主密码不一致"
+			f.Status = "两次主密码不一致"
 			return
 		}
-		if err := f.policy.Check(context.Background(), []byte(password), f.email, false); err != nil {
-			f.status = "主密码不符合组织策略"
+		if err := f.policy.Check(context.Background(), []byte(password), f.Email, false); err != nil {
+			f.Status = "主密码不符合组织策略"
 			return
 		}
 	}
 	f.sequence++
-	r := accountFormRequest{Scope: f.scope, Epoch: f.epoch, Sequence: f.sequence, Operation: operation, Email: f.email, Name: f.name, Hint: f.hint, Avatar: f.avatar, Token: f.token, OTP: f.otp, Password: []byte(f.password), NewPassword: []byte(f.newPassword), KDF: kdf, Plan: f.plan}
+	r := FormRequest{Scope: f.scope, Epoch: f.epoch, Sequence: f.sequence, Operation: operation, Email: f.Email, Name: f.name, Hint: f.hint, Avatar: f.avatar, Token: f.token, OTP: f.otp, Password: []byte(f.password), NewPassword: []byte(f.newPassword), KDF: kdf, Plan: f.plan}
 	r.RotationTrust = vaultwarden.RecoveryRotationTrust{Users: map[string]string{}, Organizations: map[string]string{}}
 	for id, key := range f.rotationTrust.Users {
 		r.RotationTrust.Users[id] = key
@@ -242,18 +243,18 @@ func (f *accountForm) dispatch(operation string) {
 	if operation == "commit" {
 		f.plan = nil
 	} // worker exclusively owns the submitted plan
-	f.submit(r) // ownership of sensitive byte slices transfers to scheduler
+	f.Submit(r) // ownership of sensitive byte slices transfers to scheduler
 }
-func (f *accountForm) evaluate() {
-	r, err := passwordstrength.Evaluate(context.Background(), f.newPassword, f.email, nil)
+func (f *Form) evaluate() {
+	r, err := passwordstrength.Evaluate(context.Background(), f.newPassword, f.Email, nil)
 	if err != nil {
 		f.score = -1
-		f.status = "无法评估主密码"
+		f.Status = "无法评估主密码"
 		return
 	}
 	f.score = r.Score
 }
-func accountFormView(c *ui.Context, f *accountForm) {
+func FormView(c *ui.Context, f *Form) {
 	if f == nil || f.closed {
 		return
 	}
@@ -277,17 +278,17 @@ func accountFormView(c *ui.Context, f *accountForm) {
 			f.cancel()
 		}
 	} else {
-		modes := f.modes
+		modes := f.Modes
 		if modes == nil {
 			modes = []string{"register", "profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
 		}
 		for _, mode := range modes {
 			if ui.Button(c, accountModeLabel(mode)).Disabled(disabled).Clicked() {
 				f.cancel()
-				f.mode = mode
+				f.Mode = mode
 			}
 		}
-		switch f.mode {
+		switch f.Mode {
 		case "profile":
 			ui.TextInput(c, &f.name).Label("显示名称（最多 50 字节）").Disabled(disabled)
 			ui.TextInput(c, &f.avatar).Label("头像颜色 #RRGGBB").Disabled(disabled)
@@ -305,9 +306,9 @@ func accountFormView(c *ui.Context, f *accountForm) {
 				f.dispatch("verify-email-token")
 			}
 		case "register":
-			ui.TextInput(c, &f.email).Label("注册邮箱").Disabled(disabled)
+			ui.TextInput(c, &f.Email).Label("注册邮箱").Disabled(disabled)
 			ui.TextInput(c, &f.name).Label("显示名称").Disabled(disabled)
-			if ui.Button(c, "发送主密码提示").Disabled(disabled || f.email == "").Clicked() {
+			if ui.Button(c, "发送主密码提示").Disabled(disabled || f.Email == "").Clicked() {
 				f.dispatch("password-hint")
 			}
 			if ui.Button(c, "发送注册验证邮件").Disabled(disabled).Clicked() {
@@ -321,11 +322,11 @@ func accountFormView(c *ui.Context, f *accountForm) {
 			}
 		default:
 			ui.TextInput(c, &f.password).Label("当前主密码").Password().Disabled(disabled)
-			switch f.mode {
+			switch f.Mode {
 			case "password":
 				accountNewPasswordView(c, f, disabled)
 			case "email":
-				ui.TextInput(c, &f.email).Label("新邮箱").Disabled(disabled)
+				ui.TextInput(c, &f.Email).Label("新邮箱").Disabled(disabled)
 				if ui.Button(c, "请求邮箱变更验证码").Disabled(disabled).Clicked() {
 					f.dispatch("email-token")
 				}
@@ -337,12 +338,12 @@ func accountFormView(c *ui.Context, f *accountForm) {
 					f.dispatch("rotation-recipients")
 				}
 				ui.Text(c, "从可信独立渠道取得下列完整SPKI公钥；不把本次服务器返回值直接当成信任依据。").MaxLines(4)
-				for _, recipient := range f.rotationRequirements.Users {
+				for _, recipient := range f.RotationRequirements.Users {
 					value := f.rotationTrust.Users[recipient.ID]
 					ui.TextInput(c, &value).Label("受托人 " + recipient.Email + " · " + recipient.ID + " 的可信公钥").Disabled(disabled)
 					f.rotationTrust.Users[recipient.ID] = value
 				}
-				for _, recipient := range f.rotationRequirements.Organizations {
+				for _, recipient := range f.RotationRequirements.Organizations {
 					value := f.rotationTrust.Organizations[recipient.ID]
 					ui.TextInput(c, &value).Label("组织 " + recipient.Name + " · " + recipient.ID + " 的可信公钥").Disabled(disabled)
 					f.rotationTrust.Organizations[recipient.ID] = value
@@ -350,7 +351,7 @@ func accountFormView(c *ui.Context, f *accountForm) {
 			case "api-key", "security-stamp", "purge", "delete":
 				ui.TextInput(c, &f.otp).Label("或受保护操作邮件 OTP（与主密码二选一）").Password().Disabled(disabled)
 			}
-			if f.mode == "rotate-user-key" || f.mode == "delete" {
+			if f.Mode == "rotate-user-key" || f.Mode == "delete" {
 				ui.Text(c, ".mygoshare-recovery 文件只依赖当时user key，不能仅用旧主密码独立解锁。请先通过导入导出的共享恢复入口处理所有未决迁移；轮换或删除后旧文件可能无法恢复。").MaxLines(6)
 				label := "确认已处理未决共享恢复文件"
 				if f.legacyRecoveryReviewed {
@@ -360,8 +361,8 @@ func accountFormView(c *ui.Context, f *accountForm) {
 					f.legacyRecoveryReviewed = !f.legacyRecoveryReviewed
 				}
 			}
-			ui.Text(c, accountImpact(vaultwarden.AccountChangeKind(f.mode))).MaxLines(5)
-			if f.mode == "api-key" {
+			ui.Text(c, accountImpact(vaultwarden.AccountChangeKind(f.Mode))).MaxLines(5)
+			if f.Mode == "api-key" {
 				if ui.Button(c, "查看 API key").Disabled(disabled).Clicked() {
 					f.confirmAction = "api-key"
 					f.confirming = true
@@ -371,7 +372,7 @@ func accountFormView(c *ui.Context, f *accountForm) {
 					f.confirming = true
 				}
 			} else if ui.Button(c, "继续并核对影响").Disabled(disabled).Clicked() {
-				f.dispatch("prepare-" + f.mode)
+				f.dispatch("prepare-" + f.Mode)
 			}
 		}
 		if ui.Button(c, "取消并清除敏感输入").Disabled(f.busy).Clicked() {
@@ -391,18 +392,18 @@ func accountFormView(c *ui.Context, f *accountForm) {
 			f.apiKeyVisible = !f.apiKeyVisible
 		}
 	}
-	for _, preparation := range f.rotationPreparations {
+	for _, preparation := range f.RotationPreparations {
 		ui.Text(c, "需迁移条目 "+preparation.CipherID+" / 附件 "+preparation.AttachmentID).MaxLines(3)
 		if preparation.Deleted {
 			ui.Text(c, "此项在回收站：只有明确恢复并重新同步后才能升级旧附件；不会自动恢复或删除。").MaxLines(4)
 		}
-		if f.openRotationPreparation != nil && ui.Button(c, "打开对应条目进行明确迁移").Key(preparation.CipherID+"/"+preparation.AttachmentID).Disabled(f.busy).Clicked() {
-			f.openRotationPreparation(preparation.CipherID, preparation.Deleted)
+		if f.OpenRotationPreparation != nil && ui.Button(c, "打开对应条目进行明确迁移").Key(preparation.CipherID+"/"+preparation.AttachmentID).Disabled(f.busy).Clicked() {
+			f.OpenRotationPreparation(preparation.CipherID, preparation.Deleted)
 		}
 	}
-	ui.Text(c, f.status).MaxLines(5)
+	ui.Text(c, f.Status).MaxLines(5)
 }
-func accountNewPasswordView(c *ui.Context, f *accountForm, disabled bool) {
+func accountNewPasswordView(c *ui.Context, f *Form, disabled bool) {
 	ui.TextInput(c, &f.newPassword).Label("新主密码（至少 12 字符）").Password().Disabled(disabled)
 	ui.TextInput(c, &f.repeatPassword).Label("再次输入新主密码").Password().Disabled(disabled)
 	ui.TextInput(c, &f.hint).Label("主密码提示（不要填写密码本身）").Disabled(disabled)
@@ -414,7 +415,7 @@ func accountNewPasswordView(c *ui.Context, f *accountForm, disabled bool) {
 	}
 	ui.Text(c, fmt.Sprintf("组织策略：最低评分 %d，最短 %d；大小写、数字和符号要求在提交前验证。服务器将重新返回当前适用策略。", f.policy.MinComplexity, f.policy.MinLength)).MaxLines(4)
 }
-func accountKDFView(c *ui.Context, f *accountForm, disabled bool) {
+func accountKDFView(c *ui.Context, f *Form, disabled bool) {
 	ui.TextInput(c, &f.kdfType).Label("KDF：0 PBKDF2 / 1 Argon2id").Disabled(disabled)
 	ui.TextInput(c, &f.iterations).Label("迭代次数").Disabled(disabled)
 	if f.kdfType == "1" {

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -52,7 +53,7 @@ func (a *app) noteTargetOutcome(scope vaultwarden.Scope, message string) {
 	}
 	a.targetOutcomeWarnings[scope] = message
 }
-func (c *orgServicesController) prepareRecovery(ctx context.Context, request recoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
+func (c *orgServicesController) prepareRecovery(ctx context.Context, request account.RecoveryFormRequest) (*vaultwarden.RecoveryPlan, error) {
 	ctx, done, env, err := c.operation(ctx)
 	defer done()
 	if err != nil {
@@ -228,7 +229,7 @@ func (c *orgServicesController) loadEmergency(trusted bool) {
 			}
 			c.emergencyContacts = contacts
 			c.emergencyTrusted = trusted
-			c.replacePanel(newEmergencyPanel(contacts, trusted, c.prepareRecovery, c.commitRecovery, c.deliver))
+			c.replacePanel(account.NewEmergencyPanel(contacts, trusted, c.prepareRecovery, c.commitRecovery, c.deliver))
 		})
 	}()
 }
@@ -238,10 +239,10 @@ func (c *orgServicesController) loadRecoveryMembers() {
 	go func() {
 		ctx, done, env, err := c.operation(c.ctx)
 		defer done()
-		var choices []recoveryMemberChoice
+		var choices []account.RecoveryMemberChoice
 		if err == nil {
 			for _, org := range organizations {
-				choices = append(choices, recoveryMemberChoice{OrganizationID: org.ID, MemberID: org.OrganizationUserID, Label: org.Name + " · 自身恢复登记"})
+				choices = append(choices, account.RecoveryMemberChoice{OrganizationID: org.ID, MemberID: org.OrganizationUserID, Label: org.Name + " · 自身恢复登记"})
 				if org.Type != 0 && org.Type != 1 {
 					continue
 				}
@@ -251,7 +252,7 @@ func (c *orgServicesController) loadRecoveryMembers() {
 					break
 				}
 				for _, member := range directory.Members() {
-					choices = append(choices, recoveryMemberChoice{OrganizationID: org.ID, MemberID: member.ID, Label: org.Name + " · " + member.Email, Administrator: true})
+					choices = append(choices, account.RecoveryMemberChoice{OrganizationID: org.ID, MemberID: member.ID, Label: org.Name + " · " + member.Email, Administrator: true})
 				}
 				directory.Close()
 			}
@@ -265,12 +266,12 @@ func (c *orgServicesController) loadRecoveryMembers() {
 				c.status = err.Error()
 				return
 			}
-			c.replacePanel(newRecoveryPanel(choices, c.prepareRecovery, c.commitRecovery, c.deliver))
+			c.replacePanel(account.NewRecoveryPanel(choices, c.prepareRecovery, c.commitRecovery, c.deliver))
 		})
 	}()
 }
 func (c *orgServicesController) openEmergencyView(contact vaultwarden.EmergencyContact) {
-	c.replacePanel(newEmergencyViewer(contact, func(ctx context.Context, id string) ([]vaultwarden.CipherFields, error) {
+	c.replacePanel(account.NewEmergencyViewer(contact, func(ctx context.Context, id string) ([]vaultwarden.CipherFields, error) {
 		ctx, done, env, err := c.operation(ctx)
 		defer done()
 		if err != nil {

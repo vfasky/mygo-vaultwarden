@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 // emergencyViewer is deliberately independent from the normal vault/editor and
 // offline/AutoFill stores. fetch must call WithEmergencyView with explicit
 // consent; the host checks scope/epoch and dispatches completion on the UI thread.
-type emergencyViewer struct {
+type EmergencyViewer struct {
 	contact                             vaultwarden.EmergencyContact
 	running, closed, terminal, revealed bool
 	generation                          uint64
@@ -24,13 +24,13 @@ type emergencyViewer struct {
 	cancel                              context.CancelFunc
 	fetch                               func(context.Context, string) ([]vaultwarden.CipherFields, error)
 	dispatch                            func(func())
-	busy                                func(bool)
+	Busy                                func(bool)
 }
 
-func newEmergencyViewer(contact vaultwarden.EmergencyContact, fetch func(context.Context, string) ([]vaultwarden.CipherFields, error), dispatch func(func())) *emergencyViewer {
-	return &emergencyViewer{contact: contact, selected: -1, fetch: fetch, dispatch: dispatch}
+func NewEmergencyViewer(contact vaultwarden.EmergencyContact, fetch func(context.Context, string) ([]vaultwarden.CipherFields, error), dispatch func(func())) *EmergencyViewer {
+	return &EmergencyViewer{contact: contact, selected: -1, fetch: fetch, dispatch: dispatch}
 }
-func (v *emergencyViewer) cancelLoad() {
+func (v *EmergencyViewer) cancelLoad() {
 	if v.cancel != nil {
 		v.cancel()
 	}
@@ -43,18 +43,18 @@ func (v *emergencyViewer) cancelLoad() {
 	v.revealed = false
 	v.status = "已取消查看。"
 }
-func (v *emergencyViewer) Close() {
+func (v *EmergencyViewer) Close() {
 	v.cancelLoad()
 	v.closed = true
 	v.status = ""
 }
-func (v *emergencyViewer) load() {
+func (v *EmergencyViewer) load() {
 	if v.closed || v.running || v.terminal || v.fetch == nil || v.dispatch == nil || !vaultwarden.EmergencyActionAllowed(v.contact, false, "view") {
 		return
 	}
 	v.running = true
-	if v.busy != nil {
-		v.busy(true)
+	if v.Busy != nil {
+		v.Busy(true)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	v.cancel = cancel
@@ -64,8 +64,8 @@ func (v *emergencyViewer) load() {
 		rows, err := fetch(ctx, id)
 		cancel()
 		dispatch(func() {
-			if v.busy != nil {
-				v.busy(false)
+			if v.Busy != nil {
+				v.Busy(false)
 			}
 			if v.closed || v.generation != generation {
 				clear(rows)
@@ -114,7 +114,7 @@ func emergencyDisplayFields(fields map[string]any) []string {
 	return lines
 }
 
-func (v *emergencyViewer) View(c *ui.Context) {
+func (v *EmergencyViewer) View(c *ui.Context) {
 	if v.closed {
 		return
 	}

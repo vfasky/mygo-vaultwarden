@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -54,9 +55,9 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 	ctx, cancel := context.WithCancel(context.Background())
 	a.componentCancel = cancel
 	vault := a.vault
-	f := newAccountForm(scope, epoch, nil)
-	f.email = a.email
-	f.openRotationPreparation = func(id string, deleted bool) {
+	f := account.NewForm(scope, epoch, nil)
+	f.Email = a.email
+	f.OpenRotationPreparation = func(id string, deleted bool) {
 		a.advanceEpoch()
 		a.category = "personal"
 		if deleted {
@@ -65,12 +66,12 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 		a.openCipherEditor(id, 0)
 	}
 	if registration {
-		f.mode = "register"
-		f.modes = []string{"register"}
+		f.Mode = "register"
+		f.Modes = []string{"register"}
 	} else {
-		f.modes = []string{"profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
+		f.Modes = []string{"profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
 	}
-	f.submit = func(r accountFormRequest) {
+	f.Submit = func(r account.FormRequest) {
 		if a.epoch != epoch || a.accountForm != f {
 			r.Close()
 			return
@@ -184,8 +185,8 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 					}
 				}
 				if journal != nil {
-					f.completed(scope, epoch, r.Sequence, result, err)
-					message := f.status
+					f.Completed(scope, epoch, r.Sequence, result, err)
+					message := f.Status
 					a.stopNetwork()
 					if state != nil {
 						a.snapshot = state
@@ -195,28 +196,28 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(storageRequest
 				}
 				switch {
 				case r.Operation == "register-send":
-					f.registration(scope, epoch, r.Sequence, registered, err)
+					f.Registration(scope, epoch, r.Sequence, registered, err)
 				case strings.HasPrefix(r.Operation, "prepare-"):
-					f.prepared(scope, epoch, r.Sequence, plan, err)
+					f.Prepared(scope, epoch, r.Sequence, plan, err)
 					var preparations *vaultwarden.RotationCipherPreparationError
 					if errors.As(err, &preparations) {
-						f.rotationPreparations = append([]vaultwarden.RotationCipherPreparation(nil), preparations.Readiness.Preparations...)
-						f.status = "先升级旧附件、核验新旧文件并明确删除原件，再同步后重新准备轮换。"
+						f.RotationPreparations = append([]vaultwarden.RotationCipherPreparation(nil), preparations.Readiness.Preparations...)
+						f.Status = "先升级旧附件、核验新旧文件并明确删除原件，再同步后重新准备轮换。"
 					}
 					if errors.Is(err, vaultwarden.ErrRotationCompatibility) {
-						f.status = err.Error()
+						f.Status = err.Error()
 					}
 				case r.Operation == "rotation-recipients":
-					if f.completed(scope, epoch, r.Sequence, result, err) && err == nil {
-						f.rotationRequirements = recipients
-						f.status = "请从可信独立渠道取得并核对以上公钥，再准备轮换。"
+					if f.Completed(scope, epoch, r.Sequence, result, err) && err == nil {
+						f.RotationRequirements = recipients
+						f.Status = "请从可信独立渠道取得并核对以上公钥，再准备轮换。"
 					}
 				case r.Operation == "api-key" || r.Operation == "rotate-api-key":
-					f.apiKeyCompleted(scope, epoch, r.Sequence, key, err)
+					f.APIKeyCompleted(scope, epoch, r.Sequence, key, err)
 				default:
-					f.completed(scope, epoch, r.Sequence, result, err)
+					f.Completed(scope, epoch, r.Sequence, result, err)
 					if err == nil && r.Operation == "register-finish" {
-						f.status = "注册已完成，请返回登录并同步。"
+						f.Status = "注册已完成，请返回登录并同步。"
 					}
 				}
 			})

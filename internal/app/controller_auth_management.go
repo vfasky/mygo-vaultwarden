@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -78,9 +79,9 @@ func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage fu
 	ctx, cancel := context.WithCancel(context.Background())
 	a.componentCancel = cancel
 	platform := sysauth.NewAuthenticationPlatform(a.window)
-	f := newAuthManagementForm(scope, epoch, nil)
+	f := account.NewAuthManagementForm(scope, epoch, nil)
 	complete := a.componentDispatch(session, lease, epoch, dispatch)
-	f.submit = func(r authManagementRequest) {
+	f.Submit = func(r account.AuthManagementRequest) {
 		a.pending++
 		go func() {
 			defer r.Close()
@@ -144,7 +145,7 @@ func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage fu
 			complete(func() {
 				a.componentBusy(false)
 				if a.epoch == epoch && a.authManagement == f {
-					f.complete(scope, epoch, r.Sequence, summary, err)
+					f.Complete(scope, epoch, r.Sequence, summary, err)
 				}
 			})
 		}()

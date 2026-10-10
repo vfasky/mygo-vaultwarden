@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -30,11 +30,11 @@ type DevicePanel struct {
 	ctx                               context.Context
 	cancel                            context.CancelFunc
 	generation                        uint64
-	closed, busy, uncertain, verified bool
-	status, confirm                   string
-	devices                           []vaultwarden.Device
-	requests                          []vaultwarden.AuthRequest
-	selected                          *vaultwarden.AuthRequest
+	closed, Busy, Uncertain, Verified bool
+	Status, Confirm                   string
+	Devices                           []vaultwarden.Device
+	Requests                          []vaultwarden.AuthRequest
+	Selected                          *vaultwarden.AuthRequest
 }
 
 func NewDevicePanel(s *vaultwarden.Session, v *vaultwarden.VaultData, host DeviceHost) *DevicePanel {
@@ -50,22 +50,22 @@ func (p *DevicePanel) Close() {
 	p.cancel()
 	p.generation++
 	p.closed = true
-	p.devices = nil
-	p.requests = nil
-	p.selected = nil
-	p.verified = false
-	p.confirm = ""
-	p.status = ""
+	p.Devices = nil
+	p.Requests = nil
+	p.Selected = nil
+	p.Verified = false
+	p.Confirm = ""
+	p.Status = ""
 }
-func (p *DevicePanel) run(work func(context.Context) error, done func()) {
-	if p.closed || p.busy {
+func (p *DevicePanel) Run(work func(context.Context) error, done func()) {
+	if p.closed || p.Busy {
 		return
 	}
 	if p.host.Check() != nil {
 		p.Close()
 		return
 	}
-	p.busy = true
+	p.Busy = true
 	if p.host.Busy != nil {
 		p.host.Busy(true)
 	}
@@ -82,21 +82,21 @@ func (p *DevicePanel) run(work func(context.Context) error, done func()) {
 			if p.closed || p.generation != generation {
 				return
 			}
-			p.busy = false
+			p.Busy = false
 			if p.host.Check() != nil || p.ctx.Err() != nil {
 				p.Close()
 				return
 			}
 			if err != nil {
-				p.status = "操作失败，请刷新核对后再试。"
+				p.Status = "操作失败，请刷新核对后再试。"
 				var uncertain *vaultwarden.MutationUncertainError
-				p.uncertain = errors.As(err, &uncertain)
-				if p.uncertain {
-					p.status = "操作结果未确认，请刷新核对；不会自动重试。"
+				p.Uncertain = errors.As(err, &uncertain)
+				if p.Uncertain {
+					p.Status = "操作结果未确认，请刷新核对；不会自动重试。"
 				}
 				return
 			}
-			p.status = "操作完成"
+			p.Status = "操作完成"
 			if done != nil {
 				done()
 			}
@@ -106,7 +106,7 @@ func (p *DevicePanel) run(work func(context.Context) error, done func()) {
 func (p *DevicePanel) Refresh() {
 	var devices []vaultwarden.Device
 	var requests []vaultwarden.AuthRequest
-	p.run(func(ctx context.Context) error {
+	p.Run(func(ctx context.Context) error {
 		var err error
 		devices, err = p.session.Devices(ctx, p.vault.Scope, p.host.Checkpoint)
 		if err == nil {
@@ -114,39 +114,39 @@ func (p *DevicePanel) Refresh() {
 		}
 		return err
 	}, func() {
-		p.devices = devices
-		p.requests = requests
-		p.selected = nil
-		p.verified = false
-		p.confirm = ""
-		p.uncertain = false
+		p.Devices = devices
+		p.Requests = requests
+		p.Selected = nil
+		p.Verified = false
+		p.Confirm = ""
+		p.Uncertain = false
 	})
 }
-func (p *DevicePanel) respond(approve bool) {
-	if p.selected == nil || p.uncertain || approve && !p.verified || p.confirm != "auth" {
+func (p *DevicePanel) Respond(approve bool) {
+	if p.Selected == nil || p.Uncertain || approve && !p.Verified || p.Confirm != "auth" {
 		return
 	}
-	row := *p.selected
-	p.confirm = ""
-	p.verified = false
-	p.run(func(ctx context.Context) error {
+	row := *p.Selected
+	p.Confirm = ""
+	p.Verified = false
+	p.Run(func(ctx context.Context) error {
 		return p.session.RespondAuthRequest(ctx, p.vault, row.ID, row.PublicKey, approve, true, p.host.Checkpoint)
 	}, func() {
-		p.selected = nil
-		p.requests = nil
+		p.Selected = nil
+		p.Requests = nil
 		if p.host.Changed != nil {
 			p.host.Changed()
 		}
 	})
 }
 func (p *DevicePanel) clearPush() {
-	if p.confirm != "push" || p.uncertain {
+	if p.Confirm != "push" || p.Uncertain {
 		return
 	}
-	p.confirm = ""
-	p.run(func(ctx context.Context) error {
+	p.Confirm = ""
+	p.Run(func(ctx context.Context) error {
 		return p.session.ClearDevicePushToken(ctx, p.vault.Scope, true, p.host.Checkpoint)
-	}, func() { p.status = "已请求清除推送登记；登录会话仍有效。" })
+	}, func() { p.Status = "已请求清除推送登记；登录会话仍有效。" })
 }
 func authPublicFingerprint(public string) string {
 	der, err := base64.StdEncoding.DecodeString(public)
@@ -169,31 +169,31 @@ func (p *DevicePanel) View(c *ui.Context) {
 					f()
 				}
 			}
-			button("刷新设备与待审批请求", p.busy, p.Refresh)
-			ui.Text(c, p.status).MaxLines(4)
-			for _, d := range p.devices {
+			button("刷新设备与待审批请求", p.Busy, p.Refresh)
+			ui.Text(c, p.Status).MaxLines(4)
+			for _, d := range p.Devices {
 				ui.Text(c, d.Name+" · "+d.Identifier).MaxLines(2)
 			}
-			if p.confirm != "push" {
-				button("清除当前设备推送登记", p.busy || p.uncertain, func() { p.confirm = "push" })
+			if p.Confirm != "push" {
+				button("清除当前设备推送登记", p.Busy || p.Uncertain, func() { p.Confirm = "push" })
 			} else {
 				ui.Text(c, "仅清除推送登记，不会退出登录或撤销会话。同一设备标识的其他账号也可能受影响。").MaxLines(4)
-				button("确认清除推送登记", p.busy, p.clearPush)
-				button("取消", p.busy, func() { p.confirm = "" })
+				button("确认清除推送登记", p.Busy, p.clearPush)
+				button("取消", p.Busy, func() { p.Confirm = "" })
 			}
-			for _, r := range p.requests {
+			for _, r := range p.Requests {
 				row := r
-				button("查看登录请求 · "+r.RequestDeviceType+" · "+r.RequestIPAddress, p.busy, func() { p.selected = &row; p.verified = false; p.confirm = "auth" })
+				button("查看登录请求 · "+r.RequestDeviceType+" · "+r.RequestIPAddress, p.Busy, func() { p.Selected = &row; p.Verified = false; p.Confirm = "auth" })
 			}
-			if r := p.selected; r != nil {
+			if r := p.Selected; r != nil {
 				ui.Text(c, "请求来源："+r.Origin).MaxLines(2)
 				ui.Text(c, "请求时间："+r.CreationDate)
 				ui.Text(c, "公钥 SHA-256："+authPublicFingerprint(r.PublicKey)).MaxLines(4)
 				ui.Text(c, "请与请求设备上显示的公钥指纹逐字核对。批准将向该设备提供保险库解密密钥。").MaxLines(4)
-				button("我已在请求设备核对完整指纹", p.busy || p.uncertain, func() { p.verified = true })
-				button("确认批准此登录", p.busy || p.uncertain || !p.verified, func() { p.respond(true) })
-				button("确认拒绝此登录", p.busy || p.uncertain, func() { p.respond(false) })
-				button("取消审批", p.busy, func() { p.selected = nil; p.verified = false; p.confirm = "" })
+				button("我已在请求设备核对完整指纹", p.Busy || p.Uncertain, func() { p.Verified = true })
+				button("确认批准此登录", p.Busy || p.Uncertain || !p.Verified, func() { p.Respond(true) })
+				button("确认拒绝此登录", p.Busy || p.Uncertain, func() { p.Respond(false) })
+				button("取消审批", p.Busy, func() { p.Selected = nil; p.Verified = false; p.Confirm = "" })
 			}
 			button("关闭", false, p.Close)
 		})

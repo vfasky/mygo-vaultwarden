@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
-package app
+package account
 
 import (
 	"context"
@@ -18,12 +18,12 @@ func TestDeviceLoginPanelRecoveryFailureAndLateCompletion(t *testing.T) {
 		Dispatch: func(f func()) { f() }, Check: func(vaultwarden.Scope, uint64) error { return nil },
 		Accept: func(*vaultwarden.DeviceLogin, vaultwarden.DeviceLoginResult) error { adopted++; return nil },
 	})
-	p.auth = newAuthForm(scope, 7, func(authRequest) {})
+	p.auth = NewAuthForm(scope, 7, func(AuthRequest) {})
 	secret := p.auth
-	secret.token = "synthetic secret"
+	secret.Token = "synthetic secret"
 	r := vaultwarden.DeviceLoginRecovery{Scope: scope, Email: "fixture@example.invalid", Epoch: 7, RequestID: "request-a", State: vaultwarden.DeviceLoginRecoverySubmitted}
 	p.finish(0, nil, vaultwarden.DeviceLoginResult{Recovery: r}, vaultwarden.ErrIdentity)
-	if adopted != 0 || p.auth != nil || secret.token != "" || !secret.closed {
+	if adopted != 0 || p.auth != nil || secret.Token != "" || !secret.Closed {
 		t.Fatal("failed result adopted or secrets retained")
 	}
 	if got := p.RecoveryOutcomes(); len(got) != 1 || deviceLoginRecoveryWarning(got[0]) != "可能已关闭全部两步验证，需核验并重新设置。" {
@@ -93,13 +93,13 @@ func TestDeviceLoginPanelMFATokenAndRecoveryConfirmation(t *testing.T) {
 	replies := make(chan vaultwarden.MFAResponse, 1)
 	go func() { r, _ := p.prompt(ctx, 0, vaultwarden.MFAChallenge{}); replies <- r }()
 	(<-dispatch)()
-	p.auth.provider = 8
-	p.auth.token = "synthetic-recovery"
-	p.auth.dispatch()
-	if !p.auth.confirming || p.auth.busy {
+	p.auth.Provider = 8
+	p.auth.Token = "synthetic-recovery"
+	p.auth.Dispatch()
+	if !p.auth.Confirming || p.auth.Busy {
 		t.Fatal("recovery lacked confirmation")
 	}
-	p.auth.dispatch()
+	p.auth.Dispatch()
 	select {
 	case r := <-replies:
 		defer clear(r.Token)
