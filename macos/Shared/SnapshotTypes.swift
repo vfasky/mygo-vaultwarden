@@ -2,6 +2,81 @@
 import Foundation
 import CryptoKit
 
+// Kept in this shared source so SwiftPM, the bridge, and AutoFill use the same catalog.
+enum L10n {
+    enum Language: Equatable { case chinese, english }
+
+    // Fixed on first use; matches internal/i18n's BCP 47 parsing and fallback.
+    static let language = select(preferredLanguages: Locale.preferredLanguages,
+                                 override: ProcessInfo.processInfo.environment["MYGO_VAULTWARDEN_LANG"])
+
+    static func select(preferredLanguages: [String], override: String? = nil) -> Language {
+        func parse(_ value: String) -> Language? {
+            let tag = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if tag == "zh" || tag.hasPrefix("zh-") || tag.hasPrefix("zh_") { return .chinese }
+            if tag == "en" || tag.hasPrefix("en-") || tag.hasPrefix("en_") { return .english }
+            return nil
+        }
+        if let override, let language = parse(override) { return language }
+        return preferredLanguages.compactMap(parse).first ?? .english
+    }
+
+    static func t(_ source: String, language: Language = language) -> String {
+        language == .english ? (english[source] ?? source) : source
+    }
+
+    static let english: [String: String] = [
+        "快照已更改或锁定，请重新认证。": "The snapshot has changed or been locked. Authenticate again.",
+        "系统已锁定，请重新认证。": "This Mac has been locked. Authenticate again.",
+        "没有加密快照。请先在主应用登录并同步。": "No encrypted snapshot. Log in and sync in the main app first.",
+        "完成设置并清理旧候选": "Finish & clear old suggestions",
+        "本机加密快照 · %d 条。读取密钥需要系统认证。": "Local encrypted snapshot. Items: %d. System authentication is required to read the key.",
+        "认证并更新自动填充候选": "Authenticate & update AutoFill",
+        "认证并填充": "Authenticate & fill",
+        "搜索标题或用户名，回车筛选": "Search title or username; press Return",
+        "没有与此网站匹配的凭据。": "No credentials match this website.",
+        "上一页": "Previous",
+        "下一页": "Next",
+        "认证并查看凭据": "Authenticate & view",
+        "取消": "Cancel",
+        "等待系统认证…": "Waiting for system authentication…",
+        "选择凭据后将再次认证并填充。": "Select a credential to authenticate again and fill.",
+        "认证已过期，请重新认证。": "Authentication has expired. Authenticate again.",
+        "候选更新未完成，请检查系统开关并重试。": "Suggestions were not updated. Check the AutoFill setting in System Settings and try again.",
+        "新账号已提交；确认切换前保留原账号加密副本与密钥。": "The new account has been saved. The previous account's encrypted copy and key are kept until you confirm the switch.",
+        "已认证本机账号切换记录。": "The account switch record on this Mac has been authenticated.",
+        "切换已确认，目标账号仍需专用恢复核验。": "The switch is confirmed. The target account still requires dedicated recovery verification.",
+        "本机账号切换已确认。": "The account switch on this Mac is confirmed.",
+        "快照已保存。": "Snapshot saved.",
+        "该组织的本机访问已隔离。": "Access to this organization on this Mac has been isolated.",
+        "登录凭据已安全更新。": "Login credentials updated securely.",
+        "密码库已解锁。": "Vault unlocked.",
+        "离线快照已解锁。": "Offline snapshot unlocked.",
+        "存储操作已完成。": "Storage operation completed.",
+        "系统候选尚未确认同步。": " System suggestions have not yet been confirmed as synced.",
+        "旧密钥清理待重试。": " Old key cleanup needs to be retried.",
+        "无法识别请求。": "Unrecognized request.",
+        "MyGo Vaultwarden 自动填充快照密钥": "MyGo Vaultwarden AutoFill snapshot key",
+        "解锁 MyGo Vaultwarden 的本机自动填充快照": "unlock the MyGo Vaultwarden AutoFill snapshot on this Mac",
+        "保留旧新账号恢复副本会超过本机加密存储上限；原账号数据保留，请先备份并明确管理旧缓存。": "Keeping recovery copies for both accounts would exceed the encrypted storage limit on this Mac. The previous account's data is preserved. Back it up and manage the old cache before proceeding.",
+        "原本机账号有未决恢复、策略或组织隔离；请先在原账号处理后再切换。": "The previous account on this Mac has pending recovery, policy changes, or organization isolation. Resolve these in that account before switching.",
+        "此目标仍有账号轮换恢复记录，请先完成专用账号恢复核验。": "This target still has an account key rotation recovery record. Complete the dedicated account recovery verification first.",
+        "没有可用快照，请先在主应用登录并同步密码库。": "No snapshot is available. Log in and sync your vault in the main app first.",
+        "快照损坏或格式不受支持，已拒绝解密。": "The snapshot is damaged or its format is unsupported. Decryption was refused.",
+        "数据已被锁定、更新或撤销，请刷新后重试。": "The data has been locked, updated, or revoked. Refresh and try again.",
+        "快照所属账号或服务器不匹配。": "The snapshot's account or server does not match.",
+        "另一个进程正在更新快照，请稍后重试。": "Another process is updating the snapshot. Try again shortly.",
+        "请求或凭据格式不受支持。": "The request or credential format is unsupported.",
+        "系统钥匙串操作失败（%d）。": "System Keychain operation failed (%d).",
+        "需要通过 Touch ID 或系统允许的设备认证读取密钥。": "Reading the key requires Touch ID or device authentication allowed by the system.",
+        "系统认证已取消，没有读取凭据。": "System authentication was canceled. No credentials were read.",
+        "共享容器或钥匙串权限未配置，请使用完整签名版本。": "Shared container or Keychain permissions are not configured. Use the fully signed app.",
+        "主密码不正确，请重试。": "Incorrect master password. Try again.",
+        "请重新登录一次，以启用主密码解锁；也可以使用 Touch ID 解锁。": "Log in again to enable master password unlock, or unlock with Touch ID."
+    ]
+}
+
+
 struct SnapshotScope: Codable, Equatable {
     let server: String
     let account: String
@@ -205,22 +280,22 @@ enum SnapshotError: Error, Equatable {
     }
     var message: String {
         switch self {
-        case .accountSwitchTooLarge: return "保留旧新账号恢复副本会超过本机加密存储上限；原账号数据保留，请先备份并明确管理旧缓存。"
-        case .protectedAccountSwitch: return "原本机账号有未决恢复、策略或组织隔离；请先在原账号处理后再切换。"
-        case .accountRecoveryRequired: return "此目标仍有账号轮换恢复记录，请先完成专用账号恢复核验。"
-        case .unavailable: return "没有可用快照，请先在主应用登录并同步密码库。"
-        case .corrupt: return "快照损坏或格式不受支持，已拒绝解密。"
-        case .stale: return "数据已被锁定、更新或撤销，请刷新后重试。"
-        case .expired: return "认证已过期，请重新认证。"
-        case .wrongScope: return "快照所属账号或服务器不匹配。"
-        case .busy: return "另一个进程正在更新快照，请稍后重试。"
-        case .invalidInput: return "请求或凭据格式不受支持。"
-        case .keychain(let status): return "系统钥匙串操作失败（\(status)）。"
-        case .authenticationRequired: return "需要通过 Touch ID 或系统允许的设备认证读取密钥。"
-        case .cancelled: return "系统认证已取消，没有读取凭据。"
-        case .configuration: return "共享容器或钥匙串权限未配置，请使用完整签名版本。"
-        case .invalidPassword: return "主密码不正确，请重试。"
-        case .passwordUnlockUnavailable: return "请重新登录一次，以启用主密码解锁；也可以使用 Touch ID 解锁。"
+        case .accountSwitchTooLarge: return L10n.t("保留旧新账号恢复副本会超过本机加密存储上限；原账号数据保留，请先备份并明确管理旧缓存。")
+        case .protectedAccountSwitch: return L10n.t("原本机账号有未决恢复、策略或组织隔离；请先在原账号处理后再切换。")
+        case .accountRecoveryRequired: return L10n.t("此目标仍有账号轮换恢复记录，请先完成专用账号恢复核验。")
+        case .unavailable: return L10n.t("没有可用快照，请先在主应用登录并同步密码库。")
+        case .corrupt: return L10n.t("快照损坏或格式不受支持，已拒绝解密。")
+        case .stale: return L10n.t("数据已被锁定、更新或撤销，请刷新后重试。")
+        case .expired: return L10n.t("认证已过期，请重新认证。")
+        case .wrongScope: return L10n.t("快照所属账号或服务器不匹配。")
+        case .busy: return L10n.t("另一个进程正在更新快照，请稍后重试。")
+        case .invalidInput: return L10n.t("请求或凭据格式不受支持。")
+        case .keychain(let status): return String(format: L10n.t("系统钥匙串操作失败（%d）。"), status)
+        case .authenticationRequired: return L10n.t("需要通过 Touch ID 或系统允许的设备认证读取密钥。")
+        case .cancelled: return L10n.t("系统认证已取消，没有读取凭据。")
+        case .configuration: return L10n.t("共享容器或钥匙串权限未配置，请使用完整签名版本。")
+        case .invalidPassword: return L10n.t("主密码不正确，请重试。")
+        case .passwordUnlockUnavailable: return L10n.t("请重新登录一次，以启用主密码解锁；也可以使用 Touch ID 解锁。")
         }
     }
 }

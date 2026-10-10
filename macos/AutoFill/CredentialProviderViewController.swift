@@ -38,7 +38,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         super.viewDidLoad()
         let distributed = DistributedNotificationCenter.default()
         let changes = distributed.addObserver(forName: SnapshotStore.changeNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.invalidateLocal("快照已更改或锁定，请重新认证。")
+            self?.invalidateLocal(L10n.t("快照已更改或锁定，请重新认证。"))
         }
         observers.append((distributed, changes))
         let screen = distributed.addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
@@ -89,7 +89,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         begin(.identity(record, Service(identity.serviceIdentifier)))
     }
     private func screenLocked() {
-        invalidateLocal("系统已锁定，请重新认证。")
+        invalidateLocal(L10n.t("系统已锁定，请重新认证。"))
         DispatchQueue.global(qos: .userInitiated).async { try? SnapshotStore.sharedContainer().lock() }
     }
     private func invalidateLocal(_ reason: String) {
@@ -139,17 +139,17 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         do {
             let state = try SnapshotStore.sharedContainer().state()
             if state.snapshot == nil {
-                text("没有加密快照。请先在主应用登录并同步。")
-                if case .configuration = request { button("完成设置并清理旧候选", selector: #selector(configure)) }
+                text(L10n.t("没有加密快照。请先在主应用登录并同步。"))
+                if case .configuration = request { button(L10n.t("完成设置并清理旧候选"), selector: #selector(configure)) }
             } else {
-                text("本机加密快照 · \(state.snapshot!.header.count) 条。读取密钥需要系统认证。")
+                text(String(format: L10n.t("本机加密快照 · %d 条。读取密钥需要系统认证。"), state.snapshot!.header.count))
                 switch request {
-                case .configuration: button("认证并更新自动填充候选", selector: #selector(configure))
-                case .identity: button("认证并填充", selector: #selector(fillIdentity))
+                case .configuration: button(L10n.t("认证并更新自动填充候选"), selector: #selector(configure))
+                case .identity: button(L10n.t("认证并填充"), selector: #selector(fillIdentity))
                 case .list:
                     if let lease {
                         let field = NSSearchField(frame: NSRect(x: 0, y: 0, width: 440, height: 28))
-                        field.placeholderString = "搜索标题或用户名，回车筛选"
+                        field.placeholderString = L10n.t("搜索标题或用户名，回车筛选")
                         field.stringValue = search
                         field.sendsWholeSearchString = true
                         field.isEnabled = !busy
@@ -158,19 +158,19 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
                         let matches = lease.credentials.enumerated().filter {
                             self.matches($0.element) && (search.isEmpty || ($0.element.title + " " + $0.element.username).localizedCaseInsensitiveContains(search))
                         }
-                        if matches.isEmpty { text("没有与此网站匹配的凭据。") }
+                        if matches.isEmpty { text(L10n.t("没有与此网站匹配的凭据。")) }
                         page = min(page, max(0, (matches.count - 1) / 5))
                         for (index, credential) in matches.dropFirst(page * 5).prefix(5) {
                             button("\(credential.title) · \(credential.username)", selector: #selector(fillSelection(_:)), tag: index)
                         }
-                        if page > 0 { button("上一页", selector: #selector(changePage(_:)), tag: -1) }
-                        if (page + 1) * 5 < matches.count { button("下一页", selector: #selector(changePage(_:)), tag: 1) }
-                    } else { button("认证并查看凭据", selector: #selector(showCredentials)) }
+                        if page > 0 { button(L10n.t("上一页"), selector: #selector(changePage(_:)), tag: -1) }
+                        if (page + 1) * 5 < matches.count { button(L10n.t("下一页"), selector: #selector(changePage(_:)), tag: 1) }
+                    } else { button(L10n.t("认证并查看凭据"), selector: #selector(showCredentials)) }
                 }
             }
         } catch { text((error as? SnapshotError ?? .configuration).message) }
         if !message.isEmpty { text(message) }
-        let cancel = NSButton(title: "取消", target: self, action: #selector(cancelRequest))
+        let cancel = NSButton(title: L10n.t("取消"), target: self, action: #selector(cancelRequest))
         cancel.bezelStyle = .rounded; cancel.keyEquivalent = "\u{1b}"
         stack.addArrangedSubview(cancel)
     }
@@ -196,7 +196,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         let attempt = UUID(); serial = attempt
         let context = LAContext(); authentication = context
         let expectedRevision = lease?.revision
-        busy = true; message = "等待系统认证…"; render()
+        busy = true; message = L10n.t("等待系统认证…"); render()
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             do {
                 let store = try SnapshotStore.sharedContainer()
@@ -211,9 +211,9 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
                         try store.withCurrentLease(unlocked) {}
                         switch action {
                         case .list:
-                            self.lease = unlocked; self.busy = false; self.message = "选择凭据后将再次认证并填充。"; self.render()
+                            self.lease = unlocked; self.busy = false; self.message = L10n.t("选择凭据后将再次认证并填充。"); self.render()
                             DispatchQueue.main.asyncAfter(deadline: .now() + 60) { [weak self] in
-                                if self?.serial == attempt { self?.invalidateLocal("认证已过期，请重新认证。") }
+                                if self?.serial == attempt { self?.invalidateLocal(L10n.t("认证已过期，请重新认证。")) }
                             }
                         case .configure:
                             SnapshotIndex.schedule(store: store, lease: unlocked) { [weak self] success in
@@ -247,7 +247,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
             finished = true; lease = nil
             extensionContext.completeExtensionConfigurationRequest()
             logger.notice("Snapshot identity configuration acknowledged")
-        } else { busy = false; message = "候选更新未完成，请检查系统开关并重试。"; render() }
+        } else { busy = false; message = L10n.t("候选更新未完成，请检查系统开关并重试。"); render() }
     }
     private func fail(_ error: Error, attempt: UUID) {
         guard serial == attempt, !finished else { return }
