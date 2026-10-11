@@ -39,15 +39,17 @@ func (a *app) backupResourcePreview(c *ui.Context, e *backupEditor) {
 	if e.resources == nil {
 		return
 	}
-	ui.Text(c, i18n.T("backup.resource.restore_hint")).MaxLines(7)
+	kit.Notice(c, kit.ToneInfo, i18n.T("backup.resource.restore_hint"))
 	for _, row := range e.resources.rows {
 		ui.Text(c, i18n.Tf("backup.resource.file_summary", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, row.Resource.Size)).FontSize(12)
 	}
-	if kit.Action(c, i18n.T("backup.resource.continue_attachments"), "", false, a.pending != 0).Clicked() {
-		e.plan.Clear()
-		e.plan = nil
-		e.submitted = true
-	}
+	ui.Row(c).Children(func() {
+		if kit.Button(c, i18n.T("backup.resource.continue_attachments"), "", kit.ButtonSecondary, a.pending != 0).Clicked() {
+			e.plan.Clear()
+			e.plan = nil
+			e.submitted = true
+		}
+	})
 }
 func (a *app) chooseResourceImportFile() {
 	e := a.backupEditor
@@ -215,28 +217,43 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 		return
 	}
 	if m.copyOnly {
-		ui.Text(c, i18n.T("backup.resource.copy_resume_hint")).MaxLines(5)
+		kit.Notice(c, kit.ToneInfo, i18n.T("backup.resource.copy_resume_hint"))
 	}
 	busy := a.pending != 0
-	ui.Text(c, i18n.T("backup.resource.attachment_restore_hint")).MaxLines(5)
-	ui.TextInput(c, &m.password).Label(i18n.T("backup.resource.master_password")).Password().Disabled(busy)
+	kit.Notice(c, kit.ToneInfo, i18n.T("backup.resource.attachment_restore_hint"))
+	kit.Field(c, i18n.T("backup.resource.master_password"), "", func() {
+		kit.Input(ui.TextInput(c, &m.password).Label(i18n.T("backup.resource.master_password"))).Password().Disabled(busy)
+	})
 	for i := range m.rows {
 		row := &m.rows[i]
 		if row.Target == "" {
 			row.Target = m.targets[row.Resource.CipherID]
 		}
-		ui.Text(c, i18n.Tf("backup.resource.source_status", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, organization.ResourceStateText(row.State))).MaxLines(3)
-		if row.Problem != "" {
-			ui.Text(c, row.Problem).MaxLines(3)
-		}
-		ui.TextInput(c, &row.Target).Label(i18n.T("backup.resource.target_item_id")).Disabled(busy || row.State == organization.ResourceVerified)
-		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("backup.resource.target_attachment_id")).Disabled(busy || row.State == organization.ResourceVerified)
-		if kit.Action(c, i18n.T("backup.resource.confirm_upload"), "", false, busy || row.Target == "" || row.State != organization.ResourceNotStarted).Clicked() {
-			a.runResourceRestore(i, false, "")
-		}
-		if kit.Action(c, i18n.T("backup.resource.verify_attachment"), "", false, busy || row.Target == "" || row.AttachmentID == "" || row.State == organization.ResourceVerified).Clicked() {
-			a.runResourceRestore(i, true, "")
-		}
+		kit.Section(c, row.Resource.FileName, func() {
+			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, i18n.Tf("backup.resource.source_status", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, organization.ResourceStateText(row.State))).FontSize(12).Grow(1).MinWidth(0).MaxLines(3)
+				kit.Pill(c, organization.ResourceStateText(row.State), kit.Panel, kit.Purple)
+			})
+			if row.Problem != "" {
+				kit.Notice(c, kit.ToneDanger, row.Problem)
+			}
+			kit.Field(c, i18n.T("backup.resource.target_item_id"), "", func() {
+				kit.Input(ui.TextInput(c, &row.Target).Label(i18n.T("backup.resource.target_item_id"))).Disabled(busy || row.State == organization.ResourceVerified)
+			})
+			kit.Field(c, i18n.T("backup.resource.target_attachment_id"), "", func() {
+				kit.Input(ui.TextInput(c, &row.AttachmentID).Label(i18n.T("backup.resource.target_attachment_id"))).Disabled(busy || row.State == organization.ResourceVerified)
+			})
+			ui.Row(c).Children(func() {
+				if kit.Button(c, i18n.T("backup.resource.confirm_upload"), "", kit.ButtonSecondary, busy || row.Target == "" || row.State != organization.ResourceNotStarted).Clicked() {
+					a.runResourceRestore(i, false, "")
+				}
+			})
+			ui.Row(c).Children(func() {
+				if kit.Button(c, i18n.T("backup.resource.verify_attachment"), "", kit.ButtonSecondary, busy || row.Target == "" || row.AttachmentID == "" || row.State == organization.ResourceVerified).Clicked() {
+					a.runResourceRestore(i, true, "")
+				}
+			})
+		})
 	}
 	for _, source := range m.trash {
 		target, ready := resourceTrashTarget(m, source)
@@ -255,9 +272,12 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 			ui.Text(c, i18n.Tf("backup.resource.status_trash_pending", target))
 			continue
 		}
-		if kit.Action(c, i18n.Tf("backup.resource.confirm_trash", target), "", false, busy || !ready).Clicked() {
-			a.runResourceRestore(0, false, source)
-		}
+		kit.Notice(c, kit.ToneWarning, i18n.Tf("backup.resource.confirm_trash", target))
+		ui.Row(c).Children(func() {
+			if kit.Button(c, i18n.T("backup.resource.move_to_trash"), "", kit.ButtonDanger, busy || !ready).Clicked() {
+				a.runResourceRestore(0, false, source)
+			}
+		})
 	}
 }
 func resourceTrashTarget(m *backupResourceEditor, source string) (string, bool) {

@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"strings"
 
 	"github.com/egoist/mygo"
 	"github.com/egoist/mygo/ui"
@@ -82,113 +83,250 @@ func (a *app) openBackupEditor() {
 }
 func (a *app) backupEditorView(c *ui.Context) {
 	e := a.backupEditor
+	if e == nil || !a.unlocked() || a.showLogin {
+		kit.EmptyState(c, "lock", i18n.T("app.list.status_locked"), "")
+		return
+	}
 	if e.recovery != nil {
 		a.cipherShareRecoveryView(c, e)
 		return
 	}
 	busy := a.pending != 0
-	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("backup.editor.title")).FontSize(23)
-			if organizationUIEnabled && !e.submitted && kit.Action(c, i18n.T("backup.import.open_share_recovery"), "", false, busy).Clicked() {
-				a.chooseCipherShareRecovery()
-			}
-			ui.Text(c, i18n.T("backup.editor.plaintext_hint")).MaxLines(5).FontSize(12)
-			if e.format == vaultwarden.MyGoResources {
-				ui.Text(c, i18n.T("backup.resource.limits_hint")).FontSize(12).MaxLines(3)
-			}
-			if !e.submitted {
-				if !e.confirm && e.plan == nil {
-					for _, format := range []struct {
-						id    vaultwarden.BackupFormat
-						label string
-					}{{vaultwarden.BitwardenJSON, i18n.T("backup.format.bitwarden_json")}, {vaultwarden.MyGoBackup, i18n.T("backup.format.mygo_backup")}, {vaultwarden.MyGoResources, i18n.T("backup.format.mygo_resources")}} {
-						if kit.NavItem(c, format.label, "vault", "", e.format == format.id, busy).Clicked() {
-							e.format = format.id
-						}
-					}
-					if kit.Action(c, i18n.T("backup.import.switch_mode"), "", false, busy || e.importing).Clicked() {
-						e.importing = true
-					}
-					if kit.Action(c, i18n.T("backup.export.switch_mode"), "", false, busy || !e.importing).Clicked() {
-						e.importing = false
-					}
-				}
+	root := ui.Column(c).Grow(1).MinHeight(0).Gap(16)
+	mode := ui.Local(root, e, func() int {
+		if e.importing {
+			return 1
+		}
+		return 0
+	})
+	root.Children(func() {
+		kit.PageHeader(c, i18n.T("backup.editor.title"), i18n.T("backup.editor.description"), func() {
+			if !e.confirm && e.plan == nil && !e.submitted && !busy {
+				kit.Segmented(c.Key("backup-mode"), mode, i18n.T("backup.export.switch_mode"), i18n.T("backup.import.switch_mode")).Width(180)
+				e.importing = *mode == 1
+			} else {
+				step := i18n.T("backup.export.switch_mode")
 				if e.importing {
-					if e.plan == nil {
-						ui.Text(c, i18n.T("backup.import.format_hint")).MaxLines(3)
-						if kit.Action(c, i18n.T("backup.import.choose_file"), "", true, busy).Clicked() {
-							a.chooseImportFile()
-						}
+					step = i18n.T("backup.import.switch_mode")
+				}
+				if e.confirm || e.plan != nil {
+					step = i18n.T("backup.editor.step_confirmation")
+				}
+				if e.submitted {
+					step = i18n.T("backup.editor.step_results")
+				}
+				kit.Pill(c, step, kit.White, kit.Purple)
+			}
+		})
+		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+			ui.Column(c).Gap(16).Children(func() {
+				if !e.submitted {
+					kit.Notice(c, kit.ToneWarning, i18n.T("backup.editor.plaintext_hint"))
+					if !e.confirm && e.plan == nil {
+						kit.ChoiceGroup(c, i18n.T("backup.format.title"), func() {
+							ui.Row(c).Gap(8).AlignItems(ui.Stretch).Children(func() {
+								kit.Choice(c, &e.format, vaultwarden.BitwardenJSON, i18n.T("backup.format.bitwarden_json"), i18n.T("backup.format.json_description"), "", busy).Grow(1).Basis(0)
+								kit.Choice(c, &e.format, vaultwarden.MyGoBackup, i18n.T("backup.format.mygo_backup"), i18n.T("backup.format.backup_description"), "", busy).Grow(1).Basis(0)
+								kit.Choice(c, &e.format, vaultwarden.MyGoResources, i18n.T("backup.format.mygo_resources"), i18n.T("backup.format.resources_description"), "", busy).Grow(1).Basis(0)
+							})
+						})
+					}
+					if e.format == vaultwarden.MyGoResources {
+						kit.Notice(c, kit.ToneInfo, i18n.T("backup.resource.limits_hint"))
+					}
+					if e.importing {
+						a.backupImportPreviewView(c, e, busy)
 					} else {
-						ui.Text(c, i18n.Tf("backup.import.preview_summary", e.plan.Items, e.plan.Folders, e.plan.Archived, e.plan.Deleted)).MaxLines(3)
-						ui.Text(c, i18n.T("backup.import.confirm_create_hint")).MaxLines(6)
-						for _, item := range e.plan.PreviewItems() {
-							label := []string{"", i18n.T("itemtype.login"), i18n.T("itemtype.note"), i18n.T("itemtype.card"), i18n.T("itemtype.identity"), i18n.T("itemtype.ssh_key"), i18n.T("itemtype.bank"), i18n.T("itemtype.license"), i18n.T("itemtype.passport")}[item.Type] + " · " + item.Name
-							if item.Archived {
-								label = i18n.Tf("backup.item.archived", label)
+						if e.confirm {
+							kit.Notice(c, kit.ToneWarning, i18n.T("backup.export.confirm_plaintext"))
+							if backupSelectionRequiresPassword(e) {
+								kit.Field(c, i18n.T("backup.export.master_password"), i18n.T("backup.export.reprompt_hint"), func() {
+									kit.Input(ui.TextInput(c, &e.exportPassword).Label(i18n.T("backup.export.master_password"))).Password().Disabled(busy)
+								})
 							}
-							if item.Deleted {
-								label = i18n.Tf("backup.item.trashed", label)
-							}
-							ui.Text(c, label).MaxLines(2).FontSize(12)
 						}
-						a.backupResourcePreview(c, e)
-						if kit.Action(c, i18n.T("backup.import.confirm_create"), "", true, busy).Clicked() {
-							a.importBackup()
+						if e.format == vaultwarden.BitwardenJSON {
+							kit.Notice(c, kit.ToneInfo, i18n.T("backup.export.selection_hint"))
 						}
+						a.backupSelectionView(c, e, busy || e.confirm)
 					}
 				} else {
-					ui.Text(c, i18n.T("backup.export.selection_hint")).MaxLines(5)
-					for _, item := range e.candidates {
-						label := "□ " + item.Title
-						if e.selected[item.ID] {
-							label = "✓ " + item.Title
-						}
-						if item.Archived {
-							label = i18n.Tf("backup.item.archived", label)
-						}
-						if item.Deleted {
-							label = i18n.Tf("backup.item.trashed", label)
-						}
-						if kit.Action(c, label, "", false, busy || e.confirm).Clicked() {
-							e.selected[item.ID] = !e.selected[item.ID]
-						}
+					kit.Notice(c, kit.ToneWarning, i18n.T("backup.import.submitted_hint"))
+					if len(e.results) > 0 {
+						kit.Section(c, i18n.T("backup.editor.step_results"), func() {
+							for _, r := range e.results {
+								ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+									ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+										ui.Text(c, r.Name).FontSize(13).SingleLine()
+										ui.Text(c, vaultwarden.ImportKindText(r.Kind)).FontSize(11).TextColor(kit.Muted)
+									})
+									kit.Pill(c, vaultwarden.ImportStateText(r.State), kit.Panel, kit.Purple)
+								})
+							}
+						})
+					} else if e.resources == nil {
+						kit.EmptyState(c, "sync", i18n.T("backup.import.no_receipts"), "")
 					}
-					if e.confirm {
-						if backupSelectionRequiresPassword(e) {
-							ui.Text(c, i18n.T("backup.export.reprompt_hint"))
-							ui.TextInput(c, &e.exportPassword).Label(i18n.T("backup.export.master_password")).Password().Disabled(busy)
-						}
-						ui.Text(c, i18n.T("backup.export.confirm_plaintext")).MaxLines(4)
-						if kit.Action(c, i18n.T("backup.export.choose_destination"), "", true, busy).Clicked() {
-							a.chooseExportFile()
-						}
-					} else if kit.Action(c, i18n.T("backup.export.continue"), "", true, busy).Clicked() {
-						e.confirm = true
-					}
+					a.backupResourceRestoreView(c, e)
 				}
-			} else {
-				ui.Text(c, i18n.T("backup.import.submitted_hint")).MaxLines(4)
-				for _, r := range e.results {
-					ui.Text(c, vaultwarden.ImportKindText(r.Kind)+" · "+r.Name+"："+vaultwarden.ImportStateText(r.State)).MaxLines(3).FontSize(12)
-				}
-				a.backupResourceRestoreView(c, e)
-				if kit.Action(c, i18n.T("backup.import.sync_results"), "sync", false, busy).Clicked() {
+			})
+		})
+		kit.ActionBar(c, func() {
+			status := a.status
+			if status == "" && !e.importing {
+				status = backupSelectionSummary(e)
+			}
+			ui.Text(c, status).FontSize(11.5).TextColor(kit.Muted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(status)
+			ui.Spacer(c)
+			if kit.Button(c, i18n.T("backup.editor.cancel_close"), "", kit.ButtonSecondary, false).Clicked() {
+				a.closeBackupWindow()
+				return
+			}
+			switch {
+			case e.submitted:
+				if kit.Button(c, i18n.T("backup.import.sync_results"), "sync", kit.ButtonSecondary, busy).Clicked() {
 					a.syncVault(false)
 				}
-			}
-			if kit.Action(c, i18n.T("backup.editor.cancel_close"), "", false, false).Clicked() {
-				if a.cancel != nil {
-					a.cancel()
-					a.cancel = nil
+			case e.importing && e.plan != nil:
+				if kit.Button(c, i18n.T("backup.import.confirm_create"), "", kit.ButtonPrimary, busy).Clicked() {
+					a.importBackup()
 				}
-				a.advanceEpoch()
-				a.clearBackupEditor()
-				a.status = i18n.T("backup.import.status_cancelled")
+			case !e.importing && e.confirm:
+				if kit.Button(c, i18n.T("backup.export.choose_destination"), "", kit.ButtonPrimary, busy).Clicked() {
+					a.chooseExportFile()
+				}
+			case !e.importing:
+				if kit.Button(c, i18n.T("backup.export.continue"), "", kit.ButtonPrimary, busy).Clicked() {
+					e.confirm = true
+				}
 			}
 		})
 	})
+}
+
+func backupSelectionSummary(e *backupEditor) string {
+	selected := 0
+	for _, item := range e.candidates {
+		if e.selected[item.ID] {
+			selected++
+		}
+	}
+	return i18n.Tf("backup.export.selection_count", selected, len(e.candidates))
+}
+
+func (a *app) backupSelectionView(c *ui.Context, e *backupEditor, disabled bool) {
+	section := ui.Column(c.Key("backup-selection")).Gap(8)
+	query := ui.Local(section, e, func() string { return "" })
+	list := ui.Local(section, "list", func() ui.ListState { return ui.ListState{} })
+	section.Children(func() {
+		kit.Section(c, i18n.T("backup.export.items_title"), func() {
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				kit.Input(ui.TextInput(c, query).Label(i18n.T("backup.export.search")).Placeholder(i18n.T("backup.export.search"))).Grow(1).MinWidth(100)
+				if kit.Button(c, i18n.T("backup.export.select_all"), "", kit.ButtonQuiet, disabled).Clicked() {
+					for _, item := range e.candidates {
+						e.selected[item.ID] = true
+					}
+				}
+				if kit.Button(c, i18n.T("backup.export.select_none"), "", kit.ButtonQuiet, disabled).Clicked() {
+					clear(e.selected)
+				}
+				if kit.Button(c, i18n.T("backup.export.select_current"), "", kit.ButtonQuiet, disabled).Clicked() {
+					clear(e.selected)
+					for _, item := range a.filteredItems() {
+						if item.OrganizationID == "" {
+							e.selected[item.ID] = true
+						}
+					}
+				}
+			})
+			ui.Text(c, backupSelectionSummary(e)).FontSize(11.5).TextColor(kit.Muted)
+			var visible []localstore.DisplayCredential
+			search := strings.ToLower(strings.TrimSpace(*query))
+			for _, item := range e.candidates {
+				if search == "" || strings.Contains(strings.ToLower(item.Title), search) || strings.Contains(strings.ToLower(item.Username), search) {
+					visible = append(visible, item)
+				}
+			}
+			if len(visible) == 0 {
+				kit.EmptyState(c, "search", i18n.T("backup.export.empty_selection"), "").Height(160)
+				return
+			}
+			list.Key = func(i int) any { return visible[i].ID }
+			_, windowHeight := c.Size()
+			// Keep the list usable in small windows; taller windows give the
+			// virtual list the additional room instead of adding blank space.
+			listHeight := max(float32(120), windowHeight-560)
+			if e.format == vaultwarden.MyGoBackup && !e.confirm {
+				listHeight += 60
+			}
+			ui.List(c, list, len(visible), func(i int) {
+				item := visible[i]
+				title := item.Title
+				if item.Archived {
+					title = i18n.Tf("backup.item.archived", title)
+				}
+				if item.Deleted {
+					title = i18n.Tf("backup.item.trashed", title)
+				}
+				detail := item.Username
+				if detail == "" {
+					detail = websiteHost(item.URL)
+				}
+				checked := e.selected[item.ID]
+				if kit.CheckRow(c.Key(item.ID), &checked, title, detail, disabled).Changed() {
+					e.selected[item.ID] = checked
+				}
+			}).Height(listHeight)
+		})
+	})
+}
+
+func (a *app) backupImportPreviewView(c *ui.Context, e *backupEditor, busy bool) {
+	if e.plan == nil {
+		ui.Column(c).Padding(24).Gap(16).AlignItems(ui.Center).Children(func() {
+			kit.Icon(c, "file", 36).TextColor(kit.Purple)
+			ui.Text(c, i18n.T("backup.import.format_hint")).TextAlign(ui.Center).FontSize(13).MaxLines(3)
+			if kit.Button(c, i18n.T("backup.import.choose_file"), "", kit.ButtonPrimary, busy).Clicked() {
+				a.chooseImportFile()
+			}
+			if organizationUIEnabled && kit.Button(c, i18n.T("backup.import.open_share_recovery"), "", kit.ButtonQuiet, busy).Clicked() {
+				a.chooseCipherShareRecovery()
+			}
+		})
+		return
+	}
+	ui.Row(c).Gap(12).Children(func() {
+		for _, stat := range []struct {
+			label string
+			n     int
+		}{
+			{i18n.T("backup.import.items_count"), e.plan.Items}, {i18n.T("backup.import.folders_count"), e.plan.Folders},
+			{i18n.T("backup.import.archived_count"), e.plan.Archived}, {i18n.T("backup.import.trashed_count"), e.plan.Deleted},
+		} {
+			ui.Column(c).Grow(1).Basis(0).Padding(14).Gap(6).Background(kit.White).Radius(kit.CardRadius).Children(func() {
+				ui.Text(c, i18n.Tf("backup.import.stat_value", stat.n)).FontSize(22).FontWeight(650)
+				ui.Text(c, stat.label).FontSize(12).TextColor(kit.Muted)
+			})
+		}
+	})
+	kit.Notice(c, kit.ToneWarning, i18n.T("backup.import.confirm_create_hint"))
+	kit.Section(c, i18n.T("backup.import.preview_title"), func() {
+		for _, item := range e.plan.PreviewItems() {
+			label := item.Name
+			if item.Archived {
+				label = i18n.Tf("backup.item.archived", label)
+			}
+			if item.Deleted {
+				label = i18n.Tf("backup.item.trashed", label)
+			}
+			typeName := []string{"", i18n.T("itemtype.login"), i18n.T("itemtype.note"), i18n.T("itemtype.card"), i18n.T("itemtype.identity"), i18n.T("itemtype.ssh_key"), i18n.T("itemtype.bank"), i18n.T("itemtype.license"), i18n.T("itemtype.passport")}[item.Type]
+			ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, label).FontSize(13).MaxLines(2).Grow(1).MinWidth(0)
+				kit.Pill(c, typeName, kit.Panel, kit.Muted)
+			})
+		}
+	})
+	a.backupResourcePreview(c, e)
 }
 func (a *app) backupCurrent(e *backupEditor, epoch uint64) bool {
 	return a.epoch == epoch && a.backupEditor == e && a.sessionOwnsSnapshot() && e.revision == a.sessionRevision
