@@ -189,7 +189,7 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 			if kit.Action(c, i18n.T("vault.compare.reapply_selections"), "", true, a.pending != 0).Clicked() {
 				a.applyCipherComparison(true)
 			}
-		}).Wrap().Justify(ui.End)
+		}).Wrap().Justify(ui.End).Margin(0, 20) // in line with the padded content above
 	})
 }
 

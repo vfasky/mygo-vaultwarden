@@ -35,7 +35,7 @@ func (a *app) itemAuthorizationView(c *ui.Context) {
 			if kit.Action(c, i18n.T("app.reprompt.verify_open"), "", true, a.pending != 0 || e.repromptPassword == "").Clicked() {
 				a.authorizePersonalItem()
 			}
-		})
+		}).Margin(0, 20) // in line with the padded content above
 	})
 }
 func (a *app) authorizePersonalItem() {

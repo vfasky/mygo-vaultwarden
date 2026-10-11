@@ -25,10 +25,13 @@ type backupEditor struct {
 	plan                          *vaultwarden.ImportPlan
 	results                       []vaultwarden.ImportEntry
 	exportPassword                string
-	exportIDs                     []string
-	exportGrants                  map[string]*vaultwarden.ItemAuthorization
-	resources                     *backupResourceEditor
-	recovery                      *cipherShareRecoveryEditor
+	// openStatus is the app status when the window opened, the main
+	// window's; the action bar shows only what came after it.
+	openStatus   string
+	exportIDs    []string
+	exportGrants map[string]*vaultwarden.ItemAuthorization
+	resources    *backupResourceEditor
+	recovery     *cipherShareRecoveryEditor
 }
 
 func backupSelectionRequiresPassword(e *backupEditor) bool {
@@ -67,7 +70,7 @@ func (a *app) openBackupEditor() {
 	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.organizationEditor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
-	e := &backupEditor{revision: a.sessionRevision, format: vaultwarden.BitwardenJSON, selected: map[string]bool{}}
+	e := &backupEditor{revision: a.sessionRevision, format: vaultwarden.BitwardenJSON, selected: map[string]bool{}, openStatus: a.status}
 	for _, item := range a.items {
 		if item.OrganizationID == "" {
 			e.candidates = append(e.candidates, item)
@@ -161,8 +164,11 @@ func (a *app) backupEditorView(c *ui.Context) {
 		})
 		kit.ActionBar(c, func() {
 			status := a.status
-			if status == "" && !e.importing {
-				status = backupSelectionSummary(e)
+			if status == e.openStatus {
+				status = ""
+				if !e.importing {
+					status = backupSelectionSummary(e)
+				}
 			}
 			ui.Text(c, status).FontSize(11.5).TextColor(kit.Muted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(status)
 			ui.Spacer(c)
@@ -227,7 +233,12 @@ func (a *app) backupSelectionView(c *ui.Context, e *backupEditor, disabled bool)
 					}
 				}
 			})
-			ui.Text(c, backupSelectionSummary(e)).FontSize(11.5).TextColor(kit.Muted)
+			// A column header as the main window's list has, with the count.
+			ui.Row(c).Padding(0, 6).AlignItems(ui.Center).Children(func() {
+				ui.Text(c, i18n.T("common.name")).FontSize(11).TextColor(kit.Muted)
+				ui.Spacer(c)
+				ui.Text(c, backupSelectionSummary(e)).FontSize(11).TextColor(kit.Muted)
+			})
 			var visible []localstore.DisplayCredential
 			search := strings.ToLower(strings.TrimSpace(*query))
 			for _, item := range e.candidates {
@@ -244,26 +255,34 @@ func (a *app) backupSelectionView(c *ui.Context, e *backupEditor, disabled bool)
 			// Keep the list usable in small windows; taller windows give the
 			// virtual list the additional room instead of adding blank space.
 			listHeight := max(float32(120), windowHeight-470)
-			ui.List(c, list, len(visible), func(i int) {
-				item := visible[i]
-				title := item.Title
-				if item.Archived {
-					title = i18n.Tf("backup.item.archived", title)
-				}
-				if item.Deleted {
-					title = i18n.Tf("backup.item.trashed", title)
-				}
-				detail := item.Username
-				if detail == "" {
-					detail = websiteHost(item.URL)
-				}
-				checked := e.selected[item.ID]
-				if kit.CheckRow(c.Key(item.ID), &checked, title, detail, disabled).Changed() {
-					e.selected[item.ID] = checked
-				}
-			}).Height(listHeight)
+			// The list scrolls inside a clipped frame, so rows never cover the header.
+			frame := ui.Column(c).Height(listHeight).Shrink(0).Padding(4).Radius(kit.ControlRadius+2).
+				Border(1, kit.Line).Background(kit.White).Clip()
+			frame.Children(func() { a.backupSelectionList(c, e, list, visible, disabled) })
 		})
 	})
+}
+
+// backupSelectionList lists the candidates to export, a check box each.
+func (a *app) backupSelectionList(c *ui.Context, e *backupEditor, list *ui.ListState, visible []localstore.DisplayCredential, disabled bool) {
+	ui.List(c, list, len(visible), func(i int) {
+		item := visible[i]
+		title := item.Title
+		if item.Archived {
+			title = i18n.Tf("backup.item.archived", title)
+		}
+		if item.Deleted {
+			title = i18n.Tf("backup.item.trashed", title)
+		}
+		detail := item.Username
+		if detail == "" {
+			detail = websiteHost(item.URL)
+		}
+		checked := e.selected[item.ID]
+		if kit.CheckRow(c.Key(item.ID), &checked, title, detail, disabled).Changed() {
+			e.selected[item.ID] = checked
+		}
+	}).Grow(1).MinHeight(0).Gap(2)
 }
 
 func (a *app) backupImportPreviewView(c *ui.Context, e *backupEditor, busy bool) {

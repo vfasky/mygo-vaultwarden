@@ -184,8 +184,10 @@ func Checkbox(c *ui.Context, checked *bool, label string, disabled bool) ui.Elem
 func CheckRow(c *ui.Context, checked *bool, title, detail string, disabled bool) ui.Element {
 	row := ui.CheckboxBase(c, checked).Label(title).Height(40).Padding(0, 12).Gap(10).Radius(ControlRadius).
 		AlignItems(ui.Center).Disabled(disabled)
-	if *checked {
-		row.Background(Selected)
+	// The check box shows the choice; a fill on every checked row of a long
+	// list reads as one block. Hover alone highlights, as in the main list.
+	if !disabled && row.Pressed() {
+		row.Background(press)
 	} else if !disabled && row.Hovered() {
 		row.Background(hover)
 	}
@@ -299,11 +301,12 @@ func Section(c *ui.Context, title string, content func()) ui.Element {
 	})
 }
 
-// ActionBar is the foot of a page or window: its actions at the trailing
-// edge (put a ui.Spacer before them), over a hairline.
+// ActionBar is the foot of a page or window: status at the leading edge,
+// its actions at the trailing edge (put a ui.Spacer before them), below a
+// hairline across the content. It has no fill of its own, so it sits on the
+// window as the content does instead of floating as a box.
 func ActionBar(c *ui.Context, content func()) ui.Element {
-	return ui.Row(c).Shrink(0).Padding(12, 20).Gap(8).AlignItems(ui.Center).
-		Background(ui.RGBA(255, 255, 255, .72)).Border(0, ui.Transparent).
+	return ui.Row(c).Shrink(0).Padding(14, 0, 0, 0).Gap(8).AlignItems(ui.Center).
 		DrawOver(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: 1}, Line, 0) }).Children(content)
 }
 

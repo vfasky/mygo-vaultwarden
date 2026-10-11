@@ -135,7 +135,7 @@ func (a *app) folderEditorView(c *ui.Context) {
 			if !e.confirm && kit.Action(c, i18n.T("vault.folder.save"), "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
 				a.mutateFolder(false)
 			}
-		})
+		}).Margin(0, 20) // in line with the padded content above
 	})
 }
 

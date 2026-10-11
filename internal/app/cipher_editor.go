@@ -607,7 +607,7 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			if kit.Action(c, i18n.T("common.save"), "", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
 				a.saveCipher()
 			}
-		})
+		}).Margin(0, 20) // in line with the padded content above
 	})
 }
 

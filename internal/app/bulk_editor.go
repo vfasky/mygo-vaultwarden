@@ -147,7 +147,7 @@ func (a *app) bulkEditorView(c *ui.Context) {
 					e.confirm = true
 				}
 			}
-		})
+		}).Margin(0, 20) // in line with the padded content above
 	})
 }
 
