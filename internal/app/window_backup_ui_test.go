@@ -44,9 +44,8 @@ func TestBackupWindowControls(t *testing.T) {
 		t.Fatal("segment did not select import")
 	}
 	click("backup.export.switch_mode")
-	click("backup.format.mygo_backup")
-	if e.importing || e.format != vaultwarden.MyGoBackup {
-		t.Fatal("mode or format choice not applied")
+	if e.importing || e.format != vaultwarden.BitwardenJSON {
+		t.Fatal("mode choice not applied")
 	}
 	click("backup.export.select_none")
 	for _, yes := range e.selected {

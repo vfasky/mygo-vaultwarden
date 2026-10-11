@@ -15,7 +15,7 @@ func TestBackupWindowBusyPreventsSelectionChanges(t *testing.T) {
 	e := a.backupEditor
 	a.pending = 1
 	tt := ui.NewTester(a.backupWindowView, 760, 680)
-	for _, key := range []string{"backup.format.mygo_backup", "backup.format.mygo_resources", "backup.export.select_none", "backup.export.continue"} {
+	for _, key := range []string{"backup.export.select_none", "backup.export.continue"} {
 		uitest.Click(t, tt, i18n.T(key))
 	}
 	uitest.Click(t, tt, "Apple")
@@ -43,20 +43,13 @@ func TestBackupWindowRecoveryCancelClearsSecrets(t *testing.T) {
 	}
 }
 
-func TestBackupWindowFormatChoices(t *testing.T) {
+func TestBackupWindowOffersOnlyBitwardenJSON(t *testing.T) {
 	a := backupWindowFixture(t)
-	tt := ui.NewTester(a.backupWindowView, 760, 680)
-	for _, choice := range []struct {
-		key    string
-		format vaultwarden.BackupFormat
-	}{
-		{"backup.format.mygo_resources", vaultwarden.MyGoResources},
-		{"backup.format.mygo_backup", vaultwarden.MyGoBackup},
-		{"backup.format.bitwarden_json", vaultwarden.BitwardenJSON},
-	} {
-		uitest.Click(t, tt, i18n.T(choice.key))
-		if a.backupEditor.format != choice.format {
-			t.Fatal("format selection did not apply")
+	for _, importing := range []bool{false, true} {
+		a.backupEditor.importing = importing
+		tt := ui.NewTester(a.backupWindowView, 760, 680)
+		if tt.HasText("MyGo 备份") || tt.HasText("MyGo 完整资源备份") || a.backupEditor.format != vaultwarden.BitwardenJSON { // i18n:ignore
+			t.Fatal("import and export offer a format other than Bitwarden JSON")
 		}
 	}
 }

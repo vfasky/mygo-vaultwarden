@@ -121,19 +121,9 @@ func (a *app) backupEditorView(c *ui.Context) {
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(16).Children(func() {
 				if !e.submitted {
+					// Import and export use Bitwarden's JSON only: the app defines no
+					// file format of its own for users.
 					kit.Notice(c, kit.ToneWarning, i18n.T("backup.editor.plaintext_hint"))
-					if !e.confirm && e.plan == nil {
-						kit.ChoiceGroup(c, i18n.T("backup.format.title"), func() {
-							ui.Row(c).Gap(8).AlignItems(ui.Stretch).Children(func() {
-								kit.Choice(c, &e.format, vaultwarden.BitwardenJSON, i18n.T("backup.format.bitwarden_json"), i18n.T("backup.format.json_description"), "", busy).Grow(1).Basis(0)
-								kit.Choice(c, &e.format, vaultwarden.MyGoBackup, i18n.T("backup.format.mygo_backup"), i18n.T("backup.format.backup_description"), "", busy).Grow(1).Basis(0)
-								kit.Choice(c, &e.format, vaultwarden.MyGoResources, i18n.T("backup.format.mygo_resources"), i18n.T("backup.format.resources_description"), "", busy).Grow(1).Basis(0)
-							})
-						})
-					}
-					if e.format == vaultwarden.MyGoResources {
-						kit.Notice(c, kit.ToneInfo, i18n.T("backup.resource.limits_hint"))
-					}
 					if e.importing {
 						a.backupImportPreviewView(c, e, busy)
 					} else {
@@ -145,9 +135,7 @@ func (a *app) backupEditorView(c *ui.Context) {
 								})
 							}
 						}
-						if e.format == vaultwarden.BitwardenJSON {
-							kit.Notice(c, kit.ToneInfo, i18n.T("backup.export.selection_hint"))
-						}
+						kit.Notice(c, kit.ToneInfo, i18n.T("backup.export.selection_hint"))
 						a.backupSelectionView(c, e, busy || e.confirm)
 					}
 				} else {
@@ -255,10 +243,7 @@ func (a *app) backupSelectionView(c *ui.Context, e *backupEditor, disabled bool)
 			_, windowHeight := c.Size()
 			// Keep the list usable in small windows; taller windows give the
 			// virtual list the additional room instead of adding blank space.
-			listHeight := max(float32(120), windowHeight-560)
-			if e.format == vaultwarden.MyGoBackup && !e.confirm {
-				listHeight += 60
-			}
+			listHeight := max(float32(120), windowHeight-470)
 			ui.List(c, list, len(visible), func(i int) {
 				item := visible[i]
 				title := item.Title
