@@ -62,7 +62,7 @@ var accountPages = []struct {
 	tab                 accountTab
 	title, symbol, open string
 }{
-	{accountTabSend, "accountcenter.send_title", "send", "app.settings.open_send"},
+	{accountTabSend, "accountcenter.send_title", "external", "app.settings.open_send"},
 	{accountTabDevices, "account.device.title", "shield", "app.settings.open_devices"},
 	{accountTabSecurity, "account.form.title", "user", "app.settings.open_account_security"},
 	{accountTabMFA, "app.settings.mfa", "key", "app.settings.open_mfa"},
@@ -79,8 +79,7 @@ func (a *app) accountWindowView(c *ui.Context) {
 		ui.Column(c).Fill().TextColor(kit.Ink).Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
 			ui.Box(c).Height(row + below).Shrink(0).DragWindow()
 			ui.Column(c).Grow(1).Padding(32).Justify(ui.Center).AlignItems(ui.Center).Gap(16).Children(func() {
-				kit.Icon(c, "lock", 32).TextColor(kit.Purple)
-				ui.Text(c, i18n.T("app.list.status_locked")).FontSize(23).FontWeight(600)
+				kit.EmptyState(c, "lock", i18n.T("app.list.status_locked"), i18n.T("accountcenter.locked_hint")).Grow(0)
 				if kit.Action(c, i18n.T("accountcenter.unlock_in_main"), "external", true, false).Clicked() {
 					a.showMainWindow()
 				}
@@ -105,14 +104,13 @@ func (a *app) accountWindowView(c *ui.Context) {
 		})
 		ui.Box(c).Width(1).Background(kit.Line)
 		ui.Column(c).Grow(1).MinWidth(0).Gradient(ui.Hex("#EAEAEF"), ui.Hex("#DDD6EF"), 155).Children(func() {
-			ui.Row(c).Height(row+below).Shrink(0).Padding(0, bar.Right+20, below, 20).AlignItems(ui.Center).DragWindow().Children(func() {
+			ui.Box(c).Height(row + below).Shrink(0).DragWindow()
+			ui.Column(c).Grow(1).MinHeight(0).Padding(0, 20, 18, 20).Gap(16).Children(func() {
 				for _, page := range accountPages {
 					if page.tab == a.windows.accountTab {
-						ui.Text(c, i18n.T(page.title)).FontSize(20).FontWeight(650)
+						kit.PageHeader(c, i18n.T(page.title), i18n.T("accountcenter.description"), nil)
 					}
 				}
-			})
-			ui.Column(c).Grow(1).MinHeight(0).Padding(0, 20, 18, 20).Gap(16).Children(func() {
 				a.accountPage(c)
 				ui.Row(c).Gap(8).Height(32).Shrink(0).Children(func() {
 					kit.Icon(c, "shield", 15).TextColor(kit.Purple)
@@ -127,31 +125,28 @@ func (a *app) accountWindowView(c *ui.Context) {
 }
 
 func (a *app) accountPage(c *ui.Context) {
-	ui.Scroll(c.Key(string(a.windows.accountTab))).Grow(1).MinHeight(0).Children(func() {
-		if !a.accountPanelOpen() {
-			ui.Column(c).Padding(24).Gap(16).Background(kit.Panel).Radius(24).Children(func() {
-				switch {
-				case a.pending != 0:
-					ui.Text(c, i18n.T("common.status_processing")).TextColor(kit.Muted)
-				case a.mainEditorOpen():
-					ui.Text(c, i18n.T("accountcenter.finish_editing_hint")).TextColor(kit.Muted)
-					if kit.Action(c, i18n.T("accountcenter.go_to_main"), "external", true, false).Clicked() {
-						a.showMainWindow()
-					}
-				default:
-					ui.Text(c, i18n.T("accountcenter.open_page_hint")).TextColor(kit.Muted)
-					if a.status != "" {
-						ui.Text(c, a.status).TextColor(kit.Muted)
-					}
-					for _, page := range accountPages {
-						if page.tab == a.windows.accountTab && kit.Action(c, i18n.T(page.open), page.symbol, true, false).Clicked() {
-							a.openAccountPage(page.tab)
-						}
+	if !a.accountPanelOpen() {
+		ui.Column(c).Grow(1).MinHeight(0).Justify(ui.Center).AlignItems(ui.Center).Gap(12).Children(func() {
+			switch {
+			case a.pending != 0:
+				kit.EmptyState(c, "sync", i18n.T("common.status_processing"), i18n.T("accountcenter.processing_hint")).Grow(0)
+			case a.mainEditorOpen():
+				kit.EmptyState(c, "note", i18n.T("accountcenter.editing_title"), i18n.T("accountcenter.finish_editing_hint")).Grow(0)
+				if kit.Action(c, i18n.T("accountcenter.go_to_main"), "external", true, false).Clicked() {
+					a.showMainWindow()
+				}
+			default:
+				kit.EmptyState(c, "shield", i18n.T("accountcenter.open_title"), i18n.T("accountcenter.open_page_hint")).Grow(0)
+				for _, page := range accountPages {
+					if page.tab == a.windows.accountTab && kit.Action(c, i18n.T(page.open), page.symbol, true, false).Clicked() {
+						a.openAccountPage(page.tab)
 					}
 				}
-			})
-			return
-		}
+			}
+		})
+		return
+	}
+	ui.Scroll(c.Key(string(a.windows.accountTab))).Grow(1).MinHeight(0).Children(func() {
 		switch a.windows.accountTab {
 		case accountTabEmergency:
 			a.orgServices.View(c)

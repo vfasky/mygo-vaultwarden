@@ -35,10 +35,10 @@ func (a *app) settingsWindowView(c *ui.Context) {
 				{settingsTabAbout, i18n.T("settings.tab.about"), "shield"},
 			} {
 				selected := a.windows.settingsTab == pane.tab || a.windows.settingsTab == "" && pane.tab == settingsTabAccount
-				tab := ui.ButtonBase(c.Key(string(pane.tab))).Column().AlignItems(ui.Center).Gap(4).MinWidth(82).Padding(7, 12).Radius(8).
+				tab := ui.ButtonBase(c.Key(string(pane.tab))).Column().AlignItems(ui.Center).Gap(4).MinWidth(82).Padding(7, 12).Radius(kit.ControlRadius).
 					Role(ui.RoleTab).Selected(selected).Label(pane.label).FontSize(11).TextColor(kit.Muted)
 				if selected {
-					tab.Background(ui.Hex("#DDD3F2")).TextColor(kit.Purple)
+					tab.Background(kit.Selected).TextColor(kit.Purple)
 				} else if tab.Hovered() {
 					tab.Background(ui.Hex("#E7E1F0"))
 				}
@@ -57,26 +57,35 @@ func (a *app) settingsWindowView(c *ui.Context) {
 
 func (a *app) settingsUpdates(c *ui.Context) {
 	state := currentUpdateState()
-	kit.DetailCard(c, i18n.T("settings.tab.updates"), func() {
-		ui.Column(c).Padding(16).Gap(14).Children(func() {
-			ui.Text(c, i18n.Tf("settings.version", settingsVersion(state.Version))).FontSize(14)
-			if state.Enabled {
-				ui.Text(c, i18n.T("settings.updates.available_hint")).FontSize(12).TextColor(kit.Muted)
-			} else {
-				ui.Text(c, i18n.T("settings.updates.unavailable_hint")).FontSize(12).TextColor(kit.Muted)
-			}
-			if ui.Checkbox(c, &state.AutomaticChecks, i18n.T("settings.updates.automatic_checks")).Disabled(!state.Enabled).Changed() {
-				setAutomaticUpdateChecks(state.AutomaticChecks)
-			}
-			if ui.Checkbox(c, &state.AutomaticDownloads, i18n.T("settings.updates.automatic_downloads")).Disabled(!state.Enabled || !state.AutomaticChecks).Changed() {
-				setAutomaticUpdateDownloads(state.AutomaticDownloads)
-			}
-			lastCheck := i18n.T("settings.updates.never_checked")
-			if !state.LastCheck.IsZero() {
-				lastCheck = state.LastCheck.Local().Format("2006-01-02 15:04")
-			}
-			ui.Text(c, i18n.Tf("settings.updates.last_check", lastCheck)).FontSize(12).TextColor(kit.Muted)
-			if kit.Action(c, i18n.T("settings.updates.check_now"), "sync", true, false).Clicked() {
+	kit.PageHeader(c, i18n.T("settings.tab.updates"), i18n.T("settings.updates.description"), nil)
+	kit.DetailCard(c, i18n.T("settings.updates.status_title"), func() {
+		lastCheck := i18n.T("settings.updates.never_checked")
+		if !state.LastCheck.IsZero() {
+			lastCheck = state.LastCheck.Local().Format("2006-01-02 15:04")
+		}
+		ui.Row(c).Children(func() {
+			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+				kit.DetailField(c, i18n.T("settings.version_label"), settingsVersion(state.Version), "")
+			})
+			ui.Column(c).Grow(1).MinWidth(0).Children(func() {
+				kit.DetailField(c, i18n.T("settings.updates.last_check"), lastCheck, "")
+			})
+		})
+	})
+	kit.Section(c, i18n.T("settings.updates.preferences_title"), func() {
+		if kit.SwitchRow(c, &state.AutomaticChecks, i18n.T("settings.updates.automatic_checks"), "", !state.Enabled).Changed() {
+			setAutomaticUpdateChecks(state.AutomaticChecks)
+		}
+		if kit.SwitchRow(c, &state.AutomaticDownloads, i18n.T("settings.updates.automatic_downloads"), "", !state.Enabled || !state.AutomaticChecks).Changed() {
+			setAutomaticUpdateDownloads(state.AutomaticDownloads)
+		}
+		if state.Enabled {
+			kit.Notice(c, kit.ToneInfo, i18n.T("settings.updates.available_hint"))
+		} else {
+			kit.Notice(c, kit.ToneInfo, i18n.T("settings.updates.unavailable_hint"))
+		}
+		ui.Row(c).Children(func() {
+			if kit.Button(c, i18n.T("settings.updates.check_now"), "sync", kit.ButtonPrimary, false).Clicked() {
 				checkForUpdates()
 			}
 		})
@@ -98,30 +107,45 @@ func (a *app) settingsAbout(c *ui.Context) {
 		ui.Text(c, i18n.T("settings.app_name")).FontSize(24).FontWeight(650)
 		ui.Text(c, i18n.Tf("settings.version", settingsVersion(currentUpdateState().Version))).FontSize(12).TextColor(kit.Muted)
 	})
-	kit.DetailCard(c, i18n.T("settings.tab.about"), func() {
-		ui.Column(c).Padding(16).Gap(12).Children(func() {
-			ui.Text(c, i18n.T("app.settings.about")).FontSize(12).LineHeight(1.6)
-			ui.Text(c, i18n.T("settings.about.license")).FontSize(12).TextColor(kit.Muted)
-			ui.Text(c, i18n.T("settings.about.third_party")).FontSize(12).TextColor(kit.Muted).LineHeight(1.5)
-		})
+	kit.Section(c, i18n.T("settings.tab.about"), func() {
+		ui.Text(c, i18n.T("app.settings.about")).FontSize(12).LineHeight(1.6)
+		ui.Text(c, i18n.T("settings.about.license")).FontSize(12)
+		ui.Text(c, i18n.T("settings.about.third_party")).FontSize(12).TextColor(kit.Muted).LineHeight(1.5)
 	})
 }
 
 // settingsGeneral works while the vault is locked, as the language picker of
 // the login and unlock pages does.
 func (a *app) settingsGeneral(c *ui.Context) {
-	kit.DetailCard(c, i18n.T("app.language.title"), func() {
-		ui.Column(c).Padding(16).Gap(10).AlignItems(ui.Start).Children(func() {
-			languageMenu(c).Background(kit.Panel)
-			ui.Text(c, i18n.T("app.language.hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
-		})
+	kit.PageHeader(c, i18n.T("settings.tab.general"), i18n.T("app.language.hint"), nil)
+	kit.Section(c, i18n.T("app.language.title"), func() {
+		ui.Row(c).Children(func() { languageMenu(c).Background(kit.Panel) })
+	})
+}
+
+// settingsServiceRow navigates to an account page, with a leading icon and
+// trailing disclosure instead of a centered, full-width action label.
+func settingsServiceRow(c *ui.Context, title, symbol string, disabled bool) ui.Element {
+	row := ui.ButtonBase(c).Label(title).Height(40).Padding(0, 10).Gap(12).
+		Radius(kit.ControlRadius).AlignItems(ui.Center).TextColor(kit.Ink).Disabled(disabled)
+	if disabled {
+		row.Opacity(.45)
+	} else if row.Pressed() {
+		row.Background(kit.Lavender)
+	} else if row.Hovered() {
+		row.Background(kit.Selected)
+	}
+	return row.Children(func() {
+		kit.Icon(c, symbol, 18).TextColor(kit.Purple)
+		ui.Text(c, title).FontSize(13).Grow(1).MinWidth(0).SingleLine()
+		kit.Icon(c, "chevron", 14).TextColor(kit.Muted)
 	})
 }
 
 func (a *app) settings(c *ui.Context) {
 	if a.windows.settingsTab == settingsTabGeneral || a.windows.settingsTab == settingsTabUpdates || a.windows.settingsTab == settingsTabAbout {
 		ui.Scroll(c.Key(string(a.windows.settingsTab))).Grow(1).MinHeight(0).Children(func() {
-			ui.Column(c).Gap(18).Padding(10, 8).Children(func() {
+			ui.Column(c).Gap(16).Padding(10, 4).Children(func() {
 				if a.windows.settingsTab == settingsTabGeneral {
 					a.settingsGeneral(c)
 				} else if a.windows.settingsTab == settingsTabUpdates {
@@ -135,7 +159,7 @@ func (a *app) settings(c *ui.Context) {
 	}
 	if !a.unlocked() || a.showLogin {
 		ui.Column(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Gap(12).Children(func() {
-			ui.Text(c, i18n.T("app.list.status_locked")).FontSize(15).FontWeight(550)
+			kit.EmptyState(c, "lock", i18n.T("app.list.status_locked"), i18n.T("settings.locked_hint")).Grow(0)
 			if kit.Action(c, i18n.T("settings.show_main_window"), "lock", true, false).Clicked() {
 				a.showMainWindow()
 			}
@@ -145,34 +169,62 @@ func (a *app) settings(c *ui.Context) {
 	ready := a.snapshot != nil && a.pending == 0
 	available := a.snapshot != nil && a.snapshot.Available
 	ui.Scroll(c.Key("settings-" + string(a.windows.settingsTab))).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Gap(18).Padding(10, 8).Children(func() {
+		ui.Column(c).Gap(16).Padding(10, 4).Children(func() {
 			if a.windows.settingsTab != settingsTabStorage {
-				kit.DetailCard(c, i18n.T("app.settings.account_services"), func() {
+				kit.PageHeader(c, i18n.T("settings.tab.account"), i18n.T("settings.account.description"), nil)
+				kit.DetailCard(c, i18n.T("app.settings.connect_vault"), func() {
+					ui.Row(c).Children(func() {
+						ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
+							kit.DetailField(c, i18n.T("settings.account.server"), a.connectedServer(), "—")
+						})
+						ui.Column(c).Grow(1).Basis(0).MinWidth(0).Children(func() {
+							kit.DetailField(c, i18n.T("settings.tab.account"), a.email, "—")
+						})
+					})
+					ui.Column(c).Padding(0, 16, 14, 16).Gap(12).Children(func() {
+						ui.Text(c, i18n.T("app.settings.credentials_hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
+						ui.Row(c).Children(func() {
+							if kit.Action(c, i18n.T("login.title"), "user", true, a.pending != 0).Clicked() {
+								a.resetLoginForm()
+								a.showLogin = true
+								a.status = ""
+								a.showMainWindow()
+							}
+						})
+					})
+				})
+				kit.Section(c, i18n.T("app.settings.account_services"), func() {
 					if warning := a.mfaWarnings.warning(a.serverURL, a.email); warning != "" {
-						ui.Text(c, warning).MaxLines(4)
+						kit.Notice(c, kit.ToneWarning, warning)
 					}
 					if a.runtimeVault != nil {
-						ui.Column(c.Key(a.secretInputVersion)).Padding(16).Gap(8).Children(func() {
-							ui.Text(c, i18n.T("app.settings.runtime_vault_hint")).MaxLines(4)
+						ui.Column(c.Key(a.secretInputVersion)).Gap(12).Children(func() {
+							kit.Notice(c, kit.ToneInfo, i18n.T("app.settings.runtime_vault_hint"))
 							if a.diskSnapshot != nil && a.diskSnapshot.Scope != nil && a.liveScope != nil && *a.diskSnapshot.Scope != *a.liveScope {
 								oldAccount := a.diskSnapshot.Scope.Account
 								if a.diskSnapshot.PasswordUnlock != nil {
 									oldAccount = a.diskSnapshot.PasswordUnlock.Email
 								}
-								ui.Text(c, i18n.Tf("app.settings.account_replacement_summary", a.diskSnapshot.Scope.Server, oldAccount, a.liveScope.Server, a.email)).MaxLines(5)
-								ui.Text(c, i18n.T("app.settings.account_replacement_hint")).MaxLines(6)
+								kit.Notice(c, kit.ToneWarning, i18n.Tf("app.settings.account_replacement_summary", a.diskSnapshot.Scope.Server, oldAccount, a.liveScope.Server, a.email))
+								kit.Notice(c, kit.ToneInfo, i18n.T("app.settings.account_replacement_hint"))
 								label := i18n.T("app.settings.confirm_account_replacement")
 								if a.runtimeReplaceConfirmed {
 									label = i18n.T("app.settings.withdraw_account_replacement")
 								}
-								if kit.Action(c, label, "user", false, a.pending != 0).Clicked() {
-									a.runtimeReplaceConfirmed = !a.runtimeReplaceConfirmed
+								ui.Row(c).Children(func() {
+									if kit.Action(c, label, "user", false, a.pending != 0).Clicked() {
+										a.runtimeReplaceConfirmed = !a.runtimeReplaceConfirmed
+									}
+								})
+							}
+							kit.Field(c, i18n.T("app.settings.bind_master_password_label"), "", func() {
+								kit.Input(ui.TextInput(c, &a.masterPassword).Label(i18n.T("app.settings.bind_master_password_label")).Password().Disabled(a.pending != 0))
+							})
+							ui.Row(c).Children(func() {
+								if kit.Action(c, i18n.T("app.settings.bind_master_password_sync"), "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
+									a.bindRuntimePasswordWith(a.postUI, localstore.Call)
 								}
-							}
-							ui.TextInput(c, &a.masterPassword).Label(i18n.T("app.settings.bind_master_password_label")).Password().Disabled(a.pending != 0)
-							if kit.Action(c, i18n.T("app.settings.bind_master_password_sync"), "lock", true, a.pending != 0 || a.masterPassword == "").Clicked() {
-								a.bindRuntimePasswordWith(a.postUI, localstore.Call)
-							}
+							})
 						})
 					}
 					if !ready || a.mainEditorOpen() {
@@ -180,47 +232,32 @@ func (a *app) settings(c *ui.Context) {
 						if a.mainEditorOpen() {
 							reason = i18n.T("settings.account.editor_hint")
 						}
-						ui.Text(c, reason).Padding(16, 16, 0, 16).FontSize(12).TextColor(kit.Muted)
+						kit.Notice(c, kit.ToneInfo, reason)
 					}
-					ui.Row(c).Padding(16).Gap(8).Wrap().Children(func() {
-						if kit.Action(c, i18n.T("app.settings.verify_target_recovery"), "vault", false, a.pending != 0).Clicked() {
-							a.openTargetRecovery()
-							a.showMainWindow()
-						}
-						busy := !ready || a.mainEditorOpen()
-						if kit.Action(c, i18n.T("account.emergency.title"), "vault", false, busy).Clicked() {
-							a.openAccountPage(accountTabEmergency)
-						}
-						if kit.Action(c, i18n.T("settings.account.send"), "send", false, busy).Clicked() {
-							a.openAccountPage(accountTabSend)
-						}
-						if kit.Action(c, i18n.T("account.device.title"), "shield", false, busy).Clicked() {
-							a.openAccountPage(accountTabDevices)
-						}
-						if kit.Action(c, i18n.T("account.form.title"), "user", false, busy).Clicked() {
-							a.openAccountPage(accountTabSecurity)
-						}
-						if kit.Action(c, i18n.T("app.settings.mfa"), "shield", false, busy).Clicked() {
-							a.openAccountPage(accountTabMFA)
+					busy := !ready || a.mainEditorOpen()
+					ui.Column(c).Children(func() {
+						for _, page := range accountPages {
+							title := i18n.T(page.title)
+							if page.tab == accountTabSend {
+								title = i18n.T("settings.account.send")
+							}
+							if settingsServiceRow(c.Key(string(page.tab)), title, page.symbol, busy).Clicked() {
+								a.openAccountPage(page.tab)
+							}
 						}
 					})
-				})
-				kit.DetailCard(c, i18n.T("app.settings.connect_vault"), func() {
-					ui.Column(c).Padding(16).Gap(13).Children(func() {
-						ui.Text(c, a.connectedServer()).FontSize(14).MaxLines(2)
-						ui.Text(c, i18n.T("app.settings.credentials_hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
-						if kit.Action(c, i18n.T("login.title"), "user", true, a.pending != 0).Clicked() {
-							a.resetLoginForm()
-							a.showLogin = true
-							a.status = ""
+					ui.Row(c).Children(func() {
+						if kit.Action(c, i18n.T("app.settings.verify_target_recovery"), "vault", false, a.pending != 0).Clicked() {
+							a.openTargetRecovery()
 							a.showMainWindow()
 						}
 					})
 				})
 			}
 			if a.windows.settingsTab == settingsTabStorage {
-				kit.DetailCard(c, i18n.T("app.settings.local_storage_autofill"), func() {
-					ui.Column(c).Padding(16).Gap(12).Children(func() {
+				kit.PageHeader(c, i18n.T("app.settings.local_storage_autofill"), i18n.T("settings.storage.description"), nil)
+				kit.Section(c, i18n.T("settings.storage.snapshot_title"), func() {
+					ui.Column(c).Gap(12).Children(func() {
 						state := i18n.T("app.settings.no_snapshot")
 						if available {
 							state = i18n.Tf("app.settings.snapshot_count", a.snapshot.Count)
@@ -239,7 +276,7 @@ func (a *app) settings(c *ui.Context) {
 						})
 						ui.Divider(c)
 						if a.snapshot != nil && a.snapshot.IndexPending {
-							ui.Text(c, i18n.T("app.settings.autofill_pending_hint")).FontSize(12).TextColor(kit.Purple)
+							kit.Notice(c, kit.ToneInfo, i18n.T("app.settings.autofill_pending_hint"))
 						}
 						ui.Row(c).Gap(8).Wrap().Children(func() {
 							if kit.Action(c, i18n.T("app.settings.autofill"), "settings", false, false).Clicked() {
@@ -250,10 +287,12 @@ func (a *app) settings(c *ui.Context) {
 							}
 						})
 						if a.snapshot != nil && a.snapshot.CleanupPending {
-							ui.Text(c, i18n.T("app.settings.cleanup_pending_hint")).FontSize(12).TextColor(kit.Purple)
-							if kit.Action(c, i18n.T("app.settings.retry_cleanup"), "sync", false, !ready).Clicked() {
-								a.runStorage(localstore.OperationRetryCleanup)
-							}
+							kit.Notice(c, kit.ToneWarning, i18n.T("app.settings.cleanup_pending_hint"))
+							ui.Row(c).Children(func() {
+								if kit.Action(c, i18n.T("app.settings.retry_cleanup"), "sync", false, !ready).Clicked() {
+									a.runStorage(localstore.OperationRetryCleanup)
+								}
+							})
 						}
 					})
 				})
@@ -264,7 +303,7 @@ func (a *app) settings(c *ui.Context) {
 					if a.runtimeVault != nil {
 						logoutLabel = i18n.T("app.settings.end_temporary_session")
 					}
-					if kit.Action(c, logoutLabel, "user", false, a.snapshot == nil).Clicked() {
+					if kit.Button(c, logoutLabel, "user", kit.ButtonDanger, a.snapshot == nil).Clicked() {
 						a.runStorage(localstore.OperationLogout)
 					}
 				})

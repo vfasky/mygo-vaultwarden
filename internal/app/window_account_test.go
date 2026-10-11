@@ -37,6 +37,41 @@ func accountCenterFixture(t *testing.T) *app {
 	return a
 }
 
+func TestAccountCenterPlaceholderStates(t *testing.T) {
+	for _, state := range []string{"open", "processing", "editing"} {
+		t.Run(state, func(t *testing.T) {
+			a := previewApp()
+			a.windows.accountTab = accountTabSend
+			a.status = "Fixture status"
+			want := i18n.T("accountcenter.open_page_hint")
+			switch state {
+			case "processing":
+				a.pending = 1
+				want = i18n.T("accountcenter.processing_hint")
+			case "editing":
+				a.editor = &cipherEditor{}
+				want = i18n.T("accountcenter.finish_editing_hint")
+			}
+			tt := ui.NewTester(a.accountWindowView, 900, 600)
+			if !tt.HasText(want) {
+				t.Fatalf("missing placeholder: %s", want)
+			}
+			count := 0
+			for _, text := range tt.Texts() {
+				if text == a.status {
+					count++
+				}
+			}
+			if count != 1 {
+				t.Fatalf("status must appear once in the bottom bar, got %d", count)
+			}
+			if state != "open" && tt.HasText(i18n.T("app.settings.open_send")) {
+				t.Fatal("blocked placeholder offered to open a panel")
+			}
+		})
+	}
+}
+
 func TestAccountCenterNavigationRevokesLease(t *testing.T) {
 	for _, tab := range []accountTab{accountTabDevices, accountTabSecurity, accountTabMFA, accountTabEmergency} {
 		t.Run(string(tab), func(t *testing.T) {
