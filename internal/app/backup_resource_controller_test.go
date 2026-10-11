@@ -333,6 +333,7 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 			}
 			if mode == "copy" {
 				f.a.clearBackupEditor()
+				f.a.windows.backupOpen = false // as after the import window closed
 				f.a.openCipherEditor("card-1", 3)
 				if f.a.editor == nil {
 					t.Fatal("copy source editor")
@@ -342,6 +343,14 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 				e = f.a.backupEditor
 				if e == nil || !e.resources.copyOnly || !f.a.backupCurrent(e, f.a.epoch) || f.creates != 1 {
 					t.Fatalf("copy handoff failed: %s", f.a.status)
+				}
+				// The attachments continue in the import and export window:
+				// drawing the windows keeps its editor, plan and epoch.
+				epoch := f.a.epoch
+				ui.NewTester(f.a.view, 1280, 820).Frame()
+				ui.NewTester(f.a.backupWindowView, 760, 680).Frame()
+				if !f.a.windows.backupOpen || f.a.backupEditor != e || e.resources.plan == nil || f.a.epoch != epoch {
+					t.Fatal("drawing the windows cancelled the copied attachments")
 				}
 				for i := 0; i < 2; i++ {
 					f.file(i, false)

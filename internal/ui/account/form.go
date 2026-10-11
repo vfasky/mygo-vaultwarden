@@ -294,11 +294,13 @@ func FormView(c *ui.Context, f *Form) {
 				labels[i] = accountModeLabel(mode)
 			}
 			selected := accountModeLabel(f.Mode)
+			chosen := false
 			kit.Field(c, i18n.T("account.form.operation_title"), "", func() {
-				ui.Select(c, &selected, labels).Label(i18n.T("account.form.operation_title")).Disabled(disabled)
+				// Changed applies the choice to selected: Select sets it after the input.
+				chosen = ui.Select(c, &selected, labels).Label(i18n.T("account.form.operation_title")).Disabled(disabled).Changed()
 			})
 			for i, mode := range modes {
-				if selected == labels[i] && mode != f.Mode {
+				if chosen && selected == labels[i] && mode != f.Mode {
 					f.cancel()
 					f.Mode = mode
 				}
