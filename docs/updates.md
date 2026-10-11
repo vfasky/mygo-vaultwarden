@@ -43,9 +43,42 @@ GO=$(bash scripts/resolve-go.sh)
 
 显式设置空环境变量会清空对应配置字段。从 GitHub 切换到 URL 时，设置 URL 并清空 `MYGO_UPDATE_GITHUB`。完全不设置 `updates` 和这些覆盖项才是未配置状态；`updates: {}` 是错误配置。Debug 不读取或注入更新配置。发布时应使用与该 Release 构建一致的公钥、更新地址和 tag 前缀。
 
-## 构建与发布
+## 发布新版本
 
-先同步 `mygo.json`、Xcode `MARKETING_VERSION` 和 `CHANGELOG.md` 的版本；当前为 `0.1.0`。发布说明取 `## 0.1.0` 下直到下一个二级标题的 Markdown，支持 `## [0.1.0] - 日期`，缺失或内容为空会失败。
+在本机执行 `scripts/release.sh`，使用 `.local/signing.env` 中的 Developer ID 证书与公证 profile，以及本机的更新签名私钥；不依赖 CI，私钥与证书不离开这台 Mac。
+
+1. 修改版本号：`mygo.json` 的 `version`，以及 Xcode 工程中两处 `MARKETING_VERSION`（`macos/MyGoVaultwarden.xcodeproj/project.pbxproj`）。
+2. 在 `CHANGELOG.md` 顶部新增 `## <版本>` 小节，它就是 release 与更新窗口里的发布说明。
+3. 提交，并在 `main`、工作区干净时运行：
+
+```sh
+bash scripts/release.sh
+```
+
+脚本依次：检查三处版本一致、CHANGELOG 有该版本、tag 未指向其他提交、同版本 release 未公开；运行 `go vet` 与 `go test`；`build-macos.sh release --notarize` 构建、签名、公证并 staple；生成更新归档、manifest、首次安装用的 `MyGo-Vaultwarden-<版本>-macOS.zip` 与 `SHA256SUMS.txt`（`build/updates/<版本>/`）。随后询问确认，再创建并推送 tag `v<版本>`，创建草稿 release，先上传 zip、归档与校验文件，最后上传 manifest。
+
+草稿不会进入应用的更新通道。在 GitHub 上检查发布说明与文件后公开：
+
+```sh
+gh release edit v<版本> --repo vfasky/mygo-vaultwarden --draft=false --latest
+```
+
+选项：
+
+| 选项 | 作用 |
+|---|---|
+| `--publish` | 上传后直接公开并标为 latest（版本号含 `-` 时作为 prerelease 公开，不进入更新通道） |
+| `--no-upload` | 只构建并生成发布文件，不打 tag、不上传，可用于检查产物 |
+| `--skip-tests` | 跳过 vet 与测试 |
+| `--yes` | 推送 tag 与上传前不再询问 |
+
+更新签名私钥依次取自环境变量 `MYGO_UPDATER_PRIVATE_KEY`、登录钥匙串中的备份（服务名 `MyGo Vaultwarden update signing key`），最后是 `mygo keygen` 写入的 `~/Library/Application Support/mygo/update-keys/mygo-update.key`。脚本需要已登录的 GitHub CLI（`gh auth login`）。推送 tag 会把它指向的提交一起推到 GitHub。
+
+中途失败可修复后重跑：同版本的旧发布文件会重新生成；草稿 release 中的文件会被覆盖；已公开的 release 不会被改动，需提高版本号。
+
+## 分步构建与发布
+
+`scripts/release.sh` 按以下步骤执行，也可以手动分步运行。先同步 `mygo.json`、Xcode `MARKETING_VERSION` 和 `CHANGELOG.md` 的版本；当前为 `0.1.0`。发布说明取 `## 0.1.0` 下直到下一个二级标题的 Markdown，支持 `## [0.1.0] - 日期`，缺失或内容为空会失败。
 
 ```sh
 # 配置与密钥就绪后，构建、签名、公证并 staple
