@@ -59,54 +59,93 @@ var bulkActions = []struct {
 
 func (a *app) bulkEditorView(c *ui.Context) {
 	e := a.bulkEditor
-	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("vault.bulk.title")).FontSize(23)
-			if e.submitted {
-				ui.Text(c, i18n.T("vault.bulk.submitted_hint")).MaxLines(3)
-				for _, result := range e.results {
-					ui.Text(c, result).MaxLines(2).FontSize(12)
-				}
-				if kit.Action(c, i18n.T("vault.bulk.sync_verify"), "sync", false, a.pending != 0).Clicked() {
-					a.syncVault(false)
-				}
-			} else {
-				ui.Text(c, i18n.T("vault.bulk.description")).MaxLines(3).FontSize(12)
-				for _, item := range e.candidates {
-					label := "□ " + item.Title
-					if e.selected[item.ID] {
-						label = "✓ " + item.Title
+	selected := 0
+	for _, item := range e.candidates {
+		if e.selected[item.ID] {
+			selected++
+		}
+	}
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+			ui.Column(c).Padding(20).Gap(16).Children(func() {
+				kit.PageHeader(c, i18n.T("vault.bulk.title"), i18n.T("vault.bulk.selection_hint"), nil)
+				if e.submitted {
+					kit.Notice(c, kit.ToneInfo, i18n.T("vault.bulk.submitted_hint"))
+					for _, result := range e.results {
+						ui.Text(c, result).MaxLines(2).FontSize(12)
 					}
-					if kit.Action(c, label, "", false, a.pending != 0 || e.confirm).Clicked() {
-						e.selected[item.ID] = !e.selected[item.ID]
+					if kit.Action(c, i18n.T("vault.bulk.sync_verify"), "sync", false, a.pending != 0).Clicked() {
+						a.syncVault(false)
+					}
+				} else {
+					kit.Section(c, i18n.T("vault.bulk.items"), func() {
+						ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+							ui.Text(c, i18n.Tf("vault.bulk.selected_count", selected, len(e.candidates))).FontSize(12).TextColor(kit.Muted)
+							ui.Spacer(c)
+							if kit.Button(c, i18n.T("vault.bulk.select_all"), "", kit.ButtonQuiet, a.pending != 0 || e.confirm).Clicked() {
+								for _, item := range e.candidates {
+									e.selected[item.ID] = true
+								}
+							}
+							if kit.Button(c, i18n.T("vault.bulk.select_none"), "", kit.ButtonQuiet, a.pending != 0 || e.confirm).Clicked() {
+								clear(e.selected)
+							}
+						})
+						if len(e.candidates) == 0 {
+							kit.EmptyState(c, "vault", i18n.T("vault.bulk.empty"), "")
+						}
+						ui.List(c, nil, len(e.candidates)).ItemKey(func(i int) any { return e.candidates[i].ID }).Rows(func(row ui.ListRow) {
+							item := e.candidates[row.Index]
+							on := e.selected[item.ID]
+							if kit.CheckRow(row.Context, &on, item.Title, item.Username, a.pending != 0 || e.confirm).Changed() {
+								e.selected[item.ID] = on
+							}
+						}).Height(200)
+					})
+					kit.Section(c, i18n.T("vault.bulk.action"), func() {
+						options := make([]editorOption, 0, len(bulkActions))
+						for _, op := range bulkActions {
+							options = append(options, editorOption{string(op.action), i18n.T(op.label)})
+						}
+						action := string(e.action)
+						if editorSelect(c, i18n.T("vault.bulk.action"), &action, options, a.pending != 0 || e.confirm).Changed() {
+							e.action = vaultwarden.CipherAction(action)
+						}
+						if e.action == vaultwarden.CipherMove {
+							a.folderPicker(c, &e.folderID, a.pending != 0 || e.confirm)
+						}
+					})
+					kit.Notice(c, kit.ToneInfo, i18n.T("vault.bulk.description"))
+					if e.confirm {
+						message := i18n.T("vault.bulk.confirm_action_hint")
+						if e.action == vaultwarden.CipherDeletePermanently {
+							message = i18n.T("vault.bulk.confirm_delete_hint")
+						}
+						kit.Notice(c, kit.ToneWarning, message)
 					}
 				}
-				for _, op := range bulkActions {
-					if kit.NavItem(c, i18n.T(op.label), "vault", "", e.action == op.action, a.pending != 0 || e.confirm).Clicked() {
-						e.action = op.action
-					}
-				}
-				if e.action == vaultwarden.CipherMove {
-					a.folderPicker(c, &e.folderID, a.pending != 0 || e.confirm)
-				}
+			})
+		})
+		kit.ActionBar(c, func() {
+			ui.Spacer(c)
+			if kit.Action(c, i18n.T("vault.bulk.close"), "", false, a.pending != 0).Clicked() {
+				a.bulkEditor = nil
+			}
+			if !e.submitted {
 				if e.confirm {
-					message := i18n.T("vault.bulk.confirm_action_hint")
-					if e.action == vaultwarden.CipherDeletePermanently {
-						message = i18n.T("vault.bulk.confirm_delete_hint")
-					}
-					ui.Text(c, message).MaxLines(3)
-					if kit.Action(c, i18n.T("vault.bulk.confirm_action"), "", true, a.pending != 0).Clicked() {
-						a.mutateBulk()
-					}
 					if kit.Action(c, i18n.T("vault.bulk.cancel_confirmation"), "", false, a.pending != 0).Clicked() {
 						e.confirm = false
+					}
+					kind := kit.ButtonPrimary
+					if e.action == vaultwarden.CipherTrash || e.action == vaultwarden.CipherDeletePermanently {
+						kind = kit.ButtonDanger
+					}
+					if kit.Button(c, i18n.T("vault.bulk.confirm_action"), "", kind, a.pending != 0).Clicked() {
+						a.mutateBulk()
 					}
 				} else if kit.Action(c, i18n.T("vault.bulk.continue"), "", true, a.pending != 0).Clicked() {
 					e.confirm = true
 				}
-			}
-			if kit.Action(c, i18n.T("vault.bulk.close"), "", false, a.pending != 0).Clicked() {
-				a.bulkEditor = nil
 			}
 		})
 	})

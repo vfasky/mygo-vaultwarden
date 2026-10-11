@@ -443,155 +443,169 @@ func (a *app) cipherEditorView(c *ui.Context) {
 		a.cipherComparisonView(c)
 		return
 	}
-	ui.Scroll(c.Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion))).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Gap(12).Padding(18).Children(func() {
-			title := i18n.Tf("vault.editor.edit_title", i18n.T(cipherTypeNames[e.fields.Type]))
-			if e.fields.ID == "" {
-				title = i18n.Tf("vault.editor.add_title", i18n.T(cipherTypeNames[e.fields.Type]))
-			}
-			ui.Text(c, title).FontSize(23).FontWeight(600)
-			if e.fields.OrganizationID != nil || e.organizationID != "" {
-				ui.Text(c, i18n.T("vault.editor.organization_sync_hint")).FontSize(12)
-			}
-			if e.organizationID != "" && e.fields.ID == "" {
-				a.organizationTypePicker(c, e)
-			}
-			ui.Text(c, i18n.T("vault.field.title")).FontSize(12)
-			ui.TextInput(c, &e.fields.Name).Label(i18n.T("vault.field.title")).Disabled(a.pending != 0 || e.uncertain)
-			for i := range e.inputs {
-				f := &e.inputs[i]
-				ui.Text(c, f.label).FontSize(12)
-				ui.Column(c.Key(f.key)).Children(func() {
-					var input ui.Element
-					if f.key == "privateKey" || f.key == "publicKey" {
-						input = ui.TextArea(c, &f.value).MinHeight(100)
-					} else {
-						input = ui.TextInput(c, &f.value)
-					}
-					input.Label(f.label).Disabled(a.pending != 0 || e.uncertain)
-					if f.secret {
-						input.Password()
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Scroll(c.Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion))).Grow(1).MinHeight(0).Children(func() {
+			ui.Column(c).Gap(16).Padding(20).Children(func() {
+				title := i18n.Tf("vault.editor.edit_title", i18n.T(cipherTypeNames[e.fields.Type]))
+				if e.fields.ID == "" {
+					title = i18n.Tf("vault.editor.add_title", i18n.T(cipherTypeNames[e.fields.Type]))
+				}
+				kit.PageHeader(c, title, i18n.T("vault.editor.description"), func() {
+					kit.Pill(c, i18n.T(cipherTypeNames[e.fields.Type]), kit.Lavender, kit.Purple)
+				})
+				if e.fields.OrganizationID != nil || e.organizationID != "" {
+					kit.Notice(c, kit.ToneInfo, i18n.T("vault.editor.organization_sync_hint"))
+				}
+				if e.organizationID != "" && e.fields.ID == "" {
+					a.organizationTypePicker(c, e)
+				}
+				kit.Section(c, i18n.T("vault.editor.basic_information"), func() {
+					kit.Field(c, i18n.T("vault.field.title"), "", func() {
+						kit.Input(ui.TextInput(c, &e.fields.Name).Label(i18n.T("vault.field.title")).Disabled(a.pending != 0 || e.uncertain))
+					})
+					a.folderPicker(c, &e.fields.FolderID, a.pending != 0 || e.uncertain)
+					kit.Checkbox(c, &e.fields.Favorite, i18n.T("vault.field.favorite"), a.pending != 0 || e.uncertain)
+				})
+				kit.Section(c, i18n.T(cipherTypeNames[e.fields.Type]), func() {
+					for i := range e.inputs {
+						f := &e.inputs[i]
+						kit.Field(c.Key(f.key), f.label, "", func() {
+							var input ui.Element
+							if f.key == "privateKey" || f.key == "publicKey" {
+								input = kit.Input(ui.TextArea(c, &f.value)).Height(100).MinHeight(100)
+							} else {
+								input = kit.Input(ui.TextInput(c, &f.value))
+							}
+							input.Label(f.label).Disabled(a.pending != 0 || e.uncertain)
+							if f.secret {
+								input.Password()
+							}
+						})
 					}
 				})
-			}
-			if e.fields.Type == 1 {
-				if e.fields.ID != "" {
+				if e.fields.Type == 1 {
+					if e.fields.ID != "" {
+						ui.Row(c).Gap(8).Wrap().Children(func() {
+							if kit.Button(c, i18n.T("vault.editor.show_saved_password"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+								a.showPersonalSecret("password", callStorage)
+							}
+							if kit.Button(c, i18n.T("vault.editor.show_current_code"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+								a.showPersonalSecret("totp", callStorage)
+							}
+							if kit.Button(c, i18n.T("vault.editor.copy_saved_password"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+								a.copyPersonalSecret("password", callStorage)
+							}
+							if kit.Button(c, i18n.T("vault.editor.copy_current_code"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+								a.copyPersonalSecret("totp", callStorage)
+							}
+						})
+						if e.shownSecret != "" {
+							ui.Text(c, e.shownSecret).FontSize(20)
+							if kit.Action(c, i18n.T("common.hide"), "", false, false).AlignSelf(ui.Start).Clicked() {
+								e.shownSecret = ""
+							}
+						}
+						kit.Notice(c, kit.ToneInfo, i18n.T("vault.editor.secret_display_hint"))
+					}
+					kit.Section(c, i18n.T("vault.field.website"), func() {
+						remove := -1
+						for i := range e.uris {
+							uri := &e.uris[i]
+							ui.Row(c.Key(fmt.Sprintf("uri-%d", i))).Gap(8).Children(func() {
+								kit.Field(c, i18n.Tf("vault.editor.website_number", i+1), "", func() {
+									kit.Input(ui.TextInput(c, &uri.value).Label(i18n.Tf("vault.editor.website_number", i+1)).Disabled(a.pending != 0 || e.uncertain))
+								}).Grow(1)
+								if kit.Button(c, i18n.T("vault.editor.remove"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
+									remove = i
+								}
+							})
+							a.uriMatchPicker(c, uri, a.pending != 0 || e.uncertain)
+						}
+						if remove >= 0 {
+							e.uris = append(e.uris[:remove], e.uris[remove+1:]...)
+						}
+						if kit.Button(c, i18n.T("vault.editor.add_website"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain || len(e.uris) >= 128).AlignSelf(ui.Start).Clicked() {
+							e.uris = append(e.uris, editorURI{source: map[string]any{"match": nil}})
+						}
+					})
+				}
+				kit.Section(c, i18n.T("vault.field.custom"), func() {
+					removeCustom := -1
+					for i := range e.custom {
+						field := &e.custom[i]
+						ui.Column(c.Key(fmt.Sprintf("custom-%d", i))).Gap(6).Children(func() {
+							kit.Field(c, i18n.T("vault.field.custom_name"), "", func() {
+								kit.Input(ui.TextInput(c, &field.name).Label(i18n.T("vault.field.custom_name")).Disabled(a.pending != 0 || e.uncertain || !field.editable))
+							})
+							a.customValueEditor(c, e, field)
+							if kit.Button(c, i18n.T("vault.editor.delete_field"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).AlignSelf(ui.Start).Clicked() {
+								removeCustom = i
+							}
+						})
+					}
+					if removeCustom >= 0 {
+						e.custom = append(e.custom[:removeCustom], e.custom[removeCustom+1:]...)
+					}
 					ui.Row(c).Gap(8).Children(func() {
-						if kit.Action(c, i18n.T("vault.editor.show_saved_password"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-							a.showPersonalSecret("password", callStorage)
+						if kit.Action(c, i18n.T("vault.editor.add_text_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+							e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("0")}, editable: true, kind: "0"})
 						}
-						if kit.Action(c, i18n.T("vault.editor.show_current_code"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-							a.showPersonalSecret("totp", callStorage)
-						}
-						if kit.Action(c, i18n.T("vault.editor.copy_saved_password"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-							a.copyPersonalSecret("password", callStorage)
-						}
-						if kit.Action(c, i18n.T("vault.editor.copy_current_code"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-							a.copyPersonalSecret("totp", callStorage)
+						if kit.Action(c, i18n.T("vault.editor.add_hidden_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+							e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("1")}, hidden: true, editable: true, kind: "1"})
 						}
 					})
-					if e.shownSecret != "" {
-						ui.Text(c, e.shownSecret).FontSize(20)
-						if kit.Action(c, i18n.T("common.hide"), "", false, false).Clicked() {
-							e.shownSecret = ""
+					ui.Row(c).Gap(8).Children(func() {
+						if kit.Action(c, i18n.T("vault.editor.add_boolean_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+							e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("2")}, value: "false", editable: true, kind: "2"})
 						}
-					}
-					ui.Text(c, i18n.T("vault.editor.secret_display_hint")).FontSize(12)
-				}
-				ui.Text(c, i18n.T("vault.field.website")).FontSize(12)
-				remove := -1
-				for i := range e.uris {
-					uri := &e.uris[i]
-					ui.Row(c.Key(fmt.Sprintf("uri-%d", i))).Gap(8).Children(func() {
-						ui.TextInput(c, &uri.value).Label(i18n.Tf("vault.editor.website_number", i+1)).Grow(1).Disabled(a.pending != 0 || e.uncertain)
-						if kit.Action(c, i18n.T("vault.editor.remove"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-							remove = i
+						if len(linkedFields[e.fields.Type]) > 0 && kit.Action(c, i18n.T("vault.editor.add_linked_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+							e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("3")}, editable: true, kind: "3", linkedID: linkedFields[e.fields.Type][0].id})
 						}
 					})
-					a.uriMatchPicker(c, uri, a.pending != 0 || e.uncertain)
-				}
-				if remove >= 0 {
-					e.uris = append(e.uris[:remove], e.uris[remove+1:]...)
-				}
-				if kit.Action(c, i18n.T("vault.editor.add_website"), "", false, a.pending != 0 || e.uncertain || len(e.uris) >= 128).Clicked() {
-					e.uris = append(e.uris, editorURI{source: map[string]any{"match": nil}})
-				}
-			}
-			a.folderPicker(c, &e.fields.FolderID, a.pending != 0 || e.uncertain)
-			favorite := i18n.T("vault.editor.add_favorite")
-			if e.fields.Favorite {
-				favorite = i18n.T("vault.editor.remove_favorite")
-			}
-			if kit.Action(c, favorite, "star", false, a.pending != 0 || e.uncertain).Clicked() {
-				e.fields.Favorite = !e.fields.Favorite
-			}
-			ui.Text(c, i18n.T("vault.field.custom")).FontSize(12)
-			removeCustom := -1
-			for i := range e.custom {
-				field := &e.custom[i]
-				ui.Column(c.Key(fmt.Sprintf("custom-%d", i))).Gap(6).Children(func() {
-					ui.TextInput(c, &field.name).Label(i18n.T("vault.field.custom_name")).Disabled(a.pending != 0 || e.uncertain || !field.editable)
-					a.customValueEditor(c, e, field)
-					if kit.Action(c, i18n.T("vault.editor.delete_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-						removeCustom = i
-					}
 				})
-			}
-			if removeCustom >= 0 {
-				e.custom = append(e.custom[:removeCustom], e.custom[removeCustom+1:]...)
-			}
-			ui.Row(c).Gap(8).Children(func() {
-				if kit.Action(c, i18n.T("vault.editor.add_text_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("0")}, editable: true, kind: "0"})
+				a.passwordHistoryView(c, e)
+				a.attachmentView(c, e)
+				a.cipherAttachmentMigrationView(c, e)
+				kit.Section(c, i18n.T("common.notes"), func() {
+					kit.Field(c, "", "", func() {
+						kit.Input(ui.TextArea(c, &e.notes).Label(i18n.T("common.notes")).Disabled(a.pending != 0 || e.uncertain)).Height(100).MinHeight(100)
+					})
+				})
+				if e.uncertain {
+					kit.Notice(c, kit.ToneWarning, i18n.T("vault.editor.uncertain_hint"))
 				}
-				if kit.Action(c, i18n.T("vault.editor.add_hidden_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("1")}, hidden: true, editable: true, kind: "1"})
+				if e.fields.OrganizationID == nil && e.fields.ID != "" && (e.conflict || e.uncertain || e.revision != a.sessionRevision) {
+					kit.Notice(c, kit.ToneWarning, i18n.T("vault.compare.draft_preserved_hint"))
+					if kit.Action(c, i18n.T("vault.editor.sync_latest"), "sync", false, a.pending != 0).AlignSelf(ui.Start).Clicked() {
+						a.syncVault(false)
+					}
+					if kit.Action(c, i18n.T("vault.compare.title"), "", false, a.pending != 0 || e.revision == a.sessionRevision).AlignSelf(ui.Start).Clicked() {
+						a.compareCipher(nil)
+					}
 				}
-			})
-			ui.Row(c).Gap(8).Children(func() {
-				if kit.Action(c, i18n.T("vault.editor.add_boolean_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("2")}, value: "false", editable: true, kind: "2"})
-				}
-				if len(linkedFields[e.fields.Type]) > 0 && kit.Action(c, i18n.T("vault.editor.add_linked_field"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-					e.custom = append(e.custom, editorCustom{source: map[string]any{"type": json.Number("3")}, editable: true, kind: "3", linkedID: linkedFields[e.fields.Type][0].id})
-				}
-			})
-			a.passwordHistoryView(c, e)
-			a.attachmentView(c, e)
-			a.cipherAttachmentMigrationView(c, e)
-			ui.Text(c, i18n.T("common.notes")).FontSize(12)
-			ui.TextArea(c, &e.notes).Label(i18n.T("common.notes")).MinHeight(100).Disabled(a.pending != 0 || e.uncertain)
-			if e.uncertain {
-				ui.Text(c, i18n.T("vault.editor.uncertain_hint")).FontSize(12).TextColor(kit.Purple)
-			}
-			if e.fields.OrganizationID == nil && e.fields.ID != "" && (e.conflict || e.uncertain || e.revision != a.sessionRevision) {
-				ui.Text(c, i18n.T("vault.compare.draft_preserved_hint"))
-				if kit.Action(c, i18n.T("vault.editor.sync_latest"), "sync", false, a.pending != 0).Clicked() {
-					a.syncVault(false)
-				}
-				if kit.Action(c, i18n.T("vault.compare.title"), "", false, a.pending != 0 || e.revision == a.sessionRevision).Clicked() {
-					a.compareCipher(nil)
-				}
-			}
-			ui.Row(c).Gap(8).Children(func() {
-				if kit.Action(c, i18n.T("common.save"), "sync", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
-					a.saveCipher()
-				}
-				if kit.Action(c, i18n.T("common.cancel"), "", false, a.pending != 0).Clicked() {
-					a.editor = nil
-				}
-				if e.uncertain && kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
-					a.syncVault(false)
+
+				if e.fields.ID != "" && e.fields.OrganizationID == nil {
+					if organizationUIEnabled && vaultwarden.CipherShareRequiresRecovery(e.document) {
+						ui.Text(c, i18n.T("vault.share_recovery.legacy_attachment_hint"))
+					}
+					if organizationUIEnabled {
+						a.organizationShareView(c, e)
+					}
+					a.cipherStateButtons(c, e)
 				}
 			})
-			if e.fields.ID != "" && e.fields.OrganizationID == nil {
-				if organizationUIEnabled && vaultwarden.CipherShareRequiresRecovery(e.document) {
-					ui.Text(c, i18n.T("vault.share_recovery.legacy_attachment_hint"))
-				}
-				if organizationUIEnabled {
-					a.organizationShareView(c, e)
-				}
-				a.cipherStateButtons(c, e)
+		})
+		kit.ActionBar(c, func() {
+			ui.Text(c, a.status).FontSize(11).TextColor(kit.Muted).MaxLines(2).Shrink(1).MinWidth(0)
+			ui.Spacer(c)
+			if e.uncertain && kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
+				a.syncVault(false)
+			}
+			if kit.Action(c, i18n.T("common.cancel"), "", false, a.pending != 0).Clicked() {
+				a.editor = nil
+			}
+			if kit.Action(c, i18n.T("common.save"), "", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
+				a.saveCipher()
 			}
 		})
 	})
@@ -608,9 +622,13 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 		if e.confirm == copyCipherAction {
 			text = i18n.T("vault.copy.confirm_copy")
 		}
-		ui.Text(c, text).TextColor(kit.Purple)
+		kit.Notice(c, kit.ToneWarning, text)
 		ui.Row(c).Gap(8).Children(func() {
-			if kit.Action(c, i18n.T("common.confirm"), "", true, a.pending != 0 || e.uncertain).Clicked() {
+			kind := kit.ButtonDanger
+			if e.confirm == copyCipherAction {
+				kind = kit.ButtonPrimary
+			}
+			if kit.Button(c, i18n.T("common.confirm"), "", kind, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(e.confirm)
 			}
 			if kit.Action(c, i18n.T("vault.editor.cancel_operation"), "", false, a.pending != 0).Clicked() {
@@ -627,7 +645,7 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 			if kit.Action(c, i18n.T("common.restore"), "", false, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(vaultwarden.CipherRestore)
 			}
-			if kit.Action(c, i18n.T("common.delete_permanently"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Button(c, i18n.T("common.delete_permanently"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = vaultwarden.CipherDeletePermanently
 			}
 		} else {
@@ -638,7 +656,7 @@ func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
 			if kit.Action(c, label, "", false, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(op)
 			}
-			if kit.Action(c, i18n.T("vault.editor.move_to_trash"), "", false, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Button(c, i18n.T("vault.editor.move_to_trash"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
 				e.confirm = vaultwarden.CipherTrash
 			}
 		}
