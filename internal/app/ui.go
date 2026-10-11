@@ -208,9 +208,7 @@ func (a *app) body(c *ui.Context) {
 		a.reconcileSelection(items)
 		a.credentialList(c, items)
 		ui.Column(c.Key("detail-pane")).Grow(1).MinWidth(0).Gap(16).Children(func() {
-			if a.backupEditor != nil {
-				a.backupEditorView(c)
-			} else if a.bulkEditor != nil {
+			if a.bulkEditor != nil {
 				a.bulkEditorView(c)
 			} else if a.organizationEditor != nil {
 				a.organizationEditorView(c)

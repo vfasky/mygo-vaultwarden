@@ -59,6 +59,10 @@ func (a *app) clearBackupEditor() {
 	}
 }
 func (a *app) openBackupEditor() {
+	if a.backupEditor != nil {
+		a.showBackupWindow()
+		return
+	}
 	if a.pending != 0 || !a.sessionOwnsSnapshot() || a.vault == nil || a.editor != nil || a.organizationEditor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil {
 		return
 	}
@@ -74,6 +78,7 @@ func (a *app) openBackupEditor() {
 		}
 	}
 	a.backupEditor = e
+	a.showBackupWindow()
 }
 func (a *app) backupEditorView(c *ui.Context) {
 	e := a.backupEditor
@@ -216,7 +221,7 @@ func (a *app) chooseImportFile() {
 	a.cancel = cancel
 	a.pending++
 	format, scope, revision := e.format, *a.liveScope, e.revision
-	parent := a.mainWindow
+	parent := a.backupParent()
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
 		var plan *vaultwarden.ImportPlan
@@ -291,7 +296,7 @@ func (a *app) chooseExportFile() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
-	format, scope, revision, vault, parent := e.format, *a.liveScope, e.revision, a.vault, a.mainWindow
+	format, scope, revision, vault, parent := e.format, *a.liveScope, e.revision, a.vault, a.backupParent()
 	go func() {
 		defer clear(password)
 		// Preflight before showing Save or touching any target file.

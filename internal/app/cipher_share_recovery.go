@@ -83,7 +83,7 @@ func (a *app) chooseCipherShareRecovery() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
-	parent := a.mainWindow
+	parent := a.backupParent()
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
 		var data []byte

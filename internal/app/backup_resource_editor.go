@@ -60,7 +60,7 @@ func (a *app) chooseResourceImportFile() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++
-	scope, revision, parent := *a.liveScope, e.revision, a.mainWindow
+	scope, revision, parent := *a.liveScope, e.revision, a.backupParent()
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(vaultwarden.MyGoResources)}})
 		var resources *vaultwarden.ResourceImportPlan
@@ -131,7 +131,7 @@ func (a *app) chooseResourceExportFile() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	a.cancel = cancel
 	a.pending++
-	scope, revision, vault, parent, prior := *a.liveScope, e.revision, a.vault, a.mainWindow, a.snapshot
+	scope, revision, vault, parent, prior := *a.liveScope, e.revision, a.vault, a.backupParent(), a.snapshot
 	go func() {
 		defer clear(password)
 		var checkpoint *localstore.SnapshotStatus
