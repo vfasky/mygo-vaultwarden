@@ -6,7 +6,7 @@
 
 - 顶部 `kit.PageHeader(c, 标题, 副标题, trailing)`：副标题一两句，说明这页做什么；模式切换等放在 trailing。
 - 中间按任务分组：表单用 `kit.Section`，只读信息用 `kit.DetailCard` + `kit.DetailField`。
-- 窗口底部用 `kit.ActionBar`：左侧放状态文字或已选数量，`ui.Spacer` 后依次放次要按钮、主按钮。编辑器在主窗口详情区时，页尾操作行同样右对齐。
+- 窗口底部用 `kit.ActionBar`：左侧放状态文字或已选数量，`ui.Spacer` 后依次放次要按钮、主按钮。主窗口的编辑器显示在右侧抽屉（`editor_drawer.go`）中，页尾操作行同样右对齐；新的主窗口编辑器也放进抽屉，不要占用详情区。
 - 页面内边距 20–24，分组之间 16，控件之间 8–12。
 
 ## 按钮

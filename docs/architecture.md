@@ -62,7 +62,7 @@ internal/passwordstrength → third_party/zxcvbn
 
 | 窗口 | 文件 | 内容 |
 |---|---|---|
-| 主窗口 | `ui.go`、`ui_auth.go` | 锁定时只显示登录/解锁；解锁后是侧栏、列表、详情与编辑器。关闭时隐藏，Dock 图标恢复 |
+| 主窗口 | `ui.go`、`ui_auth.go`、`editor_drawer.go` | 锁定时只显示登录/解锁；解锁后是侧栏、列表与详情。条目、文件夹、批量管理等编辑器从右侧抽屉滑入，背后变暗且不可操作；Esc 等同编辑器自己的取消，点遮罩不关闭，抽屉没有滑出动画（不在关闭或锁定后残留画面）。关闭时隐藏，Dock 图标恢复 |
 | 设置 | `window_settings.go` | 账号、存储与自动填充、更新、关于；账号与存储标签在锁定时只显示占位 |
 | 账号中心 | `window_account.go` | Send、设备与登录审批、账号与安全、两步验证、紧急访问 |
 | 更新 | MyGo `plugins/updater/native` | 由 `updates.go` 接入，见 [自动更新](updates.md) |

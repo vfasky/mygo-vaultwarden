@@ -200,6 +200,7 @@ func (a *app) view(c *ui.Context) {
 			ui.Column(c).Grow(1).MinHeight(0).Padding(0, 20, 18, 20).Gap(16).Children(func() { a.body(c) })
 		})
 	})
+	a.editorDrawer(c)
 }
 
 func (a *app) body(c *ui.Context) {
@@ -208,15 +209,8 @@ func (a *app) body(c *ui.Context) {
 		a.reconcileSelection(items)
 		a.credentialList(c, items)
 		ui.Column(c.Key("detail-pane")).Grow(1).MinWidth(0).Gap(16).Children(func() {
-			if a.bulkEditor != nil {
-				a.bulkEditorView(c)
-			} else if a.organizationEditor != nil {
-				a.organizationEditorView(c)
-			} else if a.folderEditor != nil {
-				a.folderEditorView(c)
-			} else if a.editor != nil {
-				a.cipherEditorView(c)
-			} else if a.selectedRow >= 0 && a.selectedRow < len(items) {
+			// Editors open in the drawer (editor_drawer.go), over this pane.
+			if a.selectedRow >= 0 && a.selectedRow < len(items) {
 				a.credentialDetail(c, items[a.selectedRow])
 			} else {
 				a.emptyDetail(c)
