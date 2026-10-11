@@ -174,56 +174,67 @@ func (v *EmergencyViewer) View(c *ui.Context) {
 	if v.closed {
 		return
 	}
-	ui.Text(c, i18n.T("account.emergency.view_title")).FontSize(22)
-	ui.Text(c, v.contact.Name+" · "+v.contact.Email)
-	ui.Text(c, i18n.T("account.emergency.view_hint"))
-	if kit.Action(c, i18n.T("account.emergency.confirm_view"), "", true, v.running || v.terminal || !vaultwarden.EmergencyActionAllowed(v.contact, false, "view")).Key("emergency-view-consent").Clicked() {
-		v.load()
-	}
-	for i, row := range v.rows {
-		if kit.Action(c, row.Name, "", v.selected == i, false).Key("emergency-view-item-" + row.ID).Clicked() {
-			v.selected = i
-			v.revealed = false
-		}
-	}
-	if v.selected >= 0 && v.selected < len(v.rows) {
-		if kit.Action(c, i18n.T("account.emergency.toggle_sensitive_data"), "", v.revealed, false).Key("emergency-view-reveal").Clicked() {
-			v.revealed = !v.revealed
-		}
-		if v.revealed {
-			row := v.rows[v.selected]
-			if row.Notes != nil {
-				ui.Text(c, i18n.Tf("account.emergency.notes_value", *row.Notes))
+	ui.Column(c).Gap(16).Children(func() {
+		kit.Section(c, i18n.T("account.emergency.view_title"), func() {
+			ui.Text(c, v.contact.Name+" · "+v.contact.Email)
+			kit.Notice(c, kit.ToneWarning, i18n.T("account.emergency.view_hint"))
+			if accountButton(c, i18n.T("account.emergency.confirm_view"), kit.ButtonPrimary).Disabled(v.running || v.terminal || !vaultwarden.EmergencyActionAllowed(v.contact, false, "view")).Key("emergency-view-consent").Clicked() {
+				v.load()
 			}
-			for _, section := range []struct {
-				title  string
-				fields map[string]any
-			}{
-				{i18n.T("itemtype.login"), row.Login},
-				{i18n.T("account.emergency.card"), row.Card},
-				{i18n.T("itemtype.identity"), row.Identity},
-				{i18n.T("itemtype.ssh_key"), row.SSHKey},
-				{i18n.T("itemtype.bank"), row.BankAccount},
-				{i18n.T("itemtype.license"), row.DriversLicense},
-				{i18n.T("itemtype.passport"), row.Passport},
-			} {
-				if len(section.fields) == 0 {
-					continue
+			if v.terminal && len(v.rows) == 0 {
+				kit.EmptyState(c, "vault", i18n.T("account.emergency.empty_items"), "")
+			}
+			for i, row := range v.rows {
+				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+					kit.Icon(c, "vault", 18).TextColor(kit.Purple)
+					ui.Text(c, row.Name).Grow(1).MinWidth(0).SingleLine()
+					if kit.Button(c, i18n.T("account.emergency.select_item"), "", kit.ButtonQuiet, false).Key("emergency-view-item-" + row.ID).Clicked() {
+						v.selected = i
+						v.revealed = false
+					}
+				})
+			}
+			if v.selected >= 0 && v.selected < len(v.rows) {
+				if accountButton(c, i18n.T("account.emergency.toggle_sensitive_data"), kit.ButtonQuiet).Key("emergency-view-reveal").Clicked() {
+					v.revealed = !v.revealed
 				}
-				ui.Text(c, section.title)
-				for _, line := range emergencyDisplayFields(section.fields) {
-					ui.Text(c, line)
+				if v.revealed {
+					row := v.rows[v.selected]
+					if row.Notes != nil {
+						ui.Text(c, i18n.Tf("account.emergency.notes_value", *row.Notes))
+					}
+					for _, section := range []struct {
+						title  string
+						fields map[string]any
+					}{
+						{i18n.T("itemtype.login"), row.Login},
+						{i18n.T("account.emergency.card"), row.Card},
+						{i18n.T("itemtype.identity"), row.Identity},
+						{i18n.T("itemtype.ssh_key"), row.SSHKey},
+						{i18n.T("itemtype.bank"), row.BankAccount},
+						{i18n.T("itemtype.license"), row.DriversLicense},
+						{i18n.T("itemtype.passport"), row.Passport},
+					} {
+						if len(section.fields) == 0 {
+							continue
+						}
+						kit.Section(c, section.title, func() {
+							for _, line := range emergencyDisplayFields(section.fields) {
+								ui.Text(c, line)
+							}
+						})
+					}
+					for _, field := range row.Fields {
+						ui.Text(c, fmt.Sprint(field["name"])+"："+fmt.Sprint(field["value"]))
+					}
 				}
 			}
-			for _, field := range row.Fields {
-				ui.Text(c, fmt.Sprint(field["name"])+"："+fmt.Sprint(field["value"]))
+			if v.running && accountButton(c, i18n.T("account.emergency.cancel_view"), kit.ButtonSecondary).Key("emergency-view-cancel").Clicked() {
+				v.cancelLoad()
 			}
+		})
+		if v.status != "" {
+			kit.ActionBar(c, func() { ui.Text(c, v.status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0) })
 		}
-	}
-	if v.running && kit.Action(c, i18n.T("account.emergency.cancel_view"), "", false, false).Key("emergency-view-cancel").Clicked() {
-		v.cancelLoad()
-	}
-	if v.status != "" {
-		ui.Text(c, v.status)
-	}
+	})
 }

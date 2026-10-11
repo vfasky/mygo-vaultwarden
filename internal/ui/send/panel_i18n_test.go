@@ -15,7 +15,7 @@ func TestSendEnglishViewAndDefaultFilename(t *testing.T) {
 	panel := NewPanel(nil, nil, nil, vaultwarden.Scope{}, Host{Dispatch: func(f func()) { f() }, Check: func() error { return nil }})
 	defer panel.Close()
 	tester := ui.NewTester(panel.View, 1200, 800)
-	if !tester.HasText("Send secure sharing") {
+	if !tester.HasText("My Sends") {
 		t.Fatal("Send title was not translated")
 	}
 	if _, ok := tester.Find("Received Send link"); !ok {

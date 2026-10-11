@@ -11,6 +11,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -40,6 +41,7 @@ type Panel struct {
 	generation                                                              uint64
 	Closed, Busy, Uncertain, confirmDelete, showText                        bool
 	Status, Link, Password, ReceivePassword, Deletion, expiration, maxCount string
+	newKind                                                                 int
 	Rows                                                                    []*vaultwarden.SendDraft
 	Draft                                                                   *vaultwarden.SendDraft
 	Receiver                                                                *vaultwarden.SendReceiver
@@ -398,90 +400,125 @@ func (p *Panel) saveReceived() {
 	})
 }
 func (p *Panel) View(c *ui.Context) {
-	ui.Scroll(c).Children(func() {
-		ui.Column(c.Key("send-panel")).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("send.panel.title")).FontSize(23)
-			if p.Closed {
-				ui.Text(c, i18n.T("send.panel.status_closed"))
-				return
-			}
-			disabled := p.Busy || p.Uncertain
-			button := func(label string, off bool, f func()) {
-				if ui.Button(c, label).Disabled(off).Clicked() {
+	ui.Column(c.Key("send-panel")).Gap(16).Children(func() {
+		if p.Closed {
+			kit.Notice(c, kit.ToneInfo, i18n.T("send.panel.status_closed"))
+			return
+		}
+		disabled := p.Busy || p.Uncertain
+		button := func(label string, kind kit.ButtonKind, off bool, f func()) {
+			ui.Row(c).Children(func() {
+				if kit.Button(c, label, "", kind, off).Clicked() {
 					f()
 				}
-			}
-			ui.Row(c).Gap(8).Children(func() {
-				button(i18n.T("send.panel.refresh"), p.Busy || p.session == nil, p.Refresh)
-				button(i18n.T("send.panel.offline_list"), p.Busy || p.session == nil, p.Offline)
-				button(i18n.T("send.editor.new_text"), p.Busy || p.session == nil, func() { p.New(0) })
-				button(i18n.T("send.editor.new_file"), p.Busy || p.session == nil, func() { p.New(1) })
 			})
-			if p.Status != "" {
-				ui.Text(c, p.Status).MaxLines(4)
+		}
+		ui.Row(c).Gap(8).Wrap().Children(func() {
+			button(i18n.T("send.panel.refresh"), kit.ButtonSecondary, p.Busy || p.session == nil, p.Refresh)
+			button(i18n.T("send.panel.offline_list"), kit.ButtonSecondary, p.Busy || p.session == nil, p.Offline)
+			ui.Spacer(c)
+			kit.Segmented(c.Key("send-new-kind"), &p.newKind, i18n.T("send.editor.text_type"), i18n.T("send.editor.file_type")).Width(160).Shrink(0).Disabled(p.Busy || p.session == nil)
+			label := i18n.T("send.editor.new_text")
+			if p.newKind == 1 {
+				label = i18n.T("send.editor.new_file")
 			}
-			if p.Busy {
-				ui.Text(c, i18n.T("send.panel.status_processing"))
-			}
-			if p.Uncertain {
-				ui.Text(c, i18n.T("send.panel.status_uncertain"))
-			}
-			for i, d := range p.Rows {
-				index := i
-				button(i18n.Tf("send.panel.row_access_count", d.Fields.Name, d.AccessCount()), p.Busy, func() { p.openRow(index) })
-			}
-			if p.Draft != nil {
-				ui.TextInput(c, &p.Fields.Name).Label(i18n.T("common.name")).Disabled(disabled)
+			button(label, kit.ButtonPrimary, p.Busy || p.session == nil, func() { p.New(p.newKind) })
+		})
+		if p.Busy {
+			kit.Notice(c, kit.ToneInfo, i18n.T("send.panel.status_processing"))
+		}
+		if p.Uncertain {
+			kit.Notice(c, kit.ToneWarning, i18n.T("send.panel.status_uncertain"))
+		}
+		if p.Draft == nil && p.Receiver == nil {
+			kit.Section(c, i18n.T("send.panel.list_title"), func() {
+				if len(p.Rows) == 0 {
+					kit.EmptyState(c, "inbox", i18n.T("send.panel.empty_title"), i18n.T("send.panel.empty_hint"))
+				}
+				for i, d := range p.Rows {
+					index := i
+					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+						kit.Icon(c, "note", 20).TextColor(kit.Purple)
+						ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+							ui.Text(c, d.Fields.Name).FontWeight(600).SingleLine()
+							ui.Text(c, i18n.Tf("send.editor.access_count", d.AccessCount())).FontSize(12).TextColor(kit.Muted)
+						})
+						if d.Fields.Disabled {
+							kit.Pill(c, i18n.T("send.panel.disabled"), kit.Panel, kit.Muted)
+						} else {
+							kit.Pill(c, i18n.T("send.panel.enabled"), kit.Selected, kit.Purple)
+						}
+						button(i18n.T("send.panel.open"), kit.ButtonQuiet, p.Busy, func() { p.openRow(index) })
+					})
+				}
+			})
+		}
+		if p.Draft != nil {
+			kit.Section(c, i18n.T("send.editor.content_title"), func() {
+				sendInput(c, &p.Fields.Name, i18n.T("common.name")).Disabled(disabled)
 				if p.Fields.Type == 0 {
-					ui.TextArea(c, &p.Fields.Text).Label(i18n.T("send.editor.shared_text")).MinHeight(110).Disabled(disabled)
-					button(i18n.Tf("send.editor.hidden_text", p.Fields.Hidden), disabled, func() { p.Fields.Hidden = !p.Fields.Hidden })
+					kit.Field(c, i18n.T("send.editor.shared_text"), "", func() {
+						kit.Input(ui.TextArea(c, &p.Fields.Text).Label(i18n.T("send.editor.shared_text"))).Height(110).Disabled(disabled)
+					})
+					kit.Checkbox(c, &p.Fields.Hidden, i18n.T("send.editor.hidden_text"), disabled)
 				} else {
-					ui.Text(c, i18n.T("send.file.edit_hint"))
+					kit.Notice(c, kit.ToneInfo, i18n.T("send.file.edit_hint"))
 					if p.Fields.FileName != "" {
 						ui.Text(c, p.Fields.FileName)
 					}
 				}
-				ui.TextArea(c, &p.Fields.Notes).Label(i18n.T("send.editor.private_notes")).MinHeight(70).Disabled(disabled)
-				ui.TextInput(c, &p.Deletion).Label(i18n.T("send.editor.deletion_date")).Disabled(disabled)
-				ui.TextInput(c, &p.expiration).Label(i18n.T("send.editor.expiration_date")).Disabled(disabled)
-				ui.TextInput(c, &p.maxCount).Label(i18n.T("send.editor.max_access_count")).Disabled(disabled)
-				ui.TextInput(c, &p.Password).Label(i18n.T("send.editor.password")).Password().Disabled(disabled)
-				button(i18n.Tf("send.editor.disabled", p.Fields.Disabled), disabled, func() { p.Fields.Disabled = !p.Fields.Disabled })
-				button(i18n.Tf("send.editor.hide_email", p.Fields.HideEmail), disabled, func() { p.Fields.HideEmail = !p.Fields.HideEmail })
-				ui.Text(c, i18n.T("send.editor.email_verification_hint"))
-				button(i18n.T("send.editor.save"), disabled, p.Save)
-				if p.Draft.ID() != "" {
-					ui.Text(c, i18n.Tf("send.editor.access_count", p.Draft.AccessCount()))
-					button(i18n.T("send.editor.copy_link"), disabled || p.Host.Copy == nil, func() {
-						if e := p.Host.Check(); e != nil {
-							p.Status = vaultwarden.ErrorMessage(e)
-							return
-						}
-						link, e := p.Draft.ShareLink()
-						if e == nil {
-							e = p.Host.Copy(link)
-						}
-						if e != nil {
-							p.Status = vaultwarden.ErrorMessage(e)
-						} else {
-							p.Status = i18n.T("send.editor.status_link_copied")
-						}
-					})
-					if p.Draft.HasPassword() {
-						button(i18n.T("send.editor.remove_password"), disabled, func() { p.change(false) })
+				kit.Field(c, i18n.T("send.editor.private_notes"), "", func() {
+					kit.Input(ui.TextArea(c, &p.Fields.Notes).Label(i18n.T("send.editor.private_notes"))).Height(70).Disabled(disabled)
+				})
+			})
+			kit.Section(c, i18n.T("send.editor.access_title"), func() {
+				sendInput(c, &p.Deletion, i18n.T("send.editor.deletion_date"), i18n.T("send.editor.deletion_date_hint")).Disabled(disabled)
+				sendInput(c, &p.expiration, i18n.T("send.editor.expiration_date"), i18n.T("send.editor.expiration_date_hint")).Disabled(disabled)
+				sendInput(c, &p.maxCount, i18n.T("send.editor.max_access_count"), i18n.T("send.editor.max_access_count_hint")).Disabled(disabled)
+				sendInput(c, &p.Password, i18n.T("send.editor.password"), i18n.T("send.editor.password_hint")).Password().Disabled(disabled)
+				kit.Checkbox(c, &p.Fields.Disabled, i18n.T("send.editor.disabled"), disabled)
+				kit.Checkbox(c, &p.Fields.HideEmail, i18n.T("send.editor.hide_email"), disabled)
+				kit.Notice(c, kit.ToneInfo, i18n.T("send.editor.email_verification_hint"))
+			})
+			kit.ActionBar(c, func() {
+				ui.Spacer(c)
+				button(i18n.T("send.editor.save"), kit.ButtonPrimary, disabled, p.Save)
+			})
+			if p.Draft.ID() != "" {
+				ui.Text(c, i18n.Tf("send.editor.access_count", p.Draft.AccessCount()))
+				button(i18n.T("send.editor.copy_link"), kit.ButtonQuiet, disabled || p.Host.Copy == nil, func() {
+					if e := p.Host.Check(); e != nil {
+						p.Status = vaultwarden.ErrorMessage(e)
+						return
 					}
-					if !p.confirmDelete {
-						button(i18n.T("send.editor.delete"), disabled, func() { p.confirmDelete = true })
+					link, e := p.Draft.ShareLink()
+					if e == nil {
+						e = p.Host.Copy(link)
+					}
+					if e != nil {
+						p.Status = vaultwarden.ErrorMessage(e)
 					} else {
-						ui.Text(c, i18n.T("send.editor.confirm_delete_hint"))
-						button(i18n.T("send.editor.confirm_delete"), disabled, func() { p.change(true) })
-						button(i18n.T("send.editor.cancel_delete"), p.Busy, func() { p.confirmDelete = false })
+						p.Status = i18n.T("send.editor.status_link_copied")
 					}
+				})
+				if p.Draft.HasPassword() {
+					button(i18n.T("send.editor.remove_password"), kit.ButtonDanger, disabled, func() { p.change(false) })
+				}
+				if !p.confirmDelete {
+					button(i18n.T("send.editor.delete"), kit.ButtonDanger, disabled, func() { p.confirmDelete = true })
+				} else {
+					kit.Notice(c, kit.ToneWarning, i18n.T("send.editor.confirm_delete_hint"))
+					button(i18n.T("send.editor.confirm_delete"), kit.ButtonDanger, disabled, func() { p.change(true) })
+					button(i18n.T("send.editor.cancel_delete"), kit.ButtonSecondary, p.Busy, func() { p.confirmDelete = false })
 				}
 			}
-			ui.TextInput(c, &p.Link).Label(i18n.T("send.receive.link")).Password().Disabled(p.Busy)
-			ui.TextInput(c, &p.ReceivePassword).Label(i18n.T("send.receive.password")).Password().Disabled(p.Busy)
-			button(i18n.T("send.receive.open_link"), p.Busy || p.Link == "", p.Receive)
+		}
+		kit.Section(c, i18n.T("send.receive.title"), func() {
+			sendInput(c, &p.Link, i18n.T("send.receive.link")).Password().Disabled(p.Busy)
+			sendInput(c, &p.ReceivePassword, i18n.T("send.receive.password")).Password().Disabled(p.Busy)
+			ui.Row(c).Children(func() {
+				button(i18n.T("send.receive.open_link"), kit.ButtonSecondary, p.Busy || p.Link == "", p.Receive)
+			})
 			if p.Receiver != nil {
 				ui.Text(c, p.Fields.Name)
 				if p.Fields.CreatorIdentifier != "" {
@@ -489,16 +526,29 @@ func (p *Panel) View(c *ui.Context) {
 				}
 				if p.Fields.Type == 0 {
 					if p.Fields.Hidden && !p.showText {
-						button(i18n.T("send.receive.show_text"), false, func() { p.showText = true })
+						button(i18n.T("send.receive.show_text"), kit.ButtonQuiet, false, func() { p.showText = true })
 					} else {
 						ui.Text(c, p.Fields.Text).MaxLines(30)
 					}
 				} else {
 					ui.Text(c, p.Fields.FileName)
-					button(i18n.T("send.receive.save_file"), p.Busy, p.saveReceived)
+					button(i18n.T("send.receive.save_file"), kit.ButtonPrimary, p.Busy, p.saveReceived)
 				}
 			}
-			button(i18n.T("send.panel.close"), false, p.Close)
+		})
+		kit.ActionBar(c, func() {
+			ui.Text(c, p.Status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0)
+			button(i18n.T("send.panel.close"), kit.ButtonSecondary, false, p.Close)
 		})
 	})
+}
+
+func sendInput(c *ui.Context, value *string, label string, hints ...string) ui.Element {
+	var input ui.Element
+	hint := ""
+	if len(hints) != 0 {
+		hint = hints[0]
+	}
+	kit.Field(c, label, hint, func() { input = kit.Input(ui.TextInput(c, value).Label(label)) })
+	return input
 }
