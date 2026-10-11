@@ -6,5 +6,9 @@
   "out": "build/mygo",
   "macos": {
     "minimumSystemVersion": "14.0"
+  },
+  "updates": {
+    "publicKey": "mdZGFEReSAnYuWYTxtvB0WNHoz4oC+C2PAt0+O42KuA=",
+    "github": "vfasky/mygo-vaultwarden"
   }
 }
