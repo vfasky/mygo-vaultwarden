@@ -24,7 +24,6 @@ var app = map[string]text{
 	"app.detail.reprompt_copy_hint":             {"此项目需要再次验证主密码，请在“查看与编辑”中复制。", "This item requires your master password again. Copy it from View & edit."},
 	"app.detail.secure_autofill":                {"安全自动填充", "Secure AutoFill"},
 	"app.detail.select_item":                    {"选择一个项目", "Select an item"},
-	"app.detail.status_secret_copied":           {"已复制已保存的内容；最多 30 秒后尽力清除。", "Saved content copied. Clearing will be attempted within 30 seconds."},
 	"app.detail.status_username_copied":         {"用户名已复制。", "Username copied."},
 	"app.detail.totp":                           {"验证码", "Verification code"},
 	"app.detail.view_edit":                      {"查看与编辑", "View & edit"},

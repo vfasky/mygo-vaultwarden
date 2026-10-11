@@ -56,14 +56,10 @@ func TestAccountCenterPlaceholderStates(t *testing.T) {
 			if !tt.HasText(want) {
 				t.Fatalf("missing placeholder: %s", want)
 			}
-			count := 0
 			for _, text := range tt.Texts() {
 				if text == a.status {
-					count++
+					t.Fatal("account center must not show status")
 				}
-			}
-			if count != 1 {
-				t.Fatalf("status must appear once in the bottom bar, got %d", count)
 			}
 			if state != "open" && tt.HasText(i18n.T("app.settings.open_send")) {
 				t.Fatal("blocked placeholder offered to open a panel")
@@ -73,7 +69,7 @@ func TestAccountCenterPlaceholderStates(t *testing.T) {
 }
 
 func TestAccountCenterNavigationRevokesLease(t *testing.T) {
-	for _, tab := range []accountTab{accountTabDevices, accountTabSecurity, accountTabMFA, accountTabEmergency} {
+	for _, tab := range []accountTab{accountTabDevices, accountTabSecurity} {
 		t.Run(string(tab), func(t *testing.T) {
 			a := accountCenterFixture(t)
 			panel, lease := a.sendPanel, a.componentLease

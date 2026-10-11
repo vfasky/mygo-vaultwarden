@@ -123,8 +123,6 @@ func (a *app) menu() *mygo.Menu {
 			action(i18n.T("menu.send"), "", menuSend),
 			action(i18n.T("menu.devices"), "", menuDevices),
 			action(i18n.T("menu.security"), "", menuSecurity),
-			action(i18n.T("menu.mfa"), "", menuMFA),
-			action(i18n.T("menu.emergency"), "", menuEmergency),
 		}},
 		{Label: i18n.T("menu.window"), Role: mygo.RoleWindowMenu, Submenu: []*mygo.MenuItem{
 			{Label: i18n.T("menu.minimize"), Role: mygo.RoleMinimize},

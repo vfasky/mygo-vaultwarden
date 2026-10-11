@@ -2,7 +2,6 @@
 package app
 
 import (
-	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"time"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
@@ -62,7 +61,7 @@ func (a *app) copyItemSecret(id string, organization bool, kind string, grant *v
 		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
-	a.status = i18n.T("app.detail.status_secret_copied")
+	a.status = ""
 }
 
 func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) localstore.Reply) {

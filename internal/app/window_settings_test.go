@@ -173,7 +173,7 @@ func TestSettingsWindowAccountServicesDisabled(t *testing.T) {
 			t.Fatal("disabled account services need an explanation")
 		}
 		epoch := a.epoch
-		for _, label := range []string{i18n.T("settings.account.send"), i18n.T("account.device.title"), i18n.T("account.form.title"), i18n.T("app.settings.mfa"), i18n.T("account.emergency.title")} {
+		for _, label := range []string{i18n.T("settings.account.send"), i18n.T("account.device.title"), i18n.T("account.form.title")} {
 			uitest.Click(t, tt, label)
 			if a.windows.accountOpen || a.epoch != epoch || a.sendPanel != nil || a.devicePanel != nil || a.accountForm != nil || a.authManagement != nil || a.orgServices != nil {
 				t.Fatalf("disabled account service %q opened a panel", label)

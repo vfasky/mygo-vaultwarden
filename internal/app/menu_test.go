@@ -21,7 +21,7 @@ func TestMenuWindowCommands(t *testing.T) {
 	if !a.windows.accountOpen || a.windows.accountTab != accountTabSend {
 		t.Fatal("account center did not default to Send")
 	}
-	for command, tab := range map[menuCommand]accountTab{menuDevices: accountTabDevices, menuSecurity: accountTabSecurity, menuMFA: accountTabMFA, menuEmergency: accountTabEmergency, menuSend: accountTabSend} {
+	for command, tab := range map[menuCommand]accountTab{menuDevices: accountTabDevices, menuSecurity: accountTabSecurity, menuSend: accountTabSend} {
 		a.runMenuCommand(command)
 		if a.windows.accountTab != tab {
 			t.Fatalf("%s selected %s", command, a.windows.accountTab)

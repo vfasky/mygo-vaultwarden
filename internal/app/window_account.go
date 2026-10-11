@@ -20,7 +20,7 @@ func accountWindowOptions() mygo.WindowOptions {
 // a page revokes the previous panel even when the new panel cannot open.
 func (a *app) openAccountPage(tab accountTab) {
 	switch tab {
-	case accountTabSend, accountTabDevices, accountTabSecurity, accountTabMFA, accountTabEmergency:
+	case accountTabSend, accountTabDevices, accountTabSecurity:
 	default:
 		tab = accountTabSend
 	}
@@ -65,8 +65,6 @@ var accountPages = []struct {
 	{accountTabSend, "accountcenter.send_title", "external", "app.settings.open_send"},
 	{accountTabDevices, "account.device.title", "shield", "app.settings.open_devices"},
 	{accountTabSecurity, "account.form.title", "user", "app.settings.open_account_security"},
-	{accountTabMFA, "app.settings.mfa", "key", "app.settings.open_mfa"},
-	{accountTabEmergency, "account.emergency.title", "vault", "app.settings.open_emergency_access"},
 }
 
 func (a *app) accountWindowView(c *ui.Context) {
@@ -112,13 +110,11 @@ func (a *app) accountWindowView(c *ui.Context) {
 					}
 				}
 				a.accountPage(c)
-				ui.Row(c).Gap(8).Height(32).Shrink(0).Children(func() {
-					kit.Icon(c, "shield", 15).TextColor(kit.Purple)
-					ui.Text(c, a.status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(a.status).Role(ui.RoleStatus)
-					if a.pending != 0 {
+				if a.pending != 0 {
+					ui.Row(c).Height(32).Shrink(0).Children(func() {
 						ui.Text(c, i18n.T("common.status_processing")).FontSize(12).TextColor(kit.Purple)
-					}
-				})
+					})
+				}
 			})
 		})
 	})
