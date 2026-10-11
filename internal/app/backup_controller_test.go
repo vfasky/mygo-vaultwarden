@@ -71,11 +71,11 @@ func TestBackupPreviewConfirmationAndLock(t *testing.T) {
 			a.backupEditorView(c)
 		}
 	}, 1000, 1000)
-	uitest.Click(t, tt, "继续导出…")
+	uitest.Click(t, tt, "继续")
 	if !e.confirm || a.pending != 0 {
 		t.Fatal("export without explicit confirmation")
 	}
-	uitest.Click(t, tt, "取消并关闭导入导出")
+	uitest.Click(t, tt, "取消")
 	if a.backupEditor != nil {
 		t.Fatal("cancel retained form")
 	}
