@@ -73,7 +73,7 @@ func TestEditorDrawerEscapeKeepsComparison(t *testing.T) {
 // The drawer slides in from the right, and closing leaves no copy behind.
 func TestEditorDrawerSlidesIn(t *testing.T) {
 	// A slow slide keeps the drawer moving through the first frames on any machine.
-	drawerSlides, drawerSlideDuration = true, 10 * time.Second
+	drawerSlides, drawerSlideDuration = true, 10*time.Second
 	defer func() { drawerSlides, drawerSlideDuration = false, 240*time.Millisecond }()
 	a := writableUIFixture(t)
 	defer a.stopNetwork()
