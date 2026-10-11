@@ -93,7 +93,8 @@ func TestVaultSidebarToggle(t *testing.T) {
 		t.Fatal("sidebar should start expanded")
 	}
 	tt.SetTitleBar(ui.TitleBar{Height: 52, Left: 88})
-	if r, ok := tt.Find("折叠侧栏"); !ok || r.X < 88 || r.X+r.W > 236 || r.Y < 0 || r.Y+r.H > 52 {
+	toggleBefore, ok := tt.Find("折叠侧栏")
+	if !ok || toggleBefore.X < 88 || toggleBefore.X+toggleBefore.W > 236 || toggleBefore.Y < 0 || toggleBefore.Y+toggleBefore.H > 52 {
 		t.Fatal("expanded toggle must remain in sidebar title bar past native window controls")
 	}
 	searchBefore, ok := tt.Find("搜索密码库")
@@ -107,8 +108,8 @@ func TestVaultSidebarToggle(t *testing.T) {
 	if searchAfter, ok := tt.Find("搜索密码库"); !ok || searchBefore.X-searchAfter.X != 237 {
 		t.Fatalf("hidden sidebar must release its full width: before=%+v after=%+v", searchBefore, searchAfter)
 	}
-	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 || r.Y < 0 || r.Y+r.H > 52 {
-		t.Fatal("collapsed toggle overlaps native window controls")
+	if toggleAfter, ok := tt.Find("展开侧栏"); !ok || toggleAfter != toggleBefore {
+		t.Fatalf("sidebar toggle moved after collapsing: before=%+v after=%+v", toggleBefore, toggleAfter)
 	}
 	for _, text := range []string{"Vaultwarden", "个人密码库", "所有密码库", "项目", "组织", "文件夹", "账号中心", "支付卡", "收藏夹"} {
 		if slices.Contains(tt.Texts(), text) {
@@ -118,6 +119,9 @@ func TestVaultSidebarToggle(t *testing.T) {
 	uitest.Click(t, tt, "展开侧栏")
 	if a.sidebarCollapsed || !slices.Contains(tt.Texts(), "所有密码库") {
 		t.Fatal("sidebar did not expand")
+	}
+	if toggleRestored, ok := tt.Find("折叠侧栏"); !ok || toggleRestored != toggleBefore {
+		t.Fatalf("sidebar toggle moved after expanding: before=%+v restored=%+v", toggleBefore, toggleRestored)
 	}
 	uitest.Click(t, tt, "支付卡")
 	if a.category != "card" {

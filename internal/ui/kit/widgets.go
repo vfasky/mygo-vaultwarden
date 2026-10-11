@@ -59,13 +59,13 @@ func IconButton(c *ui.Context, label, symbol string) ui.Element {
 // titleBarButton is a borderless toolbar icon button, like the sidebar toggle
 // of native macOS apps: no fill until hovered, sitting on the title bar row.
 func TitleBarButton(c *ui.Context, label, symbol string) ui.Element {
-	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(5).Radius(7).Shrink(0).TextColor(Muted)
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(6).Radius(7).Shrink(0).TextColor(Muted)
 	if b.Pressed() {
 		b.Background(ui.RGBA(38, 30, 62, .12)).TextColor(Ink)
 	} else if b.Hovered() {
 		b.Background(ui.RGBA(38, 30, 62, .07)).TextColor(Ink)
 	}
-	return b.Children(func() { Icon(c, symbol, 18) })
+	return b.Children(func() { Icon(c, symbol, 16) })
 }
 
 func ToolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) ui.Element {

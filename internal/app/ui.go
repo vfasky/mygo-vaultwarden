@@ -248,13 +248,13 @@ func (a *app) sidebarToggle(c *ui.Context) {
 // shares the content background, like a native macOS toolbar.
 func (a *app) header(c *ui.Context) {
 	bar := c.TitleBar()
-	left := float32(20)
+	left := max(float32(20), bar.Left-a.sidebarWidth(c))
 	if a.sidebarCollapsed {
-		left = 12
+		left = max(14, bar.Left+8)
 	}
 	row, below := titleBarRow(bar)
 	ui.Row(c).Height(row+below).Shrink(0).Gap(10).AlignItems(ui.Center).
-		Padding(0, 20, below, max(left, bar.Left-a.sidebarWidth(c))).DragWindow().Children(func() {
+		Padding(0, 20, below, left).DragWindow().Children(func() {
 		// Keep the restore toggle after the native window controls while
 		// the sidebar is hidden.
 		if a.sidebarCollapsed {
