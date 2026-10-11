@@ -30,7 +30,6 @@ var app = map[string]text{
 	"app.list.clear_search":                     {"清除搜索", "Clear search"},
 	"app.list.empty_hint":                       {"同步后，项目会显示在这里", "Your items will appear here after syncing"},
 	"app.list.items":                            {"密码库项目", "Vault items"},
-	"app.list.loaded_count":                     {"已载入 %d 个项目 · 个人密码库", "Loaded items: %d · My vault"},
 	"app.list.locked_hint":                      {"登录同步或离线解锁后查看项目", "Log in and sync, or unlock offline to view items"},
 	"app.list.no_logins":                        {"密码库中暂无登录条目", "No login items in this vault"},
 	"app.list.no_matches":                       {"没有找到匹配项目", "No matching items"},
