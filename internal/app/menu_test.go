@@ -116,9 +116,8 @@ func TestSidebarWindowEntrances(t *testing.T) {
 		if !a.windows.accountOpen {
 			t.Fatal("account center entrance missing")
 		}
-		uitest.Click(t, tt, "设置")
-		if !a.windows.settingsOpen {
-			t.Fatal("settings entrance missing")
+		if _, found := tt.Find("设置"); found {
+			t.Fatal("sidebar retained redundant settings entrance")
 		}
 		a.windows.accountOpen = false
 		a.itemsRevision = ""

@@ -100,10 +100,9 @@ func TestVaultSidebarToggle(t *testing.T) {
 	if !a.sidebarCollapsed {
 		t.Fatal("sidebar did not collapse")
 	}
-	// The rail grows to hold the traffic lights, so its background and edge
-	// run unbroken under them.
-	if r, ok := tt.Find("所有项目"); !ok || r.X+r.W > 98 || r.X < 0 {
-		t.Fatalf("collapsed rail item at %+v does not sit inside a rail clear of the traffic lights", r)
+	// Native window controls must not widen the compact icon rail.
+	if r, ok := tt.Find("所有项目"); !ok || r.X != 10 || r.W != 40 {
+		t.Fatalf("collapsed rail item at %+v should be centered in a 60px rail", r)
 	}
 	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 || r.Y < 0 || r.Y+r.H > 52 {
 		t.Fatal("collapsed toggle overlaps native window controls")
@@ -135,6 +134,53 @@ func TestVaultSidebarToggle(t *testing.T) {
 	}
 }
 
+func TestSidebarSectionDisclosure(t *testing.T) {
+	a := writableUIFixture(t)
+	defer a.stopNetwork()
+	a.folders = []vaultwarden.Folder{{ID: "folder-1", Name: "测试文件夹"}}
+	a.category = "folder:folder-1"
+	tt := ui.NewTester(func(c *ui.Context) { a.sidebar(c) }, 237, 1000)
+	for _, title := range []string{"登录", "无文件夹", "测试文件夹"} {
+		if _, found := tt.Find(title); !found {
+			t.Fatalf("section should start expanded: %s", title)
+		}
+	}
+	uitest.Click(t, tt, "类型")
+	if tt.HasText("登录") || !tt.HasText("测试文件夹") {
+		t.Fatal("collapsing types hid the wrong nodes")
+	}
+	// A focused disclosure can also be reopened with the keyboard.
+	tt.Key(0, ui.KeySpace)
+	if !tt.HasText("登录") {
+		t.Fatal("keyboard did not reopen types")
+	}
+	uitest.Click(t, tt, "类型")
+	uitest.Click(t, tt, "文件夹")
+	if tt.HasText("无文件夹") || tt.HasText("测试文件夹") || a.category != "folder:folder-1" {
+		t.Fatal("collapsing folders retained children or changed selection")
+	}
+	uitest.Click(t, tt, "新建文件夹")
+	if a.folderEditor == nil || !a.sidebarFoldersCollapsed {
+		t.Fatal("folder add action failed or toggled the section")
+	}
+	a.folderEditor = nil
+	a.sidebarCollapsed = true
+	tt.Frame()
+	if !tt.HasText("登录") || !tt.HasText("测试文件夹") {
+		t.Fatal("icon-only sidebar lost collapsed section destinations")
+	}
+	a.sidebarCollapsed = false
+	tt.Frame()
+	if tt.HasText("登录") || tt.HasText("测试文件夹") {
+		t.Fatal("sidebar did not retain section collapse state")
+	}
+	uitest.Click(t, tt, "文件夹")
+	uitest.Click(t, tt, "类型")
+	if !tt.HasText("登录") || !tt.HasText("测试文件夹") {
+		t.Fatal("section children did not return after reopening")
+	}
+}
+
 func TestCollapsedSidebarNavigation(t *testing.T) {
 	a := previewApp()
 	a.sidebarCollapsed = true
@@ -161,10 +207,10 @@ func TestCollapsedSidebarNavigation(t *testing.T) {
 			t.Fatalf("collapsed button %q has %d labels/texts, want 1", category.title, count)
 		}
 	}
-	uitest.Click(t, tt, "设置")
-	if !a.windows.settingsOpen {
-		t.Fatal("collapsed sidebar settings did not open")
+	if _, found := tt.Find("设置"); found {
+		t.Fatal("collapsed sidebar retained redundant settings entrance")
 	}
+	a.runMenuCommand(menuSettings)
 	uitest.Click(t, tt, "我的密码库")
 	if a.category != "personal" || !a.windows.settingsOpen {
 		t.Fatal("vault navigation changed the settings window")

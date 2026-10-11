@@ -104,17 +104,10 @@ func (a *app) authentication(c *ui.Context) {
 	})
 }
 
-// authFooter holds what applies to every authentication page rather than
-// to the form: the language and the rarely used cross-account recovery.
+// authFooter provides language selection on every authentication page.
 func (a *app) authFooter(c *ui.Context) {
 	ui.Row(c).Justify(ui.Center).AlignItems(ui.Center).Wrap().Children(func() {
 		languageMenu(c)
-		if a.targetRecovery == nil && (a.snapshot == nil || !a.snapshot.AccountSwitchPending) {
-			ui.Text(c, "·").FontSize(12).TextColor(kit.Muted)
-			if kit.TextLink(c, i18n.T("login.recovery.verify_as_owner"), a.pending != 0).TextColor(kit.Muted).Clicked() {
-				a.openTargetRecovery()
-			}
-		}
 	})
 }
 

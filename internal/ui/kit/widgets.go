@@ -112,7 +112,7 @@ func SidebarAction(c *ui.Context, label, symbol string, disabled bool) ui.Elemen
 func SidebarItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) ui.Element {
 	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 10).Gap(10).Radius(9).Disabled(disabled).TextColor(sidebarText)
 	if collapsed {
-		b.Tooltip(title).Height(36).Padding(0).Justify(ui.Center)
+		b.Height(36).Padding(0).Justify(ui.Center)
 	}
 	iconColor := sidebarIcon
 	if selected {
@@ -141,7 +141,37 @@ func SidebarItem(c *ui.Context, title, symbol, count string, selected, disabled,
 			}
 		}
 	})
+	if collapsed {
+		sidebarTooltip(c, b, title)
+	}
 	return b
+}
+
+// sidebarTooltip shows immediately to the right, outside the scrolling rail.
+func sidebarTooltip(c *ui.Context, anchor ui.Element, title string) {
+	anchor.Description(title)
+	dismissed := ui.Local(anchor, "sidebar-tooltip-dismissed", func() bool { return false })
+	if !anchor.Hovered() && !anchor.FocusVisible() {
+		*dismissed = false
+		return
+	}
+	if anchor.Pressed() || anchor.Clicked() {
+		*dismissed = true
+	}
+	if *dismissed || anchor.IsDisabled() {
+		return
+	}
+	ui.Overlay(c, func() {
+		tip := ui.Box(c).Absolute().PassThrough().Role(ui.RoleTooltip).
+			AttachTo(anchor, ui.AnchorRight, ui.AnchorLeft).Margin(0, 0, 0, 12).
+			Padding(6, 10).Radius(6).Background(Ink).TextColor(White).
+			Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, .18))
+		if tip.OverlayShortcut(0, ui.KeyEscape) {
+			*dismissed = true
+			return
+		}
+		tip.Children(func() { ui.Text(c, title).FontSize(12).SingleLine() })
+	})
 }
 
 func NavItem(c *ui.Context, title, symbol, count string, selected, disabled bool) ui.Element {
