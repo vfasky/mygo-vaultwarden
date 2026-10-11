@@ -36,6 +36,9 @@ type editorCustom struct {
 }
 
 type cipherEditor struct {
+	// openStatus is the app status as the editor opened, the main window's;
+	// the editor's footer shows only what came after it.
+	openStatus                             string
 	attachments                            []vaultwarden.AttachmentInfo
 	attachmentsLoaded, attachmentBusy      bool
 	attachmentDelete                       string
@@ -320,7 +323,7 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
-	editor := &cipherEditor{revision: a.sessionRevision, authorization: grant, defaultURIMatch: defaultMatch}
+	editor := &cipherEditor{revision: a.sessionRevision, authorization: grant, defaultURIMatch: defaultMatch, openStatus: a.status}
 	if grant != nil {
 		editor.authorizationExpires = grant.ExpiresAt()
 	}
@@ -511,11 +514,11 @@ func (a *app) cipherEditorView(c *ui.Context) {
 						remove := -1
 						for i := range e.uris {
 							uri := &e.uris[i]
-							ui.Row(c.Key(fmt.Sprintf("uri-%d", i))).Gap(8).Children(func() {
+							ui.Row(c.Key(fmt.Sprintf("uri-%d", i))).Gap(8).AlignItems(ui.End).Children(func() {
 								kit.Field(c, i18n.Tf("vault.editor.website_number", i+1), "", func() {
 									kit.Input(ui.TextInput(c, &uri.value).Label(i18n.Tf("vault.editor.website_number", i+1)).Disabled(a.pending != 0 || e.uncertain))
 								}).Grow(1)
-								if kit.Button(c, i18n.T("vault.editor.remove"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
+								if kit.Button(c, i18n.T("vault.editor.remove"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Height(kit.ControlHeight + 2).Clicked() {
 									remove = i
 								}
 							})
@@ -596,7 +599,11 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			})
 		})
 		kit.ActionBar(c, func() {
-			ui.Text(c, a.status).FontSize(11).TextColor(kit.Muted).MaxLines(2).Shrink(1).MinWidth(0)
+			status := a.status
+			if status == e.openStatus {
+				status = ""
+			}
+			ui.Text(c, status).FontSize(11).TextColor(kit.Muted).MaxLines(2).Shrink(1).MinWidth(0)
 			ui.Spacer(c)
 			if e.uncertain && kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
 				a.syncVault(false)

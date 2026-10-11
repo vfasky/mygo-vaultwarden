@@ -94,3 +94,31 @@ func TestEditorDrawerSlidesIn(t *testing.T) {
 		t.Fatal("closing left a copy of the editor on screen")
 	}
 }
+
+// The editor's footer shows what happened while it was open, not the main
+// window's status from before.
+func TestEditorDrawerFooterShowsOnlyEditorStatus(t *testing.T) {
+	a := writableUIFixture(t)
+	defer a.stopNetwork()
+	a.status = "main window sync summary"
+	a.openCipherEditor("card-1", 3)
+	tt := ui.NewTester(a.view, 1280, 820)
+	footer := func() bool {
+		t.Helper()
+		n := 0
+		for _, text := range tt.Texts() {
+			if text == a.status {
+				n++
+			}
+		}
+		return n > 1 // the main window's status line shows it once
+	}
+	if footer() {
+		t.Fatal("the editor footer repeated the main window's status")
+	}
+	a.status = "save failed: example reason"
+	tt.Frame()
+	if !footer() {
+		t.Fatal("the editor footer hid its own status")
+	}
+}
