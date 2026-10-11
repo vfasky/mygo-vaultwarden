@@ -57,7 +57,7 @@ stateDiagram-v2
 ## 开发环境
 
 - macOS 14+、完整 Xcode、Go 1.27.1+。
-- MyGo 固定 v0.3.7（Native UI 使用 0.3 的值类型 Element），保留 goja 与官方 zxcvbn 的主密码评分实现。
+- MyGo 固定 v0.4.2（Native UI 使用值类型 Element），保留 goja 与官方 zxcvbn 的主密码评分实现。
 - `go` 不在 PATH 时使用 `GO_BIN=/absolute/path/to/go`；`scripts/resolve-go.sh` 也识别项目用户缓存工具链。
 - 真实 AutoFill 安装需要 Apple Developer Program、Xcode 登录账号、相应证书及 provisioning profile。未签名构建不能证明系统填充可用。
 

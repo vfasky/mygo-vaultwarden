@@ -7,7 +7,7 @@ tool github.com/egoist/mygo/cmd/mygo
 require (
 	github.com/dop251/goja v0.0.0-20261007120015-921e62952efd
 	github.com/ebitengine/purego v0.11.1
-	github.com/egoist/mygo v0.3.7
+	github.com/egoist/mygo v0.4.2
 	golang.org/x/crypto v0.57.0
 	golang.org/x/net v0.59.0
 	golang.org/x/sys v0.48.0

@@ -5,7 +5,7 @@
 ## MyGo
 
 - 项目：https://github.com/egoist/mygo
-- 固定依赖版本：v0.3.7
+- 固定依赖版本：v0.4.2
 - 许可证：MIT
 - 本项目使用官方 Native UI 模板作为 Go 主应用的起点，界面使用 MyGo 的 `ui` 包。
 - MyGo 及其依赖的原始许可证随对应 Go module 保留；打包时 `scripts/collect-licenses.sh` 将相关声明写入应用 Resources/ThirdPartyLicenses。
