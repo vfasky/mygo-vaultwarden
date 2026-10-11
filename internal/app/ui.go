@@ -79,16 +79,6 @@ func (a *app) currentCategory() vaultCategory {
 	return vaultCategories()[0]
 }
 
-func (a *app) releaseItemCount() int {
-	count := 0
-	for _, item := range a.items {
-		if organizationUIEnabled || item.OrganizationID == "" {
-			count++
-		}
-	}
-	return count
-}
-
 // itemInCategory applies a sidebar destination's filter, without the search query.
 func itemInCategory(item localstore.DisplayCredential, category string) bool {
 	if (!organizationUIEnabled || category == "personal") && item.OrganizationID != "" {
@@ -584,7 +574,6 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 				a.selectedID = items[a.selectedRow].ID
 			}
 		}
-		ui.Text(c, i18n.Tf("app.list.loaded_count", a.releaseItemCount())).FontSize(11).TextColor(kit.Muted).Padding(4, 8)
 	})
 }
 
