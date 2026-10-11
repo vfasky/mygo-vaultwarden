@@ -43,11 +43,11 @@ func TestSendPanelNativeFormAndLock(t *testing.T) {
 	p.Password = "private password"
 	p.ReceivePassword = "private receiver password"
 	p.Link = "private fragment"
-	uitest.Click(t, tt, "禁用：false")
+	uitest.Click(t, tt, "禁用此 Send")
 	if !p.Fields.Disabled {
 		t.Fatal("disable control")
 	}
-	uitest.Click(t, tt, "隐藏邮箱：false")
+	uitest.Click(t, tt, "隐藏邮箱")
 	if !p.Fields.HideEmail {
 		t.Fatal("hide email control")
 	}
