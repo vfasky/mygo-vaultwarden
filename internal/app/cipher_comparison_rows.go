@@ -35,7 +35,7 @@ func (a *app) revealCipherRows(path string, storage func(localstore.Request) loc
 	}
 	clearCipherRowReveal(e)
 	err := session.WithCipherComparisonRows(a.vault, a.sessionRevision, e.comparison, path, func(local, remote []vaultwarden.CipherRowPreview, key []byte, deadline time.Time) error {
-		reply := storage(localstore.Request{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+		reply := storage(localstore.Request{Operation: localstore.OperationAuthorizeSecretDisplay, SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
 			return reply.Failure()
 		}
@@ -46,7 +46,7 @@ func (a *app) revealCipherRows(path string, storage func(localstore.Request) loc
 		return nil
 	})
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 	}
 }
 func (a *app) cipherRowPreviewView(c *ui.Context, e *cipherEditor, path string) {

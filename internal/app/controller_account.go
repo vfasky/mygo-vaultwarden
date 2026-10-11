@@ -34,7 +34,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 	if registration {
 		server, err := vaultwarden.CanonicalServer(a.serverURL)
 		if err != nil {
-			a.status = err.Error()
+			a.status = vaultwarden.ErrorMessage(err)
 			return
 		}
 		scope.Server = server
@@ -51,7 +51,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 	}
 	client, err := vaultwarden.NewClient(scope.Server, a.deviceID)
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	a.advanceEpoch()
@@ -173,7 +173,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 			}
 			var state *localstore.SnapshotStatus
 			if journal != nil {
-				reply := storage(localstore.Request{Operation: "status"})
+				reply := storage(localstore.Request{Operation: localstore.OperationStatus})
 				state = reply.State
 			}
 			dispatch(func() {
@@ -186,7 +186,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 					if !a.adoptSessionCheckpoint(cp) {
 						plan.Close()
 						a.stopNetwork()
-						a.status = vaultwarden.ErrIdentity.Error()
+						a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 						return
 					}
 					if journal == nil {
@@ -217,7 +217,7 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 						f.Status = i18n.T("account.rotation.status_upgrade_attachments")
 					}
 					if errors.Is(err, vaultwarden.ErrRotationCompatibility) {
-						f.Status = err.Error()
+						f.Status = vaultwarden.ErrorMessage(err)
 					}
 				case r.Operation == "rotation-recipients":
 					if f.Completed(scope, epoch, r.Sequence, result, err) && err == nil {

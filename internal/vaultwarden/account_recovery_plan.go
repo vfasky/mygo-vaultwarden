@@ -93,7 +93,25 @@ func (s *Session) recoveryPlanLocked(kind, method, path, resource, target, impac
 		clear(encoded)
 		return nil, ErrEncryption
 	}
-	return &RecoveryPlan{owner: s, epoch: s.authorizationEpoch, method: method, path: path, body: encoded, confirmation: kind, impact: impact, record: RecoveryDispatch{OperationID: hex.EncodeToString(nonce), Actor: Scope{Server: s.client.base.String(), Account: s.account}, Target: Scope{Server: s.client.base.String(), Account: target}, Kind: kind, ResourceID: resource, PreviousRevision: s.authorizationRevision, AuthorizationEpoch: s.authorizationEpoch, ConfirmedImpact: impact}}, nil
+	return &RecoveryPlan{
+		owner:        s,
+		epoch:        s.authorizationEpoch,
+		method:       method,
+		path:         path,
+		body:         encoded,
+		confirmation: kind,
+		impact:       impact,
+		record: RecoveryDispatch{
+			OperationID:        hex.EncodeToString(nonce),
+			Actor:              Scope{Server: s.client.base.String(), Account: s.account},
+			Target:             Scope{Server: s.client.base.String(), Account: target},
+			Kind:               kind,
+			ResourceID:         resource,
+			PreviousRevision:   s.authorizationRevision,
+			AuthorizationEpoch: s.authorizationEpoch,
+			ConfirmedImpact:    impact,
+		},
+	}, nil
 }
 
 // CommitRecoveryOperation never automatically retries a mutation, including an

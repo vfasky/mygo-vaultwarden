@@ -49,7 +49,12 @@ var bulkActions = []struct {
 	action vaultwarden.CipherAction
 	label  string
 }{
-	{vaultwarden.CipherMove, "vault.bulk.move_to_folder"}, {vaultwarden.CipherTrash, "vault.editor.move_to_trash"}, {vaultwarden.CipherRestore, "common.restore"}, {vaultwarden.CipherArchive, "common.archive"}, {vaultwarden.CipherUnarchive, "common.unarchive"}, {vaultwarden.CipherDeletePermanently, "common.delete_permanently"},
+	{vaultwarden.CipherMove, "vault.bulk.move_to_folder"},
+	{vaultwarden.CipherTrash, "vault.editor.move_to_trash"},
+	{vaultwarden.CipherRestore, "common.restore"},
+	{vaultwarden.CipherArchive, "common.archive"},
+	{vaultwarden.CipherUnarchive, "common.unarchive"},
+	{vaultwarden.CipherDeletePermanently, "common.delete_permanently"},
 }
 
 func (a *app) bulkEditorView(c *ui.Context) {
@@ -160,7 +165,7 @@ func (a *app) mutateBulk() {
 			}
 			return err
 		}
-		current := callStorage(localstore.Request{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
 			err = vaultwarden.ErrConflict
@@ -181,7 +186,7 @@ func (a *app) completeBulkMutation(epoch uint64, e *bulkEditor, checkpoint *loca
 	a.cancel = nil
 	if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 		a.stopNetwork()
-		a.status = vaultwarden.ErrIdentity.Error()
+		a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 		return
 	}
 	if err != nil {

@@ -41,7 +41,9 @@ type ResourceRow struct {
 type ResourcePreparationError struct{ Cause error }
 
 func (e *ResourcePreparationError) Error() string {
-	return i18n.Tf("org.resource.err_not_submitted", e.Cause.Error())
+	return i18n.Tf("org.resource.err_not_submitted", vaultwarden.ErrorMessage(e.Cause))
 }
+
+func (e *ResourcePreparationError) UserMessage() string { return e.Error() }
 
 func (e *ResourcePreparationError) Unwrap() error { return e.Cause }

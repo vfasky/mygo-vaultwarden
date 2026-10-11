@@ -63,6 +63,7 @@ func (a *app) restoreUnlockedSession(reply localstore.Reply) bool {
 		return false
 	}
 	a.session = session
+	a.idleLock.start()
 	scope := *reply.State.Scope
 	a.liveScope, a.sessionRevision = &scope, reply.State.Revision
 	a.serverURL, a.email = scope.Server, reply.State.PasswordUnlock.Email

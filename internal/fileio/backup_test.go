@@ -5,6 +5,7 @@ package fileio
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/testfixture"
 	"os"
 	"path/filepath"
 	"testing"
@@ -12,14 +13,8 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-// Keep this helper identical to backupTestDirectory in internal/app tests.
 func backupTestDirectory(t *testing.T) string {
-	t.Helper()
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dir
+	return testfixture.BackupDirectory(t)
 }
 
 func TestBackupFormatCannotMasqueradeAsOfficialJSON(t *testing.T) {

@@ -22,7 +22,7 @@ func (a *app) copyPersonalSecret(kind string, storage func(localstore.Request) l
 		return
 	}
 	if err := s.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	useSecret := s.WithPersonalSecret
@@ -30,7 +30,7 @@ func (a *app) copyPersonalSecret(kind string, storage func(localstore.Request) l
 		useSecret = s.WithOrganizationSecret
 	}
 	err := useSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
-		reply := storage(localstore.Request{Operation: "copySecret", SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+		reply := storage(localstore.Request{Operation: localstore.OperationCopySecret, SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
 			return reply.Failure()
 		}
@@ -38,7 +38,7 @@ func (a *app) copyPersonalSecret(kind string, storage func(localstore.Request) l
 		return nil
 	})
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	a.status = i18n.T("app.detail.status_secret_copied")
@@ -55,7 +55,7 @@ func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) l
 		return
 	}
 	if err := s.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	useSecret := s.WithPersonalSecret
@@ -63,7 +63,7 @@ func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) l
 		useSecret = s.WithOrganizationSecret
 	}
 	err := useSecret(a.vault, a.sessionRevision, e.fields.ID, kind, e.authorization, func(secret string, key []byte, deadline time.Time) error {
-		reply := storage(localstore.Request{Operation: "authorizeSecretDisplay", SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+		reply := storage(localstore.Request{Operation: localstore.OperationAuthorizeSecretDisplay, SecretProtocol: 1, SecretNotAfter: deadline.UnixMilli(), Scope: a.liveScope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 		if !reply.OK {
 			return reply.Failure()
 		}
@@ -75,7 +75,7 @@ func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) l
 	})
 	if err != nil {
 		e.shownSecret = ""
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 	}
 }
 
@@ -88,5 +88,5 @@ func (a *app) clearSecretClipboard() {
 		a.runtimeVault.revokeSecrets()
 		return
 	}
-	_ = localstore.Call(localstore.Request{Operation: "clearSecretClipboard"})
+	_ = localstore.Call(localstore.Request{Operation: localstore.OperationClearSecretClipboard})
 }

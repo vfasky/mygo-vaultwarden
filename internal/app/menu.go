@@ -4,6 +4,7 @@ package app
 import (
 	"github.com/egoist/mygo"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 )
 
 type menuCommand string
@@ -55,7 +56,7 @@ func (a *app) runMenuCommand(command menuCommand) {
 	case menuNew, menuSync, menuLock, menuBackup:
 		if command == menuLock {
 			a.showMainWindow()
-			a.runStorage("lock")
+			a.runStorage(localstore.OperationLock)
 			return
 		}
 		if !a.unlocked() || a.showLogin || a.pending != 0 {

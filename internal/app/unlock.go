@@ -26,14 +26,14 @@ func (a *app) unlockWithPassword() {
 	}
 	password := []byte(a.masterPassword)
 	config, scope := *a.snapshot.PasswordUnlock, *a.snapshot.Scope
-	request := localstore.Request{Operation: "listPassword", ExpectedRevision: a.snapshot.Revision, Scope: &scope}
+	request := localstore.Request{Operation: localstore.OperationListPassword, ExpectedRevision: a.snapshot.Revision, Scope: &scope}
 	a.clearLoginInputs()
 	a.startStorage(request, func() localstore.Reply {
 		defer clear(password)
 		key, err := vaultwarden.DeriveSnapshotUnlockKey(password, config)
 		clear(password)
 		if err != nil {
-			return localstore.Reply{Code: "invalid_password_config", Message: err.Error()}
+			return localstore.Reply{Code: "invalid_password_config", Message: vaultwarden.ErrorMessage(err)}
 		}
 		defer clear(key)
 		request.UnlockKey = key

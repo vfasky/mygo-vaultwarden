@@ -30,7 +30,7 @@ func TestLoginChallengeProtocol(t *testing.T) {
 			email := "fixture@example.invalid"
 			password := []byte("fixture-master-password")
 			defer clear(password)
-			kdf := vaultcrypto.KDF{Type: 0, Iterations: 5000}
+			kdf := vaultcrypto.KDF{Type: 0, Iterations: 100000}
 			master, err := vaultcrypto.DeriveMaster(password, email, kdf)
 			if err != nil {
 				t.Fatal(err)

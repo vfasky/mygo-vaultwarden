@@ -84,7 +84,7 @@ func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disable
 		if session, ok := a.session.(*vaultwarden.Session); ok && a.sessionOwnsSnapshot() {
 			public, err := session.AccountSharingPublicKey(a.vault)
 			if err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 			} else {
 				e.accountPublicKey = public
 			}

@@ -22,7 +22,7 @@ func accountNewKDF(k vaultcrypto.KDF) error {
 	if k.Type == 0 && (k.Iterations < 100000 || k.Iterations > 2000000 || k.Memory != 0 || k.Parallelism != 0) {
 		return ErrKDF
 	}
-	if k.Type == 1 && (k.Iterations < 2 || k.Iterations > 10 || k.Memory < 16 || k.Memory > 256 || k.Parallelism < 1 || k.Parallelism > 16) {
+	if k.Type == 1 && (k.Iterations < 2 || k.Iterations > 10 || k.Memory < 16 || k.Memory > 1024 || k.Parallelism < 1 || k.Parallelism > 16) {
 		return ErrKDF
 	}
 	if k.Type != 0 && k.Type != 1 {
@@ -80,7 +80,7 @@ func (c *Client) AccountRegister(ctx context.Context, email string, password []b
 	if err = (AccountPasswordPolicy{MinLength: 12}).Check(ctx, password, email, false); err != nil {
 		return err
 	}
-	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, email, kdf)
 	if err != nil {
 		return err
 	}

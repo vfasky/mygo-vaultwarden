@@ -50,7 +50,14 @@ func rotationCipherExpected(old map[string]any, raw json.RawMessage, account str
 	if err = copyKeys(dto, allowed...); err != nil {
 		return nil, err
 	}
-	if dto["id"] != old["id"] || dto["encryptedFor"] != account || dto["lastKnownRevisionDate"] != old["revisionDate"] {
+	oldID, oldIDOK := old["id"].(string)
+	dtoID, dtoIDOK := dto["id"].(string)
+	oldRevision, oldRevisionOK := old["revisionDate"].(string)
+	dtoRevision, dtoRevisionOK := dto["lastKnownRevisionDate"].(string)
+	if !oldIDOK || !dtoIDOK || !validObjectID(oldID) || !oldRevisionOK || !dtoRevisionOK {
+		return nil, ErrProtocol
+	}
+	if dtoID != oldID || dto["encryptedFor"] != account || dtoRevision != oldRevision {
 		return nil, ErrIdentity
 	}
 	encoded, _ := json.Marshal(old)
@@ -73,13 +80,19 @@ func rotationCipherExpected(old map[string]any, raw json.RawMessage, account str
 	if !ok {
 		return nil, ErrProtocol
 	}
-	attachments, _ := expected["attachments"].([]any)
+	attachments, err := backupObjectRows(expected["attachments"])
+	if err != nil {
+		return nil, err
+	}
 	if len(wrappers) != len(attachments) {
 		return nil, ErrProtocol
 	}
-	for _, raw := range attachments {
-		attachment := raw.(map[string]any)
-		wrapper, ok := wrappers[attachment["id"].(string)].(map[string]any)
+	for _, attachment := range attachments {
+		id, ok := attachment["id"].(string)
+		if !ok || !validObjectID(id) {
+			return nil, ErrProtocol
+		}
+		wrapper, ok := wrappers[id].(map[string]any)
 		if !ok || len(wrapper) != 2 {
 			return nil, ErrProtocol
 		}
@@ -119,9 +132,11 @@ func rotationCipherPlain(object map[string]any, key []byte) (map[string]any, err
 	if wrapped, _ := result["key"].(string); wrapped != "" {
 		result["key"] = string(itemKey)
 	}
-	rows, _ := result["attachments"].([]any)
-	for _, row := range rows {
-		attachment := row.(map[string]any)
+	rows, err := backupObjectRows(result["attachments"])
+	if err != nil {
+		return nil, err
+	}
+	for _, attachment := range rows {
 		if err = transformField(attachment, "fileName", itemKey, false); err != nil {
 			return nil, err
 		}
@@ -143,21 +158,23 @@ func rotationCipherPlain(object map[string]any, key []byte) (map[string]any, err
 	normalizeResponseLoginAlias(result)
 	return result, nil
 }
-func rotationCipherComparable(object map[string]any, personal bool) map[string]any {
+func rotationCipherComparable(object map[string]any, personal bool) (map[string]any, error) {
 	// Callers exclusively own these decoded maps. Revision advances in cipher.save;
 	// attachment URL is generated at response time (attachment.rs::to_json).
 	if personal {
 		delete(object, "revisionDate")
 	}
-	rows, _ := object["attachments"].([]any)
-	for _, row := range rows {
-		attachment := row.(map[string]any)
+	rows, err := backupObjectRows(object["attachments"])
+	if err != nil {
+		return nil, err
+	}
+	for _, attachment := range rows {
 		if _, exists := attachment["url"]; exists {
 			attachment["url"] = ""
 		}
 	}
 	normalizeResponseLoginAlias(object)
-	return object
+	return object, nil
 }
 func rotationCipherRows(rows []json.RawMessage) (map[string]map[string]any, error) {
 	result := map[string]map[string]any{}
@@ -173,9 +190,12 @@ func rotationCipherRows(rows []json.RawMessage) (map[string]map[string]any, erro
 		if _, err := shareRecoveryAttachments(object); err != nil {
 			return nil, err
 		}
-		rows, _ := object["attachments"].([]any)
+		rows, err := backupObjectRows(object["attachments"])
+		if err != nil {
+			return nil, err
+		}
 		for _, row := range rows {
-			if url, exists := row.(map[string]any)["url"]; exists {
+			if url, exists := row["url"]; exists {
 				if _, ok := url.(string); !ok {
 					return nil, ErrProtocol
 				}
@@ -301,8 +321,14 @@ func VerifyAccountRotationCipherResources(ctx context.Context, input RotationCip
 		if err = ctx.Err(); err != nil {
 			return result, err
 		}
-		old, _ := rotationCipherObject(raw)
-		id := old["id"].(string)
+		old, err := rotationCipherObject(raw)
+		if err != nil {
+			return result, err
+		}
+		id, ok := old["id"].(string)
+		if !ok || !validObjectID(id) {
+			return result, ErrProtocol
+		}
 		expected := old
 		personal := old["organizationId"] == nil
 		if personal {
@@ -333,7 +359,19 @@ func VerifyAccountRotationCipherResources(ctx context.Context, input RotationCip
 			if _, e := shareRecoveryAttachments(actual); e != nil {
 				state = RotationCipherUnverifiable
 			} else {
-				state = rotationCipherObserved(rotationCipherComparable(old, personal), rotationCipherComparable(expected, personal), rotationCipherComparable(actual, personal))
+				oldComparable, e := rotationCipherComparable(old, personal)
+				if e != nil {
+					return result, e
+				}
+				expectedComparable, e := rotationCipherComparable(expected, personal)
+				if e != nil {
+					return result, e
+				}
+				actualComparable, e := rotationCipherComparable(actual, personal)
+				if e != nil {
+					return result, e
+				}
+				state = rotationCipherObserved(oldComparable, expectedComparable, actualComparable)
 			}
 		}
 		result.Resources = append(result.Resources, RotationCipherResourceVerification{Kind: "cipher", ID: id, State: state})

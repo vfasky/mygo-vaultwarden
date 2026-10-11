@@ -132,9 +132,24 @@ func (s *Session) accountPlanLocked(vault *VaultData, kind AccountChangeKind, pa
 		clear(encoded)
 		return nil, ErrEncryption
 	}
-	return &AccountChangePlan{owner: s, epoch: s.authorizationEpoch, revision: s.authorizationRevision, kind: kind, path: path, recovery: AccountRecovery{
-		Version: 1, OperationID: hex.EncodeToString(id), Scope: vault.Scope, Kind: kind, OldRevision: s.authorizationRevision, OldSession: old, OldUnlock: &PasswordUnlock{Config: s.passwordUnlock.Config, Key: append([]byte(nil), s.passwordUnlock.Key...)}, OldVault: encoded, Request: append([]byte(nil), body...),
-	}}, nil
+	recovery := AccountRecovery{
+		Version:     1,
+		OperationID: hex.EncodeToString(id),
+		Scope:       vault.Scope,
+		Kind:        kind,
+		OldRevision: s.authorizationRevision,
+		OldSession:  old,
+		OldUnlock: &PasswordUnlock{
+			Config: s.passwordUnlock.Config,
+			Key:    append([]byte(nil), s.passwordUnlock.Key...),
+		},
+		OldVault: encoded,
+		Request:  append([]byte(nil), body...),
+	}
+	return &AccountChangePlan{
+		owner: s, epoch: s.authorizationEpoch, revision: s.authorizationRevision,
+		kind: kind, path: path, recovery: recovery,
+	}, nil
 }
 
 type accountAuthentication struct {
@@ -209,7 +224,7 @@ func (s *Session) PrepareAccountCredentials(ctx context.Context, vault *VaultDat
 	if _, err = s.accountProfileLocked(ctx, "GET", "/api/accounts/profile", nil, persist); err != nil {
 		return nil, err
 	}
-	master, err := vaultcrypto.DeriveMaster(newPassword, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(newPassword, email, kdf)
 	if err != nil {
 		return nil, err
 	}

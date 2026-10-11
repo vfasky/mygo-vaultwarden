@@ -17,7 +17,7 @@
 | 轮换 | `PrepareAccountRotation` → 完整新版`rotate-user-account-keys` DTO。强制提供adapter，完整新sync与认证snapshot相符、5类资源覆盖、RSA公私钥一致、保持KDF/email/原非对称keypair。新增helper重包装独立item key、folder名称、Send seed。legacy keyless/非空encryptedByKeyId交 #13，不猜字段。 |
 | 原生组件 | 根`account_ui.go`：独立`newAccountForm`/`accountFormView`，密码遮掩、强度/策略说明、注册结果、各业务字段、二次确认/取消、scope+UI epoch+sequence拒绝迟到结果。回调交主应用scheduler，未改共享app。 |
 
-KDF资源沿已有crypto上限，并对新设置要求PBKDF2 100000–2000000，Argon2id 2–10次/16–256MiB/1–16并行。现有legacy较低PBKDF2可以登录，但本卡不会用低于服务器新设置下限的参数提交改动。密码最少12 UTF-16单元；type1使用真实0–4评分、UTF-16长度、Unicode大小写映射、ASCII数字及固定客户端集合`!@#$%^&*`。服务器`verify-password`负责合并适用组织/SSO policy，本卡不猜不可见目标角色。`AccountPasswordPolicy.Check(ctx,password,email,login)`的login=true仅在EnforceOnLogin时执行，供后续MFA/SSO lane在完成认证前调用；它不是通用登录凭据或policy来源证明。
+在线认证与新设置均要求 PBKDF2 100000–2000000；旧离线快照仍支持 5000–2000000。Argon2id 支持 2–10 次/16–1024 MiB/1–16 并行。服务器提供低于 100000 次的 PBKDF2 时阻止在线派生，需先通过可信官方客户端提高账号参数。密码最少12 UTF-16单元；type1使用真实0–4评分、UTF-16长度、Unicode大小写映射、ASCII数字及固定客户端集合`!@#$%^&*`。服务器`verify-password`负责合并适用组织/SSO policy，本卡不猜不可见目标角色。`AccountPasswordPolicy.Check(ctx,password,email,login)`的login=true仅在EnforceOnLogin时执行，供后续MFA/SSO lane在完成认证前调用；它不是通用登录凭据或policy来源证明。
 
 ## 准备、确认、存储与会话生命周期
 

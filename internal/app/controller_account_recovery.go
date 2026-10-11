@@ -68,7 +68,7 @@ func (a *app) accountRecoveryView(c *ui.Context) {
 		a.resolveAccountRecoveryWith(true, a.postUI, localstore.Call)
 	}
 	if ui.Button(c, i18n.T("account.recovery.cancel_keep_records")).Clicked() {
-		a.runStorage("lock")
+		a.runStorage(localstore.OperationLock)
 	}
 	ui.Text(c, f.status).MaxLines(16)
 }
@@ -184,7 +184,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 			session = nil
 		}
 		if err != nil {
-			status := storage(localstore.Request{Operation: "status"})
+			status := storage(localstore.Request{Operation: localstore.OperationStatus})
 			if status.State != nil {
 				reply.State = status.State
 			}
@@ -204,7 +204,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 				a.snapshot = reply.State
 			}
 			if err != nil {
-				f.status = err.Error()
+				f.status = vaultwarden.ErrorMessage(err)
 				if len(verified.Issues) > 0 {
 					f.status += "\n" + strings.Join(verified.Issues, "\n")
 				}
@@ -222,7 +222,7 @@ func (a *app) resolveAccountRecoveryWith(deleting bool, dispatch func(func()), s
 			a.sessionRevision = reply.State.Revision
 			if adoptErr := a.adoptVault(reply.Vault); adoptErr != nil {
 				a.stopNetwork()
-				a.status = adoptErr.Error()
+				a.status = vaultwarden.ErrorMessage(adoptErr)
 				return
 			}
 			a.itemsRevision = reply.State.Revision

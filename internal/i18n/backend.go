@@ -14,6 +14,8 @@ func init() {
 }
 
 var backendError = map[string]text{
+	"error.weak_kdf":         {"服务器提供的 PBKDF2 参数过低（少于 100000 次），已阻止在线认证。请使用可信的官方客户端提高账号 KDF 参数后重试", "The server supplied weak PBKDF2 parameters (fewer than 100000 iterations). Online authentication was blocked. Use a trusted official client to increase the account's KDF parameters before trying again"},
+	"error.unknown":          {"操作失败，请重试；若问题持续，请检查配置", "The operation failed. Try again; if the problem persists, check the configuration"},
 	"error.cancelled":        {"操作已取消", "Operation canceled"},
 	"error.checkpoint":       {"登录凭据尚未安全保存，已阻止服务器请求", "Login credentials have not been saved securely. The server request was blocked"},
 	"error.conflict":         {"项目已发生变化，请同步后重新确认修改", "The item has changed. Sync, then confirm your changes again"},
@@ -95,6 +97,7 @@ var backendPolicy = map[string]text{
 }
 
 var backendServer = map[string]text{
+	"server.rotation.err_attachment_preparation":           {"轮换账户密钥前，请先为附件创建独立加密密钥；完成附件迁移后重新核验。", "Before rotating the account key, prepare independent encryption keys for attachments. Complete attachment migration, then verify again."},
 	"server.attachment.err_migration_filename":             {"附件 %s 的文件名包含当前上传接口不支持的路径、控制字符或长度，无法无损迁移：%w", "The file name of attachment %s contains a path or control characters, or exceeds the length supported by the current upload API. It cannot be migrated without changes: %w"},
 	"server.backup.err_attachment_filename":                {"附件 %s 的文件名无法通过当前上传接口无损恢复，请保留原件并明确处理文件名：%w", "The file name of attachment %s cannot be restored unchanged through the current upload API. Keep the original and explicitly resolve the file name: %w"},
 	"server.backup.err_blank_text_loss":                    {"Bitwarden 会改写空白名称或备注，请使用 MyGo 备份", "Bitwarden would alter blank names or notes. Use a MyGo backup"},

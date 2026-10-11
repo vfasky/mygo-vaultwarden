@@ -35,13 +35,14 @@ type storageTransferReply struct {
 // lock/logout can revoke an in-flight authenticated download immediately.
 func BoundedStorageCall(input []byte, call func([]byte) ([]byte, error)) ([]byte, error) {
 	var request struct {
-		Operation string `json:"operation"`
+		Operation Operation `json:"operation"`
 	}
 	if err := json.Unmarshal(input, &request); err != nil {
 		return nil, err
 	}
-	switch request.Operation {
-	case "status", "settings", "lock", "logout", "retryCleanup", "clearSecretClipboard", "copySecret", "authorizeSecretDisplay":
+	// Unknown requests still traverse the transfer protocol and fail closed in
+	// native decoding, preserving the existing transport failure response.
+	if request.Operation.Valid() && !request.Operation.AllowsTransfer() {
 		return call(input)
 	}
 	if len(input) == 0 || len(input) > storageTransferBytes {

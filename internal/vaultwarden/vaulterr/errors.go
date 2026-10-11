@@ -2,26 +2,71 @@
 // Package vaulterr defines shared Vaultwarden sentinel errors.
 package vaulterr
 
-import "github.com/vfasky/mygo-vaultwarden/internal/i18n"
+import (
+	"context"
+	"errors"
 
-// Error messages deliberately exclude response bodies, URLs, tokens and secrets.
-var (
-	ErrServer          = i18n.Error("error.server")
-	ErrNetwork         = i18n.Error("error.network")
-	ErrProtocol        = i18n.Error("error.protocol")
-	ErrCredentials     = i18n.Error("error.credentials")
-	ErrMFA             = i18n.Error("error.mfa")
-	ErrUnsupportedMFA  = i18n.Error("error.unsupported_mfa")
-	ErrExpired         = i18n.Error("error.expired")
-	ErrIdentity        = i18n.Error("error.identity")
-	ErrKDF             = i18n.Error("error.kdf")
-	ErrEncryption      = i18n.Error("error.encryption")
-	ErrCancelled       = i18n.Error("error.cancelled")
-	ErrUnsupportedEdit = i18n.Error("error.unsupported_edit")
-	ErrCheckpoint      = i18n.Error("error.checkpoint")
-	ErrValidation      = i18n.Error("error.validation")
-	ErrPermission      = i18n.Error("error.permission")
-	ErrNotFound        = i18n.Error("error.not_found")
-	ErrConflict        = i18n.Error("error.conflict")
-	ErrRateLimited     = i18n.Error("error.rate_limited")
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 )
+
+// Sentinels contain stable identities only. Translate at the presentation boundary.
+var (
+	ErrServer          = errors.New("vaultwarden: server")
+	ErrNetwork         = errors.New("vaultwarden: network")
+	ErrProtocol        = errors.New("vaultwarden: protocol")
+	ErrCredentials     = errors.New("vaultwarden: credentials")
+	ErrMFA             = errors.New("vaultwarden: mfa")
+	ErrUnsupportedMFA  = errors.New("vaultwarden: unsupported_mfa")
+	ErrExpired         = errors.New("vaultwarden: expired")
+	ErrIdentity        = errors.New("vaultwarden: identity")
+	ErrKDF             = errors.New("vaultwarden: kdf")
+	ErrWeakKDF         = errors.New("vaultwarden: weak_kdf")
+	ErrEncryption      = errors.New("vaultwarden: encryption")
+	ErrCancelled       = errors.New("vaultwarden: cancelled")
+	ErrUnsupportedEdit = errors.New("vaultwarden: unsupported_edit")
+	ErrCheckpoint      = errors.New("vaultwarden: checkpoint")
+	ErrValidation      = errors.New("vaultwarden: validation")
+	ErrPermission      = errors.New("vaultwarden: permission")
+	ErrNotFound        = errors.New("vaultwarden: not_found")
+	ErrConflict        = errors.New("vaultwarden: conflict")
+	ErrRateLimited     = errors.New("vaultwarden: rate_limited")
+)
+
+// ErrorMessage translates known identities, including wrapped sentinels, using
+// the current language. Unknown errors never expose response text or secrets.
+// Callers with domain-specific error types must handle those before this fallback.
+func ErrorMessage(err error) string {
+	if err == nil {
+		return ""
+	}
+	for _, entry := range []struct {
+		err     error
+		message string
+	}{
+		{ErrServer, "error.server"},
+		{ErrNetwork, "error.network"},
+		{ErrProtocol, "error.protocol"},
+		{ErrCredentials, "error.credentials"},
+		{ErrMFA, "error.mfa"},
+		{ErrUnsupportedMFA, "error.unsupported_mfa"},
+		{ErrExpired, "error.expired"},
+		{ErrIdentity, "error.identity"},
+		{ErrWeakKDF, "error.weak_kdf"},
+		{ErrKDF, "error.kdf"},
+		{ErrEncryption, "error.encryption"},
+		{ErrCancelled, "error.cancelled"},
+		{context.Canceled, "error.cancelled"},
+		{ErrUnsupportedEdit, "error.unsupported_edit"},
+		{ErrCheckpoint, "error.checkpoint"},
+		{ErrValidation, "error.validation"},
+		{ErrPermission, "error.permission"},
+		{ErrNotFound, "error.not_found"},
+		{ErrConflict, "error.conflict"},
+		{ErrRateLimited, "error.rate_limited"},
+	} {
+		if errors.Is(err, entry.err) {
+			return i18n.T(entry.message)
+		}
+	}
+	return i18n.T("error.unknown")
+}

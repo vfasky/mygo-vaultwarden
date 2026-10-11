@@ -175,9 +175,12 @@ func AnalyzeAccountRotationCipherResources(ctx context.Context, input AccountRot
 		}
 		e = transformCompleteCipher(object, key, false)
 		if e == nil {
-			rows, _ := object["attachments"].([]any)
-			for _, row := range rows {
-				attachment := row.(map[string]any)
+			rows, rowsErr := backupObjectRows(object["attachments"])
+			if rowsErr != nil {
+				clear(key)
+				return result, rowsErr
+			}
+			for _, attachment := range rows {
 				if name, ok := attachment["fileName"].(string); !ok || name == "" {
 					e = ErrProtocol
 					break
@@ -191,7 +194,13 @@ func AnalyzeAccountRotationCipherResources(ctx context.Context, input AccountRot
 					break
 				}
 				if wrapped == "" {
-					result.Preparations = append(result.Preparations, RotationCipherPreparation{CipherID: object["id"].(string), AttachmentID: attachment["id"].(string), Reason: "owner-key-binary: upgrade, verify both files, explicitly delete original, fresh sync", Deleted: object["deletedDate"] != nil})
+					cipherID, cipherOK := object["id"].(string)
+					attachmentID, attachmentOK := attachment["id"].(string)
+					if !cipherOK || !attachmentOK || !validObjectID(cipherID) || !validObjectID(attachmentID) {
+						e = ErrProtocol
+						break
+					}
+					result.Preparations = append(result.Preparations, RotationCipherPreparation{CipherID: cipherID, AttachmentID: attachmentID, Reason: "owner-key-binary: upgrade, verify both files, explicitly delete original, fresh sync", Deleted: object["deletedDate"] != nil})
 					continue
 				}
 				var attachmentKey []byte

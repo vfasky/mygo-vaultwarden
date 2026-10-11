@@ -47,7 +47,7 @@ func (f *DeviceLogin) BindPassword(ctx context.Context, password []byte) error {
 	if strictJSON(data) != nil || json.Unmarshal(data, &kdf) != nil {
 		return ErrProtocol
 	}
-	master, err := vaultcrypto.DeriveMaster(password, f.email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, f.email, kdf)
 	if err != nil {
 		return err
 	}

@@ -66,6 +66,7 @@ type app struct {
 	mfaWarnings                               mfaRecoveryWarnings
 	targetOutcomeWarnings                     map[vaultwarden.Scope]string
 	loginSSO                                  bool
+	idleLock                                  *idleLockController
 	notificationsEnabled                      bool
 	notifications                             *controllerNotifications
 	notificationSyncPending                   bool
@@ -86,33 +87,33 @@ func (a *app) lockInterface() {
 	a.query = ""
 }
 
-func (a *app) runStorage(operation string) {
+func (a *app) runStorage(operation localstore.Operation) {
 	if runtime := a.runtimeVault; runtime != nil {
-		if operation == "logout" {
-			operation = "lock"
+		if operation == localstore.OperationLogout {
+			operation = localstore.OperationLock
 		}
-		if operation == "status" {
+		if operation == localstore.OperationStatus {
 			epoch := a.epoch + 1
-			request := localstore.Request{Operation: "status"}
+			request := localstore.Request{Operation: localstore.OperationStatus}
 			a.startStorage(request, func() localstore.Reply { return runtime.call(epoch, request) })
 			return
 		}
-		if operation == "reindex" || operation == "list" {
+		if operation == localstore.OperationReindex || operation == localstore.OperationList {
 			a.status = i18n.T("app.sync.runtime_bind_password_hint")
 			return
 		}
 	}
-	if operation == "lock" || operation == "logout" {
+	if operation == localstore.OperationLock || operation == localstore.OperationLogout {
 		a.lockInterface()
 	}
-	if operation == "list" {
+	if operation == localstore.OperationList {
 		if a.pending != 0 {
 			return
 		}
 		a.clearLoginInputs()
 	}
 	request := localstore.Request{Operation: operation}
-	if operation == "confirmAccountSwitch" {
+	if operation == localstore.OperationConfirmAccountSwitch {
 		if a.switchReceipt == nil {
 			a.status = i18n.T("login.account_switch.authentication_required_hint")
 			return
@@ -125,9 +126,9 @@ func (a *app) runStorage(operation string) {
 	}
 	storage := a.storageCall
 	a.startStorage(request, func() localstore.Reply {
-		if operation == "logout" {
+		if operation == localstore.OperationLogout {
 			// An unconditional lock is the cancellation barrier for pending logins.
-			locked := storage(localstore.Request{Operation: "lock"})
+			locked := storage(localstore.Request{Operation: localstore.OperationLock})
 			if locked.State != nil {
 				request.ExpectedRevision = locked.State.Revision
 			}
@@ -140,7 +141,7 @@ func (a *app) startStorage(request localstore.Request, work func() localstore.Re
 	a.advanceEpoch()
 	epoch := a.epoch
 	a.pending++
-	if request.Operation != "status" && request.Operation != "settings" {
+	if request.Operation != localstore.OperationStatus && request.Operation != localstore.OperationSettings {
 		a.status = i18n.T("app.sync.status_authenticating")
 	}
 	go func() {
@@ -155,7 +156,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 	if a.epoch != epoch {
 		return
 	}
-	isUnlock := request.Operation == "list" || request.Operation == "listPassword"
+	isUnlock := request.Operation == localstore.OperationList || request.Operation == localstore.OperationListPassword
 	if isUnlock && reply.OK && (reply.State == nil || !reply.State.Available ||
 		reply.State.Revision == "" || reply.State.Revision != request.ExpectedRevision ||
 		reply.State.Scope == nil || request.Scope == nil || *reply.State.Scope != *request.Scope) {
@@ -167,7 +168,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 	if reply.DeviceID != "" {
 		a.deviceID = reply.DeviceID
 	}
-	if request.Operation == "settings" && reply.State != nil && reply.State.Scope != nil && reply.State.Scope.Server != "https://demo.invalid" {
+	if request.Operation == localstore.OperationSettings && reply.State != nil && reply.State.Scope != nil && reply.State.Scope.Server != "https://demo.invalid" {
 		a.serverURL = reply.State.Scope.Server
 	}
 	if !reply.OK {
@@ -178,25 +179,34 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 		a.items = nil
 		if a.restoreUnlockedSession(reply) {
 			if err := a.adoptVault(reply.Vault); err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 			}
 		}
 		a.itemsRevision = reply.State.Revision
 		a.showLogin = false
-		a.startNotifications(a.postUI, localstore.Call)
+		a.idleLock.start()
+		a.startNotifications(a.dispatchUI, a.storageCall)
 		return
 	}
 	switch request.Operation {
-	case "inspectAccountSwitch":
+	case localstore.OperationInspectAccountSwitch:
 		if reply.AccountSwitch == nil || reply.State == nil || reply.State.Scope == nil || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID || reply.AccountSwitch.Binding.Target != *reply.State.Scope {
-			a.status = vaultwarden.ErrIdentity.Error()
+			a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 			return
 		}
 		a.switchReceipt = reply.AccountSwitch
 		a.status = i18n.T("login.account_switch.status_authenticated")
-	case "confirmAccountSwitch":
-		if reply.AccountSwitch == nil || reply.AccountSwitch.Phase != "confirmed" || reply.AccountSwitch.Binding.OperationID != request.SwitchOperationID || reply.State == nil || reply.State.AccountSwitchPending || reply.State.Scope == nil || reply.AccountSwitch.Binding.Target != *reply.State.Scope || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID {
-			a.status = vaultwarden.ErrIdentity.Error()
+	case localstore.OperationConfirmAccountSwitch:
+		if reply.AccountSwitch == nil || reply.AccountSwitch.Phase != "confirmed" || reply.AccountSwitch.Binding.OperationID != request.SwitchOperationID {
+			a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
+			return
+		}
+		if reply.State == nil || reply.State.AccountSwitchPending || reply.State.Scope == nil {
+			a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
+			return
+		}
+		if reply.AccountSwitch.Binding.Target != *reply.State.Scope || reply.AccountSwitch.NewSnapshotID != reply.State.SnapshotID {
+			a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 			return
 		}
 		a.switchReceipt = nil
@@ -207,18 +217,18 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 		if a.restoreUnlockedSession(reply) {
 			if err := a.adoptVault(reply.Vault); err != nil {
 				a.stopNetwork()
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			a.itemsRevision = reply.State.Revision
 			a.showLogin = false
 			a.startNotifications(a.dispatchUI, a.storageCall)
 		}
-	case "lock":
+	case localstore.OperationLock:
 		a.status = i18n.T("login.unlock.status_locked")
-	case "logout":
+	case localstore.OperationLogout:
 		a.status = i18n.T("app.settings.status_account_revoked")
-	case "reindex":
+	case localstore.OperationReindex:
 		a.status = i18n.T("app.settings.status_autofill_submitted")
 	default:
 		a.status = reply.Message
@@ -236,9 +246,13 @@ func Run() {
 		a.windows.native = true
 		a.openMainWindow()
 		a.applyLanguage()
-		a.runStorage("settings")
-		mygo.Power.OnLockScreen(func() { a.postUI(func() { a.runStorage("lock") }) })
-		mygo.Power.OnSuspend(func() { a.postUI(func() { a.runStorage("lock") }) })
+		a.idleLock = &idleLockController{
+			now: time.Now, idle: mygo.Power.IdleTime, after: idleAfter,
+			dispatch: a.dispatchUI, lock: func() { a.runStorage(localstore.OperationLock) },
+		}
+		a.runStorage(localstore.OperationSettings)
+		mygo.Power.OnLockScreen(func() { a.postUI(func() { a.runStorage(localstore.OperationLock) }) })
+		mygo.Power.OnSuspend(func() { a.postUI(func() { a.runStorage(localstore.OperationLock) }) })
 	})
 	mygo.App.OnSecondInstance(func(_ []string, _ string) { a.showMainWindow() })
 	mygo.App.OnBeforeQuit(func(_ *mygo.QuitEvent) { a.windows.quitting = true })

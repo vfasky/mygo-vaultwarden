@@ -12,7 +12,7 @@ func SaveSessionCheckpoint(prior *SnapshotStatus, checkpoint vaultwarden.Session
 	if prior == nil || !prior.Available || prior.Scope == nil || *prior.Scope != checkpoint.Scope || prior.Revision == "" {
 		return Reply{}, vaultwarden.ErrIdentity
 	}
-	reply := call(Request{Operation: "saveSession", ExpectedRevision: prior.Revision, Scope: &checkpoint.Scope,
+	reply := call(Request{Operation: OperationSaveSession, ExpectedRevision: prior.Revision, Scope: &checkpoint.Scope,
 		Session: checkpoint.Session, UnlockKey: checkpoint.UnlockKey})
 	if !reply.OK {
 		return reply, reply.Failure()

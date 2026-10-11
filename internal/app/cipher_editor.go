@@ -78,12 +78,115 @@ var cipherTypeNames = []string{"", "itemtype.login", "itemtype.note", "itemtype.
 var editorSpecs = map[int][]editorField{
 	1: {{key: "username", label: "common.username"}, {key: "password", label: "common.password", secret: true}, {key: "totp", label: "vault.field.login.totp", secret: true}},
 	2: {},
-	3: {{key: "cardholderName", label: "vault.field.card.holder"}, {key: "brand", label: "vault.field.card.brand"}, {key: "number", label: "vault.field.card.number", secret: true}, {key: "expMonth", label: "vault.field.card.expiration_month"}, {key: "expYear", label: "vault.field.card.expiration_year"}, {key: "code", label: "vault.field.card.security_code", secret: true}},
-	4: {{key: "title", label: "vault.field.identity.title"}, {key: "firstName", label: "vault.field.first_name"}, {key: "middleName", label: "vault.field.middle_name"}, {key: "lastName", label: "vault.field.last_name"}, {key: "address1", label: "vault.field.identity.address_one"}, {key: "address2", label: "vault.field.identity.address_two"}, {key: "address3", label: "vault.field.identity.address_three"}, {key: "city", label: "vault.field.identity.city"}, {key: "state", label: "vault.field.identity.state"}, {key: "postalCode", label: "vault.field.identity.postal_code"}, {key: "country", label: "vault.field.identity.country"}, {key: "company", label: "vault.field.identity.company"}, {key: "email", label: "common.email"}, {key: "phone", label: "vault.field.identity.phone"}, {key: "ssn", label: "vault.field.identity.social_security_number", secret: true}, {key: "username", label: "common.username"}, {key: "passportNumber", label: "vault.field.passport.number", secret: true}, {key: "licenseNumber", label: "vault.field.license.number", secret: true}},
+	3: {
+		{key: "cardholderName", label: "vault.field.card.holder"},
+		{key: "brand", label: "vault.field.card.brand"},
+		{
+			key:    "number",
+			label:  "vault.field.card.number",
+			secret: true,
+		},
+		{key: "expMonth", label: "vault.field.card.expiration_month"},
+		{key: "expYear", label: "vault.field.card.expiration_year"},
+		{
+			key:    "code",
+			label:  "vault.field.card.security_code",
+			secret: true,
+		},
+	},
+	4: {
+		{key: "title", label: "vault.field.identity.title"},
+		{key: "firstName", label: "vault.field.first_name"},
+		{key: "middleName", label: "vault.field.middle_name"},
+		{key: "lastName", label: "vault.field.last_name"},
+		{key: "address1", label: "vault.field.identity.address_one"},
+		{key: "address2", label: "vault.field.identity.address_two"},
+		{key: "address3", label: "vault.field.identity.address_three"},
+		{key: "city", label: "vault.field.identity.city"},
+		{key: "state", label: "vault.field.identity.state"},
+		{key: "postalCode", label: "vault.field.identity.postal_code"},
+		{key: "country", label: "vault.field.identity.country"},
+		{key: "company", label: "vault.field.identity.company"},
+		{key: "email", label: "common.email"},
+		{key: "phone", label: "vault.field.identity.phone"},
+		{
+			key:    "ssn",
+			label:  "vault.field.identity.social_security_number",
+			secret: true,
+		},
+		{key: "username", label: "common.username"},
+		{
+			key:    "passportNumber",
+			label:  "vault.field.passport.number",
+			secret: true,
+		},
+		{
+			key:    "licenseNumber",
+			label:  "vault.field.license.number",
+			secret: true,
+		},
+	},
 	5: {{key: "privateKey", label: "vault.field.ssh.private_key", secret: true}, {key: "publicKey", label: "vault.field.ssh.public_key"}, {key: "keyFingerprint", label: "vault.field.ssh.fingerprint"}},
-	6: {{key: "bankName", label: "vault.field.bank.name"}, {key: "nameOnAccount", label: "vault.field.bank.account_holder"}, {key: "accountType", label: "vault.field.bank.account_type"}, {key: "accountNumber", label: "vault.field.bank.account_number", secret: true}, {key: "routingNumber", label: "vault.field.bank.routing_number"}, {key: "branchNumber", label: "vault.field.bank.branch_number"}, {key: "pin", label: "vault.field.bank.pin", secret: true}, {key: "swiftCode", label: "vault.field.bank.swift"}, {key: "iban", label: "vault.field.bank.iban"}, {key: "bankContactPhone", label: "vault.field.bank.phone"}},
-	7: {{key: "firstName", label: "vault.field.first_name"}, {key: "middleName", label: "vault.field.middle_name"}, {key: "lastName", label: "vault.field.last_name"}, {key: "dateOfBirth", label: "vault.field.date_of_birth"}, {key: "licenseNumber", label: "vault.field.license.number", secret: true}, {key: "issuingCountry", label: "vault.field.issuing_country"}, {key: "issuingState", label: "vault.field.license.issuing_state"}, {key: "issueDate", label: "vault.field.issue_date"}, {key: "expirationDate", label: "vault.field.expiration_date"}, {key: "issuingAuthority", label: "vault.field.issuing_authority"}, {key: "licenseClass", label: "vault.field.license.class"}},
-	8: {{key: "surname", label: "vault.field.last_name"}, {key: "givenName", label: "vault.field.first_name"}, {key: "dateOfBirth", label: "vault.field.date_of_birth"}, {key: "sex", label: "vault.field.passport.sex"}, {key: "birthPlace", label: "vault.field.passport.birth_place"}, {key: "nationality", label: "vault.field.passport.nationality"}, {key: "issuingCountry", label: "vault.field.issuing_country"}, {key: "passportNumber", label: "vault.field.passport.number", secret: true}, {key: "passportType", label: "vault.field.passport.type"}, {key: "nationalIdentificationNumber", label: "vault.field.passport.national_identification_number", secret: true}, {key: "issuingAuthority", label: "vault.field.issuing_authority"}, {key: "issueDate", label: "vault.field.issue_date"}, {key: "expirationDate", label: "vault.field.expiration_date"}},
+	6: {
+		{key: "bankName", label: "vault.field.bank.name"},
+		{key: "nameOnAccount", label: "vault.field.bank.account_holder"},
+		{key: "accountType", label: "vault.field.bank.account_type"},
+		{
+			key:    "accountNumber",
+			label:  "vault.field.bank.account_number",
+			secret: true,
+		},
+		{key: "routingNumber", label: "vault.field.bank.routing_number"},
+		{key: "branchNumber", label: "vault.field.bank.branch_number"},
+		{
+			key:    "pin",
+			label:  "vault.field.bank.pin",
+			secret: true,
+		},
+		{key: "swiftCode", label: "vault.field.bank.swift"},
+		{key: "iban", label: "vault.field.bank.iban"},
+		{key: "bankContactPhone", label: "vault.field.bank.phone"},
+	},
+	7: {
+		{key: "firstName", label: "vault.field.first_name"},
+		{key: "middleName", label: "vault.field.middle_name"},
+		{key: "lastName", label: "vault.field.last_name"},
+		{key: "dateOfBirth", label: "vault.field.date_of_birth"},
+		{
+			key:    "licenseNumber",
+			label:  "vault.field.license.number",
+			secret: true,
+		},
+		{key: "issuingCountry", label: "vault.field.issuing_country"},
+		{key: "issuingState", label: "vault.field.license.issuing_state"},
+		{key: "issueDate", label: "vault.field.issue_date"},
+		{key: "expirationDate", label: "vault.field.expiration_date"},
+		{key: "issuingAuthority", label: "vault.field.issuing_authority"},
+		{key: "licenseClass", label: "vault.field.license.class"},
+	},
+	8: {
+		{key: "surname", label: "vault.field.last_name"},
+		{key: "givenName", label: "vault.field.first_name"},
+		{key: "dateOfBirth", label: "vault.field.date_of_birth"},
+		{key: "sex", label: "vault.field.passport.sex"},
+		{key: "birthPlace", label: "vault.field.passport.birth_place"},
+		{key: "nationality", label: "vault.field.passport.nationality"},
+		{key: "issuingCountry", label: "vault.field.issuing_country"},
+		{
+			key:    "passportNumber",
+			label:  "vault.field.passport.number",
+			secret: true,
+		},
+		{key: "passportType", label: "vault.field.passport.type"},
+		{
+			key:    "nationalIdentificationNumber",
+			label:  "vault.field.passport.national_identification_number",
+			secret: true,
+		},
+		{key: "issuingAuthority", label: "vault.field.issuing_authority"},
+		{key: "issueDate", label: "vault.field.issue_date"},
+		{key: "expirationDate", label: "vault.field.expiration_date"},
+	},
 }
 
 func sectionFields(f *vaultwarden.CipherFields) map[string]any {
@@ -108,6 +211,9 @@ func sectionFields(f *vaultwarden.CipherFields) map[string]any {
 	return nil
 }
 func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
+	if a.session != nil {
+		a.idleLock.start()
+	}
 	a.clearOrganizationEditor()
 	organizationPrompt := a.editor != nil && a.organizationItem(a.editor.repromptID)
 	a.vault = nil
@@ -147,7 +253,22 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	entries = append(entries, orgEntries...)
 	items := make([]localstore.DisplayCredential, 0, len(entries))
 	for _, e := range entries {
-		items = append(items, localstore.DisplayCredential{OrganizationID: e.OrganizationID, CollectionIDs: e.CollectionIDs, Readable: e.Readable, ID: e.ID, Title: e.Title, Username: e.Username, URL: e.URL, Type: e.Type, Favorite: e.Favorite, Archived: e.Archived, Deleted: e.Deleted, Editable: e.Editable, RequiresPassword: e.RequiresPassword, FolderID: e.FolderID})
+		items = append(items, localstore.DisplayCredential{
+			OrganizationID:   e.OrganizationID,
+			CollectionIDs:    e.CollectionIDs,
+			Readable:         e.Readable,
+			ID:               e.ID,
+			Title:            e.Title,
+			Username:         e.Username,
+			URL:              e.URL,
+			Type:             e.Type,
+			Favorite:         e.Favorite,
+			Archived:         e.Archived,
+			Deleted:          e.Deleted,
+			Editable:         e.Editable,
+			RequiresPassword: e.RequiresPassword,
+			FolderID:         e.FolderID,
+		})
 	}
 	a.clearSecretClipboard()
 	if a.editor != nil {
@@ -196,7 +317,7 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 	}
 	defaultMatch, err := session.DefaultURIMatch(a.vault)
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	editor := &cipherEditor{revision: a.sessionRevision, authorization: grant, defaultURIMatch: defaultMatch}
@@ -204,7 +325,7 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 		editor.authorizationExpires = grant.ExpiresAt()
 	}
 	if err := session.BindSnapshotRevision(*a.liveScope, a.sessionRevision); err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	if id != "" {
@@ -220,11 +341,11 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 				a.editor = editor
 				a.secretInputVersion++
 			}
-			a.status = err.Error()
+			a.status = vaultwarden.ErrorMessage(err)
 			return
 		}
 		if (!editor.fields.Edit && editor.fields.OrganizationID == nil) || !editor.fields.ViewPassword {
-			a.status = vaultwarden.ErrPermission.Error()
+			a.status = vaultwarden.ErrorMessage(vaultwarden.ErrPermission)
 			return
 		}
 	} else {
@@ -235,7 +356,7 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 		for _, collection := range a.collections {
 			if a.category == "collection:"+collection.ID {
 				if collection.ReadOnly || collection.HidePasswords {
-					a.status = vaultwarden.ErrPermission.Error()
+					a.status = vaultwarden.ErrorMessage(vaultwarden.ErrPermission)
 					return
 				}
 				editor.organizationID, editor.collectionID = collection.OrganizationID, collection.ID
@@ -571,7 +692,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 			}
 			return err
 		}
-		current := callStorage(localstore.Request{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
 			err = vaultwarden.ErrConflict
@@ -613,7 +734,7 @@ func (a *app) completeCipherMutation(epoch uint64, editor *cipherEditor, checkpo
 	a.cancel = nil
 	if checkpointState != nil && !a.adoptSessionCheckpoint(checkpointState) {
 		a.stopNetwork()
-		a.status = vaultwarden.ErrIdentity.Error()
+		a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 		return
 	}
 	if err != nil {

@@ -96,7 +96,7 @@ func (l *controllerLease) check(storage func(localstore.Request) localstore.Repl
 	if !active {
 		return vaultwarden.ErrCancelled
 	}
-	reply := storage(localstore.Request{Operation: "status"})
+	reply := storage(localstore.Request{Operation: localstore.OperationStatus})
 	next, active := l.state()
 	if !active || next.Revision != prior.Revision {
 		return vaultwarden.ErrCancelled

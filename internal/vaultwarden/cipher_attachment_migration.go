@@ -6,8 +6,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"fmt"
-	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"io"
 	"os"
@@ -83,7 +81,7 @@ func (s *Session) CipherAttachmentMigrationInfo(vault *VaultData, id string, gra
 		}
 		name, ok := row["fileName"].(string)
 		if !ok || name == "" || len(name) > 4096 || !utf8.ValidString(name) || strings.ContainsAny(name, "/\\\x00\r\n") {
-			return nil, fmt.Errorf(i18n.T("server.attachment.err_migration_filename"), attachmentID, ErrUnsupportedEdit)
+			return nil, localError("server.attachment.err_migration_filename", ErrUnsupportedEdit, attachmentID)
 		}
 		wrapped, _ := row["key"].(string)
 		if row["key"] != nil && row["key"] != "" && wrapped == "" {

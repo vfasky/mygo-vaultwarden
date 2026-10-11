@@ -55,7 +55,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(localstore.Reques
 	}
 	client, err := vaultwarden.NewClient(a.liveScope.Server, a.deviceID)
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	a.advanceEpoch()
@@ -77,7 +77,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(localstore.Reques
 				if checkpoint := lease.takeCheckpoint(); checkpoint != nil {
 					if !a.adoptSessionCheckpoint(checkpoint) {
 						a.stopNetwork()
-						a.status = vaultwarden.ErrIdentity.Error()
+						a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 					} else {
 						// Refresh has revoked Send drafts. Never assign a new revision to them.
 						a.advanceEpoch()
@@ -98,7 +98,7 @@ func (a *app) openSendWith(dispatch func(func()), storage func(localstore.Reques
 			return err
 		}
 		return session.WithSnapshotProtection(vault, a.sessionRevision, func(key []byte, deadline time.Time) error {
-			reply := storage(localstore.Request{Operation: "copySecret", SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: &scope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
+			reply := storage(localstore.Request{Operation: localstore.OperationCopySecret, SecretProtocol: 1, Secret: secret, SecretNotAfter: deadline.UnixMilli(), Scope: &scope, ExpectedRevision: a.sessionRevision, UnlockKey: key})
 			if !reply.OK {
 				return reply.Failure()
 			}

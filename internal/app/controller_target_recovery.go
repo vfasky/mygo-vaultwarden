@@ -96,7 +96,7 @@ func (p *targetRecoveryController) inspect() {
 	}
 	server, err := vaultwarden.CanonicalServer(p.server)
 	if err != nil {
-		p.status = err.Error()
+		p.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	email, password := vaultcrypto.NormalizeEmail(p.email), []byte(p.password)
@@ -145,7 +145,7 @@ func (p *targetRecoveryController) inspect() {
 			workspace.inspection, err = workspace.session.InspectFreshTargetRecovery(ctx)
 		}
 		if err == nil {
-			reply = p.storage(localstore.Request{Operation: "status"})
+			reply = p.storage(localstore.Request{Operation: localstore.OperationStatus})
 			if !reply.OK || reply.State == nil {
 				err = reply.Failure()
 			}
@@ -174,7 +174,7 @@ func (p *targetRecoveryController) inspect() {
 				if workspace != nil {
 					go workspace.close()
 				}
-				p.status = i18n.Tf("crossaccount.recovery.err_inspection_failed", err.Error())
+				p.status = i18n.Tf("crossaccount.recovery.err_inspection_failed", vaultwarden.ErrorMessage(err))
 				return
 			}
 			p.workspace = workspace
@@ -276,7 +276,7 @@ func (p *targetRecoveryController) verify(index int) {
 			notes = append(notes, i18n.T("crossaccount.recovery.status_partially_verified"))
 		}
 		if err != nil {
-			status := p.storage(localstore.Request{Operation: "status"})
+			status := p.storage(localstore.Request{Operation: localstore.OperationStatus})
 			if status.OK {
 				reply.State = status.State
 			}
@@ -293,7 +293,7 @@ func (p *targetRecoveryController) verify(index int) {
 				a.snapshot = reply.State
 			}
 			if err != nil {
-				p.status = i18n.Tf("crossaccount.recovery.err_barrier_retained", err.Error())
+				p.status = i18n.Tf("crossaccount.recovery.err_barrier_retained", vaultwarden.ErrorMessage(err))
 				if reply.State != nil && reply.State.AccountSwitchPending {
 					p.workspace = nil
 					go workspace.close()
@@ -312,7 +312,7 @@ func (p *targetRecoveryController) verify(index int) {
 				return
 			}
 			if reply.State == nil || reply.State.Scope == nil || *reply.State.Scope != workspace.inspection.Fresh.Scope || !reply.State.Available || reply.Vault == nil || !reply.Vault.PreservesPendingPolicies(workspace.inspection.Fresh.Vault) {
-				p.status = vaultwarden.ErrIdentity.Error()
+				p.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			for _, id := range workspace.inspection.Fresh.Vault.QuarantinedOrganizations {
@@ -323,12 +323,12 @@ func (p *targetRecoveryController) verify(index int) {
 					}
 				}
 				if !found {
-					p.status = vaultwarden.ErrIdentity.Error()
+					p.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 					return
 				}
 			}
 			if e := workspace.session.AcceptAuthenticatedSnapshot(reply.Vault, reply.State.Revision); e != nil {
-				p.status = e.Error()
+				p.status = vaultwarden.ErrorMessage(e)
 				return
 			}
 			// Transfer only the newly authenticated Session and the dedicated merged receipt.
@@ -343,7 +343,7 @@ func (p *targetRecoveryController) verify(index int) {
 			if e := a.adoptVault(reply.Vault); e != nil {
 				a.stopNetwork()
 				workspace.inspection.Close()
-				a.status = e.Error()
+				a.status = vaultwarden.ErrorMessage(e)
 				return
 			}
 			a.itemsRevision = reply.State.Revision

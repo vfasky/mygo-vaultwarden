@@ -5,6 +5,7 @@ package app
 
 import (
 	"context"
+	"github.com/vfasky/mygo-vaultwarden/internal/testfixture"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"os"
 	"path/filepath"
@@ -16,12 +17,7 @@ import (
 )
 
 func backupTestDirectory(t *testing.T) string {
-	t.Helper()
-	dir, err := filepath.EvalSymlinks(t.TempDir())
-	if err != nil {
-		t.Fatal(err)
-	}
-	return dir
+	return testfixture.BackupDirectory(t)
 }
 
 func TestExportLateLockCancelAndRevisionNeverPublish(t *testing.T) {

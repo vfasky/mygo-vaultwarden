@@ -16,16 +16,16 @@ import (
 
 func (c *orgServicesController) emergencyView(view *ui.Context) {
 	ui.Text(view, i18n.T("account.emergency.title")).FontSize(22)
-	if ui.Button(view, i18n.T("account.emergency.show_trusted_contacts")).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(view, i18n.T("account.emergency.show_trusted_contacts")).Disabled(c.host.Busy()).Clicked() {
 		c.loadEmergency(true)
 	}
-	if ui.Button(view, i18n.T("account.emergency.show_granted_access")).Disabled(c.owner.pending != 0).Clicked() {
+	if ui.Button(view, i18n.T("account.emergency.show_granted_access")).Disabled(c.host.Busy()).Clicked() {
 		c.loadEmergency(false)
 	}
 	if !c.emergencyTrusted {
 		for _, contact := range c.emergencyContacts {
 			if vaultwarden.EmergencyActionAllowed(contact, false, "view") {
-				if ui.Button(view, i18n.Tf("account.emergency.view_contact", contact.Name, contact.Email)).Disabled(c.owner.pending != 0).Clicked() {
+				if ui.Button(view, i18n.Tf("account.emergency.view_contact", contact.Name, contact.Email)).Disabled(c.host.Busy()).Clicked() {
 					c.openEmergencyView(contact)
 				}
 			}
@@ -35,7 +35,7 @@ func (c *orgServicesController) emergencyView(view *ui.Context) {
 		c.panel.View(view)
 	}
 	if env, err := c.environment(); err == nil {
-		if warning := c.owner.targetOutcomeWarnings[env.vault.Scope]; warning != "" {
+		if warning := c.host.Warning(env.vault.Scope); warning != "" {
 			ui.Text(view, warning).MaxLines(5)
 		}
 	}
@@ -167,7 +167,7 @@ func (c *orgServicesController) commitRecovery(ctx context.Context, plan *vaultw
 	receipt := adapter.Receipt()
 	var observed localstore.Reply
 	if result.IsolationAttempted && receipt == nil {
-		observed = c.baseStorage(localstore.Request{Operation: "status"})
+		observed = c.baseStorage(localstore.Request{Operation: localstore.OperationStatus})
 		if observed.OK {
 			receipt = observed.State
 		}
@@ -185,29 +185,8 @@ func (c *orgServicesController) commitRecovery(ctx context.Context, plan *vaultw
 			message = i18n.T("account.recovery.status_durable_result_unknown")
 		}
 		c.dispatch(func() {
-			a := c.owner
-			a.noteTargetOutcome(description.Actor, message)
-			if a.orgServices != c || a.epoch != env.epoch {
-				return
-			}
-			if env.runtime || (description.RequireTargetLogin && description.Target == description.Actor) {
-				a.stopNetwork()
-				if receipt != nil {
-					a.snapshot = receipt
-				}
-				a.status = i18n.Tf("account.recovery.status_login_required", message)
-				return
-			}
-			if receipt != nil && a.adoptSessionCheckpoint(receipt) {
-				a.advanceEpoch()
-				a.status = message
-			} else {
-				a.stopNetwork()
-				if receipt != nil {
-					a.snapshot = receipt
-				}
-				a.status = message
-			}
+			loginRequired := env.runtime || (description.RequireTargetLogin && description.Target == description.Actor)
+			c.host.RecoveryOutcome(env, description.Actor, receipt, message, loginRequired)
 		})
 	}
 	return result, operationErr
@@ -223,11 +202,11 @@ func (c *orgServicesController) loadEmergency(trusted bool) {
 		}
 		c.deliver(func() {
 			c.busy(false)
-			if c.owner.orgServices != c || c.owner.epoch != env.epoch {
+			if !c.host.Current(env) {
 				return
 			}
 			if err != nil {
-				c.status = err.Error()
+				c.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			c.emergencyContacts = contacts
@@ -262,11 +241,11 @@ func (c *orgServicesController) loadRecoveryMembers() {
 		}
 		c.deliver(func() {
 			c.busy(false)
-			if c.owner.orgServices != c || c.owner.epoch != env.epoch {
+			if !c.host.Current(env) {
 				return
 			}
 			if err != nil {
-				c.status = err.Error()
+				c.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			c.replacePanel(account.NewRecoveryPanel(choices, c.prepareRecovery, c.commitRecovery, c.deliver))

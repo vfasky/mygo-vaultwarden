@@ -31,7 +31,7 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 		if kit.Action(c, i18n.T("vault.attachment.migration.prepare"), "", false, busy || e.uncertain).Clicked() {
 			rows, err := session.CipherAttachmentMigrationInfo(a.vault, e.fields.ID, e.authorization)
 			if err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			e.attachmentMigration = &cipherAttachmentMigrationEditor{rows: rows}
@@ -113,7 +113,7 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 			}
 			return err
 		}
-		state := callStorage(localstore.Request{Operation: "status"})
+		state := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 		var result vaultwarden.CipherAttachmentMigrationResult
 		var err error
 		if !state.OK || !backupLease(state.State, scope, revision) {
@@ -132,7 +132,7 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 			a.cancel = nil
 			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			// Freeze even unknown outcomes; a new authenticated sync is required.
@@ -140,7 +140,7 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 			m.result = i18n.Tf("vault.attachment.migration.result", result.OriginalID, result.ReplacementID, result.MetadataCreated, result.Uploaded, result.Reconciled, result.ContentVerified, result.OriginalDeleted)
 			a.status = m.result
 			if err != nil {
-				a.status = err.Error() + " " + m.result
+				a.status = vaultwarden.ErrorMessage(err) + " " + m.result
 			}
 		})
 	}()

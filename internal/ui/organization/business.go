@@ -116,7 +116,12 @@ type CopyPanel struct {
 func NewCopyPanel(source vaultwarden.VaultEntry, choices []CollectionChoice, execute func(context.Context, string, string, string) (vaultwarden.CipherDocument, error), dispatch func(func())) *CopyPanel {
 	return &CopyPanel{Flow: orgBusinessFlow{dispatch: dispatch}, source: source, choices: append([]CollectionChoice(nil), choices...), target: -1, execute: execute}
 }
-func NewCopyPanelWithResources(source vaultwarden.VaultEntry, choices []CollectionChoice, execute func(context.Context, string, string, string) (vaultwarden.CipherDocument, error), prepare func(context.Context, string, string, string) (*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error), ready func(*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error), dispatch func(func())) *CopyPanel {
+
+type CopyExecutor func(context.Context, string, string, string) (vaultwarden.CipherDocument, error)
+type ResourceCopyPreparer func(context.Context, string, string, string) (*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error)
+type ResourceCopyReady func(*vaultwarden.ResourceImportPlan, vaultwarden.CipherDocument, error)
+
+func NewCopyPanelWithResources(source vaultwarden.VaultEntry, choices []CollectionChoice, execute CopyExecutor, prepare ResourceCopyPreparer, ready ResourceCopyReady, dispatch func(func())) *CopyPanel {
 	panel := NewCopyPanel(source, choices, execute, dispatch)
 	panel.prepareResources, panel.resourcesReady = prepare, ready
 	return panel
@@ -248,7 +253,11 @@ type ImportPanel struct {
 func NewImportPanel(plan *vaultwarden.OrganizationImportPlan, format string, choices []CollectionChoice, createAllowed bool, execute func(context.Context, *vaultwarden.OrganizationImportPlan, map[string]string) (vaultwarden.OrganizationOperationResult, error), dispatch func(func())) *ImportPanel {
 	return &ImportPanel{Flow: orgBusinessFlow{dispatch: dispatch}, plan: plan, format: format, choices: append([]CollectionChoice(nil), choices...), mappings: map[string]string{}, createAllowed: createAllowed, execute: execute}
 }
-func NewResourceImportPanel(resources *vaultwarden.ResourceImportPlan, choices []CollectionChoice, createAllowed bool, execute func(context.Context, *vaultwarden.OrganizationImportPlan, map[string]string) (vaultwarden.OrganizationOperationResult, error), ready func(*vaultwarden.ResourceImportPlan, vaultwarden.OrganizationOperationResult, error), dispatch func(func())) (*ImportPanel, error) {
+
+type ResourceImportExecutor func(context.Context, *vaultwarden.OrganizationImportPlan, map[string]string) (vaultwarden.OrganizationOperationResult, error)
+type ResourceImportReady func(*vaultwarden.ResourceImportPlan, vaultwarden.OrganizationOperationResult, error)
+
+func NewResourceImportPanel(resources *vaultwarden.ResourceImportPlan, choices []CollectionChoice, createAllowed bool, execute ResourceImportExecutor, ready ResourceImportReady, dispatch func(func())) (*ImportPanel, error) {
 	metadata, err := resources.OrganizationRestoreMetadata()
 	if err != nil {
 		return nil, err

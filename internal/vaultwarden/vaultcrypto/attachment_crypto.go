@@ -26,9 +26,10 @@ func AttachmentEncryptedSize(size int64) (int64, error) {
 	return AttachmentHeaderSize + (size/aes.BlockSize+1)*aes.BlockSize, nil
 }
 
-// A transfer owns its private spool until explicitly consumed and closed. Never
-// expose this path as a download destination: publication requires the session
-// and item authorization lease to be checked by the product layer.
+// A transfer owns an unlinked private spool until explicitly consumed and closed.
+// Publication requires the session and item authorization lease to be checked by
+// the product layer. Unlinking prevents pathname access and crash leftovers; it
+// does not protect against an attacker able to access this process's descriptors.
 type AttachmentSpool struct {
 	File *os.File
 	Size int64
@@ -39,15 +40,21 @@ func newAttachmentSpool() (*AttachmentSpool, error) {
 	if err != nil {
 		return nil, vaulterr.ErrEncryption
 	}
+	// Unlink before writing any data and retain this descriptor through MAC
+	// verification and decryption. Platforms that cannot unlink an open file
+	// fail closed; never fall back to a named plaintext spool.
+	if err := os.Remove(f.Name()); err != nil {
+		_ = f.Close()
+		_ = os.Remove(f.Name())
+		return nil, vaulterr.ErrEncryption
+	}
 	return &AttachmentSpool{File: f}, nil // CreateTemp creates with mode 0600.
 }
 func (s *AttachmentSpool) Close() {
 	if s == nil || s.File == nil {
 		return
 	}
-	name := s.File.Name()
 	_ = s.File.Close()
-	_ = os.Remove(name)
 	s.File = nil
 }
 func (s *AttachmentSpool) Rewind() error {

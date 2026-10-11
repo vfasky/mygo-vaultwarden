@@ -44,7 +44,7 @@ type Request struct {
 	ClearingPolicy     *vaultwarden.PendingPolicyMutation `json:"clearingPolicy,omitempty"`
 	PendingPolicy      *vaultwarden.PendingPolicyMutation `json:"pendingPolicy,omitempty"`
 	OrganizationID     string                             `json:"organizationID,omitempty"`
-	Operation          string                             `json:"operation"`
+	Operation          Operation                          `json:"operation"`
 	ExpectedRevision   string                             `json:"expectedRevision,omitempty"`
 	Credentials        []vaultwarden.Credential           `json:"credentials"`
 	Scope              *vaultwarden.Scope                 `json:"scope,omitempty"`
@@ -60,7 +60,7 @@ type Request struct {
 // A zero-result sync is an explicit replacement, never an absent field.
 func (r Request) MarshalJSON() ([]byte, error) {
 	type wireRequest Request
-	if (r.Operation == "publishBoundAccount" || r.Operation == "publishVault" || r.Operation == "restoreOrganizationAccess" || r.Operation == "restorePolicyAccess" || r.Operation == "accountRecoveryResolve" || r.Operation == "targetRecoveryResolve" || r.Operation == "targetRecoveryResolveLocal") && r.Credentials == nil {
+	if r.Operation.PublishesCredentials() && r.Credentials == nil {
 		r.Credentials = []vaultwarden.Credential{}
 	}
 	return json.Marshal(wireRequest(r))
@@ -69,7 +69,10 @@ func (r Request) MarshalJSON() ([]byte, error) {
 type Failure struct{ Code, Message string }
 
 func (e *Failure) Error() string { return e.Message }
-func (r Reply) Failure() error   { return &Failure{Code: r.Code, Message: r.Message} }
+
+// UserMessage contains the native bridge's localized, application-owned reply.
+func (e *Failure) UserMessage() string { return e.Message }
+func (r Reply) Failure() error         { return &Failure{Code: r.Code, Message: r.Message} }
 
 type DisplayCredential struct {
 	OrganizationID   string   `json:"-"`

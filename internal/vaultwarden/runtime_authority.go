@@ -24,7 +24,7 @@ func runtimePasswordKey(ctx context.Context, client *Client, email, wrapped stri
 	if strictJSON(data) != nil || json.Unmarshal(data, &kdf) != nil {
 		return nil, ErrProtocol
 	}
-	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, email, kdf)
 	if err != nil {
 		return nil, err
 	}

@@ -83,7 +83,7 @@ func (s *Session) accountProofLocked(input AccountSensitiveInput) (accountProof,
 	if s.passwordUnlock == nil {
 		return accountProof{}, ErrExpired
 	}
-	master, err := vaultcrypto.DeriveMaster(input.Password, s.email, s.passwordUnlock.Config.KDF)
+	master, err := vaultcrypto.DeriveOnlineMaster(input.Password, s.email, s.passwordUnlock.Config.KDF)
 	if err != nil {
 		return accountProof{}, err
 	}

@@ -69,8 +69,15 @@ func organizationCipherIDs(raws []json.RawMessage, orgID string) []string {
 
 func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID string, before []string, expected []json.RawMessage, plan *OrganizationImportPlan, mappings map[string]string, persist func(SessionCheckpoint) error) OrganizationImportReconciliation {
 	r := OrganizationImportReconciliation{BeforeIDs: before}
+	if plan == nil || len(plan.file.Items) == 0 || len(expected) != len(plan.file.Items) {
+		return r
+	}
 	for _, item := range plan.file.Items {
-		r.Items = append(r.Items, OrganizationImportObservation{SourceID: item["id"].(string), Reason: i18n.T("server.transfer.err_fresh_read_incomplete")})
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			return r
+		}
+		r.Items = append(r.Items, OrganizationImportObservation{SourceID: identity.ID, Reason: i18n.T("server.transfer.err_fresh_read_incomplete")})
 	}
 	// This policy read does not accept a snapshot, issue an offline receipt, clear
 	// isolation or discard pending policies.
@@ -125,9 +132,14 @@ func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID s
 			continue
 		}
 		expectedCollections := []string{}
-		complete := true
-		for _, source := range plan.file.Items[i]["collectionIds"].([]any) {
-			target := mappings[source.(string)]
+		sources, complete := plan.file.Items[i]["collectionIds"].([]any)
+		for _, source := range sources {
+			sourceID, ok := source.(string)
+			if !ok {
+				complete = false
+				break
+			}
+			target := mappings[sourceID]
 			if target == "" {
 				complete = false
 				break
@@ -161,12 +173,21 @@ func (s *Session) reconcileOrganizationImportLocked(ctx context.Context, orgID s
 			wantFields.Edit, gotFields.Edit = false, false
 			wantFields.ViewPassword, gotFields.ViewPassword = false, false
 			relations := []string{}
-			if list, ok := actual["collectionIds"].([]any); ok {
-				for _, v := range list {
-					if id, ok := v.(string); ok {
-						relations = append(relations, id)
-					}
+			list, ok := actual["collectionIds"].([]any)
+			if !ok {
+				continue
+			}
+			validRelations := true
+			for _, value := range list {
+				id, ok := value.(string)
+				if !ok || !validObjectID(id) {
+					validRelations = false
+					break
 				}
+				relations = append(relations, id)
+			}
+			if !validRelations {
+				continue
 			}
 			sort.Strings(relations)
 			if reflect.DeepEqual(wantFields, gotFields) && reflect.DeepEqual(expectedCollections, relations) {

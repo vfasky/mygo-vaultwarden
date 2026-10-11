@@ -97,9 +97,9 @@ func TestLegacySnapshotOffersMigrationAndRetainsTouchID(t *testing.T) {
 }
 
 func TestUnlockReceiptsCannotRevealStaleOrWrongAccountMetadata(t *testing.T) {
-	for _, operation := range []string{"listPassword", "list"} {
+	for _, operation := range []localstore.Operation{localstore.OperationListPassword, localstore.OperationList} {
 		for _, scenario := range []string{"success", "wrong-password", "cancelled", "late-lock", "late-logout", "wrong-revision", "wrong-account", "wrong-server", "nil-state", "unavailable"} {
-			t.Run(operation+"/"+scenario, func(t *testing.T) {
+			t.Run(string(operation)+"/"+scenario, func(t *testing.T) {
 				a := passwordLockedApp()
 				a.epoch, a.pending = 2, 1
 				request := localstore.Request{Operation: operation, ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}

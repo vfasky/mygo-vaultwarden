@@ -171,7 +171,7 @@ var accountForm = map[string]text{
 	"account.form.err_registration_request":       {"请求失败或结果未知，请检查邮箱后再继续", "The request failed or the outcome is unknown. Check your email before continuing"},
 	"account.form.evaluate_password":              {"评估密码强度", "Check password strength"},
 	"account.form.kdf_iterations":                 {"迭代次数", "Iterations"},
-	"account.form.kdf_memory":                     {"内存 MiB（16–256）", "Memory in MiB (16–256)"},
+	"account.form.kdf_memory":                     {"内存 MiB（16–1024）", "Memory in MiB (16–1024)"},
 	"account.form.kdf_parallelism":                {"并行度（1–16）", "Parallelism (1–16)"},
 	"account.form.new_email":                      {"新邮箱", "New email"},
 	"account.form.new_password":                   {"新主密码（至少 12 字符）", "New master password (at least 12 characters)"},

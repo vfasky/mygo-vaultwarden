@@ -12,7 +12,13 @@ import (
 // It grants metadata query/resolve only, never a vault/AutoFill lease.
 func NewTargetRecoveryLoginStorage(state *SnapshotStatus, epoch uint64, currentEpoch func() uint64,
 	fresh vaultwarden.SyncResult, evidence TargetRecoveryVerification, call func(Request) Reply) (*TargetRecoveryStorage, error) {
-	if state == nil || state.Revision == "" || epoch == 0 || currentEpoch == nil || currentEpoch() != epoch || call == nil || fresh.Vault == nil || fresh.PasswordUnlock == nil || len(fresh.PasswordUnlock.Key) != 32 || len(fresh.Session) == 0 || fresh.Scope != fresh.Vault.Scope || fresh.Scope.Account == "" || evidence.AuthenticationEpoch == 0 {
+	if state == nil || state.Revision == "" || epoch == 0 || currentEpoch == nil || currentEpoch() != epoch || call == nil {
+		return nil, ErrTargetRecovery
+	}
+	if fresh.Vault == nil || fresh.PasswordUnlock == nil || len(fresh.PasswordUnlock.Key) != 32 || len(fresh.Session) == 0 {
+		return nil, ErrTargetRecovery
+	}
+	if fresh.Scope != fresh.Vault.Scope || fresh.Scope.Account == "" || evidence.AuthenticationEpoch == 0 {
 		return nil, ErrTargetRecovery
 	}
 	for _, h := range []string{evidence.AuthorityHash, evidence.KeyHash, evidence.MembershipHash, evidence.MFAHash, evidence.ConfirmationHash} {
@@ -20,7 +26,20 @@ func NewTargetRecoveryLoginStorage(state *SnapshotStatus, epoch uint64, currentE
 			return nil, ErrTargetRecovery
 		}
 	}
-	proof := targetRecoveryResolution{Kind: evidence.Kind, ExpectedRevision: state.Revision, Target: fresh.Scope, VaultHash: TargetRecoveryHash(fresh.Vault.Sync), SessionHash: TargetRecoveryHash(fresh.Session), UnlockHash: TargetRecoveryHash(fresh.PasswordUnlock.Key), AuthorityHash: evidence.AuthorityHash, KeyHash: evidence.KeyHash, MembershipHash: evidence.MembershipHash, MFAHash: evidence.MFAHash, ConfirmationHash: evidence.ConfirmationHash, AuthenticationEpoch: evidence.AuthenticationEpoch}
+	proof := targetRecoveryResolution{
+		Kind:                evidence.Kind,
+		ExpectedRevision:    state.Revision,
+		Target:              fresh.Scope,
+		VaultHash:           TargetRecoveryHash(fresh.Vault.Sync),
+		SessionHash:         TargetRecoveryHash(fresh.Session),
+		UnlockHash:          TargetRecoveryHash(fresh.PasswordUnlock.Key),
+		AuthorityHash:       evidence.AuthorityHash,
+		KeyHash:             evidence.KeyHash,
+		MembershipHash:      evidence.MembershipHash,
+		MFAHash:             evidence.MFAHash,
+		ConfirmationHash:    evidence.ConfirmationHash,
+		AuthenticationEpoch: evidence.AuthenticationEpoch,
+	}
 	v := *fresh.Vault
 	v.Sync = bytes.Clone(v.Sync)
 	u := *fresh.PasswordUnlock

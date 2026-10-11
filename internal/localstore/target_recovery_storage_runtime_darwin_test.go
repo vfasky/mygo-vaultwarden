@@ -70,8 +70,11 @@ func TestNativeRuntimeSecretLeaseABI(t *testing.T) {
 	request["operation"] = "copy"
 	request["requestID"] = "11111111-1111-4111-8111-111111111111"
 	request["secret"] = "isolated-fixture-secret"
-	if call(request)["ok"] != true || call(request)["ok"] != true {
-		t.Fatal("copy/idempotence failed")
+	if call(request)["ok"] != true {
+		t.Fatal("copy failed")
+	}
+	if call(request)["ok"] != true {
+		t.Fatal("copy idempotence failed")
 	}
 	request["secret"] = "different"
 	if call(request)["ok"] == true {

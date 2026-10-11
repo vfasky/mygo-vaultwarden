@@ -31,7 +31,7 @@ func (s *Session) WithOrganizationAPIKey(ctx context.Context, vault *VaultData, 
 		return ErrPermission
 	}
 	config := s.passwordUnlock.Config
-	master, err := vaultcrypto.DeriveMaster(password, config.Email, config.KDF)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, config.Email, config.KDF)
 	if err != nil {
 		return err
 	}

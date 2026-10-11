@@ -37,7 +37,7 @@ func (s *TargetRecoveryStorage) InspectLocalTarget() (Reply, error) {
 	if s.binding == nil {
 		return Reply{}, ErrTargetRecovery
 	}
-	req := s.request("targetRecoveryInspectLocal")
+	req := s.request(OperationTargetRecoveryInspectLocal)
 	target := s.binding.Target
 	req.Scope = &target
 	reply, err := s.receive(req)

@@ -6,60 +6,16 @@ package localstore
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/vfasky/mygo-vaultwarden/internal/testfixture"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
-	"os"
-	"runtime"
 	"sync/atomic"
 	"testing"
 
-	"github.com/ebitengine/purego"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 func recoveryNativeCall(t *testing.T) func(Request) Reply {
-	t.Helper()
-	library := os.Getenv("SNAPSHOT_TEST_HARNESS")
-	if library == "" {
-		t.Skip("requires isolated MemoryKeys Swift C ABI harness")
-	}
-	t.Setenv("SNAPSHOT_TEST_DIRECTORY", t.TempDir())
-	handle, err := purego.Dlopen(library, purego.RTLD_NOW|purego.RTLD_LOCAL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	symbol, err := purego.Dlsym(handle, "mygo_snapshot_execute")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var native func([]byte, int, []byte, int) int32
-	purego.RegisterFunc(&native, symbol)
-	return func(request Request) Reply {
-		t.Helper()
-		input, err := json.Marshal(request)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer clear(input)
-		output, err := BoundedStorageCall(input, func(frame []byte) ([]byte, error) {
-			buffer := make([]byte, 512*1024)
-			n := native(frame, len(frame), buffer, len(buffer))
-			runtime.KeepAlive(frame)
-			runtime.KeepAlive(buffer)
-			if n <= 0 || int(n) > len(buffer) {
-				t.Fatalf("ABI length %d", n)
-			}
-			return buffer[:n], nil
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer clear(output)
-		var reply Reply
-		if json.Unmarshal(output, &reply) != nil {
-			t.Fatal("invalid bridge JSON")
-		}
-		return reply
-	}
+	return testfixture.RecoveryNativeCall[Request, Reply](t, BoundedStorageCall)
 }
 func TestNativeAccountRecoveryLifecycle(t *testing.T) {
 	call := recoveryNativeCall(t)

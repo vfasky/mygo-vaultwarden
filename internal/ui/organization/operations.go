@@ -101,7 +101,7 @@ func (p *OperationsPanel) Start() {
 			case result.ReconcileRequired:
 				p.status = i18n.T("org.ops.status_partial")
 			case err != nil:
-				p.status = i18n.Tf("org.ops.err_request_incomplete", err.Error())
+				p.status = i18n.Tf("org.ops.err_request_incomplete", vaultwarden.ErrorMessage(err))
 			case result.Applied:
 				p.status = i18n.Tf("org.ops.status_confirmed", len(result.IDs))
 			default:
@@ -125,7 +125,13 @@ func (p *OperationsPanel) View(c *ui.Context) {
 	for _, option := range []struct {
 		label  string
 		action vaultwarden.CipherAction
-	}{{i18n.T("org.ops.move_to_trash"), vaultwarden.CipherTrash}, {i18n.T("common.restore"), vaultwarden.CipherRestore}, {i18n.T("common.archive"), vaultwarden.CipherArchive}, {i18n.T("common.unarchive"), vaultwarden.CipherUnarchive}, {i18n.T("common.delete_permanently"), vaultwarden.CipherDeletePermanently}} {
+	}{
+		{i18n.T("org.ops.move_to_trash"), vaultwarden.CipherTrash},
+		{i18n.T("common.restore"), vaultwarden.CipherRestore},
+		{i18n.T("common.archive"), vaultwarden.CipherArchive},
+		{i18n.T("common.unarchive"), vaultwarden.CipherUnarchive},
+		{i18n.T("common.delete_permanently"), vaultwarden.CipherDeletePermanently},
+	} {
 		if kit.Action(c, option.label, "", p.action == option.action, p.running || p.terminal).Key("org-operation-" + string(option.action)).Clicked() {
 			p.action = option.action
 			p.Confirmation = false

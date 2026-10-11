@@ -16,6 +16,7 @@ var (
 	ErrUnsupportedMFA  = vaulterr.ErrUnsupportedMFA
 	ErrExpired         = vaulterr.ErrExpired
 	ErrIdentity        = vaulterr.ErrIdentity
+	ErrWeakKDF         = vaulterr.ErrWeakKDF
 	ErrKDF             = vaulterr.ErrKDF
 	ErrEncryption      = vaulterr.ErrEncryption
 	ErrCancelled       = vaulterr.ErrCancelled

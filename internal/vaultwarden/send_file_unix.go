@@ -16,8 +16,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Pin every parent directory using openat(O_NOFOLLOW). Publication is a linkat
-// no-replace operation in that pinned directory; existing files are untouched.
+// Pin the explicitly selected directory without opening ungranted ancestors.
+// Publication uses linkat without replacement within that pinned directory.
 type sendDestination struct {
 	dir               int
 	temporary, target string
@@ -31,20 +31,9 @@ func sendParent(path string) (int, string, error) {
 	if target == "." || target == "/" {
 		return -1, "", ErrValidation
 	}
-	fd, e := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	fd, e := unix.Open(filepath.Dir(path), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
 	if e != nil {
 		return -1, "", ErrPermission
-	}
-	for _, part := range strings.Split(strings.TrimPrefix(filepath.Dir(path), "/"), "/") {
-		if part == "" {
-			continue
-		}
-		next, e := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC|unix.O_NOFOLLOW, 0)
-		unix.Close(fd)
-		if e != nil {
-			return -1, "", ErrPermission
-		}
-		fd = next
 	}
 	return fd, target, nil
 }
@@ -52,12 +41,14 @@ func sendParent(path string) (int, string, error) {
 // OpenSendSource pins a regular local file without following symlinks. The
 // caller owns the returned handle and closes it even on cancellation.
 func OpenSendSource(path string) (io.ReadCloser, int64, string, error) {
-	dir, name, e := sendParent(path)
-	if e != nil {
-		return nil, 0, "", e
+	if !filepath.IsAbs(path) || strings.ContainsRune(path, 0) || filepath.Clean(path) != path {
+		return nil, 0, "", ErrValidation
 	}
-	defer unix.Close(dir)
-	fd, e := unix.Openat(dir, name, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
+	name := filepath.Base(path)
+	if name == "." || name == "/" {
+		return nil, 0, "", ErrValidation
+	}
+	fd, e := unix.Open(path, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 	if e != nil {
 		return nil, 0, "", ErrPermission
 	}

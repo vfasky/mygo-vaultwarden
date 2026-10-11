@@ -13,6 +13,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -65,7 +66,7 @@ func (a *app) chooseResourceImportFile() {
 		var resources *vaultwarden.ResourceImportPlan
 		var metadata *vaultwarden.ImportPlan
 		if err == nil && len(paths) == 1 && ctx.Err() == nil {
-			state := callStorage(localstore.Request{Operation: "status"})
+			state := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 			if !state.OK || !backupLease(state.State, scope, revision) {
 				err = vaultwarden.ErrConflict
 			} else {
@@ -86,7 +87,7 @@ func (a *app) chooseResourceImportFile() {
 				resources.Clear()
 				metadata.Clear()
 				if a.backupEditor == e && err != nil {
-					a.status = err.Error()
+					a.status = vaultwarden.ErrorMessage(err)
 				}
 				return
 			}
@@ -141,13 +142,13 @@ func (a *app) chooseResourceExportFile() {
 			}
 			return err
 		}
-		path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(vaultwarden.MyGoResources)}})
+		path, err := send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(vaultwarden.MyGoResources)}})
 		var stage *fileio.StagedFile
 		var proof *vaultwarden.ResourceBackupPublication
 		grants := map[string]*vaultwarden.ItemAuthorization{}
 		if err == nil && path != "" && ctx.Err() == nil {
 			path, err = fileio.BackupOutputPath(path, vaultwarden.MyGoResources)
-			state := callStorage(localstore.Request{Operation: "status"})
+			state := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 			if err == nil && (!state.OK || !backupLease(state.State, scope, revision)) {
 				err = vaultwarden.ErrConflict
 			}
@@ -180,27 +181,27 @@ func (a *app) chooseResourceExportFile() {
 			a.cancel = nil
 			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			if !a.backupCurrent(e, epoch) || ctx.Err() != nil {
 				return
 			}
 			if err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			if stage == nil {
 				a.status = i18n.T("backup.export.status_cancelled")
 				return
 			}
-			state := callStorage(localstore.Request{Operation: "status"})
+			state := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 			if !state.OK || !backupLease(state.State, scope, revision) {
-				a.status = vaultwarden.ErrConflict.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrConflict)
 				return
 			}
 			if err = session.PublishResourceBackup(ctx, proof, grants, stage.Commit); err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			e.confirm = false
@@ -348,7 +349,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 		var result vaultwarden.AttachmentUploadResult
 		var trashResult vaultwarden.CipherStateResult
 		var err error
-		state := storage(localstore.Request{Operation: "status"})
+		state := storage(localstore.Request{Operation: localstore.OperationStatus})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			err = vaultwarden.ErrConflict
 		}
@@ -392,7 +393,7 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 			a.cancel = nil
 			if checkpoint != nil && !a.adoptBackupCheckpoint(e, checkpoint) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			if trashSource != "" {
@@ -412,8 +413,8 @@ func (a *app) runResourceRestoreWith(index int, verify bool, trashSource string,
 			}
 			m.rows[index].Problem = ""
 			if err != nil {
-				m.rows[index].Problem = err.Error()
-				a.status = err.Error() + " " + a.status
+				m.rows[index].Problem = vaultwarden.ErrorMessage(err)
+				a.status = vaultwarden.ErrorMessage(err) + " " + a.status
 			}
 			if !verify && (attempted || trashResult.Dispatched) && a.sessionOwnsSnapshot() {
 				refresh()

@@ -20,46 +20,31 @@ import (
 
 var errBackupFile = i18n.Error("file.backup.err_unsafe_access")
 
-// Pin every parent component by descriptor, refusing symlinks. Path replacement
-// after selection cannot redirect a secret write outside the selected directory.
+// Open only the explicitly selected directory. A native file selection grants
+// access to that file, not its parent; callers staging exports must separately
+// obtain a directory selection. Resolving ancestors is left to the kernel (e.g.
+// macOS /tmp -> /private/tmp); the selected directory itself must not be a link.
+// All subsequent writes stay relative to this pinned descriptor.
 func openBackupParent(path string) (int, string, error) {
-	if !filepath.IsAbs(path) || strings.ContainsRune(path, 0) {
+	if !filepath.IsAbs(path) || strings.ContainsRune(path, 0) || filepath.Clean(path) != path {
 		return -1, "", errBackupFile
 	}
-	path = filepath.Clean(path)
 	name := filepath.Base(path)
 	if name == "/" || name == "." {
 		return -1, "", errBackupFile
 	}
-	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	fd, err := unix.Open(filepath.Dir(path), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return -1, "", errBackupFile
-	}
-	for _, part := range strings.Split(strings.TrimPrefix(filepath.Dir(path), "/"), "/") {
-		if part == "" {
-			continue
-		}
-		next, err := unix.Openat(fd, part, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		unix.Close(fd)
-		if err != nil {
-			return -1, "", errBackupFile
-		}
-		fd = next
 	}
 	return fd, name, nil
 }
 
 func ReadBackupFile(ctx context.Context, path string) ([]byte, error) {
-	fd, name, err := openBackupParent(path)
+	file, err := openSelectedInput(path)
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(fd)
-	raw, err := unix.Openat(fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, errBackupFile
-	}
-	file := os.NewFile(uintptr(raw), "import")
 	defer file.Close()
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() || info.Size() > vaultwarden.MaxBackupSize {

@@ -5,8 +5,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"net/http"
 )
@@ -238,7 +236,7 @@ func (s *Session) organizationCipherPolicyGuardLocked(ctx context.Context, data 
 		return nil, ErrPermission
 	}
 	if policies.restrictedOrganizations[orgID][kind] {
-		return nil, fmt.Errorf(i18n.T("server.policy.err_organization_item_type_restricted"), ErrPermission)
+		return nil, localError("server.policy.err_organization_item_type_restricted", ErrPermission)
 	}
 	return func() error {
 		if err := s.checkOperationPoliciesLocked(ctx, policies); err != nil {
@@ -291,7 +289,7 @@ func (s *Session) personalCipherStatePolicyLocked(ctx context.Context, ids []str
 			return ErrPermission
 		}
 		if policies.restrictedPersonal[*meta.Type] {
-			return fmt.Errorf(i18n.T("server.policy.err_item_state_restricted"), ErrPermission)
+			return localError("server.policy.err_item_state_restricted", ErrPermission)
 		}
 		found[meta.ID] = true
 	}
@@ -369,10 +367,10 @@ func (s *Session) personalCipherPolicyGuardLocked(ctx context.Context, kind int,
 		return nil, err
 	}
 	if policies.personalOwnership {
-		return nil, fmt.Errorf(i18n.T("server.policy.err_personal_ownership_restricted"), ErrPermission)
+		return nil, localError("server.policy.err_personal_ownership_restricted", ErrPermission)
 	}
 	if policies.restrictedPersonal[kind] {
-		return nil, fmt.Errorf(i18n.T("server.policy.err_personal_item_type_restricted"), ErrPermission)
+		return nil, localError("server.policy.err_personal_item_type_restricted", ErrPermission)
 	}
 	return func() error {
 		if err := s.checkOperationPoliciesLocked(ctx, policies); err != nil {

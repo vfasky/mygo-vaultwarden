@@ -248,7 +248,7 @@ func TestAccountPolicyAndSensitiveInput(t *testing.T) {
 	if _, err := s.accountProofLocked(AccountSensitiveInput{OTP: "123456"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []vaultcrypto.KDF{{Type: 0, Iterations: 99999}, {Type: 2, Iterations: 100000}, {Type: 1, Iterations: 2, Memory: 257, Parallelism: 1}, {Type: 1, Iterations: 100000, Memory: 16, Parallelism: 1}} {
+	for _, k := range []vaultcrypto.KDF{{Type: 0, Iterations: 99999}, {Type: 2, Iterations: 100000}, {Type: 1, Iterations: 2, Memory: 1025, Parallelism: 1}, {Type: 1, Iterations: 100000, Memory: 16, Parallelism: 1}} {
 		if accountNewKDF(k) == nil {
 			t.Fatal("unbounded KDF accepted")
 		}

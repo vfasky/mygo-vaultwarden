@@ -111,7 +111,7 @@ func TestRegistrationKDFAdvanced(t *testing.T) {
 	tt := ui.NewTester(func(c *ui.Context) { SignedOutView(c, f) }, 400, 1600)
 	uitest.Click(t, tt, "Argon2id")
 	tt.Frame()
-	if f.kdfType != "1" || f.iterations != "3" || !tt.HasText("内存 MiB（16–256）") {
+	if f.kdfType != "1" || f.iterations != "3" || !tt.HasText("内存 MiB（16–1024）") {
 		t.Fatalf("Argon2id defaults: %s %s", f.kdfType, f.iterations)
 	}
 }

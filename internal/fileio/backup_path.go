@@ -2,13 +2,19 @@
 package fileio
 
 import (
-	"fmt"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"path/filepath"
 	"strings"
 
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
+
+type backupExtensionError string
+
+func (e backupExtensionError) Error() string {
+	return i18n.Tf("file.backup.err_extension", string(e))
+}
+func (e backupExtensionError) UserMessage() string { return e.Error() }
 
 func BackupOutputPath(path string, format vaultwarden.BackupFormat) (string, error) {
 	if path == "" {
@@ -26,7 +32,7 @@ func BackupOutputPath(path string, format vaultwarden.BackupFormat) (string, err
 		return path + extension, nil
 	}
 	if strings.ToLower(filepath.Ext(path)) != extension {
-		return "", fmt.Errorf(i18n.T("file.backup.err_extension"), extension)
+		return "", backupExtensionError(extension)
 	}
 	return path, nil
 }

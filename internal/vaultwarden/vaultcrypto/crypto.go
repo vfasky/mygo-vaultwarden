@@ -32,6 +32,33 @@ func NormalizeEmail(email string) string {
 	return cases.Lower(language.Und).String(strings.TrimSpace(email))
 }
 
+// ValidateKDF validates supported resource bounds without allocating KDF memory.
+// Legacy PBKDF2 parameters remain readable for existing offline snapshots.
+func ValidateKDF(kdf KDF) error {
+	switch kdf.Type {
+	case 0:
+		if kdf.Iterations < 5000 || kdf.Iterations > 2000000 {
+			return vaulterr.ErrKDF
+		}
+	case 1:
+		if kdf.Iterations < 2 || kdf.Iterations > 10 || kdf.Memory < 16 || kdf.Memory > 1024 || kdf.Parallelism < 1 || kdf.Parallelism > 16 {
+			return vaulterr.ErrKDF
+		}
+	default:
+		return vaulterr.ErrKDF
+	}
+	return nil
+}
+
+// DeriveOnlineMaster rejects weak server-supplied PBKDF2 parameters before
+// deriving any password proof. Offline snapshot readers use DeriveMaster.
+func DeriveOnlineMaster(password []byte, email string, kdf KDF) ([]byte, error) {
+	if kdf.Type == 0 && kdf.Iterations < 100000 {
+		return nil, vaulterr.ErrWeakKDF
+	}
+	return DeriveMaster(password, email, kdf)
+}
+
 func DeriveMaster(password []byte, email string, kdf KDF) ([]byte, error) {
 	email = NormalizeEmail(email)
 	if len(password) == 0 || len(password) > 8192 || len(email) == 0 || len(email) > 1024 || !utf8.Valid(password) {
@@ -40,16 +67,13 @@ func DeriveMaster(password []byte, email string, kdf KDF) ([]byte, error) {
 	if kdf.Salt != nil && *kdf.Salt != "" && *kdf.Salt != email {
 		return nil, vaulterr.ErrKDF
 	}
+	if err := ValidateKDF(kdf); err != nil {
+		return nil, err
+	}
 	switch kdf.Type {
 	case 0:
-		if kdf.Iterations < 5000 || kdf.Iterations > 2000000 {
-			return nil, vaulterr.ErrKDF
-		}
 		return pbkdf2.Key(password, []byte(email), kdf.Iterations, 32, sha256.New), nil
 	case 1:
-		if kdf.Iterations < 2 || kdf.Iterations > 10 || kdf.Memory < 16 || kdf.Memory > 256 || kdf.Parallelism < 1 || kdf.Parallelism > 16 {
-			return nil, vaulterr.ErrKDF
-		}
 		salt := sha256.Sum256([]byte(email))
 		return argon2.IDKey(password, salt[:], uint32(kdf.Iterations), uint32(kdf.Memory)*1024, uint8(kdf.Parallelism), 32), nil
 	default:

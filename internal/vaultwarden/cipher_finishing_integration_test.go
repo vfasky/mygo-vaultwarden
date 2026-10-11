@@ -94,7 +94,7 @@ func TestLiveVaultFinishing(t *testing.T) {
 		}
 		return result.Vault
 	}
-	vault := syncVault()
+	syncVault()
 	// Seed a real legacy no-item-key cipher, including complete FIDO2 wire fields.
 	doc, err := NewPersonalCipher(CipherFields{Type: 1, Name: "legacy FIDO attachment", Login: map[string]any{"username": "fixture", "password": "fixture-password", "uris": []any{map[string]any{"uri": "https://example.invalid/path", "match": json.Number("3")}}}}, owner.key, owner.account)
 	if err != nil {
@@ -139,7 +139,7 @@ func TestLiveVaultFinishing(t *testing.T) {
 	// Construct old owner-key binary data through the fixed legacy route.
 	plain := bytes.Repeat([]byte("legacy-binary\x00\xff"), 4096)
 	liveLegacyAttachment(t, ctx, owner, sourceID, owner.key, owner.key, "same-name.bin", plain)
-	vault = syncVault()
+	vault := syncVault()
 	rows, err := owner.CipherAttachmentMigrationInfo(vault, sourceID, nil)
 	if err != nil {
 		documents, _ := vault.Documents(vault.Scope)

@@ -62,7 +62,13 @@ func (a *app) adoptOrganizationIsolation(state *localstore.SnapshotStatus, vault
 }
 
 func (a *app) adoptOrganizationSnapshot(state *localstore.SnapshotStatus, vault *vaultwarden.VaultData, orgID string, isolated bool, cleared ...vaultwarden.PendingPolicyMutation) bool {
-	if !a.sessionOwnsSnapshot() || state == nil || !state.Available || state.Scope == nil || *state.Scope != *a.liveScope || state.Revision == "" || state.Revision == a.sessionRevision || state.SnapshotID == "" || state.SnapshotID == a.snapshot.SnapshotID || vault == nil || vault.Scope != *a.liveScope {
+	if !a.sessionOwnsSnapshot() || state == nil || !state.Available || state.Scope == nil || *state.Scope != *a.liveScope {
+		return false
+	}
+	if state.Revision == "" || state.Revision == a.sessionRevision || state.SnapshotID == "" || state.SnapshotID == a.snapshot.SnapshotID {
+		return false
+	}
+	if vault == nil || vault.Scope != *a.liveScope {
 		return false
 	}
 	found := false
@@ -231,7 +237,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 			}
 			if a.pending != 0 {
 				if kit.Action(c, i18n.T("org.settings.cancel_and_lock"), "", false, false).Clicked() {
-					a.runStorage("lock")
+					a.runStorage(localstore.OperationLock)
 				}
 			} else if kit.Action(c, i18n.T("org.settings.close_management"), "", false, false).Clicked() {
 				a.clearOrganizationEditor()
@@ -245,7 +251,13 @@ func (a *app) runOrganizationManagement(operation string) {
 	if a.pending != 0 || e == nil || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision || a.vault == nil {
 		return
 	}
-	if operation != "recovery-key-load" && operation != "recovery-key-create" && operation != "load" && operation != "save" && operation != "leave" && operation != "delete" && operation != "restore" && operation != "collection-load" && operation != "collection-save" && operation != "collection-delete" && !memberManagementOperation(operation) && !groupManagementOperation(operation) && !policyManagementOperation(operation) {
+	knownOperation := false
+	switch operation {
+	case "recovery-key-load", "recovery-key-create", "load", "save", "leave", "delete", "restore",
+		"collection-load", "collection-save", "collection-delete":
+		knownOperation = true
+	}
+	if !knownOperation && !memberManagementOperation(operation) && !groupManagementOperation(operation) && !policyManagementOperation(operation) {
 		return
 	}
 	if (operation == "recovery-key-load" || operation == "recovery-key-create") && (!e.owner || e.id == "" || (operation == "recovery-key-create" && e.confirmation != operation)) {
@@ -366,7 +378,7 @@ func (a *app) runOrganizationManagement(operation string) {
 				record := policyDraft.PendingMutation()
 				pendingPolicy = &record
 			}
-			reply = callStorage(localstore.Request{Operation: "quarantineOrganization", PendingPolicy: pendingPolicy, ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: id, UnlockKey: cp.UnlockKey, Session: cp.Session})
+			reply = callStorage(localstore.Request{Operation: localstore.OperationQuarantineOrganization, PendingPolicy: pendingPolicy, ExpectedRevision: prior.Revision, Scope: &cp.Scope, OrganizationID: id, UnlockKey: cp.UnlockKey, Session: cp.Session})
 			if !reply.OK || reply.State == nil || reply.Vault == nil {
 				return vaultwarden.ErrCheckpoint
 			}
@@ -397,7 +409,7 @@ func (a *app) runOrganizationManagement(operation string) {
 			}
 			return err
 		}
-		current := callStorage(localstore.Request{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 		var result vaultwarden.OrganizationProfile
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
@@ -468,21 +480,31 @@ func (a *app) runOrganizationManagement(operation string) {
 					err = session.ValidatePolicyRecovery(synced, policyRecovery)
 				}
 				if err == nil {
-					storageOperation := "restoreOrganizationAccess"
+					storageOperation := localstore.OperationRestoreOrganizationAccess
 					restoreOrgID := id
 					var clearingPolicy *vaultwarden.PendingPolicyMutation
 					if operation == "policy-review" {
-						storageOperation = "publishVault"
+						storageOperation = localstore.OperationPublishVault
 					}
 					if operation == "policy-restore" {
-						storageOperation = "restorePolicyAccess"
+						storageOperation = localstore.OperationRestorePolicyAccess
 						if !policyRecovery.CanRestoreOrganization() {
 							restoreOrgID = ""
 						}
 						record := policyRecovery.Record()
 						clearingPolicy = &record
 					}
-					reply = callStorage(localstore.Request{Operation: storageOperation, ClearingPolicy: clearingPolicy, OrganizationID: restoreOrgID, ExpectedRevision: prior.Revision, Scope: &synced.Scope, Credentials: synced.Credentials, PasswordUnlock: synced.PasswordUnlock, Session: synced.Session, Vault: synced.Vault})
+					reply = callStorage(localstore.Request{
+						Operation:        storageOperation,
+						ClearingPolicy:   clearingPolicy,
+						OrganizationID:   restoreOrgID,
+						ExpectedRevision: prior.Revision,
+						Scope:            &synced.Scope,
+						Credentials:      synced.Credentials,
+						PasswordUnlock:   synced.PasswordUnlock,
+						Session:          synced.Session,
+						Vault:            synced.Vault,
+					})
 					if !reply.OK {
 						err = reply.Failure()
 					} else if reply.State == nil || reply.Vault == nil {
@@ -657,7 +679,7 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 	a.cancel = nil
 	if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 		a.stopNetwork()
-		a.status = vaultwarden.ErrIdentity.Error()
+		a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 		return
 	}
 	if err != nil {
@@ -694,7 +716,10 @@ func (a *app) completeOrganizationManagement(epoch uint64, e *organizationEditor
 		}
 		return
 	}
-	if operation == "policy-review" || operation == "policy-list" || operation == "policy-load" || operation == "group-list" || operation == "group-load" || operation == "invitation-load" || operation == "recovery-key-load" || operation == "recovery-key-create" || operation == "collection-load" || operation == "collection-access" || operation == "member-load" || operation == "member-prepare" || operation == "member-role-load" {
+	switch operation {
+	case "policy-review", "policy-list", "policy-load", "group-list", "group-load", "invitation-load",
+		"recovery-key-load", "recovery-key-create", "collection-load", "collection-access",
+		"member-load", "member-prepare", "member-role-load":
 		return
 	}
 	if operation == "restore" || operation == "policy-restore" {

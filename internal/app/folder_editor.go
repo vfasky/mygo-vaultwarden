@@ -129,7 +129,7 @@ func (a *app) mutateFolder(remove bool) {
 			}
 			return err
 		}
-		current := callStorage(localstore.Request{Operation: "status"})
+		current := callStorage(localstore.Request{Operation: localstore.OperationStatus})
 		var err error
 		if !current.OK || current.State == nil || current.State.Revision != prior.Revision || ctx.Err() != nil {
 			err = vaultwarden.ErrConflict
@@ -152,7 +152,7 @@ func (a *app) completeFolderMutation(epoch uint64, e *folderEditor, checkpoint *
 	a.cancel = nil
 	if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 		a.stopNetwork()
-		a.status = vaultwarden.ErrIdentity.Error()
+		a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 		return
 	}
 	if err != nil {

@@ -14,10 +14,15 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
-func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *vaultwarden.Session, vault *vaultwarden.VaultData, e *cipherEditor, scope vaultwarden.Scope, revision string, persist func(vaultwarden.SessionCheckpoint) error, stores ...func(localstore.Request) localstore.Reply) (vaultwarden.CipherDocument, error) {
+func shareCipherWithRecovery(
+	ctx context.Context, parent *mygo.Window, session *vaultwarden.Session, vault *vaultwarden.VaultData,
+	e *cipherEditor, scope vaultwarden.Scope, revision string,
+	persist func(vaultwarden.SessionCheckpoint) error, stores ...func(localstore.Request) localstore.Reply,
+) (vaultwarden.CipherDocument, error) {
 	storage := localstore.Call
 	if len(stores) > 0 {
 		storage = stores[0]
@@ -25,7 +30,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 	if !vaultwarden.CipherShareRequiresRecovery(e.document) {
 		return session.SharePersonalCipher(ctx, vault, e.shareOrganizationID, e.shareCollectionID, e.document, e.fields, e.authorization, persist)
 	}
-	path, err := mygo.Dialog.Save(mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
+	path, err := send.ChooseExportPath(ctx, mygo.SaveDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
 	if err != nil {
 		return vaultwarden.CipherDocument{}, err
 	}
@@ -38,7 +43,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 		return vaultwarden.CipherDocument{}, vaultwarden.ErrValidation
 	}
 	return session.SharePersonalCipherWithRecovery(ctx, vault, e.shareOrganizationID, e.shareCollectionID, e.document, e.fields, e.authorization, persist, func(data []byte) error {
-		state := storage(localstore.Request{Operation: "status"})
+		state := storage(localstore.Request{Operation: localstore.OperationStatus})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			return vaultwarden.ErrConflict
 		}
@@ -53,7 +58,7 @@ func shareCipherWithRecovery(ctx context.Context, parent *mygo.Window, session *
 		if err = stage.Commit(); err != nil {
 			return err
 		}
-		state = storage(localstore.Request{Operation: "status"})
+		state = storage(localstore.Request{Operation: localstore.OperationStatus})
 		if !state.OK || !backupLease(state.State, scope, revision) {
 			return vaultwarden.ErrConflict
 		}
@@ -101,7 +106,7 @@ func (a *app) chooseCipherShareRecovery() {
 			a.cancel = nil
 			if err != nil {
 				clear(data)
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
 			if len(data) > 0 {
@@ -221,11 +226,11 @@ func (a *app) runCipherShareRecovery(repair bool) {
 			a.cancel = nil
 			if checkpoint != nil && !a.adoptSessionCheckpoint(checkpoint) {
 				a.stopNetwork()
-				a.status = vaultwarden.ErrIdentity.Error()
+				a.status = vaultwarden.ErrorMessage(vaultwarden.ErrIdentity)
 				return
 			}
 			if err != nil {
-				a.status = i18n.Tf("vault.share_recovery.err_keep_file", err.Error())
+				a.status = i18n.Tf("vault.share_recovery.err_keep_file", vaultwarden.ErrorMessage(err))
 				return
 			}
 			if !repair {

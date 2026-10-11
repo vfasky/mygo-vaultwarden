@@ -79,10 +79,13 @@ func TestAttachmentFilesRejectLinksCancelAndReplacement(t *testing.T) {
 	if err := os.Symlink(dir, parentLink); err != nil {
 		t.Fatal(err)
 	}
-	if file, err := OpenAttachmentInput(filepath.Join(parentLink, "input")); err == nil {
-		file.Close()
-		t.Fatal("symlink ancestor opened")
+	// File grants cover the selected file, even through an ancestor alias.
+	// Only the final component is forbidden from being a symbolic link.
+	aliased, err := OpenAttachmentInput(filepath.Join(parentLink, "input"))
+	if err != nil {
+		t.Fatal("selected file through ancestor alias", err)
 	}
+	aliased.Close()
 	file, err := OpenAttachmentInput(input)
 	if err != nil {
 		t.Fatal(err)

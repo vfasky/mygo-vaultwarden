@@ -72,7 +72,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 	}
 	server, err := vaultwarden.CanonicalServer(a.serverURL)
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	email := vaultcrypto.NormalizeEmail(a.email)
@@ -87,7 +87,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 	scope := vaultwarden.Scope{Server: server, Account: accountID}
 	client, err := vaultwarden.NewClient(server, a.deviceID)
 	if err != nil {
-		a.status = err.Error()
+		a.status = vaultwarden.ErrorMessage(err)
 		return
 	}
 	a.stopNetwork()
@@ -102,7 +102,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 	lifetime := &deviceLoginLifecycle{epoch: epoch, clock: &a.workerEpoch, scope: scope}
 	lifetime.active.Store(true)
 	lifetime.checkSource = func() error {
-		reply := storage(localstore.Request{Operation: "status"})
+		reply := storage(localstore.Request{Operation: localstore.OperationStatus})
 		if !reply.OK {
 			return reply.Failure()
 		}
@@ -121,7 +121,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 			if source.RecoveryPending {
 				err = localstore.ErrRuntimeTargetBlocked
 			} else {
-				reply := storage(localstore.Request{Operation: "list", Scope: &scope, ExpectedRevision: source.Revision})
+				reply := storage(localstore.Request{Operation: localstore.OperationList, Scope: &scope, ExpectedRevision: source.Revision})
 				clear(reply.Session)
 				reply.Session = nil
 				reply.Items = nil
@@ -143,7 +143,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 				return
 			}
 			if err != nil {
-				a.status = err.Error()
+				a.status = vaultwarden.ErrorMessage(err)
 				lifetime.active.Store(false)
 				return
 			}
@@ -202,7 +202,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 								cap.Close()
 							}
 							a.closeDeviceLogin()
-							a.status = err.Error()
+							a.status = vaultwarden.ErrorMessage(err)
 							return
 						}
 						a.diskSnapshot = &source
@@ -213,7 +213,7 @@ func (a *app) openDeviceLoginWith(dispatch func(func()), storage func(localstore
 						a.sessionRevision = cap.Revision()
 						if err = a.adoptVault(vault); err != nil {
 							a.stopNetwork()
-							a.status = err.Error()
+							a.status = vaultwarden.ErrorMessage(err)
 							return
 						}
 						a.itemsRevision = cap.Revision()
@@ -274,7 +274,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(locals
 		}
 		binding, err := localstore.NewAccountSwitchBinding(&source, *a.liveScope)
 		if err != nil {
-			a.status = err.Error()
+			a.status = vaultwarden.ErrorMessage(err)
 			return
 		}
 		switchBinding = &binding
@@ -309,7 +309,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(locals
 			if switchBinding != nil {
 				reply, err = localstore.PublishBoundAccount(ctx, &source, fresh, *switchBinding, storage)
 			} else {
-				reply = storage(localstore.Request{Operation: "publishVault", ExpectedRevision: source.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
+				reply = storage(localstore.Request{Operation: localstore.OperationPublishVault, ExpectedRevision: source.Revision, Scope: &fresh.Scope, Credentials: fresh.Credentials, PasswordUnlock: fresh.PasswordUnlock, Session: fresh.Session, Vault: fresh.Vault})
 				if !reply.OK {
 					err = reply.Failure()
 				}
@@ -336,7 +336,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(locals
 				if reply.State != nil {
 					a.snapshot = reply.State
 				}
-				a.status = i18n.Tf("account.device_login.status_receipt_discarded", err.Error())
+				a.status = i18n.Tf("account.device_login.status_receipt_discarded", vaultwarden.ErrorMessage(err))
 				return
 			}
 			runtime.close()
@@ -350,7 +350,7 @@ func (a *app) bindRuntimePasswordWith(dispatch func(func()), storage func(locals
 			a.sessionRevision = reply.State.Revision
 			if e := a.adoptVault(reply.Vault); e != nil {
 				a.stopNetwork()
-				a.status = e.Error()
+				a.status = vaultwarden.ErrorMessage(e)
 				return
 			}
 			a.itemsRevision = reply.State.Revision

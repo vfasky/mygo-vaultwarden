@@ -77,7 +77,7 @@ func (s *AccountRecoveryStorage) Close() {
 func (s *AccountRecoveryStorage) active() bool {
 	return !s.closed && s.currentEpoch() != 0 && s.currentEpoch() == s.epoch
 }
-func (s *AccountRecoveryStorage) request(operation string) Request {
+func (s *AccountRecoveryStorage) request(operation Operation) Request {
 	return Request{Operation: operation, Scope: &s.scope, ExpectedRevision: s.revision, UnlockKey: s.unlockKey, RecoveryBinding: s.binding}
 }
 func (s *AccountRecoveryStorage) receive(request Request) (Reply, error) {
@@ -95,11 +95,11 @@ func (s *AccountRecoveryStorage) receive(request Request) (Reply, error) {
 	if !reply.OK {
 		return reply, reply.Failure()
 	}
-	if reply.State == nil || reply.State.Revision == "" || (request.Operation != "accountRecoveryQuery" && reply.State.Revision == s.revision) {
+	if reply.State == nil || reply.State.Revision == "" || (request.Operation != OperationAccountRecoveryQuery && reply.State.Revision == s.revision) {
 		return Reply{}, vaultwarden.ErrIdentity
 	}
-	if reply.State.RecoveryPending != (request.Operation != "accountRecoveryResolve") ||
-		(request.Operation == "accountRecoveryQuery" && reply.State.Revision != s.revision) {
+	if reply.State.RecoveryPending != (request.Operation != OperationAccountRecoveryResolve) ||
+		(request.Operation == OperationAccountRecoveryQuery && reply.State.Revision != s.revision) {
 		if reply.Recovery != nil {
 			reply.Recovery.Close()
 		}
@@ -113,12 +113,12 @@ func (s *AccountRecoveryStorage) receive(request Request) (Reply, error) {
 	} else if !reply.State.Available || reply.State.Scope == nil || *reply.State.Scope != s.scope || reply.State.SnapshotID == "" {
 		return Reply{}, vaultwarden.ErrIdentity
 	}
-	if request.Operation != "accountRecoveryResolve" {
+	if request.Operation != OperationAccountRecoveryResolve {
 		r := reply.Recovery
 		validPhase := r != nil && (r.Phase == "prepared" || r.Phase == "unknown" || r.Phase == "confirmed" || r.Phase == "not-dispatched")
 		if !validPhase || r.Version != 1 || r.Binding.Epoch == 0 || recoveryHash(r.Record) != r.Binding.RecordHash || (request.RecoveryBinding != nil && *request.RecoveryBinding != r.Binding) ||
-			(request.Operation == "accountRecoveryBegin" && r.Phase != "prepared") ||
-			(request.Operation == "accountRecoveryResult" && r.Phase != request.RecoveryPhase) {
+			(request.Operation == OperationAccountRecoveryBegin && r.Phase != "prepared") ||
+			(request.Operation == OperationAccountRecoveryResult && r.Phase != request.RecoveryPhase) {
 			if r != nil {
 				r.Close()
 			}
@@ -154,7 +154,7 @@ func (s *AccountRecoveryStorage) Begin(record vaultwarden.AccountRecovery) error
 	}
 	defer clear(raw)
 	binding := accountRecoveryBinding{record.OperationID, record.OldRevision, s.epoch, recoveryHash(raw)}
-	request := s.request("accountRecoveryBegin")
+	request := s.request(OperationAccountRecoveryBegin)
 	request.RecoveryBinding = &binding
 	request.RecoveryRecord = raw
 	reply, err := s.receive(request)
@@ -166,7 +166,7 @@ func (s *AccountRecoveryStorage) Begin(record vaultwarden.AccountRecovery) error
 func (s *AccountRecoveryStorage) Query() (Reply, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.receive(s.request("accountRecoveryQuery"))
+	return s.receive(s.request(OperationAccountRecoveryQuery))
 }
 
 // Result only annotates the durable record; even Confirmed leaves the barrier.
@@ -183,7 +183,7 @@ func (s *AccountRecoveryStorage) Result(result vaultwarden.AccountChangeResult) 
 	if result.Confirmed {
 		phase = "confirmed"
 	}
-	request := s.request("accountRecoveryResult")
+	request := s.request(OperationAccountRecoveryResult)
 	request.RecoveryPhase = phase
 	reply, err := s.receive(request)
 	if reply.Recovery != nil {
@@ -201,7 +201,7 @@ func (s *AccountRecoveryStorage) Checkpoint(checkpoint vaultwarden.SessionCheckp
 	if s.binding == nil || checkpoint.Scope != s.scope {
 		return vaultwarden.ErrIdentity
 	}
-	request := s.request("accountRecoveryCheckpoint")
+	request := s.request(OperationAccountRecoveryCheckpoint)
 	request.Session = checkpoint.Session
 	reply, err := s.receive(request)
 	if reply.Recovery != nil {
@@ -223,7 +223,7 @@ func (s *AccountRecoveryStorage) ResolveVerified(fresh vaultwarden.SyncResult, u
 	if s.binding == nil || fresh.Scope != s.scope || fresh.Vault == nil || fresh.Vault.Scope != s.scope || fresh.PasswordUnlock == nil || len(fresh.Session) == 0 || !userConfirmed || !authorityVerified || !resourcesVerified {
 		return Reply{}, vaultwarden.ErrIdentity
 	}
-	request := s.request("accountRecoveryResolve")
+	request := s.request(OperationAccountRecoveryResolve)
 	request.PasswordUnlock = fresh.PasswordUnlock
 	request.Session = fresh.Session
 	request.Vault = fresh.Vault
@@ -246,7 +246,7 @@ func (s *AccountRecoveryStorage) DeleteConfirmed(userConfirmed bool) (Reply, err
 	if s.binding == nil || s.kind != vaultwarden.AccountDelete || !userConfirmed {
 		return Reply{}, vaultwarden.ErrIdentity
 	}
-	request := s.request("accountRecoveryResolve")
+	request := s.request(OperationAccountRecoveryResolve)
 	request.RecoveryResolution = &accountRecoveryResolution{Binding: *s.binding, Mode: "delete", UserConfirmed: true, AuthorityVerified: true}
 	reply, err := s.receive(request)
 	if err == nil {

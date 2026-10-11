@@ -17,7 +17,7 @@
 - `attachmentEncryptedSize(size)`：明文0–512MiB（含端点）；密文 `49 + (floor(size/16)+1)*16`，空文件65字节，最大536870977字节。有限的磁盘/内存资源策略，不是无限大文件支持。
 - `encryptAttachment(ctx, io.Reader, plaintextSize, key)`：精确读取所声明大小，拒绝短/长输入，64KiB分块CBC/HMAC，随机IV，输出rewound密文`*attachmentSpool`。
 - `decryptAttachment(ctx, io.Reader, ciphertextSize, key)`：先完整认证密文到私有磁盘spool，再解密到另一私有spool；MAC/填充/大小/取消错误不返回明文。工作内存64KiB，磁盘峰值约密文+明文两份；不是将文件读进JSON或整文件内存。
-- `attachmentSpool`是包内对象，`.file/.size`只供后续Session代码使用，`.close()`关闭并删除其临时文件，`.rewind()`归零。os.CreateTemp按0600创建到系统临时目录（测试使用本会话TMPDIR），所有错误路径defer清理。删除属于普通文件删除，不承诺磁盘安全擦除；极端文件系统删除失败目前不向外暴露路径或错误。产品发布仍须采用安全目录/不覆盖原子发布，并在发布前重新验证授权；这个基础没有实现发布。
+- `vaultcrypto.AttachmentSpool` 是包内流式操作使用的临时对象；`File/Size` 只供受控传输使用，`Close` 关闭描述符，`Rewind` 归零。`os.CreateTemp` 按 0600 创建后立即 unlink，删除失败就关闭并拒绝操作，不回退为有名称的明文 spool。之后读写仅通过持有的描述符，进程退出由系统回收。子进程退出测试证明目录不残留可见文件名；这不是断电、磁盘安全擦除或同用户读取 fd 的证明。最终导出仍须采用安全目录/不覆盖原子发布，并在发布前重新验证授权。
 - ctx在读写块和返回前检查；阻塞Reader本身必须支持取消。HTTP请求已绑定ctx和5分钟超时；任意外部Reader不能因这个包装自动获得可中断IO。buffer清零，不承诺Go运行时或磁盘的全量安全擦除。
 
 `attachment_transport.go`：

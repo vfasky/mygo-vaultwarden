@@ -65,7 +65,7 @@ func CheckRuntimeTargetProtection(cap *vaultwarden.RuntimeAuthority, vault *vaul
 	}
 	authority := TargetRecoveryRuntimeAuthority{Scope: binding.Scope, Generation: binding.Generation, DeadlineUnixMS: binding.DeadlineUnixMS, LeaseID: binding.LeaseID, OperationID: binding.OperationID, SummaryHash: binding.SummaryHash}
 	scope := cap.Scope()
-	reply := storage(Request{Operation: "targetRecoveryRuntimePending", Scope: &scope, ExpectedRevision: source.Revision, TargetRuntime: &authority})
+	reply := storage(Request{Operation: OperationTargetRecoveryRuntimePending, Scope: &scope, ExpectedRevision: source.Revision, TargetRuntime: &authority})
 	defer func() {
 		for i := range reply.TargetRecords {
 			reply.TargetRecords[i].Close()
@@ -110,7 +110,7 @@ func CheckRuntimeTargetProtection(cap *vaultwarden.RuntimeAuthority, vault *vaul
 		}
 	}
 	// A write during native query/cleanup cannot be accepted as the old source.
-	current := storage(Request{Operation: "status"})
+	current := storage(Request{Operation: OperationStatus})
 	if !current.OK {
 		return current.Failure()
 	}

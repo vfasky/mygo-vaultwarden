@@ -1,0 +1,62 @@
+name: Owned live fixtures
+on:
+  schedule:
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+    inputs:
+      run_live:
+        description: Allow temporary owned Docker fixtures and image downloads
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: owned-live-fixtures
+  cancel-in-progress: false
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Describe resource opt-in
+        env:
+          ENABLED: ${{ vars.MYGO_LIVE_CI == '1' || inputs.run_live == true }}
+        run: |
+          if [ "$ENABLED" = true ]; then
+            echo 'Owned live fixtures enabled; inspect the live job and JSON events for results.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'SKIPPED: live resource opt-in is absent. No live tests ran; this is not live validation.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+  live:
+    if: vars.MYGO_LIVE_CI == '1' || inputs.run_live == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache: true
+      - name: Run only self-provisioning fixtures
+        shell: bash
+        env:
+          MYGO_LIVE_CI: '1'
+        run: |
+          export TMPDIR="$RUNNER_TEMP/live"
+          mkdir -p "$TMPDIR"
+          set +e
+          bash scripts/ci-live.sh "$RUNNER_TEMP/live-tests.jsonl"
+          result=$?
+          set -e
+          if [ "$result" = 77 ]; then
+            echo 'SKIPPED: Docker prerequisites unavailable. No live tests ran; not a pass.' >> "$GITHUB_STEP_SUMMARY"
+            # An opted-in job without prerequisites must not appear green.
+            exit 1
+          fi
+          exit "$result"
+      - name: Keep live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: owned-live-results
+          path: ${{ runner.temp }}/live-tests.jsonl
+          if-no-files-found: warn

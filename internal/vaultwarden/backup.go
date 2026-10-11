@@ -66,9 +66,26 @@ func (p *ImportPlan) PreviewItems() []ImportPreview {
 	return append([]ImportPreview(nil), p.preview...)
 }
 
-func backupError(index int, reason string) error {
-	return fmt.Errorf(i18n.T("server.backup.err_item_conversion"), index+1, reason)
+// BackupConversionError retains a stable cause independently of UI language.
+type BackupConversionError struct {
+	Index  int
+	Reason string
+	Cause  error
 }
+
+func (e *BackupConversionError) Error() string {
+	return fmt.Sprintf(i18n.T("server.backup.err_item_conversion"), e.Index+1, e.Reason)
+}
+func (e *BackupConversionError) Unwrap() error { return e.Cause }
+
+func backupError(index int, reason string) error {
+	return &BackupConversionError{Index: index, Reason: reason, Cause: ErrUnsupportedEdit}
+}
+
+type backupUnsupportedError struct{ reason string }
+
+func (e backupUnsupportedError) Error() string { return i18n.T(e.reason) }
+func (e backupUnsupportedError) Unwrap() error { return ErrUnsupportedEdit }
 
 // strictJSON rejects duplicate keys as well as trailing documents. Importing a
 // file must not present one interpretation for preview and another for writes.
@@ -157,7 +174,7 @@ func decodeBackup(data []byte, format BackupFormat) (backupFile, error) {
 	seen := map[string]bool{}
 	for i, item := range file.Items {
 		if err := validateBackupItem(item, format); err != nil {
-			return file, backupError(i, err.Error())
+			return file, &BackupConversionError{Index: i, Reason: ErrorMessage(err), Cause: err}
 		}
 		id, ok := item["id"].(string)
 		if !ok || !validObjectID(id) || seen[id] {
@@ -178,7 +195,16 @@ func decodeBackup(data []byte, format BackupFormat) (backupFile, error) {
 }
 
 func validateBackupItem(item map[string]any, format BackupFormat) error {
-	if err := copyKeys(item, "id", "type", "name", "notes", "folderId", "organizationId", "collectionIds", "favorite", "reprompt", "fields", "passwordHistory", "creationDate", "revisionDate", "deletedDate", "archivedDate", "login", "secureNote", "card", "identity", "sshKey", "bankAccount", "driversLicense", "passport"); err != nil {
+	if _, err := backupItemIdentity(item); err != nil {
+		return err
+	}
+	allowedKeys := []string{
+		"id", "type", "name", "notes", "folderId", "organizationId", "collectionIds",
+		"favorite", "reprompt", "fields", "passwordHistory", "creationDate", "revisionDate",
+		"deletedDate", "archivedDate", "login", "secureNote", "card", "identity", "sshKey",
+		"bankAccount", "driversLicense", "passport",
+	}
+	if err := copyKeys(item, allowedKeys...); err != nil {
 		return err
 	}
 	// Reuse the complete known-field audit, without allowing encrypted keys or
@@ -249,18 +275,19 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 				return ErrValidation
 			}
 		}
-		if uris, ok := fields.Login["uris"].([]any); ok {
-			for _, raw := range uris {
-				uri := raw.(map[string]any)
-				if match := uri["match"]; match != nil {
-					n, ok := match.(json.Number)
-					if !ok {
-						return ErrValidation
-					}
-					strategy, err := n.Int64()
-					if err != nil || strategy < 0 || strategy > 5 {
-						return ErrUnsupportedEdit
-					}
+		uris, err := backupObjectRows(fields.Login["uris"])
+		if err != nil {
+			return err
+		}
+		for _, uri := range uris {
+			if match := uri["match"]; match != nil {
+				n, ok := match.(json.Number)
+				if !ok {
+					return ErrValidation
+				}
+				strategy, err := n.Int64()
+				if err != nil || strategy < 0 || strategy > 5 {
+					return ErrUnsupportedEdit
 				}
 			}
 		}
@@ -292,35 +319,44 @@ func validateBackupItem(item map[string]any, format BackupFormat) error {
 	}
 	if format == BitwardenJSON {
 		if strings.TrimSpace(fields.Name) == "" || (fields.Notes != nil && strings.TrimSpace(*fields.Notes) == "") {
-			return fmt.Errorf("%s", i18n.T("server.backup.err_blank_text_loss"))
+			return backupUnsupportedError{reason: "server.backup.err_blank_text_loss"}
 		}
 		for _, entry := range fields.PasswordHistory {
-			date, _ := time.Parse(time.RFC3339Nano, entry["lastUsedDate"].(string))
+			text, ok := entry["lastUsedDate"].(string)
+			if !ok {
+				return ErrProtocol
+			}
+			date, err := time.Parse(time.RFC3339Nano, text)
+			if err != nil {
+				return ErrProtocol
+			}
 			if date.Nanosecond()%1000000 != 0 {
-				return fmt.Errorf("%s", i18n.T("server.backup.err_history_timestamp_precision"))
+				return backupUnsupportedError{reason: "server.backup.err_history_timestamp_precision"}
 			}
 		}
 		if fields.Type == 8 {
-			return fmt.Errorf("%s", i18n.T("server.backup.err_passport_unsupported"))
+			return backupUnsupportedError{reason: "server.backup.err_passport_unsupported"}
 		}
 		if len(fields.PasswordHistory) > 5 {
-			return fmt.Errorf("%s", i18n.T("server.backup.err_history_limit"))
+			return backupUnsupportedError{reason: "server.backup.err_history_limit"}
 		}
 		if fields.DeletedDate != nil {
-			return fmt.Errorf("%s", i18n.T("server.backup.err_trash_unsupported"))
+			return backupUnsupportedError{reason: "server.backup.err_trash_unsupported"}
 		}
 		if fields.Login != nil {
 			if !emptyCopyArray(fields.Login["fido2Credentials"]) {
-				return fmt.Errorf("%s", i18n.T("server.backup.err_passkeys_unverified"))
+				return backupUnsupportedError{reason: "server.backup.err_passkeys_unverified"}
 			}
 			if err := copyKeys(fields.Login, "username", "password", "totp", "uris", "fido2Credentials"); err != nil {
 				return err
 			}
-			if uris, ok := fields.Login["uris"].([]any); ok {
-				for _, raw := range uris {
-					if err := copyKeys(raw.(map[string]any), "uri", "match"); err != nil {
-						return err
-					}
+			uris, err := backupObjectRows(fields.Login["uris"])
+			if err != nil {
+				return err
+			}
+			for _, uri := range uris {
+				if err := copyKeys(uri, "uri", "match"); err != nil {
+					return err
 				}
 			}
 		}
@@ -351,8 +387,12 @@ func ParseImport(data []byte, format BackupFormat) (*ImportPlan, error) {
 	}
 	plan := &ImportPlan{data: append([]byte(nil), data...), Format: format, Folders: len(file.Folders), Items: len(file.Items)}
 	for _, item := range file.Items {
-		kind, _ := item["type"].(json.Number).Int64()
-		plan.preview = append(plan.preview, ImportPreview{Name: item["name"].(string), Type: int(kind), Archived: item["archivedDate"] != nil, Deleted: item["deletedDate"] != nil})
+		identity, err := backupItemIdentity(item)
+		if err != nil {
+			plan.Clear()
+			return nil, err
+		}
+		plan.preview = append(plan.preview, ImportPreview{Name: identity.Name, Type: identity.Type, Archived: item["archivedDate"] != nil, Deleted: item["deletedDate"] != nil})
 		if item["archivedDate"] != nil {
 			plan.Archived++
 		}
@@ -375,24 +415,17 @@ func (s *Session) ExportPersonalBackupAuthorized(ctx context.Context, vault *Vau
 	return s.exportPersonalBackup(ctx, vault, ids, format, grants, false)
 }
 
-func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, ids []string, format BackupFormat, grants map[string]*ItemAuthorization, resources bool) ([]byte, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	ctx, finish, err := s.beginOperationLocked(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer finish()
+func (s *personalBackupService) export(ctx context.Context, vault *VaultData, ids []string, format BackupFormat, grants map[string]*ItemAuthorization, resources bool) ([]byte, error) {
 	if vault == nil {
 		return nil, ErrIdentity
 	}
-	if err = s.requireScopeLocked(vault.Scope); err != nil {
+	if err := s.access.checkScope(vault.Scope); err != nil {
 		return nil, err
 	}
 	if format != BitwardenJSON && format != MyGoBackup {
 		return nil, ErrValidation
 	}
-	policies, err := s.snapshotPoliciesLocked(vault)
+	policies, err := s.access.policies(vault)
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +467,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		if json.Unmarshal(doc.JSON, &metadata) != nil {
 			return nil, ErrProtocol
 		}
-		if metadata.OrganizationID != nil || (metadata.Reprompt != 0 && !s.validItemAuthorizationLocked(grants[id], doc)) || metadata.ViewPassword == nil || !*metadata.ViewPassword || policies.restricts(nil, metadata.Type) {
+		if metadata.OrganizationID != nil || (metadata.Reprompt != 0 && !s.access.validGrant(grants[id], doc)) || metadata.ViewPassword == nil || !*metadata.ViewPassword || policies.restricts(nil, metadata.Type) {
 			return nil, ErrPermission
 		}
 		if resources {
@@ -443,16 +476,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		if err = validateCopyObject(object); err != nil {
 			return nil, backupError(len(file.Items), i18n.T("server.backup.err_unsupported_content"))
 		}
-		fields, err := DecryptCipherDocument(doc, s.key)
-		if err != nil {
-			return nil, err
-		}
-		key, err := cipherItemKey(object, s.key)
-		if err != nil {
-			return nil, err
-		}
-		err = transformCompleteCipher(object, key, false)
-		clear(key)
+		fields, err := s.access.decryptItem(doc, object)
 		if err != nil {
 			return nil, err
 		}
@@ -462,9 +486,16 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		if login, ok := object["login"].(map[string]any); ok && format == BitwardenJSON {
 			// The legacy alias is derived from uris, and checksums are regenerated on
 			// import. The official plaintext schema has neither field.
+			uris, err := backupObjectRows(login["uris"])
+			if err != nil {
+				return nil, err
+			}
 			if alias := login["uri"]; alias != nil {
-				uris, _ := login["uris"].([]any)
-				if len(uris) == 0 || uris[0].(map[string]any)["uri"] != alias {
+				text, ok := alias.(string)
+				if !ok {
+					return nil, ErrProtocol
+				}
+				if len(uris) == 0 || uris[0]["uri"] != text {
 					return nil, backupError(len(file.Items), i18n.T("server.backup.err_legacy_uri_mismatch"))
 				}
 			}
@@ -474,22 +505,19 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 			}
 			delete(login, "autofillOnPageLoad")
 			delete(login, "passwordRevisionDate")
-			if uris, ok := login["uris"].([]any); ok {
-				for _, raw := range uris {
-					uri := raw.(map[string]any)
-					if checksum := uri["uriChecksum"]; checksum != nil {
-						text, ok := uri["uri"].(string)
-						hash := sha256.Sum256([]byte(text))
-						if !ok || checksum != base64.StdEncoding.EncodeToString(hash[:]) {
-							return nil, backupError(len(file.Items), i18n.T("server.backup.err_uri_checksum"))
-						}
+			for _, uri := range uris {
+				if checksum := uri["uriChecksum"]; checksum != nil {
+					text, ok := uri["uri"].(string)
+					hash := sha256.Sum256([]byte(text))
+					if !ok || checksum != base64.StdEncoding.EncodeToString(hash[:]) {
+						return nil, backupError(len(file.Items), i18n.T("server.backup.err_uri_checksum"))
 					}
-					delete(uri, "uriChecksum")
 				}
+				delete(uri, "uriChecksum")
 			}
 		}
 		if err = validateBackupItem(object, format); err != nil {
-			return nil, backupError(len(file.Items), err.Error())
+			return nil, &BackupConversionError{Index: len(file.Items), Reason: ErrorMessage(err), Cause: err}
 		}
 		if fields.FolderID != nil {
 			needed[*fields.FolderID] = true
@@ -506,7 +534,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		return nil, ErrProtocol
 	}
 	for _, folder := range folders.Folders {
-		plain, err := vaultcrypto.DecryptString(folder.Name, s.key)
+		plain, err := s.access.decryptFolder(folder.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -530,7 +558,7 @@ func (s *Session) exportPersonalBackup(ctx context.Context, vault *VaultData, id
 		clear(data)
 		return nil, ErrCancelled
 	}
-	if err := s.personalBackupAuthorizationLocked(vault, ids, grants); err != nil {
+	if err := s.access.checkExport(vault, ids, grants); err != nil {
 		clear(data)
 		return nil, err
 	}
@@ -652,14 +680,15 @@ func encryptImportedItem(item map[string]any, userKey []byte, account string) (C
 	}
 	object["key"], object["encryptedFor"] = wrapped, account
 	if login, ok := object["login"].(map[string]any); ok {
-		if uris, ok := login["uris"].([]any); ok {
-			for _, raw := range uris {
-				uri := raw.(map[string]any)
-				_, hasChecksum := uri["uriChecksum"]
-				if text, ok := uri["uri"].(string); ok && !hasChecksum {
-					hash := sha256.Sum256([]byte(text))
-					uri["uriChecksum"] = base64.StdEncoding.EncodeToString(hash[:])
-				}
+		uris, err := backupObjectRows(login["uris"])
+		if err != nil {
+			return CipherDocument{}, err
+		}
+		for _, uri := range uris {
+			_, hasChecksum := uri["uriChecksum"]
+			if text, ok := uri["uri"].(string); ok && !hasChecksum {
+				hash := sha256.Sum256([]byte(text))
+				uri["uriChecksum"] = base64.StdEncoding.EncodeToString(hash[:])
 			}
 		}
 	}

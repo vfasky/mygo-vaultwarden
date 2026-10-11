@@ -33,7 +33,7 @@ func (c *Client) UnlockSSOVault(ctx context.Context, raw json.RawMessage, email 
 	if json.Unmarshal(data, &kdf) != nil {
 		return nil, ErrProtocol
 	}
-	master, err := vaultcrypto.DeriveMaster(password, email, kdf)
+	master, err := vaultcrypto.DeriveOnlineMaster(password, email, kdf)
 	if err != nil {
 		return nil, err
 	}
@@ -61,5 +61,14 @@ func (c *Client) UnlockSSOVault(ctx context.Context, raw json.RawMessage, email 
 		clear(unlock)
 		return nil, ErrCancelled
 	}
-	return &Session{client: c, email: email, key: key, wrapped: token.wrappedKey(), access: token.AccessToken, refresh: token.RefreshToken, expires: time.Now().Add(time.Duration(token.ExpiresIn) * time.Second), passwordUnlock: &PasswordUnlock{Config: PasswordUnlockConfig{Email: email, KDF: kdf}, Key: unlock}}, nil
+	return &Session{
+		client:         c,
+		email:          email,
+		key:            key,
+		wrapped:        token.wrappedKey(),
+		access:         token.AccessToken,
+		refresh:        token.RefreshToken,
+		expires:        time.Now().Add(time.Duration(token.ExpiresIn) * time.Second),
+		passwordUnlock: &PasswordUnlock{Config: PasswordUnlockConfig{Email: email, KDF: kdf}, Key: unlock},
+	}, nil
 }
