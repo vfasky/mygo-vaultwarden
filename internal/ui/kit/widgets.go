@@ -35,25 +35,24 @@ func Pill(c *ui.Context, text string, bg, fg ui.Color) {
 	ui.Text(c, text).FontSize(11).TextColor(fg).Background(bg).Padding(5, 10).Radius(20).Shrink(0)
 }
 
+// Action is a Button: the primary kind or the secondary one.
 func Action(c *ui.Context, label, symbol string, primary, disabled bool) ui.Element {
-	var b ui.Element
 	if primary {
-		b = ui.PrimaryButton(c, "")
-	} else {
-		b = ui.Button(c, "")
+		return Button(c, label, symbol, ButtonPrimary, disabled)
 	}
-	b.Label(label).Height(38).Padding(0, 14).Radius(20).Border(0, ui.Transparent).Disabled(disabled).Children(func() {
-		if symbol != "" {
-			Icon(c, symbol, 17)
-		}
-		ui.Text(c, label).FontSize(13)
-	})
-	return b
+	return Button(c, label, symbol, ButtonSecondary, disabled)
 }
 
+// IconButton is a quiet square button showing only a symbol.
 func IconButton(c *ui.Context, label, symbol string) ui.Element {
-	return ui.Button(c, "").Label(label).Tooltip(label).Size(36, 36).Padding(8).Radius(18).Border(0, ui.Transparent).
-		Children(func() { Icon(c, symbol, 18) })
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(30, 30).Padding(7).Radius(ControlRadius - 1).Shrink(0).
+		Justify(ui.Center).AlignItems(ui.Center).TextColor(Muted)
+	if b.Pressed() {
+		b.Background(press).TextColor(Ink)
+	} else if b.Hovered() {
+		b.Background(hover).TextColor(Ink)
+	}
+	return b.Children(func() { Icon(c, symbol, 16) })
 }
 
 // titleBarButton is a borderless toolbar icon button, like the sidebar toggle
@@ -68,21 +67,18 @@ func TitleBarButton(c *ui.Context, label, symbol string) ui.Element {
 	return b.Children(func() { Icon(c, symbol, 16) })
 }
 
+// ToolbarButton is a Button of the title bar; the secondary kind is
+// translucent over the window's gradient.
 func ToolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) ui.Element {
-	var b ui.Element
 	if primary {
-		b = ui.PrimaryButton(c, "")
-	} else {
-		b = ui.Button(c, "")
+		return Button(c, label, symbol, ButtonPrimary, disabled).Padding(0, 12)
 	}
-	b.Label(label).Height(32).Padding(0, 13).Gap(6).Radius(16).Disabled(disabled).Children(func() {
-		Icon(c, symbol, 15)
-		ui.Text(c, label).FontSize(13)
-	})
-	if !primary {
-		b.Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55))
-	} else {
-		b.Border(0, ui.Transparent)
+	b := Button(c, label, symbol, ButtonSecondary, disabled).Padding(0, 12).
+		Border(1, ui.RGBA(255, 255, 255, .75)).Background(ui.RGBA(255, 255, 255, .6))
+	if !disabled && b.Pressed() {
+		b.Background(ui.RGBA(255, 255, 255, .95))
+	} else if !disabled && b.Hovered() {
+		b.Background(ui.RGBA(255, 255, 255, .85))
 	}
 	return b
 }
@@ -204,10 +200,12 @@ func navigationItem(c *ui.Context, title, symbol, count string, selected, disabl
 	return b
 }
 
+// DetailCard is a titled white card of rows (DetailField, dividers); its
+// content sets its own padding. Section is the card of a form.
 func DetailCard(c *ui.Context, title string, content func()) {
-	ui.Column(c).Gap(8).Padding(10).Background(Panel).Radius(24).Children(func() {
-		ui.Text(c, title).Padding(3, 6).FontSize(14).FontWeight(550)
-		ui.Column(c).Background(White).Radius(16).Clip().Children(content)
+	ui.Column(c).Gap(8).Children(func() {
+		ui.Text(c, title).Padding(0, 4).FontSize(12.5).FontWeight(600).TextColor(Muted)
+		ui.Column(c).Background(White).Radius(CardRadius).Border(1, Line).Clip().Children(content)
 	})
 }
 

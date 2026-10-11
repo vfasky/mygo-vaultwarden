@@ -8,6 +8,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/passwordstrength"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden/vaultcrypto"
 	"strconv"
@@ -274,156 +275,205 @@ func FormView(c *ui.Context, f *Form) {
 	if f == nil || f.closed {
 		return
 	}
-	ui.Text(c, i18n.T("account.form.title")).FontSize(20)
-	disabled := f.busy || f.uncertain
-	if f.confirming {
-		if f.confirmAction != "" {
-			ui.Text(c, i18n.T("account.apikey.confirm_impact")).MaxLines(4)
-		} else {
-			ui.Text(c, accountImpact(f.plan.Kind())).MaxLines(6)
-		}
-		ui.Text(c, i18n.T("account.form.confirm_submission_impact")).MaxLines(4)
-		if ui.Button(c, i18n.T("account.form.confirm_security_change")).Disabled(disabled).Clicked() {
+	kit.Section(c, accountModeLabel(f.Mode), func() {
+		disabled := f.busy || f.uncertain
+		if f.confirming {
 			if f.confirmAction != "" {
-				f.dispatch(f.confirmAction)
+				kit.Notice(c, kit.ToneWarning, i18n.T("account.apikey.confirm_impact"))
 			} else {
-				f.dispatch("commit")
+				kit.Notice(c, kit.ToneWarning, accountImpact(f.plan.Kind()))
 			}
-		}
-		if ui.Button(c, i18n.T("common.cancel")).Disabled(f.busy).Clicked() {
-			f.cancel()
-		}
-	} else {
-		modes := f.Modes
-		if modes == nil {
-			modes = []string{"profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
-		}
-		for _, mode := range modes {
-			if ui.Button(c, accountModeLabel(mode)).Disabled(disabled).Clicked() {
-				f.cancel()
-				f.Mode = mode
+			kit.Notice(c, kit.ToneWarning, i18n.T("account.form.confirm_submission_impact"))
+		} else {
+			modes := f.Modes
+			if modes == nil {
+				modes = []string{"profile", "password", "email", "kdf", "api-key", "security-stamp", "purge", "delete", "rotate-user-key"}
 			}
-		}
-		switch f.Mode {
-		case "profile":
-			ui.TextInput(c, &f.name).Label(i18n.T("account.form.profile_name")).Disabled(disabled)
-			ui.TextInput(c, &f.avatar).Label(i18n.T("account.form.avatar_color")).Disabled(disabled)
-			if ui.Button(c, i18n.T("account.form.save_profile")).Disabled(disabled).Clicked() {
-				f.dispatch("profile")
+			labels := make([]string, len(modes))
+			for i, mode := range modes {
+				labels[i] = accountModeLabel(mode)
 			}
-			if ui.Button(c, i18n.T("account.form.save_avatar")).Disabled(disabled).Clicked() {
-				f.dispatch("avatar")
+			selected := accountModeLabel(f.Mode)
+			chosen := false
+			kit.Field(c, i18n.T("account.form.operation_title"), "", func() {
+				// Changed applies the choice to selected: Select sets it after the input.
+				chosen = ui.Select(c, &selected, labels).Label(i18n.T("account.form.operation_title")).Disabled(disabled).Changed()
+			})
+			for i, mode := range modes {
+				if chosen && selected == labels[i] && mode != f.Mode {
+					f.cancel()
+					f.Mode = mode
+				}
 			}
-			if ui.Button(c, i18n.T("account.form.request_email_verification")).Disabled(disabled).Clicked() {
-				f.dispatch("verify-email")
-			}
-			ui.TextInput(c, &f.token).Label(i18n.T("account.form.verification_email_token")).Password().Disabled(disabled)
-			if ui.Button(c, i18n.T("account.form.confirm_email_token")).Disabled(disabled || f.token == "").Clicked() {
-				f.dispatch("verify-email-token")
-			}
-		default:
-			ui.TextInput(c, &f.password).Label(i18n.T("common.current_master_password")).Password().Disabled(disabled)
 			switch f.Mode {
-			case "password":
-				accountNewPasswordView(c, f, disabled)
-			case "email":
-				ui.TextInput(c, &f.Email).Label(i18n.T("account.form.new_email")).Disabled(disabled)
-				if ui.Button(c, i18n.T("account.form.request_email_change_code")).Disabled(disabled).Clicked() {
-					f.dispatch("email-token")
+			case "profile":
+				accountInput(c, &f.name, i18n.T("account.form.profile_name")).Disabled(disabled)
+				accountInput(c, &f.avatar, i18n.T("account.form.avatar_color")).Disabled(disabled)
+				if accountButton(c, i18n.T("account.form.save_avatar"), kit.ButtonSecondary).Disabled(disabled).Clicked() {
+					f.dispatch("avatar")
 				}
-				ui.TextInput(c, &f.token).Label(i18n.T("account.form.email_change_code")).Password().Disabled(disabled)
-			case "kdf":
-				accountKDFView(c, f, disabled)
-			case "rotate-user-key":
-				if ui.Button(c, i18n.T("account.rotation.load_recipients")).Disabled(disabled).Clicked() {
-					f.dispatch("rotation-recipients")
+				if accountButton(c, i18n.T("account.form.request_email_verification"), kit.ButtonSecondary).Disabled(disabled).Clicked() {
+					f.dispatch("verify-email")
 				}
-				ui.Text(c, i18n.T("account.rotation.trusted_keys_hint")).MaxLines(4)
-				for _, recipient := range f.RotationRequirements.Users {
-					value := f.rotationTrust.Users[recipient.ID]
-					ui.TextInput(c, &value).Label(i18n.Tf("account.rotation.trustee_public_key", recipient.Email, recipient.ID)).Disabled(disabled)
-					f.rotationTrust.Users[recipient.ID] = value
+				accountInput(c, &f.token, i18n.T("account.form.verification_email_token")).Password().Disabled(disabled)
+				if accountButton(c, i18n.T("account.form.confirm_email_token"), kit.ButtonSecondary).Disabled(disabled || f.token == "").Clicked() {
+					f.dispatch("verify-email-token")
 				}
-				for _, recipient := range f.RotationRequirements.Organizations {
-					value := f.rotationTrust.Organizations[recipient.ID]
-					ui.TextInput(c, &value).Label(i18n.Tf("account.rotation.organization_public_key", recipient.Name, recipient.ID)).Disabled(disabled)
-					f.rotationTrust.Organizations[recipient.ID] = value
+			default:
+				accountInput(c, &f.password, i18n.T("common.current_master_password")).Password().Disabled(disabled)
+				switch f.Mode {
+				case "password":
+					accountNewPasswordView(c, f, disabled)
+				case "email":
+					accountInput(c, &f.Email, i18n.T("account.form.new_email")).Disabled(disabled)
+					if accountButton(c, i18n.T("account.form.request_email_change_code"), kit.ButtonSecondary).Disabled(disabled).Clicked() {
+						f.dispatch("email-token")
+					}
+					accountInput(c, &f.token, i18n.T("account.form.email_change_code")).Password().Disabled(disabled)
+				case "kdf":
+					accountKDFView(c, f, disabled)
+				case "rotate-user-key":
+					if accountButton(c, i18n.T("account.rotation.load_recipients"), kit.ButtonSecondary).Disabled(disabled).Clicked() {
+						f.dispatch("rotation-recipients")
+					}
+					kit.Notice(c, kit.ToneInfo, i18n.T("account.rotation.trusted_keys_hint"))
+					for _, recipient := range f.RotationRequirements.Users {
+						value := f.rotationTrust.Users[recipient.ID]
+						accountInput(c, &value, i18n.Tf("account.rotation.trustee_public_key", recipient.Email, recipient.ID)).Disabled(disabled)
+						f.rotationTrust.Users[recipient.ID] = value
+					}
+					for _, recipient := range f.RotationRequirements.Organizations {
+						value := f.rotationTrust.Organizations[recipient.ID]
+						accountInput(c, &value, i18n.Tf("account.rotation.organization_public_key", recipient.Name, recipient.ID)).Disabled(disabled)
+						f.rotationTrust.Organizations[recipient.ID] = value
+					}
+				case "api-key", "security-stamp", "purge", "delete":
+					accountInput(c, &f.otp, i18n.T("account.form.protected_email_otp")).Password().Disabled(disabled)
 				}
-			case "api-key", "security-stamp", "purge", "delete":
-				ui.TextInput(c, &f.otp).Label(i18n.T("account.form.protected_email_otp")).Password().Disabled(disabled)
+				if f.Mode == "rotate-user-key" || f.Mode == "delete" {
+					kit.Notice(c, kit.ToneWarning, i18n.T("account.rotation.share_recovery_hint"))
+					label := i18n.T("account.rotation.confirm_share_recovery")
+					if f.legacyRecoveryReviewed {
+						label = i18n.T("account.rotation.revoke_share_recovery_confirmation")
+					}
+					kit.Checkbox(c, &f.legacyRecoveryReviewed, label, disabled)
+				}
+				kit.Notice(c, kit.ToneWarning, accountImpact(vaultwarden.AccountChangeKind(f.Mode)))
 			}
-			if f.Mode == "rotate-user-key" || f.Mode == "delete" {
-				ui.Text(c, i18n.T("account.rotation.share_recovery_hint")).MaxLines(6)
-				label := i18n.T("account.rotation.confirm_share_recovery")
-				if f.legacyRecoveryReviewed {
-					label = i18n.T("account.rotation.revoke_share_recovery_confirmation")
-				}
-				if ui.Button(c, label).Disabled(disabled).Clicked() {
-					f.legacyRecoveryReviewed = !f.legacyRecoveryReviewed
+		}
+		if f.apiKey != "" {
+			field := accountInput(c, &f.apiKey, i18n.T("account.apikey.secret_value")).Disabled(true)
+			if !f.apiKeyVisible {
+				field.Password()
+			}
+			label := i18n.T("account.apikey.show")
+			if f.apiKeyVisible {
+				label = i18n.T("account.apikey.hide")
+			}
+			if accountButton(c, label, kit.ButtonQuiet).Clicked() {
+				f.apiKeyVisible = !f.apiKeyVisible
+			}
+		}
+		for _, preparation := range f.RotationPreparations {
+			ui.Text(c, i18n.Tf("account.rotation.attachment_to_migrate", preparation.CipherID, preparation.AttachmentID)).MaxLines(3)
+			if preparation.Deleted {
+				kit.Notice(c, kit.ToneWarning, i18n.T("account.rotation.trash_attachment_hint"))
+			}
+			if f.OpenRotationPreparation != nil && accountButton(c.Key(preparation.CipherID+"/"+preparation.AttachmentID), i18n.T("account.rotation.open_item_migration"), kit.ButtonQuiet).Disabled(f.busy).Clicked() {
+				f.OpenRotationPreparation(preparation.CipherID, preparation.Deleted)
+			}
+		}
+	})
+	kit.ActionBar(c, func() {
+		ui.Text(c, f.Status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0)
+		disabled := f.busy || f.uncertain
+		if f.confirming {
+			if kit.Button(c, i18n.T("common.cancel"), "", kit.ButtonSecondary, f.busy).Clicked() {
+				f.cancel()
+			}
+			if kit.Button(c, i18n.T("account.form.confirm_security_change"), "", kit.ButtonDanger, disabled).Clicked() {
+				if f.confirmAction != "" {
+					f.dispatch(f.confirmAction)
+				} else {
+					f.dispatch("commit")
 				}
 			}
-			ui.Text(c, accountImpact(vaultwarden.AccountChangeKind(f.Mode))).MaxLines(5)
-			if f.Mode == "api-key" {
-				if ui.Button(c, i18n.T("account.apikey.view")).Disabled(disabled).Clicked() {
-					f.confirmAction = "api-key"
-					f.confirming = true
+		} else {
+			if kit.Button(c, i18n.T("account.form.cancel_clear_secrets"), "", kit.ButtonSecondary, f.busy).Clicked() {
+				f.cancel()
+			}
+			switch f.Mode {
+			case "profile":
+				if kit.Button(c, i18n.T("account.form.save_profile"), "", kit.ButtonPrimary, disabled).Clicked() {
+					f.dispatch("profile")
 				}
-				if ui.Button(c, i18n.T("account.apikey.rotate")).Disabled(disabled).Clicked() {
+			case "api-key":
+				if kit.Button(c, i18n.T("account.apikey.rotate"), "", kit.ButtonDanger, disabled).Clicked() {
 					f.confirmAction = "rotate-api-key"
 					f.confirming = true
 				}
-			} else if ui.Button(c, i18n.T("account.form.continue_review_impact")).Disabled(disabled).Clicked() {
-				f.dispatch("prepare-" + f.Mode)
+				if kit.Button(c, i18n.T("account.apikey.view"), "", kit.ButtonPrimary, disabled).Clicked() {
+					f.confirmAction = "api-key"
+					f.confirming = true
+				}
+			default:
+				if kit.Button(c, i18n.T("account.form.continue_review_impact"), "", accountOperationKind(f.Mode), disabled).Clicked() {
+					f.dispatch("prepare-" + f.Mode)
+				}
 			}
 		}
-		if ui.Button(c, i18n.T("account.form.cancel_clear_secrets")).Disabled(f.busy).Clicked() {
-			f.cancel()
-		}
+	})
+}
+
+// accountInput keeps page fields labeled while allowing callers to preserve
+// their password and disabled policies on the underlying input.
+func accountInput(c *ui.Context, value *string, label string, hints ...string) ui.Element {
+	var input ui.Element
+	hint := ""
+	if len(hints) != 0 {
+		hint = hints[0]
 	}
-	if f.apiKey != "" {
-		field := ui.TextInput(c, &f.apiKey).Label(i18n.T("account.apikey.secret_value")).Disabled(true)
-		if !f.apiKeyVisible {
-			field.Password()
-		}
-		label := i18n.T("account.apikey.show")
-		if f.apiKeyVisible {
-			label = i18n.T("account.apikey.hide")
-		}
-		if ui.Button(c, label).Clicked() {
-			f.apiKeyVisible = !f.apiKeyVisible
-		}
-	}
-	for _, preparation := range f.RotationPreparations {
-		ui.Text(c, i18n.Tf("account.rotation.attachment_to_migrate", preparation.CipherID, preparation.AttachmentID)).MaxLines(3)
-		if preparation.Deleted {
-			ui.Text(c, i18n.T("account.rotation.trash_attachment_hint")).MaxLines(4)
-		}
-		if f.OpenRotationPreparation != nil && ui.Button(c.Key(preparation.CipherID+"/"+preparation.AttachmentID), i18n.T("account.rotation.open_item_migration")).Disabled(f.busy).Clicked() {
-			f.OpenRotationPreparation(preparation.CipherID, preparation.Deleted)
-		}
-	}
-	ui.Text(c, f.Status).MaxLines(5)
+	kit.Field(c, label, hint, func() {
+		input = kit.Input(ui.TextInput(c, value).Label(label))
+	})
+	return input
+}
+
+// accountButton gives standalone form actions their natural content width.
+func accountButton(c *ui.Context, label string, kind kit.ButtonKind) ui.Element {
+	var button ui.Element
+	ui.Row(c).Children(func() { button = kit.Button(c, label, "", kind, false) })
+	return button
 }
 func accountNewPasswordView(c *ui.Context, f *Form, disabled bool) {
-	ui.TextInput(c, &f.newPassword).Label(i18n.T("account.form.new_password")).Password().Disabled(disabled)
-	ui.TextInput(c, &f.repeatPassword).Label(i18n.T("account.form.repeat_password")).Password().Disabled(disabled)
-	ui.TextInput(c, &f.hint).Label(i18n.T("account.form.password_hint")).Disabled(disabled)
-	if ui.Button(c, i18n.T("account.form.evaluate_password")).Disabled(disabled).Clicked() {
+	accountInput(c, &f.newPassword, i18n.T("account.form.new_password"), i18n.T("account.form.new_password_hint")).Password().Disabled(disabled)
+	accountInput(c, &f.repeatPassword, i18n.T("account.form.repeat_password")).Password().Disabled(disabled)
+	accountInput(c, &f.hint, i18n.T("account.form.password_hint"), i18n.T("account.form.password_hint_help")).Disabled(disabled)
+	if accountButton(c, i18n.T("account.form.evaluate_password"), kit.ButtonQuiet).Disabled(disabled).Clicked() {
 		f.evaluate()
 	}
 	if f.score >= 0 {
 		ui.Text(c, i18n.Tf("account.form.password_strength", f.score))
 	}
-	ui.Text(c, i18n.Tf("account.form.password_policy_hint", f.policy.MinComplexity, f.policy.MinLength)).MaxLines(4)
+	kit.Notice(c, kit.ToneInfo, i18n.Tf("account.form.password_policy_hint", f.policy.MinComplexity, f.policy.MinLength))
 }
 func accountKDFView(c *ui.Context, f *Form, disabled bool) {
-	ui.TextInput(c, &f.kdfType).Label("KDF：0 PBKDF2 / 1 Argon2id").Disabled(disabled)
-	ui.TextInput(c, &f.iterations).Label(i18n.T("account.form.kdf_iterations")).Disabled(disabled)
+	accountInput(c, &f.kdfType, i18n.T("account.form.kdf_type")).Disabled(disabled)
+	accountInput(c, &f.iterations, i18n.T("account.form.kdf_iterations")).Disabled(disabled)
 	if f.kdfType == "1" {
-		ui.TextInput(c, &f.memory).Label(i18n.T("account.form.kdf_memory")).Disabled(disabled)
-		ui.TextInput(c, &f.parallelism).Label(i18n.T("account.form.kdf_parallelism")).Disabled(disabled)
+		accountInput(c, &f.memory, i18n.T("account.form.kdf_memory")).Disabled(disabled)
+		accountInput(c, &f.parallelism, i18n.T("account.form.kdf_parallelism")).Disabled(disabled)
 	}
 }
+func accountOperationKind(mode string) kit.ButtonKind {
+	switch mode {
+	case "purge", "delete", "security-stamp", "rotate-user-key":
+		return kit.ButtonDanger
+	default:
+		return kit.ButtonPrimary
+	}
+}
+
 func accountModeLabel(mode string) string {
 	switch mode {
 	case "profile":

@@ -115,6 +115,9 @@ func (a *app) startResourceCipherCopyWith(session *vaultwarden.Session, e *ciphe
 			}
 			a.editor = nil
 			a.backupEditor = editor
+			// The attachments continue in the import and export window, which
+			// lives exactly as long as the editor (reconcileBackupWindow).
+			a.showBackupWindow()
 			a.status = i18n.T("vault.copy.status_incomplete")
 			if err != nil {
 				a.status = vaultwarden.ErrorMessage(err) + " " + a.status

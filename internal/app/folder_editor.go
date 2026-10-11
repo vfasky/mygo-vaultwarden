@@ -39,57 +39,103 @@ func (a *app) openFolderEditor(id string) {
 	a.secretInputVersion++
 }
 
+type editorOption struct{ value, label string }
+
+// editorSelect keeps stable IDs separate from translated or duplicate display names.
+func editorSelect(c *ui.Context, label string, selected *string, options []editorOption, disabled bool) ui.Element {
+	text := *selected
+	for _, option := range options {
+		if option.value == *selected {
+			text = option.label
+			break
+		}
+	}
+	sel := ui.SelectBase(c, selected)
+	kit.Input(sel.Trigger).Label(label).Disabled(disabled).Gap(8).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, text).Grow(1).MinWidth(0).SingleLine()
+		kit.Icon(c, "chevron", 12).TextColor(kit.Muted)
+	})
+	sel.Popup(func(panel ui.Element) {
+		panel.Padding(4).Background(kit.White).Border(1, kit.ControlBorder).Radius(kit.ControlRadius)
+		for _, option := range options {
+			item := sel.Item(option.value).Label(option.label).Padding(8, 12).Radius(6).Disabled(disabled)
+			if item.Highlighted() {
+				item.Background(kit.Selected).TextColor(kit.Purple)
+			}
+			item.Children(func() { ui.Text(c, option.label).FontSize(13).SingleLine() })
+		}
+	})
+	return sel.Trigger
+}
+
 func (a *app) folderPicker(c *ui.Context, selected **string, disabled bool) {
-	ui.Text(c, i18n.T("common.folder")).FontSize(12)
-	ui.Scroll(c).Height(110).Children(func() {
-		ui.Column(c).Gap(4).Children(func() {
-			if kit.NavItem(c, i18n.T("common.no_folder"), "vault", "", *selected == nil, disabled).Clicked() {
+	kit.Field(c, i18n.T("common.folder"), "", func() {
+		id := ""
+		if *selected != nil {
+			id = **selected
+		}
+		options := []editorOption{{"", i18n.T("common.no_folder")}}
+		for _, folder := range a.folders {
+			options = append(options, editorOption{folder.ID, folder.Name})
+		}
+		if editorSelect(c, i18n.T("common.folder"), &id, options, disabled).Changed() {
+			if id == "" {
 				*selected = nil
+			} else {
+				*selected = &id
 			}
-			for _, f := range a.folders {
-				if kit.NavItem(c, f.Name, "vault", "", *selected != nil && **selected == f.ID, disabled).Clicked() {
-					id := f.ID
-					*selected = &id
-				}
-			}
-		})
+		}
 	})
 }
 
 func (a *app) folderEditorView(c *ui.Context) {
 	e := a.folderEditor
-	ui.Column(c.Key("folder-editor")).Padding(18).Gap(12).Children(func() {
-		title := i18n.T("vault.folder.add_title")
-		if e.id != "" {
-			title = i18n.T("vault.folder.manage_title")
-		}
-		ui.Text(c, title).FontSize(23)
-		ui.TextInput(c, &e.name).Label(i18n.T("vault.folder.name")).Disabled(a.pending != 0 || e.uncertain)
-		if e.confirm {
-			ui.Text(c, i18n.T("vault.folder.confirm_delete_hint")).MaxLines(3)
-			if kit.Action(c, i18n.T("vault.folder.confirm_delete"), "", true, a.pending != 0 || e.uncertain).Clicked() {
-				a.mutateFolder(true)
+	ui.Column(c.Key("folder-editor")).Grow(1).MinHeight(0).Children(func() {
+		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+			ui.Column(c).Padding(20).Gap(16).Children(func() {
+				title := i18n.T("vault.folder.add_title")
+				if e.id != "" {
+					title = i18n.T("vault.folder.manage_title")
+				}
+				kit.PageHeader(c, title, i18n.T("vault.folder.description"), nil)
+				kit.Section(c, i18n.T("vault.editor.basic_information"), func() {
+					kit.Field(c, i18n.T("vault.folder.name"), "", func() {
+						kit.Input(ui.TextInput(c, &e.name).Label(i18n.T("vault.folder.name")).Disabled(a.pending != 0 || e.uncertain))
+					})
+				})
+				if e.confirm {
+					kit.Notice(c, kit.ToneWarning, i18n.T("vault.folder.confirm_delete_hint"))
+				}
+				if e.uncertain {
+					kit.Notice(c, kit.ToneWarning, i18n.T("vault.folder.uncertain_hint"))
+					if kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
+						a.syncVault(false)
+					}
+				}
+			})
+		})
+		kit.ActionBar(c, func() {
+			if e.confirm {
+				if kit.Button(c, i18n.T("vault.folder.confirm_delete"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
+					a.mutateFolder(true)
+				}
+				ui.Spacer(c)
+				if kit.Action(c, i18n.T("vault.folder.cancel_delete"), "", false, a.pending != 0).Clicked() {
+					e.confirm = false
+				}
+			} else {
+				if e.id != "" && kit.Button(c, i18n.T("vault.folder.delete"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
+					e.confirm = true
+				}
+				ui.Spacer(c)
 			}
-			if kit.Action(c, i18n.T("vault.folder.cancel_delete"), "", false, a.pending != 0).Clicked() {
-				e.confirm = false
+			if kit.Action(c, i18n.T("vault.folder.close"), "", false, a.pending != 0).Clicked() {
+				a.folderEditor = nil
 			}
-		} else {
-			if kit.Action(c, i18n.T("vault.folder.save"), "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
+			if !e.confirm && kit.Action(c, i18n.T("vault.folder.save"), "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
 				a.mutateFolder(false)
 			}
-			if e.id != "" && kit.Action(c, i18n.T("vault.folder.delete"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-				e.confirm = true
-			}
-		}
-		if e.uncertain {
-			ui.Text(c, i18n.T("vault.folder.uncertain_hint")).FontSize(12)
-			if kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
-				a.syncVault(false)
-			}
-		}
-		if kit.Action(c, i18n.T("vault.folder.close"), "", false, a.pending != 0).Clicked() {
-			a.folderEditor = nil
-		}
+		})
 	})
 }
 

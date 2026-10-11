@@ -55,7 +55,7 @@ func (a *app) cipherRowPreviewView(c *ui.Context, e *cipherEditor, path string) 
 	if shown {
 		label = i18n.T("vault.compare.hide_rows")
 	}
-	if kit.Action(c, label, "key", false, a.pending != 0).Clicked() {
+	if kit.Button(c, label, "key", kit.ButtonQuiet, a.pending != 0).AlignSelf(ui.Start).Clicked() {
 		if shown {
 			clearCipherRowReveal(e)
 		} else {
@@ -65,16 +65,21 @@ func (a *app) cipherRowPreviewView(c *ui.Context, e *cipherEditor, path string) 
 	if e.rowPreview == nil || e.rowPreview.path != path {
 		return
 	}
-	for _, side := range []struct {
-		name string
-		rows []vaultwarden.CipherRowPreview
-	}{{i18n.T("vault.compare.local"), e.rowPreview.local}, {i18n.T("vault.compare.remote"), e.rowPreview.remote}} {
-		for _, row := range side.rows {
-			ui.Text(c, i18n.Tf("vault.compare.row_details", side.name, row.Index+1, row.Name, row.Metadata)).FontSize(12).MaxLines(3)
-			ui.Text(c, row.Value).FontSize(12).MaxLines(3)
-			if row.HasUnknown {
-				ui.Text(c, i18n.T("vault.compare.row_extensions_hint")).FontSize(11).MaxLines(2)
-			}
+	ui.Row(c).Gap(12).Children(func() {
+		for _, side := range []struct {
+			name string
+			rows []vaultwarden.CipherRowPreview
+		}{{i18n.T("vault.compare.local"), e.rowPreview.local}, {i18n.T("vault.compare.remote"), e.rowPreview.remote}} {
+			ui.Column(c).Grow(1).MinWidth(0).Gap(8).Children(func() {
+				ui.Text(c, side.name).FontSize(12).FontWeight(600)
+				for _, row := range side.rows {
+					ui.Text(c, i18n.Tf("vault.compare.row_details", side.name, row.Index+1, row.Name, row.Metadata)).FontSize(12).MaxLines(3)
+					ui.Text(c, row.Value).FontSize(12).MaxLines(3)
+					if row.HasUnknown {
+						kit.Notice(c, kit.ToneInfo, i18n.T("vault.compare.row_extensions_hint"))
+					}
+				}
+			})
 		}
-	}
+	})
 }

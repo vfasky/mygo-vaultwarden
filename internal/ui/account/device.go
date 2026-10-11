@@ -10,6 +10,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -158,45 +159,82 @@ func authPublicFingerprint(public string) string {
 	return hex.EncodeToString(sum[:])
 }
 func (p *DevicePanel) View(c *ui.Context) {
-	ui.Scroll(c).Children(func() {
-		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("account.device.title")).FontSize(23)
-			if p.closed {
-				ui.Text(c, i18n.T("account.device.status_panel_closed"))
-				return
+	ui.Column(c).Gap(16).Children(func() {
+		if p.closed {
+			kit.Notice(c, kit.ToneInfo, i18n.T("account.device.status_panel_closed"))
+			return
+		}
+		button := func(label string, kind kit.ButtonKind, disabled bool, f func()) {
+			if kit.Button(c, label, "", kind, disabled).Clicked() {
+				f()
 			}
-			button := func(label string, disabled bool, f func()) {
-				if ui.Button(c, label).Disabled(disabled).Clicked() {
-					f()
-				}
+		}
+		ui.Row(c).Children(func() {
+			button(i18n.T("account.device.refresh_requests"), kit.ButtonSecondary, p.Busy, p.Refresh)
+		})
+		kit.Section(c, i18n.T("account.device.devices_title"), func() {
+			if len(p.Devices) == 0 {
+				kit.EmptyState(c, "shield", i18n.T("account.device.empty_devices"), "")
 			}
-			button(i18n.T("account.device.refresh_requests"), p.Busy, p.Refresh)
-			ui.Text(c, p.Status).MaxLines(4)
 			for _, d := range p.Devices {
-				ui.Text(c, d.Name+" · "+d.Identifier).MaxLines(2)
+				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+					kit.Icon(c, "shield", 20).TextColor(kit.Purple)
+					ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+						ui.Text(c, d.Name).FontWeight(600).SingleLine()
+						ui.Text(c, d.Identifier).FontSize(12).TextColor(kit.Muted).SingleLine()
+						ui.Text(c, i18n.Tf("account.device.last_activity", d.RevisionDate)).FontSize(12).TextColor(kit.Muted)
+					})
+					kit.Pill(c, i18n.Tf("account.device.device_type", d.Type), kit.Selected, kit.Purple)
+				})
 			}
-			if p.Confirm != "push" {
-				button(i18n.T("account.device.clear_push"), p.Busy || p.Uncertain, func() { p.Confirm = "push" })
-			} else {
-				ui.Text(c, i18n.T("account.device.clear_push_hint")).MaxLines(4)
-				button(i18n.T("account.device.confirm_clear_push"), p.Busy, p.clearPush)
-				button(i18n.T("common.cancel"), p.Busy, func() { p.Confirm = "" })
+			ui.Row(c).Gap(8).Children(func() {
+				if p.Confirm != "push" {
+					button(i18n.T("account.device.clear_push"), kit.ButtonDanger, p.Busy || p.Uncertain, func() { p.Confirm = "push" })
+				}
+			})
+			if p.Confirm == "push" {
+				kit.Notice(c, kit.ToneWarning, i18n.T("account.device.clear_push_hint"))
+				ui.Row(c).Gap(8).Children(func() {
+					button(i18n.T("account.device.confirm_clear_push"), kit.ButtonDanger, p.Busy, p.clearPush)
+					button(i18n.T("common.cancel"), kit.ButtonSecondary, p.Busy, func() { p.Confirm = "" })
+				})
+			}
+		})
+		kit.Section(c, i18n.T("account.device.requests_title"), func() {
+			if len(p.Requests) == 0 {
+				kit.EmptyState(c, "shield", i18n.T("account.device.empty_requests"), "")
 			}
 			for _, r := range p.Requests {
 				row := r
-				button(i18n.Tf("account.device.view_login_request", r.RequestDeviceType, r.RequestIPAddress), p.Busy, func() { p.Selected = &row; p.Verified = false; p.Confirm = "auth" })
+				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+					kit.Icon(c, "shield", 20).TextColor(kit.Purple)
+					ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+						ui.Text(c, r.RequestIPAddress).FontWeight(600).SingleLine()
+						ui.Text(c, i18n.Tf("account.device.request_time", r.CreationDate)).FontSize(12).TextColor(kit.Muted)
+					})
+					kit.Pill(c, i18n.T("account.device.pending_approval"), kit.Selected, kit.Purple)
+					button(i18n.Tf("account.device.view_login_request", r.RequestDeviceType, r.RequestIPAddress), kit.ButtonQuiet, p.Busy, func() { p.Selected = &row; p.Verified = false; p.Confirm = "auth" })
+				})
 			}
 			if r := p.Selected; r != nil {
 				ui.Text(c, i18n.Tf("account.device.request_origin", r.Origin)).MaxLines(2)
 				ui.Text(c, i18n.Tf("account.device.request_time", r.CreationDate))
-				ui.Text(c, i18n.Tf("account.device.public_key_fingerprint", authPublicFingerprint(r.PublicKey))).MaxLines(4)
-				ui.Text(c, i18n.T("account.device.approval_fingerprint_hint")).MaxLines(4)
-				button(i18n.T("account.device.confirm_fingerprint"), p.Busy || p.Uncertain, func() { p.Verified = true })
-				button(i18n.T("account.device.confirm_approve_login"), p.Busy || p.Uncertain || !p.Verified, func() { p.Respond(true) })
-				button(i18n.T("account.device.confirm_reject_login"), p.Busy || p.Uncertain, func() { p.Respond(false) })
-				button(i18n.T("account.device.cancel_approval"), p.Busy, func() { p.Selected = nil; p.Verified = false; p.Confirm = "" })
+				ui.Text(c, i18n.Tf("account.device.public_key_fingerprint", authPublicFingerprint(r.PublicKey)))
+				kit.Notice(c, kit.ToneWarning, i18n.T("account.device.approval_fingerprint_hint"))
+				ui.Row(c).Children(func() {
+					button(i18n.T("account.device.confirm_fingerprint"), kit.ButtonSecondary, p.Busy || p.Uncertain, func() { p.Verified = true })
+				})
+				ui.Row(c).Gap(8).Children(func() {
+					button(i18n.T("account.device.cancel_approval"), kit.ButtonSecondary, p.Busy, func() { p.Selected = nil; p.Verified = false; p.Confirm = "" })
+					button(i18n.T("account.device.confirm_reject_login"), kit.ButtonDanger, p.Busy || p.Uncertain, func() { p.Respond(false) })
+					ui.Spacer(c)
+					button(i18n.T("account.device.confirm_approve_login"), kit.ButtonPrimary, p.Busy || p.Uncertain || !p.Verified, func() { p.Respond(true) })
+				})
 			}
-			button(i18n.T("common.close"), false, p.Close)
+		})
+		kit.ActionBar(c, func() {
+			ui.Text(c, p.Status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0)
+			button(i18n.T("common.close"), kit.ButtonSecondary, false, p.Close)
 		})
 	})
 }

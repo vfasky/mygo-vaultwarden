@@ -333,6 +333,7 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 			}
 			if mode == "copy" {
 				f.a.clearBackupEditor()
+				f.a.windows.backupOpen = false // as after the import window closed
 				f.a.openCipherEditor("card-1", 3)
 				if f.a.editor == nil {
 					t.Fatal("copy source editor")
@@ -342,6 +343,14 @@ func TestResourceControllerAcceptedSyncContinuesEveryFile(t *testing.T) {
 				e = f.a.backupEditor
 				if e == nil || !e.resources.copyOnly || !f.a.backupCurrent(e, f.a.epoch) || f.creates != 1 {
 					t.Fatalf("copy handoff failed: %s", f.a.status)
+				}
+				// The attachments continue in the import and export window:
+				// drawing the windows keeps its editor, plan and epoch.
+				epoch := f.a.epoch
+				ui.NewTester(f.a.view, 1280, 820).Frame()
+				ui.NewTester(f.a.backupWindowView, 760, 680).Frame()
+				if !f.a.windows.backupOpen || f.a.backupEditor != e || e.resources.plan == nil || f.a.epoch != epoch {
+					t.Fatal("drawing the windows cancelled the copied attachments")
 				}
 				for i := 0; i < 2; i++ {
 					f.file(i, false)
@@ -505,7 +514,7 @@ func TestResourceFormContinueAndCancel(t *testing.T) {
 			f.a.backupEditorView(c)
 		}
 	}, 1200, 1600)
-	uitest.Click(t, tester, "仅继续附件恢复，使用已存在的明确目标编号（不创建项目）")
+	uitest.Click(t, tester, "仅恢复附件（不创建项目）")
 	if e.plan != nil || !e.submitted || e.resources.plan == nil || f.creates != 0 {
 		t.Fatal("native continue action created metadata or dropped resources")
 	}
@@ -514,7 +523,7 @@ func TestResourceFormContinueAndCancel(t *testing.T) {
 	if !tester.HasText(e.resources.rows[0].Problem) {
 		t.Fatal("file error hidden by global sync status")
 	}
-	uitest.Click(t, tester, "取消并关闭导入导出")
+	uitest.Click(t, tester, "取消")
 	if f.a.backupEditor != nil || len(e.resources.plan.Resources()) != 0 {
 		t.Fatal("native cancellation retained resource plan")
 	}

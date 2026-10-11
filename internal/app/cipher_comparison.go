@@ -98,69 +98,86 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 			c.After(time.Until(e.rowPreview.expires))
 		}
 	}
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Gap(12).Padding(18).Children(func() {
-			ui.Text(c, i18n.T("vault.compare.title")).FontSize(23).FontWeight(600)
-			ui.Text(c, i18n.T("vault.compare.description"))
-			if e.uncertain {
-				ui.Text(c, i18n.T("vault.compare.uncertain_hint"))
-			}
-			if len(e.changes) == 0 {
-				ui.Text(c, i18n.T("vault.compare.status_no_changes"))
-			}
-			for _, change := range e.changes {
-				text := i18n.Tf("vault.compare.status_remote_changed", comparisonFieldLabel(change.Path))
-				if change.Local {
-					text = i18n.Tf("vault.compare.status_local_changed", comparisonFieldLabel(change.Path))
-					if change.Remote {
-						text = i18n.Tf("vault.compare.status_both_changed", comparisonFieldLabel(change.Path))
-					}
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+			ui.Column(c).Gap(16).Padding(20).Children(func() {
+				kit.PageHeader(c, i18n.T("vault.compare.title"), i18n.T("vault.compare.description"), nil)
+				if e.uncertain {
+					kit.Notice(c, kit.ToneWarning, i18n.T("vault.compare.uncertain_hint"))
 				}
-				if change.SameValue {
-					text = i18n.Tf("vault.compare.same_value", text)
+				if len(e.changes) == 0 {
+					kit.Notice(c, kit.ToneInfo, i18n.T("vault.compare.status_no_changes"))
 				}
-				ui.Text(c, text)
-				if change.Local && change.CanApply {
-					label := i18n.T("vault.compare.use_local")
-					if e.localChoices[change.Path] {
-						label = i18n.T("vault.compare.local_selected")
-					}
-					if kit.Action(c, label, "", false, a.pending != 0).Clicked() {
-						e.localChoices[change.Path] = !e.localChoices[change.Path]
-					}
-				} else if change.Local {
-					a.cipherRowPreviewView(c, e, change.Path)
-					ui.Text(c, i18n.T("vault.compare.row_matching_hint"))
-					for _, label := range change.RemoteRows {
-						ui.Text(c, i18n.Tf("vault.compare.remote_row", label)).FontSize(12)
-					}
-					for i, label := range change.LocalRows {
-						ui.Text(c, i18n.Tf("vault.compare.local_row", label)).FontSize(12)
-						choices := e.rowChoices[change.Path]
-						if i >= len(choices) {
-							continue
-						}
-						label := i18n.T("vault.compare.keep_remote_row")
-						if choices[i] == -1 {
-							label = i18n.T("vault.compare.add_row")
-						} else if choices[i] >= 0 {
-							label = i18n.Tf("vault.compare.match_remote_row", choices[i]+1)
-						}
-						if kit.Action(c, label, "", false, a.pending != 0).Clicked() {
-							choices[i]++
-							if choices[i] >= len(change.RemoteRows) {
-								choices[i] = -2
-							}
+				for _, change := range e.changes {
+					text := i18n.Tf("vault.compare.status_remote_changed", comparisonFieldLabel(change.Path))
+					if change.Local {
+						text = i18n.Tf("vault.compare.status_local_changed", comparisonFieldLabel(change.Path))
+						if change.Remote {
+							text = i18n.Tf("vault.compare.status_both_changed", comparisonFieldLabel(change.Path))
 						}
 					}
+					if change.SameValue {
+						text = i18n.Tf("vault.compare.same_value", text)
+					}
+					kit.Section(c.Key(change.Path), comparisonFieldLabel(change.Path), func() {
+						ui.Text(c, text).FontSize(12).TextColor(kit.Muted)
+						if change.Local && change.CanApply {
+							local := e.localChoices[change.Path]
+							kit.ChoiceGroup(c, comparisonFieldLabel(change.Path), func() {
+								ui.Row(c).Gap(8).Children(func() {
+									if kit.Choice(c, &local, false, i18n.T("vault.compare.remote"), "", "", a.pending != 0).Grow(1).MinWidth(0).Changed() {
+										e.localChoices[change.Path] = local
+									}
+									if kit.Choice(c, &local, true, i18n.T("vault.compare.use_local"), "", "", a.pending != 0).Grow(1).MinWidth(0).Changed() {
+										e.localChoices[change.Path] = local
+									}
+								})
+							})
+						} else if change.Local {
+							a.cipherRowPreviewView(c, e, change.Path)
+							kit.Notice(c, kit.ToneInfo, i18n.T("vault.compare.row_matching_hint"))
+							ui.Row(c).Gap(12).Children(func() {
+								ui.Column(c).Grow(1).MinWidth(0).Gap(8).Children(func() {
+									ui.Text(c, i18n.T("vault.compare.remote")).FontWeight(600)
+									for _, label := range change.RemoteRows {
+										ui.Text(c, i18n.Tf("vault.compare.remote_row", label)).FontSize(12).MaxLines(3)
+									}
+								})
+								ui.Column(c).Grow(1).MinWidth(0).Gap(8).Children(func() {
+									ui.Text(c, i18n.T("vault.compare.local")).FontWeight(600)
+									for i, label := range change.LocalRows {
+										choices := e.rowChoices[change.Path]
+										if i >= len(choices) {
+											continue
+										}
+										options := []string{i18n.T("vault.compare.keep_remote_row"), i18n.T("vault.compare.add_row")}
+										for j := range change.RemoteRows {
+											options = append(options, i18n.Tf("vault.compare.match_remote_row", j+1))
+										}
+										selected := options[choices[i]+2]
+										kit.Field(c.Key(i), i18n.Tf("vault.compare.local_row", label), "", func() {
+											if ui.Select(c, &selected, options).Label(i18n.Tf("vault.compare.local_row", label)).Disabled(a.pending != 0).Changed() {
+												for j, option := range options {
+													if option == selected {
+														choices[i] = j - 2
+														break
+													}
+												}
+											}
+										})
+									}
+								})
+							})
+						}
+					})
 				}
-			}
-			ui.Text(c, i18n.T("vault.compare.version_conflict_hint"))
+				kit.Notice(c, kit.ToneInfo, i18n.T("vault.compare.version_conflict_hint"))
+			})
+		})
+		kit.ActionBar(c, func() {
+			ui.Spacer(c)
 			if kit.Action(c, i18n.T("vault.compare.use_remote"), "", false, a.pending != 0).Clicked() {
 				a.applyCipherComparison(false)
-			}
-			if kit.Action(c, i18n.T("vault.compare.reapply_selections"), "", true, a.pending != 0).Clicked() {
-				a.applyCipherComparison(true)
 			}
 			if kit.Action(c, i18n.T("vault.compare.back_keep_draft"), "", false, a.pending != 0).Clicked() {
 				clearCipherRowReveal(e)
@@ -169,7 +186,10 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 				e.localChoices = nil
 				a.secretInputVersion++
 			}
-		})
+			if kit.Action(c, i18n.T("vault.compare.reapply_selections"), "", true, a.pending != 0).Clicked() {
+				a.applyCipherComparison(true)
+			}
+		}).Wrap().Justify(ui.End)
 	})
 }
 

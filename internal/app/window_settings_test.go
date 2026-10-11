@@ -2,6 +2,9 @@
 package app
 
 import (
+	"image/png"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -10,6 +13,79 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 )
+
+func TestWindowsVisualPreviews(t *testing.T) {
+	dir := os.Getenv("MYGO_UI_PREVIEW_DIR")
+	if dir == "" {
+		t.Skip("set MYGO_UI_PREVIEW_DIR to export window previews")
+	}
+	language := i18n.Current()
+	defer i18n.Set(language)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	export := func(name string, view func(*ui.Context), width, height int) {
+		t.Helper()
+		tt := ui.NewTester(view, width, height)
+		if strings.HasSuffix(name, "-bottom") {
+			tt.Scroll(float32(width-40), float32(height/2), 0, 1000)
+		}
+		f, err := os.Create(filepath.Join(dir, name+".png"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = png.Encode(f, tt.Image())
+		closeErr := f.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if closeErr != nil {
+			t.Fatal(closeErr)
+		}
+	}
+	for _, tab := range []settingsTab{settingsTabGeneral, settingsTabAccount, settingsTabStorage, settingsTabUpdates, settingsTabAbout} {
+		a := previewApp()
+		a.windows.settingsTab = tab
+		export("settings-"+string(tab), a.settingsWindowView, 720, 560)
+		if tab == settingsTabAccount {
+			export("settings-account-full", a.settingsWindowView, 720, 1000)
+			export("settings-account-bottom", a.settingsWindowView, 720, 560)
+		}
+	}
+	for _, tab := range []settingsTab{settingsTabAccount, settingsTabUpdates} {
+		i18n.Set(i18n.English)
+		a := previewApp()
+		a.windows.settingsTab = tab
+		export("settings-"+string(tab)+"-en-min", a.settingsWindowView, 620, 460)
+		export("settings-"+string(tab)+"-en-min-bottom", a.settingsWindowView, 620, 460)
+		i18n.Set(language)
+	}
+	a := previewApp()
+	a.windows.settingsTab = settingsTabStorage
+	a.snapshot.IndexPending, a.snapshot.CleanupPending = true, true
+	export("settings-storage-pending", a.settingsWindowView, 720, 560)
+	a = passwordLockedApp()
+	a.windows.settingsTab = settingsTabAccount
+	export("settings-account-locked", a.settingsWindowView, 720, 560)
+	for _, page := range accountPages {
+		a := previewApp()
+		a.windows.accountTab = page.tab
+		export("account-open-"+string(page.tab), a.accountWindowView, 1080, 720)
+	}
+	for _, state := range []string{"processing", "editing", "locked"} {
+		a := previewApp()
+		a.windows.accountTab = accountTabSend
+		switch state {
+		case "processing":
+			a.pending = 1
+		case "editing":
+			a.editor = &cipherEditor{}
+		case "locked":
+			a = passwordLockedApp()
+		}
+		export("account-"+state, a.accountWindowView, 1080, 720)
+	}
+}
 
 func TestSettingsWindowTabs(t *testing.T) {
 	a := previewApp()
@@ -69,7 +145,7 @@ func TestSettingsWindowUpdatesWithoutPlugin(t *testing.T) {
 	a := passwordLockedApp()
 	a.windows.settingsTab = settingsTabUpdates
 	tt := ui.NewTester(a.settingsWindowView, 720, 560)
-	for _, text := range []string{i18n.T("settings.updates.unavailable_hint"), i18n.Tf("settings.updates.last_check", i18n.T("settings.updates.never_checked")), i18n.Tf("settings.version", "—")} {
+	for _, text := range []string{i18n.T("settings.updates.unavailable_hint"), i18n.T("settings.updates.last_check"), i18n.T("settings.updates.never_checked"), i18n.T("settings.version_label"), "—"} {
 		if !tt.HasText(text) {
 			t.Fatalf("missing update state: %s", text)
 		}

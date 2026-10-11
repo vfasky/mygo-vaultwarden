@@ -68,3 +68,45 @@ func TestAccountNativeScopeEpochAndUnknown(t *testing.T) {
 		t.Fatal("unknown operation retried")
 	}
 }
+
+// The operation menu switches the form, clearing the secrets of the last
+// operation, and does nothing while the form is busy or uncertain.
+func TestAccountFormOperationSelector(t *testing.T) {
+	f := NewForm(vaultwarden.Scope{Server: "https://test.invalid", Account: "a"}, 3, func(FormRequest) {})
+	f.Mode = "profile"
+	// The section title shows the mode too, so the menu is opened from the
+	// keyboard: it is the first control of the form.
+	open := func() *ui.Tester {
+		tt := ui.NewTester(func(c *ui.Context) { FormView(c, f) }, 1200, 2400)
+		tt.Key(0, ui.KeyTab)
+		tt.Key(0, ui.KeySpace)
+		return tt
+	}
+	choose := func(from, to string) {
+		t.Helper()
+		tt := open()
+		if err := tt.Click(accountModeLabel(to)); err != nil {
+			t.Fatal(err)
+		}
+		tt.Frame()
+	}
+	for _, step := range [][2]string{{"profile", "password"}, {"password", "api-key"}, {"api-key", "rotate-user-key"}} {
+		f.password = "secret-password"
+		choose(step[0], step[1])
+		if f.Mode != step[1] || f.password != "" {
+			t.Fatalf("choosing %s: mode=%s password cleared=%v", step[1], f.Mode, f.password == "")
+		}
+	}
+	if !open().HasText(accountModeLabel("rotate-user-key")) {
+		t.Fatal("rotation form not shown")
+	}
+	for _, state := range []string{"busy", "uncertain"} {
+		f.busy, f.uncertain = state == "busy", state == "uncertain"
+		tt := open()
+		_ = tt.Click(accountModeLabel("profile"))
+		tt.Frame()
+		if f.Mode != "rotate-user-key" {
+			t.Fatalf("%s form switched to %s", state, f.Mode)
+		}
+	}
+}

@@ -24,48 +24,56 @@ func (a *app) attachmentView(c *ui.Context, e *cipherEditor) {
 		return
 	}
 	busy := a.pending != 0
-	ui.Text(c, i18n.T("vault.attachment.title")).FontSize(16)
-	ui.Text(c, i18n.T("vault.attachment.description")).FontSize(12).MaxLines(4)
-	if kit.Action(c, i18n.T("vault.attachment.refresh"), "", false, busy || e.uncertain).Clicked() {
-		a.runAttachmentOperation("list", vaultwarden.AttachmentInfo{})
-	}
-	if e.fields.Edit && kit.Action(c, i18n.T("vault.attachment.upload"), "", false, busy || e.uncertain || e.fields.DeletedDate != nil).Clicked() {
-		a.runAttachmentOperation("upload", vaultwarden.AttachmentInfo{})
-	}
-	if e.attachmentsLoaded && len(e.attachments) == 0 {
-		ui.Text(c, i18n.T("vault.attachment.empty")).FontSize(12)
-	}
-	for _, attachment := range e.attachments {
-		ui.Column(c).Gap(6).Children(func() {
-			ui.Text(c, attachment.FileName).MaxLines(2)
-			ui.Text(c, i18n.Tf("vault.attachment.encrypted_size", attachment.CiphertextSize)).FontSize(11)
-			if kit.Action(c, i18n.T("vault.attachment.download"), "", false, busy || e.uncertain).Clicked() {
-				a.runAttachmentOperation("download", attachment)
+	kit.Section(c, i18n.T("vault.attachment.title"), func() {
+		kit.Notice(c, kit.ToneInfo, i18n.T("vault.attachment.description"))
+		ui.Row(c).Gap(8).Children(func() {
+			if kit.Button(c, i18n.T("vault.attachment.refresh"), "", kit.ButtonQuiet, busy || e.uncertain).Clicked() {
+				a.runAttachmentOperation("list", vaultwarden.AttachmentInfo{})
 			}
-			if e.fields.Edit {
-				if e.attachmentDelete == attachment.ID {
-					ui.Text(c, i18n.T("vault.attachment.confirm_delete_hint")).FontSize(12)
-					if kit.Action(c, i18n.T("vault.attachment.confirm_delete"), "", true, busy || e.uncertain).Clicked() {
-						a.runAttachmentOperation("delete", attachment)
-					}
-					if kit.Action(c, i18n.T("vault.attachment.keep"), "", false, busy).Clicked() {
-						e.attachmentDelete = ""
-					}
-				} else if kit.Action(c, i18n.T("vault.attachment.delete"), "", false, busy || e.uncertain).Clicked() {
-					e.attachmentDelete = attachment.ID
-				}
+			if e.fields.Edit && kit.Action(c, i18n.T("vault.attachment.upload"), "", false, busy || e.uncertain || e.fields.DeletedDate != nil).Clicked() {
+				a.runAttachmentOperation("upload", vaultwarden.AttachmentInfo{})
 			}
 		})
-	}
-	if e.attachmentBusy {
-		ui.Text(c, i18n.T("vault.attachment.status_transferring")).FontSize(12)
-		if kit.Action(c, i18n.T("vault.attachment.cancel"), "", false, false).Clicked() {
-			if a.cancel != nil {
-				a.cancel()
-			}
-			a.status = i18n.T("vault.attachment.status_cancel_requested")
+		if e.attachmentsLoaded && len(e.attachments) == 0 {
+			kit.EmptyState(c, "vault", i18n.T("vault.attachment.empty"), "")
 		}
-	}
+		for _, attachment := range e.attachments {
+			ui.Column(c).Gap(8).Children(func() {
+				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+					ui.Column(c).Grow(1).MinWidth(0).Gap(4).Children(func() {
+						ui.Text(c, attachment.FileName).MaxLines(2)
+						ui.Text(c, i18n.Tf("vault.attachment.encrypted_size", attachment.CiphertextSize)).FontSize(11).TextColor(kit.Muted)
+					})
+					if kit.Button(c, i18n.T("vault.attachment.download"), "", kit.ButtonQuiet, busy || e.uncertain).Clicked() {
+						a.runAttachmentOperation("download", attachment)
+					}
+					if e.fields.Edit && e.attachmentDelete != attachment.ID && kit.Button(c, i18n.T("vault.attachment.delete"), "", kit.ButtonDanger, busy || e.uncertain).Clicked() {
+						e.attachmentDelete = attachment.ID
+					}
+				})
+				if e.fields.Edit {
+					if e.attachmentDelete == attachment.ID {
+						kit.Notice(c, kit.ToneWarning, i18n.T("vault.attachment.confirm_delete_hint"))
+						if kit.Button(c, i18n.T("vault.attachment.confirm_delete"), "", kit.ButtonDanger, busy || e.uncertain).AlignSelf(ui.Start).Clicked() {
+							a.runAttachmentOperation("delete", attachment)
+						}
+						if kit.Action(c, i18n.T("vault.attachment.keep"), "", false, busy).AlignSelf(ui.Start).Clicked() {
+							e.attachmentDelete = ""
+						}
+					}
+				}
+			})
+		}
+		if e.attachmentBusy {
+			ui.Text(c, i18n.T("vault.attachment.status_transferring")).FontSize(12)
+			if kit.Action(c, i18n.T("vault.attachment.cancel"), "", false, false).AlignSelf(ui.Start).Clicked() {
+				if a.cancel != nil {
+					a.cancel()
+				}
+				a.status = i18n.T("vault.attachment.status_cancel_requested")
+			}
+		}
+	})
 }
 
 // Mutations trigger a normal sync that may close the editor. Never silently

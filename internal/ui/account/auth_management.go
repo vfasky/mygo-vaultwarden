@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -131,58 +132,115 @@ func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
 	if f == nil || f.closed {
 		return
 	}
-	for _, entry := range authManagementOperations() {
-		if ui.Button(c, entry.label).Disabled(f.busy || (f.uncertain && entry.op != vaultwarden.MFAList)).Clicked() {
-			f.clear()
-			f.confirming = false
-			f.operation = entry.op
-		}
-	}
-	ui.TextInput(c, &f.password).Label(i18n.T("account.mfa.master_password_hint")).Password().Disabled(f.busy)
-	ui.TextInput(c, &f.otp).Label(i18n.T("account.mfa.sensitive_email_otp")).Password().Disabled(f.busy)
-	labels := map[string]string{
-		"name":         i18n.T("account.mfa.security_key_name"),
-		"key":          i18n.T("account.mfa.authenticator_key"),
-		"token":        i18n.T("common.verification_code"),
-		"email":        i18n.T("account.mfa.recipient_email"),
-		"host":         i18n.T("account.mfa.duo_host"),
-		"clientId":     i18n.T("account.mfa.duo_client_id"),
-		"clientSecret": i18n.T("account.mfa.duo_client_secret"),
-		"id":           i18n.T("account.mfa.security_key_id"),
-		"type":         i18n.T("account.mfa.method_id"),
-	}
-	for _, entry := range authManagementOperations() {
-		if entry.op != f.operation {
-			continue
-		}
-		for _, field := range entry.fields {
-			value := f.values[field]
-			label := labels[field]
-			if label == "" {
-				label = i18n.Tf("account.mfa.otp_slot", field)
+	ui.Column(c).Gap(16).Children(func() {
+		operations := authManagementOperations()
+		ui.Row(c).Children(func() {
+			if kit.Button(c, operations[0].label, "sync", kit.ButtonSecondary, f.busy).Clicked() {
+				f.clear()
+				f.confirming = false
+				f.operation = vaultwarden.MFAList
 			}
-			ui.TextInput(c, &value).Label(label).Password().Disabled(f.busy)
-			f.values[field] = value
+		})
+		kit.Section(c, i18n.T("account.mfa.methods_title"), func() {
+			groups := []struct {
+				title      string
+				start, end int
+			}{
+				{i18n.T("account.mfa.authenticator_title"), 1, 3},
+				{i18n.T("common.email"), 3, 6},
+				{i18n.T("account.mfa.duo_title"), 6, 8},
+				{i18n.T("account.mfa.yubikey_title"), 8, 10},
+				{i18n.T("account.mfa.security_keys_title"), 10, 13},
+				{i18n.T("account.mfa.other_actions_title"), 13, 17},
+			}
+			for _, group := range groups {
+				selected := false
+				for _, entry := range operations[group.start:group.end] {
+					selected = selected || f.operation == entry.op
+				}
+				row := ui.Row(c).Padding(8).Gap(12).AlignItems(ui.Center).Radius(kit.ControlRadius)
+				if selected {
+					row.Background(kit.Selected)
+				}
+				row.Children(func() {
+					ui.Row(c).Width(125).Shrink(0).Gap(8).AlignItems(ui.Center).Children(func() {
+						kit.Icon(c, "shield", 18).TextColor(kit.Purple)
+						ui.Text(c, group.title).FontWeight(600).FontSize(13)
+					})
+					ui.Row(c).Grow(1).MinWidth(0).Gap(8).Wrap().Children(func() {
+						for _, entry := range operations[group.start:group.end] {
+							kind := kit.ButtonQuiet
+							if f.operation == entry.op {
+								kind = kit.ButtonSecondary
+							}
+							if entry.op == "disable" || entry.op == "delete-webauthn" {
+								kind = kit.ButtonDanger
+							}
+							if kit.Button(c, entry.label, "", kind, f.busy || (f.uncertain && entry.op != vaultwarden.MFAList)).Clicked() {
+								f.clear()
+								f.confirming = false
+								f.operation = entry.op
+							}
+						}
+					})
+				})
+			}
+		})
+		label := i18n.T("common.continue")
+		if f.confirming {
+			label = i18n.T("account.mfa.confirm_operation")
 		}
-	}
-	label := i18n.T("common.continue")
-	if f.confirming {
-		label = i18n.T("account.mfa.confirm_operation")
-	}
-	if ui.Button(c, label).Disabled(f.busy || (f.uncertain && f.operation != vaultwarden.MFAList)).Clicked() {
-		f.dispatch()
-	}
-	if f.result != "" {
-		if ui.Button(c, i18n.T("account.mfa.toggle_result")).Clicked() {
-			f.reveal = !f.reveal
+		kit.Section(c, i18n.T("account.mfa.configuration_title"), func() {
+			accountInput(c, &f.password, i18n.T("account.mfa.master_password_hint")).Password().Disabled(f.busy)
+			accountInput(c, &f.otp, i18n.T("account.mfa.sensitive_email_otp")).Password().Disabled(f.busy)
+			labels := map[string]string{
+				"name":         i18n.T("account.mfa.security_key_name"),
+				"key":          i18n.T("account.mfa.authenticator_key"),
+				"token":        i18n.T("common.verification_code"),
+				"email":        i18n.T("account.mfa.recipient_email"),
+				"host":         i18n.T("account.mfa.duo_host"),
+				"clientId":     i18n.T("account.mfa.duo_client_id"),
+				"clientSecret": i18n.T("account.mfa.duo_client_secret"),
+				"id":           i18n.T("account.mfa.security_key_id"),
+				"type":         i18n.T("account.mfa.method_id"),
+			}
+			for _, entry := range authManagementOperations() {
+				if entry.op != f.operation {
+					continue
+				}
+				for _, field := range entry.fields {
+					value := f.values[field]
+					label := labels[field]
+					if label == "" {
+						label = i18n.Tf("account.mfa.otp_slot", field)
+					}
+					accountInput(c, &value, label).Password().Disabled(f.busy)
+					f.values[field] = value
+				}
+			}
+		})
+		if f.confirming {
+			kit.Notice(c, kit.ToneWarning, i18n.T("account.mfa.confirm_settings_impact"))
 		}
-		field := ui.TextInput(c, &f.result).Label(i18n.T("account.mfa.authentication_result")).Disabled(true)
-		if !f.reveal {
-			field.Password()
+		kit.ActionBar(c, func() {
+			ui.Text(c, f.status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0)
+			if kit.Button(c, i18n.T("account.mfa.cancel_clear_authentication"), "", kit.ButtonSecondary, false).Clicked() {
+				f.Close()
+			}
+			if kit.Button(c, label, "", kit.ButtonPrimary, f.busy || (f.uncertain && f.operation != vaultwarden.MFAList)).Clicked() {
+				f.dispatch()
+			}
+		})
+		if f.result != "" {
+			kit.Section(c, i18n.T("account.mfa.authentication_result"), func() {
+				if accountButton(c, i18n.T("account.mfa.toggle_result"), kit.ButtonQuiet).Clicked() {
+					f.reveal = !f.reveal
+				}
+				field := accountInput(c, &f.result, i18n.T("account.mfa.authentication_result")).Disabled(true)
+				if !f.reveal {
+					field.Password()
+				}
+			})
 		}
-	}
-	if ui.Button(c, i18n.T("account.mfa.cancel_clear_authentication")).Clicked() {
-		f.Close()
-	}
-	ui.Text(c, f.status).MaxLines(5)
+	})
 }

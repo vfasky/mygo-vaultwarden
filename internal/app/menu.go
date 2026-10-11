@@ -54,6 +54,10 @@ func (a *app) runMenuCommand(command menuCommand) {
 		}
 		a.openAccountPage(tab)
 	case menuNew, menuSync, menuLock, menuBackup:
+		if command == menuBackup && a.backupEditor != nil {
+			a.showBackupWindow()
+			return
+		}
 		if command == menuLock {
 			a.showMainWindow()
 			a.runStorage(localstore.OperationLock)
@@ -70,10 +74,10 @@ func (a *app) runMenuCommand(command menuCommand) {
 		if a.vault == nil || a.mainEditorOpen() {
 			return
 		}
-		a.showMainWindow()
 		if command == menuBackup {
 			a.openBackupEditor()
 		} else {
+			a.showMainWindow()
 			kind := categoryKinds[a.category]
 			if kind == 0 {
 				kind = 1

@@ -83,7 +83,7 @@ func (a *app) chooseCipherShareRecovery() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
-	parent := a.mainWindow
+	parent := a.backupParent()
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{{Name: i18n.T("vault.share_recovery.file_type"), Extensions: []string{"mygoshare-recovery"}}}})
 		var data []byte
@@ -119,41 +119,49 @@ func (a *app) chooseCipherShareRecovery() {
 func (a *app) cipherShareRecoveryView(c *ui.Context, e *backupEditor) {
 	r := e.recovery
 	busy := a.pending != 0
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c).Padding(18).Gap(10).Children(func() {
-			ui.Text(c, i18n.T("vault.share_recovery.title")).FontSize(23)
-			ui.Text(c, i18n.T("vault.share_recovery.description")).MaxLines(7)
-			ui.Text(c, i18n.Tf("vault.share_recovery.declared_item_id", r.id)).MaxLines(2)
-			ui.TextInput(c, &r.password).Label(i18n.T("vault.share_recovery.master_password")).Password().Disabled(busy)
-			if kit.Action(c, i18n.T("vault.share_recovery.sync_first"), "sync", false, busy).Clicked() {
-				a.syncVault(false)
-			}
-			if kit.Action(c, i18n.T("vault.share_recovery.authenticate_verify"), "", false, busy).Clicked() {
-				a.runCipherShareRecovery(false)
-			}
+	kit.PageHeader(c, i18n.T("vault.share_recovery.title"), "", nil).Margin(0, 0, 16, 0)
+	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c).Padding(0, 0, 16, 0).Gap(16).Children(func() {
+			kit.Notice(c, kit.ToneInfo, i18n.T("vault.share_recovery.description"))
+			kit.DetailCard(c, i18n.T("backup.recovery.file_title"), func() {
+				ui.Text(c, i18n.Tf("vault.share_recovery.declared_item_id", r.id)).Padding(14).MaxLines(2)
+			})
+			kit.Field(c, i18n.T("vault.share_recovery.master_password"), "", func() {
+				kit.Input(ui.TextInput(c, &r.password).Label(i18n.T("vault.share_recovery.master_password"))).Password().Disabled(busy)
+			})
+			ui.Row(c).Gap(8).Children(func() {
+				if kit.Action(c, i18n.T("vault.share_recovery.sync_first"), "sync", false, busy).Clicked() {
+					a.syncVault(false)
+				}
+				if kit.Action(c, i18n.T("vault.share_recovery.authenticate_verify"), "", false, busy).Clicked() {
+					a.runCipherShareRecovery(false)
+				}
+			})
 			if r.inspected {
+				kit.Notice(c, kit.ToneWarning, i18n.T("vault.share_recovery.confirm_repair"))
 				ui.Text(c, i18n.Tf("vault.share_recovery.current_item", vaultwarden.ShareRecoveryStateText(r.inspection.CipherState), r.inspection.CipherID))
 				for _, attachment := range r.inspection.Attachments {
-					ui.Text(c, attachment.ID+"："+vaultwarden.ShareRecoveryStateText(attachment.State)).FontSize(12)
+					ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
+						ui.Text(c, attachment.ID).FontSize(12).Grow(1).MinWidth(0).SingleLine()
+						kit.Pill(c, vaultwarden.ShareRecoveryStateText(attachment.State), kit.White, kit.Purple)
+					})
 				}
 				if r.attempted {
-					ui.Text(c, i18n.T("vault.share_recovery.attempted_hint"))
+					kit.Notice(c, kit.ToneWarning, i18n.T("vault.share_recovery.attempted_hint"))
 				}
-				if kit.Action(c, i18n.T("vault.share_recovery.confirm_repair"), "", true, busy || !r.inspection.CanRepair || r.attempted).Clicked() {
-					a.runCipherShareRecovery(true)
-				}
-			}
-			if kit.Action(c, i18n.T("vault.share_recovery.cancel_close"), "", false, false).Clicked() {
-				if a.cancel != nil {
-					a.cancel()
-					a.cancel = nil
-				}
-				a.advanceEpoch()
-				clear(r.file)
-				r.password = ""
-				e.recovery = nil
 			}
 		})
+	})
+	kit.ActionBar(c, func() {
+		ui.Text(c, a.status).FontSize(11.5).TextColor(kit.Muted).Grow(1).MinWidth(0).MaxLines(2).Tooltip(a.status)
+		ui.Spacer(c)
+		if kit.Button(c, i18n.T("backup.editor.cancel_close"), "", kit.ButtonSecondary, false).Tooltip(i18n.T("vault.share_recovery.cancel_close")).Clicked() {
+			a.closeBackupWindow()
+			return
+		}
+		if r.inspected && kit.Button(c, i18n.T("backup.recovery.confirm_repair"), "", kit.ButtonPrimary, busy || !r.inspection.CanRepair || r.attempted).Clicked() {
+			a.runCipherShareRecovery(true)
+		}
 	})
 }
 func (a *app) runCipherShareRecovery(repair bool) {

@@ -63,6 +63,11 @@ type windowSet struct {
 	accountTab  accountTab
 	account     *mygo.Window
 
+	// backupOpen is the import and export window, open exactly while
+	// a.backupEditor exists (reconcileBackupWindow).
+	backupOpen bool
+	backup     *mygo.Window
+
 	// signature is the shared state the windows last drew (see frame).
 	signature uiSignature
 	// language is the one the menu bar and window titles are in (applyLanguage).
@@ -81,7 +86,7 @@ func (a *app) postUI(f func()) {
 
 // invalidateWindows redraws the app's windows other than except. Main thread only.
 func (a *app) invalidateWindows(except *mygo.Window) {
-	for _, w := range []*mygo.Window{a.mainWindow, a.windows.settings, a.windows.account} {
+	for _, w := range []*mygo.Window{a.mainWindow, a.windows.settings, a.windows.account, a.windows.backup} {
 		if w != nil && w != except && !w.IsDestroyed() {
 			w.Invalidate()
 		}
@@ -113,6 +118,8 @@ type uiSignature struct {
 	settingsTab               settingsTab
 	accountTab                accountTab
 	language                  i18n.Lang
+	backupOpen                bool
+	backup                    *backupEditor
 }
 
 func (a *app) signature() uiSignature {
@@ -125,6 +132,7 @@ func (a *app) signature() uiSignature {
 		send: a.sendPanel, devices: a.devicePanel, accountForm: a.accountForm, authManagement: a.authManagement,
 		orgServices: a.orgServices, settingsOpen: a.windows.settingsOpen, accountOpen: a.windows.accountOpen,
 		settingsTab: a.windows.settingsTab, accountTab: a.windows.accountTab, language: i18n.Current(),
+		backupOpen: a.windows.backupOpen, backup: a.backupEditor,
 	}
 }
 
@@ -159,6 +167,9 @@ func (a *app) applyLanguage() {
 	if w := a.windows.account; w != nil && !w.IsDestroyed() {
 		w.SetTitle(accountWindowOptions().Title)
 	}
+	if w := a.windows.backup; w != nil && !w.IsDestroyed() {
+		w.SetTitle(backupWindowOptions().Title)
+	}
 }
 
 // framePrelude runs at the top of every window's view: it checks the
@@ -174,6 +185,7 @@ func (a *app) framePrelude(c *ui.Context) {
 		}
 	}
 	a.reconcileAccountPanels()
+	a.reconcileBackupWindow()
 }
 
 // reconcileAccountPanels keeps at most the panel of the shown account center
@@ -301,6 +313,82 @@ func (a *app) closeAccountCenter() {
 	}
 	a.windows.accountOpen = false
 	a.reconcileAccountPanels()
+}
+
+// showBackupWindow shows the import and export window of a.backupEditor;
+// openBackupEditor calls it.
+func (a *app) showBackupWindow() {
+	a.windows.backupOpen = true
+	if !a.windows.native {
+		return
+	}
+	if a.windows.backup == nil || a.windows.backup.IsDestroyed() {
+		var win *mygo.Window
+		options := backupWindowOptions()
+		options.StateKey = "backup"
+		options.Content = ui.View(a.frame(func() *mygo.Window { return win }, a.backupWindowView))
+		win = mygo.NewWindow(options)
+		win.OnClosed(func() {
+			if a.windows.backup == win {
+				a.windows.backup, a.windows.backupOpen = nil, false
+				// Closing the window is cancelling: its work and secrets end now.
+				a.cancelBackupEditor()
+				a.invalidateWindows(win)
+			}
+		})
+		a.windows.backup = win
+	}
+	a.windows.backup.Show()
+	a.windows.backup.Focus()
+}
+
+// closeBackupWindow closes the import and export window, cancelling its editor.
+func (a *app) closeBackupWindow() {
+	if w := a.windows.backup; w != nil && !w.IsDestroyed() {
+		w.Close()
+		return
+	}
+	a.windows.backupOpen = false
+	a.cancelBackupEditor()
+}
+
+// cancelBackupEditor stops the import or export under way and clears the
+// editor with its passwords, plans and grants.
+func (a *app) cancelBackupEditor() {
+	if a.backupEditor == nil {
+		return
+	}
+	if a.cancel != nil {
+		a.cancel()
+		a.cancel = nil
+	}
+	a.advanceEpoch()
+	a.clearBackupEditor()
+	a.status = i18n.T("backup.import.status_cancelled")
+}
+
+// reconcileBackupWindow keeps the window and the editor together: a lock or
+// a session change clears the editor and so closes the window, and an
+// editor without its window is cancelled.
+func (a *app) reconcileBackupWindow() {
+	switch {
+	case a.windows.backupOpen && a.backupEditor == nil:
+		if w := a.windows.backup; w != nil && !w.IsDestroyed() {
+			w.Close()
+		} else {
+			a.windows.backupOpen = false
+		}
+	case !a.windows.backupOpen && a.backupEditor != nil:
+		a.cancelBackupEditor()
+	}
+}
+
+// backupParent is the window that import and export dialogs attach to.
+func (a *app) backupParent() *mygo.Window {
+	if w := a.windows.backup; w != nil && !w.IsDestroyed() {
+		return w
+	}
+	return a.mainWindow
 }
 
 // accountParent is the window that account center dialogs and system
