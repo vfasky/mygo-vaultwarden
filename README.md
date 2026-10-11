@@ -109,7 +109,7 @@ Xcode 管理主应用和扩展两个 target；Go build phase 生成主可执行�
 
 ## 自动更新
 
-配置更新源与公钥的 Release 构建支持 MyGo 原生自动更新，可在“设置 › 更新”或应用菜单“检查更新…”控制。Debug 和未配置的构建不会自动更新。签名、公证后的应用可用 `bash scripts/release-update.sh` 生成更新包与 manifest，不会自动上传；密钥配置、发布顺序与验收步骤见 [自动更新与发布](docs/updates.md)。
+配置更新源与公钥的 Release 构建支持 MyGo 原生自动更新，可在“设置 › 更新”或应用菜单“检查更新…”控制。Debug 和未配置的构建不会自动更新。发布新版本：改好版本号与 `CHANGELOG.md` 并提交后，在本机运行 `bash scripts/release.sh`，它用本机证书与更新私钥完成测试、签名、公证、生成更新文件，并上传草稿 release；密钥配置、发布步骤与验收见 [自动更新与发布](docs/updates.md)。
 
 ## 使用与安全边界
 
