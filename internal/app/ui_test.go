@@ -93,37 +93,43 @@ func TestVaultSidebarToggle(t *testing.T) {
 		t.Fatal("sidebar should start expanded")
 	}
 	tt.SetTitleBar(ui.TitleBar{Height: 52, Left: 88})
-	if r, ok := tt.Find("折叠侧栏"); !ok || r.X < 88 || r.X+r.W > 236 || r.Y < 0 || r.Y+r.H > 52 {
+	toggleBefore, ok := tt.Find("折叠侧栏")
+	if !ok || toggleBefore.X < 88 || toggleBefore.X+toggleBefore.W > 236 || toggleBefore.Y < 0 || toggleBefore.Y+toggleBefore.H > 52 {
 		t.Fatal("expanded toggle must remain in sidebar title bar past native window controls")
+	}
+	searchBefore, ok := tt.Find("搜索密码库")
+	if !ok {
+		t.Fatal("search missing")
 	}
 	uitest.Click(t, tt, "折叠侧栏")
 	if !a.sidebarCollapsed {
 		t.Fatal("sidebar did not collapse")
 	}
-	// The rail grows to hold the traffic lights, so its background and edge
-	// run unbroken under them.
-	if r, ok := tt.Find("所有项目"); !ok || r.X+r.W > 98 || r.X < 0 {
-		t.Fatalf("collapsed rail item at %+v does not sit inside a rail clear of the traffic lights", r)
+	if searchAfter, ok := tt.Find("搜索密码库"); !ok || searchBefore.X-searchAfter.X != 237 {
+		t.Fatalf("hidden sidebar must release its full width: before=%+v after=%+v", searchBefore, searchAfter)
 	}
-	if r, ok := tt.Find("展开侧栏"); !ok || r.X < 88 || r.Y < 0 || r.Y+r.H > 52 {
-		t.Fatal("collapsed toggle overlaps native window controls")
+	if toggleAfter, ok := tt.Find("展开侧栏"); !ok || toggleAfter != toggleBefore {
+		t.Fatalf("sidebar toggle moved after collapsing: before=%+v after=%+v", toggleBefore, toggleAfter)
 	}
-	for _, text := range []string{"Vaultwarden", "个人密码库", "所有密码库", "项目", "组织", "文件夹"} {
+	for _, text := range []string{"Vaultwarden", "个人密码库", "所有密码库", "项目", "组织", "文件夹", "账号中心", "支付卡", "收藏夹"} {
 		if slices.Contains(tt.Texts(), text) {
 			t.Fatalf("collapsed sidebar retained text %q", text)
 		}
 	}
-	uitest.Click(t, tt, "支付卡")
-	if a.category != "card" {
-		t.Fatal("collapsed category navigation failed")
-	}
-	uitest.Click(t, tt, "我的密码库")
-	if a.category != "personal" {
-		t.Fatal("collapsed vault navigation failed")
-	}
 	uitest.Click(t, tt, "展开侧栏")
 	if a.sidebarCollapsed || !slices.Contains(tt.Texts(), "所有密码库") {
 		t.Fatal("sidebar did not expand")
+	}
+	if toggleRestored, ok := tt.Find("折叠侧栏"); !ok || toggleRestored != toggleBefore {
+		t.Fatalf("sidebar toggle moved after expanding: before=%+v restored=%+v", toggleBefore, toggleRestored)
+	}
+	uitest.Click(t, tt, "支付卡")
+	if a.category != "card" {
+		t.Fatal("restored category navigation failed")
+	}
+	uitest.Click(t, tt, "我的密码库")
+	if a.category != "personal" {
+		t.Fatal("restored vault navigation failed")
 	}
 	tt.Key(ui.Cmd, ui.KeyB)
 	if !a.sidebarCollapsed {
@@ -135,48 +141,78 @@ func TestVaultSidebarToggle(t *testing.T) {
 	}
 }
 
-func TestCollapsedSidebarNavigation(t *testing.T) {
+func TestSidebarSectionDisclosure(t *testing.T) {
+	a := writableUIFixture(t)
+	defer a.stopNetwork()
+	a.folders = []vaultwarden.Folder{{ID: "folder-1", Name: "测试文件夹"}}
+	a.category = "folder:folder-1"
+	tt := ui.NewTester(func(c *ui.Context) { a.sidebar(c) }, 237, 1000)
+	for _, title := range []string{"登录", "无文件夹", "测试文件夹"} {
+		if _, found := tt.Find(title); !found {
+			t.Fatalf("section should start expanded: %s", title)
+		}
+	}
+	uitest.Click(t, tt, "类型")
+	if tt.HasText("登录") || !tt.HasText("测试文件夹") {
+		t.Fatal("collapsing types hid the wrong nodes")
+	}
+	// A focused disclosure can also be reopened with the keyboard.
+	tt.Key(0, ui.KeySpace)
+	if !tt.HasText("登录") {
+		t.Fatal("keyboard did not reopen types")
+	}
+	uitest.Click(t, tt, "类型")
+	uitest.Click(t, tt, "文件夹")
+	if tt.HasText("无文件夹") || tt.HasText("测试文件夹") || a.category != "folder:folder-1" {
+		t.Fatal("collapsing folders retained children or changed selection")
+	}
+	uitest.Click(t, tt, "新建文件夹")
+	if a.folderEditor == nil || !a.sidebarFoldersCollapsed {
+		t.Fatal("folder add action failed or toggled the section")
+	}
+	a.folderEditor = nil
+	a.sidebarCollapsed = true
+	tt.Frame()
+	if len(tt.Texts()) != 0 {
+		t.Fatal("hidden sidebar retained content")
+	}
+	a.sidebarCollapsed = false
+	tt.Frame()
+	if tt.HasText("登录") || tt.HasText("测试文件夹") {
+		t.Fatal("sidebar did not retain section collapse state")
+	}
+	uitest.Click(t, tt, "文件夹")
+	uitest.Click(t, tt, "类型")
+	if !tt.HasText("登录") || !tt.HasText("测试文件夹") {
+		t.Fatal("section children did not return after reopening")
+	}
+}
+
+func TestRestoredSidebarNavigation(t *testing.T) {
 	a := previewApp()
 	a.sidebarCollapsed = true
-	tt := ui.NewTester(func(c *ui.Context) {
-		ui.Row(c).Fill().AlignItems(ui.Stretch).Children(func() { a.sidebar(c) })
-	}, 65, 700)
-	if slices.Contains(tt.Texts(), "8") {
-		t.Fatal("collapsed sidebar retained count badge")
-	}
+	tt := ui.NewTester(a.view, 1060, 820)
+	uitest.Click(t, tt, "展开侧栏")
 	for _, category := range vaultCategories() {
 		uitest.Click(t, tt, category.title)
 		if a.category != category.id {
 			t.Fatalf("collapsed navigation failed for %s", category.title)
 		}
-		// Texts includes accessibility labels; each icon button keeps its label,
-		// but must not also render a text child.
-		count := 0
-		for _, text := range tt.Texts() {
-			if text == category.title {
-				count++
-			}
-		}
-		if count != 1 {
-			t.Fatalf("collapsed button %q has %d labels/texts, want 1", category.title, count)
-		}
 	}
-	uitest.Click(t, tt, "设置")
-	if !a.windows.settingsOpen {
-		t.Fatal("collapsed sidebar settings did not open")
-	}
+	a.runMenuCommand(menuSettings)
 	uitest.Click(t, tt, "我的密码库")
 	if a.category != "personal" || !a.windows.settingsOpen {
 		t.Fatal("vault navigation changed the settings window")
 	}
 }
 
-func TestCollapsedSidebarBaselineNavigationAndRevocation(t *testing.T) {
+func TestRestoredSidebarBaselineNavigationAndRevocation(t *testing.T) {
 	a := organizationUIFixture(t, true, true, 0)
 	defer a.stopNetwork()
 	a.sidebarCollapsed = true
 	a.folders = []vaultwarden.Folder{{ID: "folder-1", Name: "测试文件夹"}}
 	tt := ui.NewTester(a.view, 1280, 820)
+	uitest.Click(t, tt, "展开侧栏")
 	if organizationUIEnabled {
 		uitest.Click(t, tt, "团队组织")
 		if a.category != "org:organization-1" || len(a.filteredItems()) != 1 {

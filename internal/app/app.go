@@ -20,6 +20,8 @@ type app struct {
 	category, selectedID                      string
 	showLogin                                 bool
 	sidebarCollapsed                          bool
+	sidebarTypesCollapsed                     bool
+	sidebarFoldersCollapsed                   bool
 	listState                                 ui.ListState
 	selectedRow                               int
 	windows                                   windowSet // which windows are open and their native handles (windows.go)
@@ -240,7 +242,12 @@ func Run() {
 	if !mygo.App.RequestSingleInstanceLock() {
 		return
 	}
-	a := &app{status: i18n.T("app.sync.status_reading_storage"), notificationsEnabled: true}
+	a := &app{
+		status:                  i18n.T("app.sync.status_reading_storage"),
+		notificationsEnabled:    true,
+		sidebarTypesCollapsed:   true,
+		sidebarFoldersCollapsed: true,
+	}
 	useUpdater(func() { a.invalidateWindows(nil) })
 	mygo.App.WhenReady(func() {
 		a.windows.native = true

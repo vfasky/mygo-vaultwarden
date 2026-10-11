@@ -41,8 +41,8 @@ func TestAuthenticatedUnlockRestoresSyncAndWipesTransport(t *testing.T) {
 				t.Fatal("session transport buffer was retained")
 			}
 			tt := ui.NewTester(a.view, 1060, 700)
-			if !tt.HasText("可同步") || !tt.HasText("同步") {
-				t.Fatal("restored session missing from UI")
+			if tt.HasText("可同步") || !tt.HasText("同步") {
+				t.Fatal("sync button missing or redundant sync status shown")
 			}
 			a.lockInterface()
 			if a.session != nil || a.sessionRevision != "" || a.unlocked() {
@@ -87,15 +87,15 @@ func TestLateOrUnauthenticatedReceiptNeverRestoresSession(t *testing.T) {
 	}
 }
 
-func TestLegacyUnlockSyncButtonOpensLoginWithoutDeletingVault(t *testing.T) {
+func TestLegacyUnlockSyncButtonStaysDisabled(t *testing.T) {
 	a := passwordLockedApp()
 	a.pending, a.epoch = 1, 1
 	a.completeStorage(localstore.Request{Operation: "list", ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, 1,
 		localstore.Reply{OK: true, State: a.snapshot, Items: []localstore.DisplayCredential{{ID: "one"}}})
 	tt := ui.NewTester(a.view, 1060, 700)
 	uitest.Click(t, tt, "同步")
-	if !a.showLogin || !a.unlocked() || a.pending != 0 || !tt.HasText("登录服务器") {
-		t.Fatal("legacy sync stayed disabled or deleted the vault on navigation")
+	if a.showLogin || !a.unlocked() || a.pending != 0 || tt.HasText("登录服务器") {
+		t.Fatal("disabled sync button changed the offline vault or opened login")
 	}
 }
 

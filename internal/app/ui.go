@@ -246,27 +246,19 @@ func (a *app) sidebarToggle(c *ui.Context) {
 // shares the content background, like a native macOS toolbar.
 func (a *app) header(c *ui.Context) {
 	bar := c.TitleBar()
-	left := float32(20)
+	left := max(float32(20), bar.Left-a.sidebarWidth(c))
 	if a.sidebarCollapsed {
-		left = 12
+		left = max(14, bar.Left+8)
 	}
 	row, below := titleBarRow(bar)
 	ui.Row(c).Height(row+below).Shrink(0).Gap(10).AlignItems(ui.Center).
-		Padding(0, 20, below, max(left, bar.Left-a.sidebarWidth(c))).DragWindow().Children(func() {
-		// The expanded sidebar carries the toggle; the collapsed rail only
-		// fits the traffic lights, so it leads the toolbar instead.
+		Padding(0, 20, below, left).DragWindow().Children(func() {
+		// Keep the restore toggle after the native window controls while
+		// the sidebar is hidden.
 		if a.sidebarCollapsed {
 			a.sidebarToggle(c)
 		}
 		ui.Spacer(c)
-		state := i18n.T("app.toolbar.status_locked")
-		if a.unlocked() {
-			state = i18n.T("app.toolbar.status_unlocked")
-		}
-		if a.session != nil {
-			state = i18n.T("app.toolbar.status_sync_ready")
-		}
-		kit.Pill(c, state, kit.Lavender, kit.Purple)
 		if kit.ToolbarButton(c, i18n.T("app.toolbar.import_export"), "vault", false, a.pending != 0 || a.vault == nil || a.mainEditorOpen()).Clicked() {
 			a.runMenuCommand(menuBackup)
 		}
@@ -279,7 +271,7 @@ func (a *app) header(c *ui.Context) {
 		if a.category == "trash" && kit.ToolbarButton(c, i18n.T("app.toolbar.empty_trash"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
 			a.openBulkEditor(true)
 		}
-		if kit.ToolbarButton(c, i18n.T("common.sync"), "sync", false, a.pending != 0).Clicked() {
+		if kit.ToolbarButton(c, i18n.T("common.sync"), "sync", false, a.pending != 0 || !a.sessionOwnsSnapshot()).Clicked() {
 			a.runMenuCommand(menuSync)
 		}
 		if kit.ToolbarButton(c, i18n.T("common.lock"), "lock", true, false).Clicked() {
@@ -305,16 +297,18 @@ func titleBarRow(bar ui.TitleBar) (row, below float32) {
 	return row, max(row, 52) - row
 }
 
-// sidebarWidth keeps the collapsed rail at least as wide as the traffic
-// lights, so the rail runs unbroken from the top of the window.
+// sidebarWidth excludes the sidebar entirely while it is hidden.
 func (a *app) sidebarWidth(c *ui.Context) float32 {
 	if a.sidebarCollapsed {
-		return max(64, c.TitleBar().Left+10)
+		return 0
 	}
 	return 236
 }
 
 func (a *app) sidebar(c *ui.Context) {
+	if a.sidebarCollapsed {
+		return
+	}
 	bar := c.TitleBar()
 	width := a.sidebarWidth(c)
 	ui.Row(c).Width(width + 1).Shrink(0).AlignItems(ui.Stretch).Children(func() {
@@ -347,7 +341,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	}
 	// Expanded groups are titled; the rail separates them with short hairlines.
 	first := true
-	section := func(title string, action func()) {
+	section := func(title string, hidden *bool, action func()) bool {
 		if collapsed {
 			if !first {
 				ui.Row(c).Justify(ui.Center).Padding(7, 0).Children(func() {
@@ -360,13 +354,34 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 				top = 4
 			}
 			ui.Row(c).Height(top+24).Padding(top, 4, 0, 10).AlignItems(ui.Center).Children(func() {
-				ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(kit.SidebarFaint).Grow(1).SingleLine()
+				if hidden == nil {
+					ui.Text(c, title).FontSize(11).FontWeight(600).TextColor(kit.SidebarFaint).Grow(1).SingleLine()
+				} else {
+					button := ui.ButtonBase(c).Label(title).Role(ui.RoleDisclosure).Expanded(!*hidden).
+						Grow(1).Height(24).Justify(ui.Start).Gap(5).Radius(5).TextColor(kit.SidebarFaint)
+					if button.Hovered() {
+						button.TextColor(kit.Muted)
+					}
+					button.Children(func() {
+						ui.Text(c, title).FontSize(11).FontWeight(600).SingleLine()
+						angle := float32(90)
+						if *hidden {
+							angle = 0
+						}
+						kit.Icon(c, "chevron", 11).Rotate(angle)
+					})
+					if button.Clicked() {
+						*hidden = !*hidden
+					}
+				}
 				if action != nil {
 					action()
 				}
 			})
 		}
 		first = false
+		// Icon-only navigation keeps every destination reachable without headers.
+		return collapsed || hidden == nil || !*hidden
 	}
 	folderBusy := a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil
 	// Rows are inset from the edges, but the scroll view spans the full width
@@ -394,12 +409,18 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	})
 	ui.Scroll(c).Grow(1).MinHeight(0).ScrollbarInsets(2, 3, 2, 0).Children(func() {
 		ui.Column(c).Gap(2).Padding(0, inset, 8, inset).Children(func() {
-			section(i18n.T("app.sidebar.all_vaults"), nil)
+			section(i18n.T("app.sidebar.all_vaults"), nil, nil)
 			if navItem(c, i18n.T("common.my_vault"), "user", "", a.category == "personal", false).Clicked() {
 				a.category, a.query = "personal", ""
 			}
 			categoryGroup := func(title string, types bool) {
-				section(title, nil)
+				var hidden *bool
+				if types {
+					hidden = &a.sidebarTypesCollapsed
+				}
+				if !section(title, hidden, nil) {
+					return
+				}
 				for _, category := range vaultCategories() {
 					if (categoryKinds[category.id] != 0) != types {
 						continue
@@ -417,7 +438,7 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 			categoryGroup(i18n.T("app.sidebar.items"), false)
 			categoryGroup(i18n.T("app.sidebar.types"), true)
 			if organizationUIEnabled {
-				section(i18n.T("app.sidebar.organizations"), nil)
+				section(i18n.T("app.sidebar.organizations"), nil, nil)
 				if navItem(c, i18n.T("app.sidebar.create_join_organization"), "plus", "", false, a.pending != 0 || a.vault == nil || a.organizationEditor != nil).Clicked() {
 					a.openOrganizationEditor("")
 				}
@@ -440,26 +461,27 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 					}
 				}
 			}
-			section(i18n.T("app.sidebar.folders"), func() {
+			if section(i18n.T("app.sidebar.folders"), &a.sidebarFoldersCollapsed, func() {
 				if kit.SidebarAction(c, i18n.T("vault.folder.add_title"), "plus", folderBusy).Clicked() {
 					a.openFolderEditor("")
 				}
-			})
-			if navItem(c, i18n.T("common.no_folder"), "inbox", count("folder:"), a.category == "folder:", false).Clicked() {
-				a.category = "folder:"
-			}
-			for _, f := range a.folders {
-				if navItem(c, f.Name, "folder", count("folder:"+f.ID), a.category == "folder:"+f.ID, false).Clicked() {
-					a.category = "folder:" + f.ID
+			}) {
+				if navItem(c, i18n.T("common.no_folder"), "inbox", count("folder:"), a.category == "folder:", false).Clicked() {
+					a.category = "folder:"
 				}
-			}
-			// The rail has no section titles to carry the add action.
-			if collapsed && navItem(c, i18n.T("vault.folder.add_title"), "folder-plus", "", false, folderBusy).Clicked() {
-				a.openFolderEditor("")
-			}
-			if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
-				if navItem(c, i18n.T("vault.folder.manage_title"), "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
-					a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
+				for _, f := range a.folders {
+					if navItem(c, f.Name, "folder", count("folder:"+f.ID), a.category == "folder:"+f.ID, false).Clicked() {
+						a.category = "folder:" + f.ID
+					}
+				}
+				// The rail has no section titles to carry the add action.
+				if collapsed && navItem(c, i18n.T("vault.folder.add_title"), "folder-plus", "", false, folderBusy).Clicked() {
+					a.openFolderEditor("")
+				}
+				if strings.HasPrefix(a.category, "folder:") && a.category != "folder:" {
+					if navItem(c, i18n.T("vault.folder.manage_title"), "settings", "", false, a.pending != 0 || a.editor != nil || a.folderEditor != nil || a.backupEditor != nil).Clicked() {
+						a.openFolderEditor(strings.TrimPrefix(a.category, "folder:"))
+					}
 				}
 			}
 		})
@@ -468,9 +490,6 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 		ui.Box(c).Height(1).Margin(0, 4).Background(ui.RGBA(38, 30, 62, .08))
 		if navItem(c, i18n.T("app.window.account_center_title"), "user", "", false, !a.unlocked() || a.showLogin).Clicked() {
 			a.runMenuCommand(menuAccount)
-		}
-		if navItem(c, i18n.T("app.window.settings_title"), "settings", "", false, false).Clicked() {
-			a.showSettingsWindow("")
 		}
 	})
 }

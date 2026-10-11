@@ -42,6 +42,7 @@ var Icons = map[string]*ui.SVG{
 	"archive":     lineIcon(`<rect x="3" y="3" width="18" height="5" rx="1.5"/><path d="M5 8v12h14V8m-10 4h6"/>`),
 	"trash":       lineIcon(`<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>`),
 	"search":      lineIcon(`<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/>`),
+	"send":        lineIcon(`<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>`),
 	"sync":        lineIcon(`<path d="M20 4v6h-6M4 20v-6h6M4.8 8A8 8 0 0 1 18 5l2 5M4 14l2 5a8 8 0 0 0 13.2-3"/>`),
 	"lock":        lineIcon(`<rect x="5" y="10" width="14" height="11" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3m-4 5v2"/>`),
 	"shield":      lineIcon(`<path d="m12 2 8 4v6c0 5-8 10-8 10S4 17 4 12V6Z"/><path d="m8 12 3 3 5-6"/>`),

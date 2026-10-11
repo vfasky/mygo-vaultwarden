@@ -112,13 +112,18 @@ func TestSidebarWindowEntrances(t *testing.T) {
 		a := previewApp()
 		a.sidebarCollapsed = collapsed
 		tt := ui.NewTester(func(c *ui.Context) { a.sidebar(c) }, 237, 820)
+		if collapsed {
+			if len(tt.Texts()) != 0 {
+				t.Fatal("hidden sidebar retained window entrances")
+			}
+			continue
+		}
 		uitest.Click(t, tt, "账号中心")
 		if !a.windows.accountOpen {
 			t.Fatal("account center entrance missing")
 		}
-		uitest.Click(t, tt, "设置")
-		if !a.windows.settingsOpen {
-			t.Fatal("settings entrance missing")
+		if _, found := tt.Find("设置"); found {
+			t.Fatal("sidebar retained redundant settings entrance")
 		}
 		a.windows.accountOpen = false
 		a.itemsRevision = ""

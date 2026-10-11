@@ -58,13 +58,13 @@ func IconButton(c *ui.Context, label, symbol string) ui.Element {
 // titleBarButton is a borderless toolbar icon button, like the sidebar toggle
 // of native macOS apps: no fill until hovered, sitting on the title bar row.
 func TitleBarButton(c *ui.Context, label, symbol string) ui.Element {
-	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(5).Radius(7).Shrink(0).TextColor(Muted)
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(28, 28).Padding(6).Radius(7).Shrink(0).TextColor(Muted)
 	if b.Pressed() {
 		b.Background(ui.RGBA(38, 30, 62, .12)).TextColor(Ink)
 	} else if b.Hovered() {
 		b.Background(ui.RGBA(38, 30, 62, .07)).TextColor(Ink)
 	}
-	return b.Children(func() { Icon(c, symbol, 18) })
+	return b.Children(func() { Icon(c, symbol, 16) })
 }
 
 // ToolbarButton is a Button of the title bar; the secondary kind is
@@ -108,7 +108,7 @@ func SidebarAction(c *ui.Context, label, symbol string, disabled bool) ui.Elemen
 func SidebarItem(c *ui.Context, title, symbol, count string, selected, disabled, collapsed bool) ui.Element {
 	b := ui.ButtonBase(c).Label(title).Height(32).Padding(0, 10).Gap(10).Radius(9).Disabled(disabled).TextColor(sidebarText)
 	if collapsed {
-		b.Tooltip(title).Height(36).Padding(0).Justify(ui.Center)
+		b.Height(36).Padding(0).Justify(ui.Center)
 	}
 	iconColor := sidebarIcon
 	if selected {
@@ -137,7 +137,37 @@ func SidebarItem(c *ui.Context, title, symbol, count string, selected, disabled,
 			}
 		}
 	})
+	if collapsed {
+		sidebarTooltip(c, b, title)
+	}
 	return b
+}
+
+// sidebarTooltip shows immediately to the right, outside the scrolling rail.
+func sidebarTooltip(c *ui.Context, anchor ui.Element, title string) {
+	anchor.Description(title)
+	dismissed := ui.Local(anchor, "sidebar-tooltip-dismissed", func() bool { return false })
+	if !anchor.Hovered() && !anchor.FocusVisible() {
+		*dismissed = false
+		return
+	}
+	if anchor.Pressed() || anchor.Clicked() {
+		*dismissed = true
+	}
+	if *dismissed || anchor.IsDisabled() {
+		return
+	}
+	ui.Overlay(c, func() {
+		tip := ui.Box(c).Absolute().PassThrough().Role(ui.RoleTooltip).
+			AttachTo(anchor, ui.AnchorRight, ui.AnchorLeft).Margin(0, 0, 0, 12).
+			Padding(6, 10).Radius(6).Background(Ink).TextColor(White).
+			Shadow(0, 2, 8, 0, ui.RGBA(0, 0, 0, .18))
+		if tip.OverlayShortcut(0, ui.KeyEscape) {
+			*dismissed = true
+			return
+		}
+		tip.Children(func() { ui.Text(c, title).FontSize(12).SingleLine() })
+	})
 }
 
 func NavItem(c *ui.Context, title, symbol, count string, selected, disabled bool) ui.Element {

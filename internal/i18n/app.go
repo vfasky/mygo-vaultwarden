@@ -111,9 +111,6 @@ var app = map[string]text{
 	"app.toolbar.add":                           {"新增", "Add"},
 	"app.toolbar.empty_trash":                   {"清空回收站", "Empty Trash"},
 	"app.toolbar.import_export":                 {"导入导出", "Import & export"},
-	"app.toolbar.status_locked":                 {"未解锁", "Locked"},
-	"app.toolbar.status_sync_ready":             {"可同步", "Ready to sync"},
-	"app.toolbar.status_unlocked":               {"本机已解锁", "Unlocked on this Mac"},
 	"app.window.account_center_title":           {"账号中心", "Account center"},
 	"app.window.settings_title":                 {"设置", "Settings"},
 }
@@ -157,7 +154,6 @@ var login = map[string]text{
 	"login.recovery.open":                               {"进入账号恢复", "Open account recovery"},
 	"login.recovery.pending_hint":                       {"此账号有未完成的安全变更恢复记录，旧库与自动填充已暂停。普通登录、同步和退出不能清除此记录。", "This account has an unfinished recovery record for a security change. The old vault and AutoFill are suspended. Normal login, sync, and logout cannot clear this record."},
 	"login.recovery.title":                              {"恢复目标账号", "Recover target account"},
-	"login.recovery.verify_as_owner":                    {"目标本人登录并核验跨账号恢复", "Verify cross-account recovery as the owner"},
 	"login.retry_connection":                            {"重试连接", "Retry connection"},
 	"login.sso.hint":                                    {"SSO 认证后仍需主密码解锁；新建 SSO 账号和 Key Connector 暂不支持。", "Your master password is still required to unlock after SSO authentication. Creating SSO accounts and Key Connector are not yet supported."},
 	"login.sso.submit":                                  {"SSO 登录", "Log in with SSO"},
