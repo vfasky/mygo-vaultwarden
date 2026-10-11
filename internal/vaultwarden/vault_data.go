@@ -75,6 +75,8 @@ type VaultEntry struct {
 	Type                                  int
 	Favorite, Archived, Deleted, Editable bool
 	RequiresPassword                      bool
+	// HasPassword and HasTOTP tell that a login has them, never what they are.
+	HasPassword, HasTOTP bool
 }
 
 // PersonalEntries returns display metadata only, never notes or secret fields.
@@ -123,6 +125,9 @@ func (s *Session) PersonalEntries(vault *VaultData) ([]VaultEntry, error) {
 			if fields, err := DecryptCipherDocument(document, s.key); err == nil {
 				entry.Title, entry.Editable = fields.Name, fields.Edit && fields.ViewPassword
 				entry.Username, _ = fields.Login["username"].(string)
+				password, _ := fields.Login["password"].(string)
+				totp, _ := fields.Login["totp"].(string)
+				entry.HasPassword, entry.HasTOTP = password != "", totp != ""
 				if uris, ok := fields.Login["uris"].([]any); ok && len(uris) > 0 {
 					if uri, ok := uris[0].(map[string]any); ok {
 						entry.URL, _ = uri["uri"].(string)

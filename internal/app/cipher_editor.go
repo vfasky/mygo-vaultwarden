@@ -270,6 +270,8 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 			Deleted:          e.Deleted,
 			Editable:         e.Editable,
 			RequiresPassword: e.RequiresPassword,
+			HasPassword:      e.HasPassword,
+			HasTOTP:          e.HasTOTP,
 			FolderID:         e.FolderID,
 		})
 	}

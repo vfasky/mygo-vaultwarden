@@ -634,26 +634,10 @@ func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential)
 					ui.Text(c, websiteHost(item.URL)).FontSize(13).TextColor(kit.Muted).SingleLine()
 				})
 			})
-			ui.Row(c).Gap(8).Children(func() {
-				if kit.Action(c, i18n.T("app.detail.open_website"), "external", true, !safeWebsite(item.URL)).Clicked() {
-					c.OpenURL(item.URL)
-				}
-				if kit.Action(c, i18n.T("app.detail.copy_username"), "copy", false, item.Username == "").Clicked() {
-					c.WriteClipboard(item.Username)
-					a.status = i18n.T("app.detail.status_username_copied")
-				}
-			})
-			kit.DetailCard(c, i18n.T("app.detail.login_information"), func() {
-				kit.DetailField(c, i18n.T("common.username"), item.Username, i18n.T("app.detail.no_username"))
-				ui.Divider(c)
-				ui.Row(c).Padding(12, 16).Gap(10).Children(func() {
-					ui.Column(c).Grow(1).Gap(7).Children(func() {
-						ui.Text(c, i18n.T("common.password")).FontSize(11).TextColor(kit.Muted)
-						ui.Text(c, i18n.T("app.detail.password_autofill_hint")).FontSize(14)
-					})
-					kit.Icon(c, "lock", 19).TextColor(kit.Purple)
-				})
-			})
+			if kit.Action(c, i18n.T("app.detail.open_website"), "external", true, !safeWebsite(item.URL)).AlignSelf(ui.Start).Clicked() {
+				c.OpenURL(item.URL)
+			}
+			kit.DetailCard(c, i18n.T("app.detail.login_information"), func() { a.credentialSecrets(c, item) })
 			kit.DetailCard(c, i18n.T("vault.field.website"), func() { kit.DetailField(c, i18n.T("app.detail.login_url"), item.URL, i18n.T("app.detail.no_website")) })
 			kit.Section(c, i18n.T("app.detail.secure_autofill"), func() {
 				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
@@ -665,6 +649,68 @@ func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential)
 			})
 		})
 	})
+}
+
+// credentialSecrets lists the username, and for a login its password and
+// code, each with a copy button. The password and the code are never shown:
+// copying decrypts them for the protected clipboard, which clears them.
+func (a *app) credentialSecrets(c *ui.Context, item localstore.DisplayCredential) {
+	username := item.Username
+	if username == "" {
+		username = i18n.T("app.detail.no_username")
+	}
+	if detailCopyRow(c, i18n.T("common.username"), username, item.Username == "", i18n.T("app.detail.copy_username"), item.Username == "", "") {
+		c.WriteClipboard(item.Username)
+		a.status = i18n.T("app.detail.status_username_copied")
+	}
+	if item.Type != 0 && item.Type != 1 {
+		return
+	}
+	secretsLocked := a.pending != 0 || a.vault == nil || !a.sessionOwnsSnapshot() || item.OrganizationID != ""
+	hint := ""
+	if item.RequiresPassword {
+		hint = i18n.T("app.detail.reprompt_copy_hint")
+	}
+	ui.Divider(c)
+	// Without the session's decrypted metadata, a missing password is unknown.
+	known := a.vault != nil && a.sessionOwnsSnapshot()
+	password, missing := "••••••••", known && !item.HasPassword && !item.RequiresPassword
+	if missing {
+		password = i18n.T("app.detail.no_password")
+	}
+	if detailCopyRow(c, i18n.T("common.password"), password, missing, i18n.T("app.detail.copy_password"), secretsLocked || missing || item.RequiresPassword, hint) {
+		a.copyDetailSecret(item, "password", a.vaultStorage())
+	}
+	if item.HasTOTP {
+		ui.Divider(c)
+		if detailCopyRow(c, i18n.T("app.detail.totp"), "••• •••", false, i18n.T("app.detail.copy_code"), secretsLocked || item.RequiresPassword, "") {
+			a.copyDetailSecret(item, "totp", a.vaultStorage())
+		}
+	}
+}
+
+// detailCopyRow is a field of the details with a copy button at its
+// trailing edge; it reports a click on the button.
+func detailCopyRow(c *ui.Context, label, value string, empty bool, copyLabel string, disabled bool, hint string) bool {
+	clicked := false
+	ui.Row(c).Padding(12, 12, 12, 16).Gap(10).AlignItems(ui.Center).Children(func() {
+		ui.Column(c).Grow(1).MinWidth(0).Gap(7).Children(func() {
+			ui.Text(c, label).FontSize(11).TextColor(kit.Muted)
+			value := ui.Text(c, value).FontSize(14).SingleLine()
+			if empty {
+				value.TextColor(kit.Muted)
+			}
+			if hint != "" {
+				ui.Text(c, hint).FontSize(11).TextColor(kit.Muted).MaxLines(2)
+			}
+		})
+		b := kit.IconButton(c, copyLabel, "copy").Disabled(disabled)
+		if disabled {
+			b.Opacity(.35)
+		}
+		clicked = b.Clicked()
+	})
+	return clicked
 }
 
 func (a *app) emptyDetail(c *ui.Context) {

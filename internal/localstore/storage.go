@@ -88,7 +88,11 @@ type DisplayCredential struct {
 	Deleted          bool     `json:"deleted,omitempty"`
 	Editable         bool     `json:"editable,omitempty"`
 	RequiresPassword bool     `json:"requiresPassword,omitempty"`
-	FolderID         string   `json:"folderId,omitempty"`
+	// HasPassword and HasTOTP enable copying them from the details; they are
+	// not part of the storage protocol.
+	HasPassword bool   `json:"-"`
+	HasTOTP     bool   `json:"-"`
+	FolderID    string `json:"folderId,omitempty"`
 }
 
 type Reply struct {
