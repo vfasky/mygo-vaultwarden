@@ -74,7 +74,6 @@ func (a *app) openBackupEditor() {
 		}
 	}
 	a.backupEditor = e
-	a.showSettings = false
 }
 func (a *app) backupEditorView(c *ui.Context) {
 	e := a.backupEditor
@@ -217,7 +216,7 @@ func (a *app) chooseImportFile() {
 	a.cancel = cancel
 	a.pending++
 	format, scope, revision := e.format, *a.liveScope, e.revision
-	parent := a.window
+	parent := a.mainWindow
 	go func() {
 		paths, err := mygo.Dialog.Open(mygo.OpenDialogOptions{Parent: parent, Filters: []mygo.FileFilter{backupDialogFilter(format)}})
 		var plan *vaultwarden.ImportPlan
@@ -234,7 +233,7 @@ func (a *app) chooseImportFile() {
 				clear(data)
 			}
 		}
-		a.window.Update(func() {
+		a.postUI(func() {
 			a.pending--
 			defer cancel()
 			if !a.backupCurrent(e, epoch) || ctx.Err() != nil {
@@ -292,7 +291,7 @@ func (a *app) chooseExportFile() {
 	ctx, cancel := context.WithCancel(context.Background())
 	a.cancel = cancel
 	a.pending++
-	format, scope, revision, vault, parent := e.format, *a.liveScope, e.revision, a.vault, a.window
+	format, scope, revision, vault, parent := e.format, *a.liveScope, e.revision, a.vault, a.mainWindow
 	go func() {
 		defer clear(password)
 		// Preflight before showing Save or touching any target file.
@@ -324,7 +323,7 @@ func (a *app) chooseExportFile() {
 			if err == nil && path != "" && ctx.Err() == nil {
 				path, err = fileio.BackupOutputPath(path, format)
 				if err != nil {
-					a.window.Update(func() { a.completeBackupExport(e, epoch, ctx, nil, err, cancel) })
+					a.postUI(func() { a.completeBackupExport(e, epoch, ctx, nil, err, cancel) })
 					return
 				}
 				status = callStorage(localstore.Request{Operation: localstore.OperationStatus})
@@ -340,7 +339,7 @@ func (a *app) chooseExportFile() {
 				}
 			}
 		}
-		a.window.Update(func() { a.completeBackupExport(e, epoch, ctx, stage, err, cancel) })
+		a.postUI(func() { a.completeBackupExport(e, epoch, ctx, stage, err, cancel) })
 	}()
 }
 func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Context, stage *fileio.StagedFile, err error, cancel context.CancelFunc) {
@@ -381,7 +380,7 @@ func (a *app) completeBackupExport(e *backupEditor, epoch uint64, ctx context.Co
 	a.status = i18n.T("backup.export.status_saved")
 }
 func (a *app) importBackup() {
-	a.importBackupWith(a.window.Update, localstore.Call, func() { a.syncVault(false) })
+	a.importBackupWith(a.postUI, localstore.Call, func() { a.syncVault(false) })
 }
 
 func (a *app) importBackupWith(dispatch func(func()), storage func(localstore.Request) localstore.Reply, refresh func()) {

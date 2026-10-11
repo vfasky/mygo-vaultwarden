@@ -153,7 +153,6 @@ func (a *app) openOrganizationEditor(id string) {
 		}
 	}
 	a.organizationEditor = e
-	a.showSettings = false
 	a.secretInputVersion++
 	if id != "" && e.owner {
 		a.runOrganizationManagement("load")
@@ -536,7 +535,7 @@ func (a *app) runOrganizationManagement(operation string) {
 				err = session.DeleteOrganization(ctx, vault, id, password, isolate, persist)
 			}
 		}
-		a.window.Update(func() {
+		a.postUI(func() {
 			if a.epoch == epoch && isolatedVault != nil {
 				if operation == "policy-review" {
 					if err == nil && a.adoptPolicyRecoveryPreview(epoch, e, checkpoint, isolatedVault, loadedPolicyRecovery) {

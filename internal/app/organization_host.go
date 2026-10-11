@@ -43,7 +43,7 @@ func (h appOrgServicesHost) Current(env orgServiceSnapshot) bool {
 	return h.app.orgServices == h.controller && h.app.epoch == env.epoch && h.app.session == env.session
 }
 func (h appOrgServicesHost) Busy() bool           { return h.app.pending != 0 }
-func (h appOrgServicesHost) Window() *mygo.Window { return h.app.window }
+func (h appOrgServicesHost) Window() *mygo.Window { return h.app.accountParent() }
 func (h appOrgServicesHost) Warning(scope vaultwarden.Scope) string {
 	return h.app.targetOutcomeWarnings[scope]
 }

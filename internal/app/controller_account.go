@@ -250,6 +250,6 @@ func (a *app) openAccountWith(dispatch func(func()), storage func(localstore.Req
 	}
 	a.accountForm = f
 	if !registration {
-		a.category, a.showSettings = "account", false
+		a.selectAccountTab(accountTabSecurity)
 	}
 }

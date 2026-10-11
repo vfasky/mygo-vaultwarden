@@ -374,7 +374,6 @@ func (a *app) openCipherEditorAuthorized(id string, kind int, grant *vaultwarden
 		editor.fields.FolderID = &folder
 	}
 	a.secretInputVersion++
-	a.showSettings = false
 }
 
 func populateCipherEditor(editor *cipherEditor) {
@@ -679,7 +678,7 @@ func (a *app) mutateCipher(action vaultwarden.CipherAction) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	a.cancel = cancel
 	a.pending++
-	parent := a.window
+	parent := a.mainWindow
 	a.status = i18n.T("vault.editor.status_saving")
 	go func() {
 		var reply localstore.Reply

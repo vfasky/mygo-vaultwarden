@@ -21,7 +21,7 @@ func TestUnlockNotificationsWithoutWindow(t *testing.T) {
 			a.pending, a.epoch = 1, 2
 			a.completeStorage(localstore.Request{Operation: operation, ExpectedRevision: a.snapshot.Revision, Scope: a.snapshot.Scope}, a.epoch,
 				localstore.Reply{OK: true, State: a.snapshot, Session: savedUIFixture(t, a)})
-			if a.window != nil || a.notifications == nil {
+			if a.mainWindow != nil || a.notifications == nil {
 				t.Fatal("unlock did not assemble headless subscription")
 			}
 			// The legacy fixture has no access token: startup reports its error

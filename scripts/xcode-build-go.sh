@@ -10,6 +10,23 @@ mkdir -p "$TARGET_BUILD_DIR/$(dirname "$EXECUTABLE_PATH")" "$DERIVED_FILE_DIR/go
 ldflags="-X 'github.com/egoist/mygo.packageName=MyGo Vaultwarden' -X github.com/egoist/mygo.packageIdentifier=$PRODUCT_BUNDLE_IDENTIFIER -X github.com/egoist/mygo.packageVersion=$MARKETING_VERSION"
 if [[ "$CONFIGURATION" == Release ]]; then
   ldflags="$ldflags -s -w -X github.com/egoist/mygo.production=1"
+  has_arm64=0
+  has_amd64=0
+  for architecture in $ARCHS; do
+    case "$architecture" in
+      arm64) has_arm64=1 ;;
+      x86_64) has_amd64=1 ;;
+      *) echo "Unsupported architecture: $architecture" >&2; exit 1 ;;
+    esac
+  done
+  case "$has_arm64$has_amd64" in
+    10) update_target=darwin-arm64 ;;
+    01) update_target=darwin-amd64 ;;
+    11) update_target=darwin-universal ;;
+    *) echo "ARCHS must contain arm64 and/or x86_64." >&2; exit 1 ;;
+  esac
+  update_flags="$("$go_bin" run ./tools/release-update feed -target "$update_target")"
+  if [[ -n "$update_flags" ]]; then ldflags="$ldflags $update_flags"; fi
 fi
 binaries=()
 for architecture in $ARCHS; do

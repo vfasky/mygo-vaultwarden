@@ -192,7 +192,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 	// Capture on the UI thread; only the successful authenticated publication
 	// below may consume this continuation. Status observations cannot mint one.
 	backupContinuation := a.captureBackupContinuation(epoch)
-	platform := sysauth.NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.mainWindow)
 	go func() {
 		defer clear(password)
 		var session vaultSession = existing
@@ -374,7 +374,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 				a.editor = nil
 			}
 			a.itemsRevision = a.snapshot.Revision
-			a.showSettings, a.showLogin = false, false
+			a.showLogin = false
 			s := result.Summary
 			a.status = i18n.Tf("app.sync.summary", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
 			a.reconcileBulk()

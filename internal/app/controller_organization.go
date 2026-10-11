@@ -313,7 +313,7 @@ func (a *app) openOrgServicesWith(dispatch func(func()), storage func(localstore
 	}
 	a.orgServices = c
 	a.componentCancel = cancel
-	a.category, a.showSettings = "org-services", false
+	a.selectAccountTab(accountTabEmergency)
 }
 func (c *orgServicesController) replacePanel(panel connectedPanel) {
 	if c.panel != nil {

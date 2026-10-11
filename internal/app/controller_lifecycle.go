@@ -31,7 +31,7 @@ func (a *app) dispatchUI(f func()) {
 		a.uiDispatcher(f)
 		return
 	}
-	a.window.Update(f)
+	a.postUI(f)
 }
 
 // controllerLease is the only mutable controller state visible to workers.

@@ -18,11 +18,12 @@ import (
 
 type app struct {
 	category, selectedID                      string
-	showSettings, showLogin                   bool
+	showLogin                                 bool
 	sidebarCollapsed                          bool
 	listState                                 ui.ListState
 	selectedRow                               int
-	window                                    *mygo.Window
+	windows                                   windowSet // which windows are open and their native handles (windows.go)
+	mainWindow                                *mygo.Window
 	uiDispatcher                              func(func())                              // immutable after controller construction
 	storageBackend                            func(localstore.Request) localstore.Reply // immutable after construction
 	serverURL, email, query, status, deviceID string
@@ -82,7 +83,7 @@ type app struct {
 
 func (a *app) lockInterface() {
 	a.stopNetwork()
-	a.showLogin, a.showSettings = false, false
+	a.showLogin = false
 	a.query = ""
 }
 
@@ -182,7 +183,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 			}
 		}
 		a.itemsRevision = reply.State.Revision
-		a.showSettings, a.showLogin = false, false
+		a.showLogin = false
 		a.idleLock.start()
 		a.startNotifications(a.dispatchUI, a.storageCall)
 		return
@@ -220,7 +221,7 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 				return
 			}
 			a.itemsRevision = reply.State.Revision
-			a.showLogin, a.showSettings = false, false
+			a.showLogin = false
 			a.startNotifications(a.dispatchUI, a.storageCall)
 		}
 	case localstore.OperationLock:
@@ -236,19 +237,30 @@ func (a *app) completeStorage(request localstore.Request, epoch uint64, reply lo
 
 // Run starts the MyGo Vaultwarden application and blocks until it quits.
 func Run() {
+	if !mygo.App.RequestSingleInstanceLock() {
+		return
+	}
 	a := &app{status: i18n.T("app.sync.status_reading_storage"), notificationsEnabled: true}
+	useUpdater(func() { a.invalidateWindows(nil) })
 	mygo.App.WhenReady(func() {
-		// Pinning the traffic lights where hiddenInset puts them makes the
-		// title bar exactly as tall as their row, centered on them, so the
-		// sidebar toggle and toolbar can center on c.TitleBar().Height.
-		a.window = mygo.NewWindow(mygo.WindowOptions{Title: "MyGo Vaultwarden", Width: 1280, Height: 820, MinWidth: 1060, MinHeight: 700, StateKey: "main", TitleBarStyle: mygo.TitleBarHiddenInset, TrafficLightPosition: &mygo.Point{X: 18, Y: 18}, Content: ui.View(a.view)})
+		a.windows.native = true
+		a.openMainWindow()
+		a.applyLanguage()
 		a.idleLock = &idleLockController{
 			now: time.Now, idle: mygo.Power.IdleTime, after: idleAfter,
 			dispatch: a.dispatchUI, lock: func() { a.runStorage(localstore.OperationLock) },
 		}
 		a.runStorage(localstore.OperationSettings)
-		mygo.Power.OnLockScreen(func() { a.window.Update(func() { a.runStorage(localstore.OperationLock) }) })
-		mygo.Power.OnSuspend(func() { a.window.Update(func() { a.runStorage(localstore.OperationLock) }) })
+		mygo.Power.OnLockScreen(func() { a.postUI(func() { a.runStorage(localstore.OperationLock) }) })
+		mygo.Power.OnSuspend(func() { a.postUI(func() { a.runStorage(localstore.OperationLock) }) })
+	})
+	mygo.App.OnSecondInstance(func(_ []string, _ string) { a.showMainWindow() })
+	mygo.App.OnBeforeQuit(func(_ *mygo.QuitEvent) { a.windows.quitting = true })
+	mygo.App.OnWindowAllClosed(func() {})
+	mygo.App.OnActivate(func(hasVisibleWindows bool) {
+		if !hasVisibleWindows && !a.windows.quitting {
+			a.showMainWindow()
+		}
 	})
 	mygo.App.OnWillQuit(func(_ *mygo.QuitEvent) { a.stopNetwork() })
 	if err := mygo.App.Run(); err != nil {

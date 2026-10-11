@@ -118,7 +118,7 @@ func (p *targetRecoveryController) inspect() {
 	ctx, epoch, generation := p.ctx, p.epoch, p.generation
 	a := p.owner
 	device := a.deviceID
-	platform := sysauth.NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.mainWindow)
 	clock := &a.workerEpoch
 	p.running = true
 	a.pending++

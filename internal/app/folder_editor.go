@@ -36,7 +36,6 @@ func (a *app) openFolderEditor(id string) {
 		}
 	}
 	a.folderEditor = e
-	a.showSettings = false
 	a.secretInputVersion++
 }
 

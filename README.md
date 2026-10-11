@@ -6,7 +6,7 @@
 
 个人附件与完整资源备份支持有界流式处理、逐文件恢复、同步续接和下载核验。MyGo 完整资源格式与官方 JSON 不同；不能无损表达的内容会被明确阻止。敏感读取和再次验证有短期授权，未知写入结果不会自动重放。
 
-账号服务入口位于“账号与设置”，提供 Send、设备登录与审批、账号安全、MFA 和紧急访问。登录按服务器要求完成 MFA。
+应用分为几个原生窗口：主窗口负责登录解锁、密码库浏览与编辑；“设置”窗口（`⌘,`）包含通用（语言）、账号、存储与自动填充、更新和关于；“账号中心”窗口（侧栏入口或“账号”菜单，`⇧⌘A`）提供 Send、设备登录与审批、账号安全、MFA 和紧急访问。账号中心一次只连接一个页面；锁定、主窗口正在编辑或有操作进行时不打开面板，并说明原因。关闭主窗口只隐藏它，点击 Dock 图标恢复，`⌘Q` 退出。登录按服务器要求完成 MFA。
 
 设备批准后的临时在线库不持久保存运行期密钥或 token，也不注册运行期 AutoFill。显式绑定密码后必须重新同步，才能发布持久快照。替换另一账号的本机缓存需要明确确认和系统认证；旧保护未解决时拒绝替换，未知结果只检查同一次操作。
 
@@ -66,7 +66,7 @@ stateDiagram-v2
 | 目录 | 内容 |
 |---|---|
 | `main.go` | 薄入口，调用 `internal/app` |
-| `internal/app` | 应用控制器：主窗口、生命周期、登录解锁、同步与密码库编辑器 |
+| `internal/app` | 应用控制器：主窗口、设置与账号中心窗口、菜单、生命周期、登录解锁、同步、自动更新与密码库编辑器 |
 | `internal/ui` | UI：`kit` 共享组件，`account`、`send`、`organization` 领域面板 |
 | `internal/vaultwarden` | Vaultwarden 协议客户端，`vaultcrypto`、`totp`、`vaulterr` 子包 |
 | `internal/localstore`、`internal/fileio`、`internal/platform` | 本机加密快照、本地文件暂存、原生桥与系统认证 |
@@ -106,6 +106,10 @@ bash scripts/build-macos.sh release --notarize
 ```
 
 Xcode 管理主应用和扩展两个 target；Go build phase 生成主可执行文件，原生扩展嵌入 `Contents/PlugIns`，共享 Swift 桥位于 `Contents/Frameworks/libSnapshotBridge.dylib`。应用图标与资源说明见 [docs/app-icon.md](docs/app-icon.md)。
+
+## 自动更新
+
+配置更新源与公钥的 Release 构建支持 MyGo 原生自动更新，可在“设置 › 更新”或应用菜单“检查更新…”控制。Debug 和未配置的构建不会自动更新。签名、公证后的应用可用 `bash scripts/release-update.sh` 生成更新包与 manifest，不会自动上传；密钥配置、发布顺序与验收步骤见 [自动更新与发布](docs/updates.md)。
 
 ## 使用与安全边界
 

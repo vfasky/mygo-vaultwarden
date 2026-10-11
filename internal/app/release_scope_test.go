@@ -27,13 +27,18 @@ func TestPersonalReleaseHidesOrganizationUIWithoutDroppingSyncData(t *testing.T)
 			t.Fatal("organization item presented as personal")
 		}
 	}
-	uitest.Click(t, tester, "账号与设置")
-	if tester.HasText("组织条目、资源与审计") || tester.HasText("组织恢复登记与管理员恢复") {
+	uitest.Click(t, tester, "设置")
+	if !a.windows.settingsOpen {
+		t.Fatal("settings window did not open")
+	}
+	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	if settings.HasText("组织条目、资源与审计") || settings.HasText("组织恢复登记与管理员恢复") {
 		t.Fatal("organization management entry exposed")
 	}
 	a.openEmergencyServices()
 	tester.Frame()
-	if a.orgServices == nil || !a.orgServices.emergencyOnly || tester.HasText("组织恢复登记与管理员恢复") || tester.HasText("Public 目录导入") {
+	account := ui.NewTester(a.accountWindowView, 1080, 720)
+	if a.orgServices == nil || !a.orgServices.emergencyOnly || account.HasText("组织恢复登记与管理员恢复") || account.HasText("Public 目录导入") {
 		t.Fatal("emergency route exposed deferred organization products")
 	}
 	if !bytes.Equal(original, a.vault.Sync) || len(a.organizations) == 0 {

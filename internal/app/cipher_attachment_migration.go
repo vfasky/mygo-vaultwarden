@@ -123,7 +123,7 @@ func (a *app) runCipherAttachmentMigration(remove bool) {
 		} else {
 			result, err = session.UpgradeLegacyCipherAttachment(ctx, vault, id, oldID, true, grant, persist)
 		}
-		a.window.Update(func() {
+		a.postUI(func() {
 			a.pending--
 			defer cancel()
 			if a.editor != e || a.epoch != epoch {

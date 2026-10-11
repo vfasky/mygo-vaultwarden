@@ -86,7 +86,7 @@ func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage fu
 	epoch, scope := a.epoch, *a.liveScope
 	ctx, cancel := context.WithCancel(context.Background())
 	a.componentCancel = cancel
-	platform := sysauth.NewAuthenticationPlatform(a.window)
+	platform := sysauth.NewAuthenticationPlatform(a.accountParent())
 	f := account.NewAuthManagementForm(scope, epoch, nil)
 	complete := a.componentDispatch(session, lease, epoch, dispatch)
 	f.Submit = func(r account.AuthManagementRequest) {
@@ -159,5 +159,5 @@ func (a *app) openAuthenticationManagementWith(dispatch func(func()), storage fu
 		}()
 	}
 	a.authManagement = f
-	a.category, a.showSettings = "mfa", false
+	a.selectAccountTab(accountTabMFA)
 }

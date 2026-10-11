@@ -45,6 +45,6 @@ func (a *app) openDevicesWith(dispatch func(func()), storage func(localstore.Req
 		Check: func() error { return lease.check(storage) }, Checkpoint: func(cp vaultwarden.SessionCheckpoint) error { return lease.persist(cp, storage) },
 		Changed: func() { a.syncVaultWith(false, dispatch, storage) }}
 	a.devicePanel = account.NewDevicePanel(session, a.vault, host)
-	a.category, a.showSettings = "devices", false
+	a.selectAccountTab(accountTabDevices)
 	a.devicePanel.Refresh()
 }

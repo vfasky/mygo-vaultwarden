@@ -51,7 +51,6 @@ var app = map[string]text{
 	"app.settings.bind_master_password_label":   {"显式绑定当前账号主密码", "Explicitly bind this account's master password"},
 	"app.settings.bind_master_password_sync":    {"绑定主密码并重新同步", "Bind master password and sync again"},
 	"app.settings.cleanup_pending_hint":         {"旧密钥清理尚未完成。", "Old key cleanup is not yet complete."},
-	"app.settings.close":                        {"关闭设置", "Close settings"},
 	"app.settings.confirm_account_replacement":  {"明确同意替换以上本机账号", "I agree to replace the local account above"},
 	"app.settings.connect_vault":                {"连接密码库", "Connect to vault"},
 	"app.settings.credentials_hint":             {"登录凭据在本地加密保存，解锁后可同步；也可连接其他服务器与账号。", "Login credentials are encrypted and saved locally so you can sync after unlocking. You can also connect to another server or account."},
@@ -73,7 +72,6 @@ var app = map[string]text{
 	"app.settings.snapshot_count":               {"本机快照 · %d 个登录项目", "Local snapshot · Login items: %d"},
 	"app.settings.status_account_revoked":       {"本机账号和快照已撤销；不会修改服务器上的密码库。", "The local account and snapshot have been revoked. The vault on the server will not be changed."},
 	"app.settings.status_autofill_submitted":    {"候选更新已提交，请刷新状态查看系统回执。", "The AutoFill suggestion update has been submitted. Refresh the status to check the system receipt."},
-	"app.settings.title":                        {"账号与设置", "Account & settings"},
 	"app.settings.unlock_offline":               {"离线解锁", "Unlock offline"},
 	"app.settings.update_autofill":              {"更新系统候选", "Update AutoFill suggestions"},
 	"app.settings.verify_target_recovery":       {"核验目标账号恢复记录", "Verify target account recovery record"},
@@ -116,6 +114,8 @@ var app = map[string]text{
 	"app.toolbar.status_locked":                 {"未解锁", "Locked"},
 	"app.toolbar.status_sync_ready":             {"可同步", "Ready to sync"},
 	"app.toolbar.status_unlocked":               {"本机已解锁", "Unlocked on this Mac"},
+	"app.window.account_center_title":           {"账号中心", "Account center"},
+	"app.window.settings_title":                 {"设置", "Settings"},
 }
 
 var login = map[string]text{
