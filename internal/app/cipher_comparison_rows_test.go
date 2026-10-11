@@ -53,10 +53,12 @@ func TestCipherRowNativePreviewAndExplicitCorrespondence(t *testing.T) {
 		t.Fatal("expired row preview")
 	}
 	uitest.Click(t, tester, "保留远端，不应用此本地行")
+	uitest.Click(t, tester, "作为独立新增行")
 	if e.rowChoices["fields"][0] != -1 {
 		t.Fatal("explicit append missing")
 	}
 	uitest.Click(t, tester, "作为独立新增行")
+	uitest.Click(t, tester, "明确对应远端第 1 行")
 	if e.rowChoices["fields"][0] != 0 {
 		t.Fatal("explicit remote mapping missing")
 	}

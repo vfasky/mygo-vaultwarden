@@ -13,18 +13,27 @@ import (
 
 func (a *app) itemAuthorizationView(c *ui.Context) {
 	e := a.editor
-	ui.Column(c).Gap(12).Padding(18).Children(func() {
-		ui.Text(c, i18n.T("app.reprompt.title")).FontSize(23).FontWeight(600)
-		ui.Text(c, i18n.T("app.reprompt.hint")).FontSize(13)
-		ui.TextInput(c, &e.repromptPassword).Label(i18n.T("login.master_password")).Password().Disabled(a.pending != 0)
-		ui.Row(c).Gap(8).Children(func() {
-			if kit.Action(c, i18n.T("app.reprompt.verify_open"), "", true, a.pending != 0 || e.repromptPassword == "").Clicked() {
-				a.authorizePersonalItem()
-			}
+	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+			ui.Column(c).Gap(16).Padding(20).Children(func() {
+				kit.PageHeader(c, i18n.T("app.reprompt.title"), "", nil)
+				kit.Notice(c, kit.ToneInfo, i18n.T("app.reprompt.hint"))
+				kit.Section(c, i18n.T("login.master_password"), func() {
+					kit.Field(c, "", "", func() {
+						kit.Input(ui.TextInput(c, &e.repromptPassword).Label(i18n.T("login.master_password")).Password().Disabled(a.pending != 0))
+					})
+				})
+			})
+		})
+		kit.ActionBar(c, func() {
+			ui.Spacer(c)
 			if kit.Action(c, i18n.T("common.cancel"), "", false, a.pending != 0).Clicked() {
 				*e = cipherEditor{}
 				a.editor = nil
 				a.secretInputVersion++
+			}
+			if kit.Action(c, i18n.T("app.reprompt.verify_open"), "", true, a.pending != 0 || e.repromptPassword == "").Clicked() {
+				a.authorizePersonalItem()
 			}
 		})
 	})

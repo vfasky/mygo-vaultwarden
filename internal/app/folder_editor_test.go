@@ -4,6 +4,7 @@ package app
 import (
 	"context"
 	"github.com/egoist/mygo/ui"
+	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
@@ -82,5 +83,30 @@ func TestFolderUncertainResultKeepsDraftAndBlocksRetry(t *testing.T) {
 	a.mutateFolder(false)
 	if !e.uncertain || a.pending != 0 || e.name != "retained" {
 		t.Fatal("unknown mutation retried/lost draft")
+	}
+}
+
+func TestFolderPickerDropdownPreservesIDsAndDisabledState(t *testing.T) {
+	a := &app{folders: []vaultwarden.Folder{{ID: "one", Name: "Personal"}, {ID: "two", Name: "Work"}}}
+	var selected *string
+	disabled := false
+	tt := ui.NewTester(func(c *ui.Context) { a.folderPicker(c, &selected, disabled) }, 500, 400)
+	uitest.Click(t, tt, i18n.T("common.no_folder"))
+	uitest.Click(t, tt, "Work")
+	if selected == nil || *selected != "two" {
+		t.Fatal("dropdown did not commit folder ID")
+	}
+	disabled = true
+	tt.Frame()
+	uitest.Click(t, tt, "Work")
+	if selected == nil || *selected != "two" || tt.HasText("Personal") {
+		t.Fatal("disabled dropdown opened or changed value")
+	}
+	disabled = false
+	tt.Frame()
+	uitest.Click(t, tt, "Work")
+	uitest.Click(t, tt, i18n.T("common.no_folder"))
+	if selected != nil {
+		t.Fatal("no folder did not restore nil")
 	}
 }

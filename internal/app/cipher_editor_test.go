@@ -55,6 +55,7 @@ func TestNativeEditorUsesAuthenticatedVaultAndClearsOnLock(t *testing.T) {
 	if a.editor.confirm != vaultwarden.CipherTrash || !tt.HasText("确认将项目移入回收站？") {
 		t.Fatal("destructive action lacks confirmation")
 	}
+	tt.Scroll(1100, 600, 0, 500)
 	uitest.Click(t, tt, "取消操作")
 	if a.pending != 0 || a.editor.confirm != "" {
 		t.Fatal("confirmation cancellation mutated vault")

@@ -28,7 +28,7 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 	}
 	busy := a.pending != 0
 	if e.attachmentMigration == nil {
-		if kit.Action(c, i18n.T("vault.attachment.migration.prepare"), "", false, busy || e.uncertain).Clicked() {
+		if kit.Button(c, i18n.T("vault.attachment.migration.prepare"), "", kit.ButtonQuiet, busy || e.uncertain).AlignSelf(ui.Start).Clicked() {
 			rows, err := session.CipherAttachmentMigrationInfo(a.vault, e.fields.ID, e.authorization)
 			if err != nil {
 				a.status = vaultwarden.ErrorMessage(err)
@@ -39,44 +39,43 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 		return
 	}
 	m := e.attachmentMigration
-	ui.Text(c, i18n.T("vault.attachment.migration.description")).MaxLines(8)
-	for _, row := range m.rows {
-		label := row.FileName + " · " + row.ID
-		if row.Legacy {
-			label = i18n.Tf("vault.attachment.migration.original", label)
-			if m.original == row.ID {
-				label = "✓ " + label
+	kit.Section(c, i18n.T("vault.attachment.migration.title"), func() {
+		kit.Notice(c, kit.ToneInfo, i18n.T("vault.attachment.migration.description"))
+		kit.ChoiceGroup(c, i18n.T("vault.attachment.migration.prepare"), func() {
+			for _, row := range m.rows {
+				label := row.FileName + " · " + row.ID
+				if row.Legacy {
+					label = i18n.Tf("vault.attachment.migration.original", label)
+					kit.Choice(c, &m.original, row.ID, label, "", "", busy || e.uncertain)
+				}
 			}
-			if kit.Action(c, label, "", false, busy || e.uncertain).Clicked() {
-				m.original = row.ID
+		})
+		kit.ChoiceGroup(c, i18n.T("vault.attachment.migration.confirm_copy"), func() {
+			for _, row := range m.rows {
+				if !row.Legacy {
+					label := i18n.Tf("vault.attachment.migration.replacement", row.FileName+" · "+row.ID)
+					kit.Choice(c, &m.replacement, row.ID, label, "", "", busy || e.uncertain)
+				}
 			}
-		} else {
-			label = i18n.Tf("vault.attachment.migration.replacement", label)
-			if m.replacement == row.ID {
-				label = "✓ " + label
-			}
-			if kit.Action(c, label, "", false, busy || e.uncertain).Clicked() {
-				m.replacement = row.ID
+		})
+		if kit.Action(c, i18n.T("vault.attachment.migration.confirm_copy"), "", false, busy || e.uncertain || m.original == "").AlignSelf(ui.Start).Clicked() {
+			a.runCipherAttachmentMigration(false)
+		}
+		if kit.Button(c, i18n.T("vault.attachment.migration.confirm_delete_original"), "", kit.ButtonDanger, busy || e.uncertain || m.original == "" || m.replacement == "").AlignSelf(ui.Start).Clicked() {
+			a.runCipherAttachmentMigration(true)
+		}
+		if m.result != "" {
+			kit.Notice(c, kit.ToneInfo, m.result)
+		}
+		if e.uncertain && kit.Action(c, i18n.T("vault.attachment.migration.sync_reopen"), "sync", false, busy).AlignSelf(ui.Start).Clicked() {
+			a.syncVault(false)
+		}
+		if busy && kit.Action(c, i18n.T("vault.attachment.migration.cancel"), "", false, false).AlignSelf(ui.Start).Clicked() {
+			if a.cancel != nil {
+				a.cancel()
 			}
 		}
-	}
-	if kit.Action(c, i18n.T("vault.attachment.migration.confirm_copy"), "", false, busy || e.uncertain || m.original == "").Clicked() {
-		a.runCipherAttachmentMigration(false)
-	}
-	if kit.Action(c, i18n.T("vault.attachment.migration.confirm_delete_original"), "", false, busy || e.uncertain || m.original == "" || m.replacement == "").Clicked() {
-		a.runCipherAttachmentMigration(true)
-	}
-	if m.result != "" {
-		ui.Text(c, m.result).MaxLines(8)
-	}
-	if e.uncertain && kit.Action(c, i18n.T("vault.attachment.migration.sync_reopen"), "sync", false, busy).Clicked() {
-		a.syncVault(false)
-	}
-	if busy && kit.Action(c, i18n.T("vault.attachment.migration.cancel"), "", false, false).Clicked() {
-		if a.cancel != nil {
-			a.cancel()
-		}
-	}
+	})
 }
 
 func (a *app) runCipherAttachmentMigration(remove bool) {

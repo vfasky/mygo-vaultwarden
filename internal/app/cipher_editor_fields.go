@@ -64,22 +64,25 @@ func (a *app) uriMatchPicker(c *ui.Context, u *editorURI, disabled bool) {
 			}
 		}
 	}
-	if kit.Action(c, i18n.Tf("vault.uri.match_label", label), "", false, disabled).Clicked() {
+	if kit.Button(c, i18n.Tf("vault.uri.match_label", label), "", kit.ButtonQuiet, disabled).AlignSelf(ui.Start).Clicked() {
 		u.showMatch = !u.showMatch
 	}
 	if u.showMatch {
-		for _, m := range uriMatches {
-			if kit.NavItem(c, i18n.T(m.label), "globe", "", u.source["match"] == m.value, disabled).Clicked() {
-				copy := map[string]any{}
-				for key, value := range u.source {
-					copy[key] = value
+		kit.ChoiceGroup(c, i18n.Tf("vault.uri.match_label", label), func() {
+			for _, m := range uriMatches {
+				selected := u.source["match"]
+				if kit.Choice(c, &selected, m.value, i18n.T(m.label), "", "", disabled).Changed() {
+					copy := map[string]any{}
+					for key, value := range u.source {
+						copy[key] = value
+					}
+					copy["match"] = m.value
+					u.source = copy
+					u.showMatch = false
 				}
-				copy["match"] = m.value
-				u.source = copy
-				u.showMatch = false
 			}
-		}
-		ui.Text(c, i18n.T("vault.uri.autofill_hint")).FontSize(11).MaxLines(3)
+		})
+		kit.Notice(c, kit.ToneInfo, i18n.T("vault.uri.autofill_hint"))
 	}
 }
 func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom) {
@@ -92,11 +95,12 @@ func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom)
 		} else if f.value != "false" {
 			label = i18n.T("vault.field.boolean_unknown")
 		}
-		if kit.Action(c, label, "", false, disabled).Clicked() {
-			if f.value == "true" {
-				f.value = "false"
-			} else {
+		on := f.value == "true"
+		if kit.Checkbox(c, &on, label, disabled).Changed() {
+			if on {
 				f.value = "true"
+			} else {
+				f.value = "false"
 			}
 		}
 	case "3":
@@ -106,22 +110,25 @@ func (a *app) customValueEditor(c *ui.Context, e *cipherEditor, f *editorCustom)
 				label = i18n.T(linked.label)
 			}
 		}
-		if kit.Action(c, i18n.Tf("vault.field.linked_target", label), "", false, disabled).Clicked() {
+		if kit.Button(c, i18n.Tf("vault.field.linked_target", label), "", kit.ButtonQuiet, disabled).AlignSelf(ui.Start).Clicked() {
 			f.showLinks = !f.showLinks
 		}
 		if f.showLinks {
-			for _, linked := range linkedFields[e.fields.Type] {
-				if kit.NavItem(c, i18n.T(linked.label), "key", "", linked.id == f.linkedID, disabled).Clicked() {
-					f.linkedID = linked.id
-					f.showLinks = false
+			kit.ChoiceGroup(c, i18n.Tf("vault.field.linked_target", label), func() {
+				for _, linked := range linkedFields[e.fields.Type] {
+					if kit.Choice(c, &f.linkedID, linked.id, i18n.T(linked.label), "", "", disabled).Changed() {
+						f.showLinks = false
+					}
 				}
-			}
+			})
 		}
 	default:
-		value := ui.TextInput(c, &f.value).Label(i18n.T("vault.field.custom_value")).Disabled(disabled)
-		if f.hidden {
-			value.Password()
-		}
+		kit.Field(c, i18n.T("vault.field.custom_value"), "", func() {
+			value := kit.Input(ui.TextInput(c, &f.value).Label(i18n.T("vault.field.custom_value")).Disabled(disabled))
+			if f.hidden {
+				value.Password()
+			}
+		})
 	}
 }
 func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
@@ -136,45 +143,49 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 	if len(e.fields.PasswordHistory) == 0 {
 		return
 	}
-	if e.confirmHistoryDelete {
-		ui.Text(c, i18n.T("vault.history.confirm_clear_hint")).FontSize(12)
-		ui.Row(c).Gap(8).Children(func() {
-			if kit.Action(c, i18n.T("vault.history.confirm_clear"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-				e.fields.PasswordHistory = nil
-				e.confirmHistoryDelete, e.showHistory = false, false
-				clear(e.shownHistory)
-				e.shownHistory = nil
-			}
-			if kit.Action(c, i18n.T("vault.history.keep"), "", false, a.pending != 0).Clicked() {
-				e.confirmHistoryDelete = false
-			}
-		})
-		return
-	}
-	if kit.Action(c, i18n.T("vault.history.clear"), "", false, a.pending != 0 || e.uncertain).Clicked() {
-		e.confirmHistoryDelete = true
-	}
-	label := i18n.Tf("vault.history.show_saved", len(e.fields.PasswordHistory))
-	if e.showHistory {
-		label = i18n.T("vault.history.hide")
-	}
-	if kit.Action(c, label, "key", false, a.pending != 0 || e.uncertain).Clicked() {
-		if e.showHistory {
-			e.showHistory = false
-			clear(e.shownHistory)
-			e.shownHistory = nil
-		} else {
-			a.showCipherHistory(a.vaultStorage())
-		}
-	}
-	if e.showHistory {
-		ui.Scroll(c).Height(160).Children(func() {
-			ui.Column(c).Gap(8).Children(func() {
-				for _, entry := range e.shownHistory {
-					ui.Text(c, entry.LastUsedDate).FontSize(11)
-					ui.Text(c, entry.Password).FontSize(12).MaxLines(3)
+	kit.Section(c, i18n.T("vault.history.title"), func() {
+		if e.confirmHistoryDelete {
+			kit.Notice(c, kit.ToneWarning, i18n.T("vault.history.confirm_clear_hint"))
+			ui.Row(c).Gap(8).Children(func() {
+				if kit.Button(c, i18n.T("vault.history.confirm_clear"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
+					e.fields.PasswordHistory = nil
+					e.confirmHistoryDelete, e.showHistory = false, false
+					clear(e.shownHistory)
+					e.shownHistory = nil
+				}
+				if kit.Action(c, i18n.T("vault.history.keep"), "", false, a.pending != 0).Clicked() {
+					e.confirmHistoryDelete = false
 				}
 			})
-		})
-	}
+			return
+		}
+		if kit.Button(c, i18n.T("vault.history.clear"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).AlignSelf(ui.Start).Clicked() {
+			e.confirmHistoryDelete = true
+		}
+		label := i18n.Tf("vault.history.show_saved", len(e.fields.PasswordHistory))
+		if e.showHistory {
+			label = i18n.T("vault.history.hide")
+		}
+		if kit.Button(c, label, "key", kit.ButtonQuiet, a.pending != 0 || e.uncertain).AlignSelf(ui.Start).Clicked() {
+			if e.showHistory {
+				e.showHistory = false
+				clear(e.shownHistory)
+				e.shownHistory = nil
+			} else {
+				a.showCipherHistory(a.vaultStorage())
+			}
+		}
+		if e.showHistory {
+			ui.Scroll(c).Height(float32(min(160, len(e.shownHistory)*48))).Children(func() {
+				ui.Column(c).Gap(8).Children(func() {
+					for _, entry := range e.shownHistory {
+						ui.Row(c).Gap(12).Padding(8).AlignItems(ui.Center).Children(func() {
+							ui.Text(c, entry.Password).FontSize(12).Grow(1).MinWidth(0).MaxLines(3)
+							ui.Text(c, entry.LastUsedDate).FontSize(11).TextColor(kit.Muted)
+						})
+					}
+				})
+			})
+		}
+	})
 }

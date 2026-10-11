@@ -611,7 +611,7 @@ func credentialAvatar(c *ui.Context, item localstore.DisplayCredential, size flo
 
 func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential) {
 	ui.Scroll(c.Key(item.ID)).Grow(1).MinHeight(0).Children(func() {
-		ui.Column(c).Gap(14).Padding(10, 8, 8, 8).Children(func() {
+		ui.Column(c).Gap(16).Padding(20).Children(func() {
 			ui.Row(c).Gap(8).Children(func() {
 				ui.Text(c, i18n.T("common.my_vault")).FontSize(12).TextColor(kit.Muted)
 				kit.Icon(c, "chevron", 12).TextColor(kit.Muted)
@@ -625,7 +625,7 @@ func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential)
 					a.openCipherEditor(item.ID, item.Type)
 				}
 			})
-			ui.Row(c).Gap(16).Children(func() {
+			ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
 				credentialAvatar(c, item, 60)
 				ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
 					ui.Text(c, displayTitle(item)).FontSize(29).FontWeight(650).MaxLines(2).Tooltip(displayTitle(item))
@@ -653,27 +653,20 @@ func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential)
 				})
 			})
 			kit.DetailCard(c, i18n.T("vault.field.website"), func() { kit.DetailField(c, i18n.T("app.detail.login_url"), item.URL, i18n.T("app.detail.no_website")) })
-			ui.Column(c).Gap(8).Padding(14, 18).Background(kit.Lavender).Radius(22).Children(func() {
-				ui.Row(c).Gap(9).Children(func() {
-					kit.Icon(c, "shield", 20).TextColor(kit.Purple)
-					ui.Text(c, i18n.T("app.detail.secure_autofill")).FontWeight(600)
-					ui.Spacer(c)
-					if kit.IconButton(c, i18n.T("app.settings.autofill"), "settings").Size(30, 30).Padding(7).Clicked() {
+			kit.Section(c, i18n.T("app.detail.secure_autofill"), func() {
+				ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+					kit.Notice(c, kit.ToneInfo, i18n.T("app.detail.autofill_hint")).Grow(1)
+					if kit.IconButton(c, i18n.T("app.settings.autofill"), "settings").Clicked() {
 						openAutoFillSettings(c)
 					}
 				})
-				ui.Text(c, i18n.T("app.detail.autofill_hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Purple)
 			})
 		})
 	})
 }
 
 func (a *app) emptyDetail(c *ui.Context) {
-	ui.Column(c).Grow(1).Background(ui.RGBA(247, 246, 251, .6)).Radius(26).Padding(34).Justify(ui.Center).AlignItems(ui.Center).Gap(16).Children(func() {
-		ui.Row(c).Size(76, 76).Justify(ui.Center).Radius(26).Background(kit.White).Children(func() { kit.Icon(c, "vault", 38).TextColor(kit.Purple) })
-		ui.Text(c, i18n.T("app.detail.select_item")).FontSize(23).FontWeight(600).TextAlign(ui.Center)
-		ui.Text(c, i18n.T("app.detail.empty_hint")).FontSize(13).LineHeight(1.6).TextColor(kit.Muted).TextAlign(ui.Center)
-	})
+	kit.EmptyState(c, "vault", i18n.T("app.detail.select_item"), i18n.T("app.detail.empty_hint"))
 }
 
 func openAutoFillSettings(c *ui.Context) {
