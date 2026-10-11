@@ -255,8 +255,8 @@ func (a *app) header(c *ui.Context) {
 	row, below := titleBarRow(bar)
 	ui.Row(c).Height(row+below).Shrink(0).Gap(10).AlignItems(ui.Center).
 		Padding(0, 20, below, max(left, bar.Left-a.sidebarWidth(c))).DragWindow().Children(func() {
-		// The expanded sidebar carries the toggle; the compact rail leaves
-		// it in the toolbar, after the native window controls.
+		// Keep the restore toggle after the native window controls while
+		// the sidebar is hidden.
 		if a.sidebarCollapsed {
 			a.sidebarToggle(c)
 		}
@@ -299,16 +299,18 @@ func titleBarRow(bar ui.TitleBar) (row, below float32) {
 	return row, max(row, 52) - row
 }
 
-// sidebarWidth keeps the icon rail compact; header reserves the traffic
-// lights' space separately from the rail width.
+// sidebarWidth excludes the sidebar entirely while it is hidden.
 func (a *app) sidebarWidth(c *ui.Context) float32 {
 	if a.sidebarCollapsed {
-		return 60
+		return 0
 	}
 	return 236
 }
 
 func (a *app) sidebar(c *ui.Context) {
+	if a.sidebarCollapsed {
+		return
+	}
 	bar := c.TitleBar()
 	width := a.sidebarWidth(c)
 	ui.Row(c).Width(width + 1).Shrink(0).AlignItems(ui.Stretch).Children(func() {
