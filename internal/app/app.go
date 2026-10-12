@@ -28,6 +28,7 @@ type app struct {
 	sidebarFoldersCollapsed                   bool
 	listState                                 ui.ListState
 	selectedRow                               int
+	syncSummary                               *syncSummaryStatus
 	windows                                   windowSet // which windows are open and their native handles (windows.go)
 	mainWindow                                *mygo.Window
 	uiDispatcher                              func(func())                              // immutable after controller construction

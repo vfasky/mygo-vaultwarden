@@ -157,6 +157,7 @@ func (a *app) frame(self func() *mygo.Window, view func(c *ui.Context)) func(c *
 // language it started with.
 func (a *app) applyLanguage() {
 	a.windows.language = i18n.Current()
+	a.retranslateStatus()
 	if !a.windows.native {
 		return
 	}

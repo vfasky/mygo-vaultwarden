@@ -12,6 +12,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
+	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 func TestWindowsVisualPreviews(t *testing.T) {
@@ -226,5 +227,27 @@ func TestSettingsWindowGeneralLanguage(t *testing.T) {
 	tt.Frame()
 	if i18n.Current() != i18n.English || !tt.HasText("General") || !tt.HasText("Account") || a.windows.language != i18n.English {
 		t.Fatalf("language did not apply to the window and its titles: %q", tt.Texts())
+	}
+}
+
+func TestLanguageChangeRewordsStatus(t *testing.T) {
+	defer i18n.SetPreference("")
+	i18n.SetPreference(i18n.Chinese)
+	a := passwordLockedApp()
+	a.windows.language = i18n.Current()
+	summary := vaultwarden.Summary{Logins: 3}
+	a.status = syncSummaryText(5, summary)
+	a.syncSummary = &syncSummaryStatus{count: 5, summary: summary, text: a.status}
+	chinese := a.status
+	i18n.SetPreference(i18n.English)
+	a.applyLanguage()
+	if a.status == chinese || a.status != syncSummaryText(5, summary) || strings.Contains(a.status, "已同步") {
+		t.Fatalf("sync summary was not reworded: %q", a.status)
+	}
+	a.status = "other status"
+	i18n.SetPreference(i18n.Chinese)
+	a.applyLanguage()
+	if a.status != "" {
+		t.Fatalf("a status in the previous language stayed: %q", a.status)
 	}
 }

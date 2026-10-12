@@ -379,7 +379,8 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			a.itemsRevision = a.snapshot.Revision
 			a.showLogin = false
 			s := result.Summary
-			a.status = i18n.Tf("app.sync.summary", len(a.items), s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
+			a.status = syncSummaryText(len(a.items), s)
+			a.syncSummary = &syncSummaryStatus{count: len(a.items), summary: s, text: a.status}
 			a.reconcileBulk()
 			a.reconcileImport(backupContinuation)
 			a.startNotifications(dispatch, storage)
@@ -389,4 +390,31 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			}
 		})
 	}()
+}
+
+// syncSummaryStatus remembers the numbers behind the status line a sync left,
+// so a change of language words it again instead of leaving the old language.
+type syncSummaryStatus struct {
+	count   int
+	summary vaultwarden.Summary
+	text    string
+}
+
+func syncSummaryText(count int, s vaultwarden.Summary) string {
+	return i18n.Tf("app.sync.summary", count, s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
+}
+
+// retranslateStatus rewords the sync summary in the language now in force and
+// drops any other status line, which was worded in the previous language.
+func (a *app) retranslateStatus() {
+	if a.status == "" {
+		return
+	}
+	if sum := a.syncSummary; sum != nil && a.status == sum.text {
+		sum.text = syncSummaryText(sum.count, sum.summary)
+		a.status = sum.text
+		return
+	}
+	a.status = ""
+	a.syncSummary = nil
 }
