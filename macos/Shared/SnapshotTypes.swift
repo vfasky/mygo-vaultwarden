@@ -32,6 +32,7 @@ enum L10n {
         "autofill.no_snapshot": (zh: "没有加密快照。请先在主应用登录并同步。", en: "No encrypted snapshot. Log in and sync in the main app first."),
         "autofill.finish_configuration": (zh: "完成设置并清理旧候选", en: "Finish & clear old suggestions"),
         "autofill.snapshot_description": (zh: "本机加密快照 · %d 条。读取密钥需要系统认证。", en: "Local encrypted snapshot. Items: %d. System authentication is required to read the key."),
+        "autofill.subtitle": (zh: "密码自动填充", en: "Password AutoFill"),
         "autofill.authenticate_update": (zh: "认证并更新自动填充候选", en: "Authenticate & update AutoFill"),
         "autofill.authenticate_fill": (zh: "认证并填充", en: "Authenticate & fill"),
         "autofill.search_hint": (zh: "搜索标题或用户名，回车筛选", en: "Search title or username; press Return"),

@@ -31,8 +31,8 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     private let logger = Logger(subsystem: "yz.sh.mygo-vaultwarden.autofill", category: "provider")
 
     override func loadView() {
-        view = NSView(frame: NSRect(x: 0, y: 0, width: 500, height: 400))
-        preferredContentSize = NSSize(width: 500, height: 620)
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 420))
+        preferredContentSize = NSSize(width: 420, height: 420)
     }
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -112,67 +112,101 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
             return credential.quickFillMatches(serviceIdentifier: service.identifier, isURL: service.isURL)
         }
     }
+    private func appIcon() -> NSImage {
+        Bundle.main.image(forResource: "AppIcon") ?? NSImage(named: NSImage.applicationIconName) ?? NSImage()
+    }
     private func render() {
         view.subviews.forEach { $0.removeFromSuperview() }
-        let stack = NSStackView()
-        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 16
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(stack)
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 24),
-            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -24),
-            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 24),
-            stack.bottomAnchor.constraint(lessThanOrEqualTo: view.bottomAnchor, constant: -24)
-        ])
-        func text(_ value: String, title: Bool = false) {
+
+        let icon = NSImageView(image: appIcon())
+        icon.imageScaling = .scaleProportionallyUpOrDown
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        let title = NSTextField(labelWithString: "MyGo Vaultwarden")
+        title.font = .systemFont(ofSize: 20, weight: .semibold)
+        let subtitle = NSTextField(labelWithString: L10n.t("autofill.subtitle"))
+        subtitle.font = .systemFont(ofSize: 12); subtitle.textColor = .secondaryLabelColor
+        let titles = NSStackView(views: [title, subtitle])
+        titles.orientation = .vertical; titles.alignment = .leading; titles.spacing = 2
+        let header = NSStackView(views: [icon, titles])
+        header.orientation = .horizontal; header.alignment = .centerY; header.spacing = 14
+        icon.widthAnchor.constraint(equalToConstant: 56).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 56).isActive = true
+
+        let body = NSStackView()
+        body.orientation = .vertical; body.alignment = .leading; body.spacing = 12
+
+        func text(_ value: String, secondary: Bool = false) {
             let label = NSTextField(wrappingLabelWithString: value)
-            label.font = .systemFont(ofSize: title ? 22 : 13, weight: title ? .semibold : .regular)
-            stack.addArrangedSubview(label)
-            label.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+            label.font = .systemFont(ofSize: 13)
+            label.textColor = secondary ? .secondaryLabelColor : .labelColor
+            body.addArrangedSubview(label)
+            label.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
         }
-        func button(_ value: String, selector: Selector, tag: Int = 0) {
+        func button(_ value: String, selector: Selector, tag: Int = 0, primary: Bool = false) {
             let button = NSButton(title: value, target: self, action: selector)
-            button.tag = tag; button.bezelStyle = .rounded; button.isEnabled = !busy
-            stack.addArrangedSubview(button)
+            button.tag = tag; button.bezelStyle = .rounded; button.controlSize = .large; button.isEnabled = !busy
+            if primary { button.keyEquivalent = "\r" }
+            body.addArrangedSubview(button)
+            button.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
         }
-        text("MyGo Vaultwarden", title: true)
         do {
             let state = try SnapshotStore.sharedContainer().state()
             if state.snapshot == nil {
                 text(L10n.t("autofill.no_snapshot"))
-                if case .configuration = request { button(L10n.t("autofill.finish_configuration"), selector: #selector(configure)) }
+                if case .configuration = request { button(L10n.t("autofill.finish_configuration"), selector: #selector(configure), primary: true) }
             } else {
-                text(String(format: L10n.t("autofill.snapshot_description"), state.snapshot!.header.count))
+                text(String(format: L10n.t("autofill.snapshot_description"), state.snapshot!.header.count), secondary: true)
                 switch request {
-                case .configuration: button(L10n.t("autofill.authenticate_update"), selector: #selector(configure))
-                case .identity: button(L10n.t("autofill.authenticate_fill"), selector: #selector(fillIdentity))
+                case .configuration: button(L10n.t("autofill.authenticate_update"), selector: #selector(configure), primary: true)
+                case .identity: button(L10n.t("autofill.authenticate_fill"), selector: #selector(fillIdentity), primary: true)
                 case .list:
                     if let lease {
-                        let field = NSSearchField(frame: NSRect(x: 0, y: 0, width: 440, height: 28))
+                        let field = NSSearchField()
                         field.placeholderString = L10n.t("autofill.search_hint")
                         field.stringValue = search
                         field.sendsWholeSearchString = true
                         field.isEnabled = !busy
                         field.target = self; field.action = #selector(searchChanged(_:))
-                        stack.addArrangedSubview(field)
+                        body.addArrangedSubview(field)
+                        field.widthAnchor.constraint(equalTo: body.widthAnchor).isActive = true
                         let matches = lease.credentials.enumerated().filter {
                             self.matches($0.element) && (search.isEmpty || ($0.element.title + " " + $0.element.username).localizedCaseInsensitiveContains(search))
                         }
-                        if matches.isEmpty { text(L10n.t("autofill.no_matching_credentials")) }
+                        if matches.isEmpty { text(L10n.t("autofill.no_matching_credentials"), secondary: true) }
                         page = min(page, max(0, (matches.count - 1) / 5))
                         for (index, credential) in matches.dropFirst(page * 5).prefix(5) {
                             button("\(credential.title) · \(credential.username)", selector: #selector(fillSelection(_:)), tag: index)
                         }
                         if page > 0 { button(L10n.t("autofill.previous_page"), selector: #selector(changePage(_:)), tag: -1) }
                         if (page + 1) * 5 < matches.count { button(L10n.t("autofill.next_page"), selector: #selector(changePage(_:)), tag: 1) }
-                    } else { button(L10n.t("autofill.authenticate_view"), selector: #selector(showCredentials)) }
+                    } else { button(L10n.t("autofill.authenticate_view"), selector: #selector(showCredentials), primary: true) }
                 }
             }
         } catch { text((error as? SnapshotError ?? .configuration).message) }
-        if !message.isEmpty { text(message) }
+        if !message.isEmpty { text(message, secondary: true) }
+
+        let divider = NSBox(); divider.boxType = .separator
         let cancel = NSButton(title: L10n.t("autofill.cancel"), target: self, action: #selector(cancelRequest))
-        cancel.bezelStyle = .rounded; cancel.keyEquivalent = "\u{1b}"
-        stack.addArrangedSubview(cancel)
+        cancel.bezelStyle = .rounded; cancel.controlSize = .large; cancel.keyEquivalent = "\u{1b}"
+        let footer = NSStackView(views: [NSView(), cancel])
+        footer.orientation = .horizontal
+
+        let stack = NSStackView(views: [header, divider, body])
+        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 18
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(stack); view.addSubview(footer)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 28),
+            stack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -28),
+            stack.topAnchor.constraint(equalTo: view.topAnchor, constant: 40),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: footer.topAnchor, constant: -16),
+            divider.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            body.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            footer.leadingAnchor.constraint(equalTo: stack.leadingAnchor),
+            footer.trailingAnchor.constraint(equalTo: stack.trailingAnchor),
+            footer.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -24)
+        ])
     }
     @objc private func searchChanged(_ field: NSSearchField) { search = field.stringValue; page = 0; render() }
     @objc private func changePage(_ button: NSButton) { page = max(0, page + button.tag); render() }

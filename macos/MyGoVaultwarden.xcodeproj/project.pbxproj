@@ -32,6 +32,7 @@
         A20000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/SnapshotIndex.swift; sourceTree = "<group>"; };
         A10000000000000000000004 = {isa = PBXBuildFile; fileRef = A20000000000000000000005; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
         A10000000000000000000005 = {isa = PBXBuildFile; fileRef = A20000000000000000000008; };
+        A10000000000000000000022 = {isa = PBXBuildFile; fileRef = A20000000000000000000008; };
         A20000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = image.icns; path = App/AppIcon.icns; sourceTree = "<group>"; };
         A20000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFill/CredentialProviderViewController.swift; sourceTree = "<group>"; };
         A20000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/VaultCredential.swift; sourceTree = "<group>"; };
@@ -78,7 +79,7 @@
             shellScript = "bash \"$SRCROOT/../scripts/xcode-build-go.sh\"\n";
         };
         A50000000000000000000002 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000001, A10000000000000000000002, A10000000000000000000010, A10000000000000000000011, A10000000000000000000012, A10000000000000000000013, A10000000000000000000014, A10000000000000000000015, A10000000000000000000016, A10000000000000000000017, A10000000000000000000018, A10000000000000000000019, A10000000000000000000020, A10000000000000000000021, ); runOnlyForDeploymentPostprocessing = 0; };
-        A50000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+        A50000000000000000000003 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000022, ); runOnlyForDeploymentPostprocessing = 0; };
         A50000000000000000000004 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (A10000000000000000000004, ); name = "Embed AutoFill extension"; runOnlyForDeploymentPostprocessing = 0; };
         A50000000000000000000005 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000005, ); runOnlyForDeploymentPostprocessing = 0; };
         A60000000000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A70000000000000000000001; proxyType = 1; remoteGlobalIDString = A40000000000000000000002; remoteInfo = AutoFill; };
