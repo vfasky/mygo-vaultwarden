@@ -45,6 +45,7 @@ type app struct {
 	folders                                   []vaultwarden.Folder
 	organizationEditor                        *organizationEditor
 	folderEditor                              *folderEditor
+	drawerShown                               string // the drawer kind that has slid in, "" while closed
 	bulkEditor                                *bulkEditor
 	backupEditor                              *backupEditor
 	itemsRevision                             string

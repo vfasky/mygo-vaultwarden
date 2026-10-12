@@ -26,14 +26,23 @@ var drawerSlides = true
 // drawerSlideDuration is how long the drawer slides in.
 var drawerSlideDuration = 240 * time.Millisecond
 
-var (
-	drawerPanelMotion = func(width float32) ui.ElementTransition {
-		return ui.ElementTransition{Enter: &ui.Motion{X: width, Opacity: 1}, Duration: drawerSlideDuration}
+// slideDrawer starts the panel a drawer's width to the right and the
+// backdrop clear as the drawer opens, and moves them in from there. It
+// animates a translation, which only paints: MyGo lays overlays out again
+// after element transitions, which put an Enter motion back in place.
+func (a *app) slideDrawer(kind string, backdrop, panel ui.Element, width float32) {
+	if !drawerSlides {
+		return
 	}
-	drawerBackdropMotion = func() ui.ElementTransition {
-		return ui.ElementTransition{Enter: &ui.Motion{}, Duration: drawerSlideDuration}
+	if a.drawerShown != kind {
+		a.drawerShown = kind
+		panel.Jump("slide", width)
+		backdrop.Jump("shown", 0)
 	}
-)
+	slide := ui.Animation{Duration: drawerSlideDuration, Ease: ui.EaseOut}
+	panel.Translate(panel.AnimateTo("slide", 0, slide), 0)
+	backdrop.Opacity(backdrop.AnimateTo("shown", 1, slide))
+}
 
 // drawerEditor names the editor the drawer shows, and builds it.
 func (a *app) drawerEditor() (kind string, view func(c *ui.Context)) {
@@ -71,6 +80,7 @@ func (a *app) editorDrawer(c *ui.Context) {
 			kind, view = a.drawerEditor()
 		}
 		if view == nil {
+			a.drawerShown = ""
 			layer.PassThrough()
 			return
 		}
@@ -82,10 +92,7 @@ func (a *app) editorDrawer(c *ui.Context) {
 			panel := ui.Column(c.Key("editor-drawer-"+kind)).Absolute().Top(0).Right(0).Bottom(0).Width(width).
 				Padding(14, 0, 18, 0).Background(kit.Panel).Role(ui.RoleDialog).Label(drawerTitle(kind)).
 				Shadow(-12, 0, 32, 0, ui.RGBA(38, 30, 62, .18))
-			if drawerSlides {
-				backdrop.Transition(drawerBackdropMotion())
-				panel.Transition(drawerPanelMotion(width))
-			}
+			a.slideDrawer(kind, backdrop, panel, width)
 			panel.DrawOver(func(p *ui.Painter, r ui.Rect) { p.Fill(ui.Rect{X: r.X, Y: r.Y, W: 1, H: r.H}, kit.Line, 0) })
 			panel.Children(func() { view(c) })
 		})
