@@ -2,6 +2,20 @@
 
 每个版本分“中文”和“English”两段，内容一一对应。这一节会写入 GitHub release 说明和应用的更新窗口，介绍网站也从 release 读取两种语言。
 
+## 0.1.4
+
+### 中文
+
+- 通过系统自动填充填入账号密码后，可自动把该条目的当前验证码（TOTP）复制到剪贴板；可在“设置 → 本机存储与自动填充”关闭。
+- 只有一个匹配凭据时，自动填充弹窗出现后直接发起系统认证，少点一步。
+- 升级 MyGo 框架。
+
+### English
+
+- After AutoFill fills a login, the item's current verification code (TOTP) can be copied to the clipboard automatically. Turn this off in Settings → Storage & AutoFill.
+- When only one credential matches, AutoFill starts system authentication as soon as the sheet appears, saving a click.
+- Updated the MyGo framework.
+
 ## 0.1.3
 
 ### 中文

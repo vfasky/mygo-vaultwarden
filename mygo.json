@@ -1,7 +1,7 @@
 {
   "name": "MyGo Vaultwarden",
   "identifier": "yz.sh.mygo-vaultwarden",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "icon": "resources/icon.png",
   "out": "build/mygo",
   "macos": {
