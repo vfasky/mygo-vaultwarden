@@ -17,3 +17,4 @@ macos/Authentication/.build
 # web 介绍网站
 /web/node_modules/
 /web/.cloudflare/
+/web/public/data/releases.json
