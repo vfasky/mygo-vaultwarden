@@ -7,7 +7,6 @@ import (
 	"crypto/tls"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"time"
 
@@ -288,8 +287,7 @@ func (c *Client) notificationConnection(ctx context.Context, scope Scope, anonym
 			if e != nil {
 				return e
 			}
-			event.FromThisDevice = event.Kind == NotificationSync && event.contextID != "" && strings.EqualFold(event.contextID, c.deviceID)
-			event.contextID = ""
+			event.markOrigin(c.deviceID)
 			pending = rest
 			if ctx.Err() != nil || !valid() {
 				return ErrExpired

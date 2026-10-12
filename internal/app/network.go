@@ -324,16 +324,23 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 		if workErr == nil && ctx.Err() != nil {
 			workErr = vaultwarden.ErrCancelled
 		}
-		dispatch(func() {
+		// finish releases this sync's hold on pending exactly once, in whichever
+		// UI callback ends it.
+		finish := func(adopted bool) {
 			a.pending--
 			if a.syncEpoch == epoch {
 				a.syncEpoch = 0
 			}
-			adopted := false
+			// A stopped or replaced session already discarded its hints.
+			if coveredHint && !adopted && a.session != nil && a.session == existing {
+				a.notificationSyncPending = true
+			}
+		}
+		dispatch(func() {
+			handedOff := false
 			defer func() {
-				// A stopped or replaced session already discarded its hints.
-				if coveredHint && !adopted && a.session != nil && a.session == existing {
-					a.notificationSyncPending = true
+				if !handedOff {
+					finish(false)
 				}
 			}()
 			if a.epoch != epoch {
@@ -363,10 +370,8 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 				}
 				return
 			}
-			if !backupContinuation.current(a) {
-				backupContinuation = nil
-			}
-			if concrete, ok := session.(*vaultwarden.Session); ok && runtime == nil {
+			concrete, _ := session.(*vaultwarden.Session)
+			if concrete != nil && runtime == nil {
 				if err := concrete.AcceptAuthenticatedSnapshot(reply.Vault, reply.State.Revision); err != nil {
 					if login {
 						go session.Close()
@@ -376,34 +381,60 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 					return
 				}
 			}
-			a.snapshot = reply.State
-			a.session = session
-			a.liveScope = &result.Scope
-			a.sessionRevision = reply.State.Revision
-			a.items = metadata
-			if err := a.adoptVault(result.Vault); err != nil {
-				a.status = vaultwarden.ErrorMessage(err)
-				return
-			}
-			adopted = true
-			if a.folderEditor != nil && a.folderEditor.saved {
-				a.folderEditor = nil
-			}
-			if a.editor != nil && a.editor.saved {
-				a.editor = nil
-			}
-			a.itemsRevision = a.snapshot.Revision
-			a.showLogin = false
-			s := result.Summary
-			a.status = syncSummaryText(len(a.items), s)
-			a.syncSummary = &syncSummaryStatus{count: len(a.items), summary: s, text: a.status}
-			a.reconcileBulk()
-			a.reconcileImport(backupContinuation)
-			a.startNotifications(dispatch, storage)
-			if a.notificationSyncPending {
-				a.notificationSyncPending = false
-				a.syncVaultWith(false, dispatch, storage)
-			}
+			// Decrypting display metadata for every item is the slow part of
+			// adoption; do it off the UI thread while pending still holds.
+			handedOff = true
+			go func() {
+				var view *vaultView
+				var viewErr error
+				if concrete != nil && result.Vault != nil {
+					view, viewErr = loadVaultView(concrete, result.Vault)
+				}
+				dispatch(func() {
+					adopted := false
+					defer func() {
+						finish(adopted)
+						// A hint that arrived during this sync needs one more pass.
+						if adopted && a.notificationSyncPending {
+							a.notificationSyncPending = false
+							a.syncVaultWith(false, dispatch, storage)
+						}
+					}()
+					if a.epoch != epoch {
+						if login {
+							go session.Close()
+						}
+						return
+					}
+					if !backupContinuation.current(a) {
+						backupContinuation = nil
+					}
+					a.snapshot = reply.State
+					a.session = session
+					a.liveScope = &result.Scope
+					a.sessionRevision = reply.State.Revision
+					a.items = metadata
+					if err := a.adoptVaultView(result.Vault, view, viewErr); err != nil {
+						a.status = vaultwarden.ErrorMessage(err)
+						return
+					}
+					adopted = true
+					if a.folderEditor != nil && a.folderEditor.saved {
+						a.folderEditor = nil
+					}
+					if a.editor != nil && a.editor.saved {
+						a.editor = nil
+					}
+					a.itemsRevision = a.snapshot.Revision
+					a.showLogin = false
+					s := result.Summary
+					a.status = syncSummaryText(len(a.items), s)
+					a.syncSummary = &syncSummaryStatus{count: len(a.items), summary: s, text: a.status}
+					a.reconcileBulk()
+					a.reconcileImport(backupContinuation)
+					a.startNotifications(dispatch, storage)
+				})
+			}()
 		})
 	}()
 }

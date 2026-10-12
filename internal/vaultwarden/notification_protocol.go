@@ -3,6 +3,7 @@ package vaultwarden
 
 import (
 	"encoding/binary"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -301,4 +302,11 @@ func decodeNotification(frame []byte, scope Scope, anonymousID string) (Notifica
 		event.Kind = NotificationSync
 	}
 	return event, nil
+}
+
+// markOrigin compares the decoded ContextId with this client's device
+// identifier and then drops the raw value from the event.
+func (e *NotificationEvent) markOrigin(deviceID string) {
+	e.FromThisDevice = e.Kind == NotificationSync && e.contextID != "" && deviceID != "" && strings.EqualFold(e.contextID, deviceID)
+	e.contextID = ""
 }

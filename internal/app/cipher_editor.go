@@ -213,7 +213,48 @@ func sectionFields(f *vaultwarden.CipherFields) map[string]any {
 	}
 	return nil
 }
+
+// vaultView is display metadata decrypted from one authenticated snapshot.
+type vaultView struct {
+	entries                 []vaultwarden.VaultEntry
+	folders                 []vaultwarden.Folder
+	organizations, isolated []vaultwarden.Organization
+	collections             []vaultwarden.Collection
+}
+
+// loadVaultView reads no app state, so a worker may run it while the UI stays
+// responsive. Its result is only adopted after adoptVaultView revalidates the
+// snapshot authority on the UI thread.
+func loadVaultView(session *vaultwarden.Session, vault *vaultwarden.VaultData) (*vaultView, error) {
+	var view vaultView
+	var err error
+	if view.entries, err = session.PersonalEntries(vault); err != nil {
+		return nil, err
+	}
+	if view.folders, err = session.PersonalFolders(vault); err != nil {
+		return nil, err
+	}
+	if view.organizations, view.collections, err = session.Organizations(vault); err != nil {
+		return nil, err
+	}
+	if view.isolated, err = session.IsolatedOrganizations(vault); err != nil {
+		return nil, err
+	}
+	orgEntries, err := session.OrganizationEntries(vault)
+	if err != nil {
+		return nil, err
+	}
+	view.entries = append(view.entries, orgEntries...)
+	return &view, nil
+}
+
 func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
+	return a.adoptVaultView(vault, nil, nil)
+}
+
+// adoptVaultView adopts a view loaded from vault, or loads it here when both
+// view and loadErr are nil.
+func (a *app) adoptVaultView(vault *vaultwarden.VaultData, view *vaultView, loadErr error) error {
 	if a.session != nil {
 		a.idleLock.start()
 	}
@@ -233,27 +274,17 @@ func (a *app) adoptVault(vault *vaultwarden.VaultData) error {
 	if err := session.ValidateAuthenticatedSnapshot(vault, a.sessionRevision); err != nil {
 		return err
 	}
-	entries, err := session.PersonalEntries(vault)
-	if err != nil {
-		return err
+	if loadErr != nil {
+		return loadErr
 	}
-	folders, err := session.PersonalFolders(vault)
-	if err != nil {
-		return err
+	if view == nil {
+		var err error
+		if view, err = loadVaultView(session, vault); err != nil {
+			return err
+		}
 	}
-	organizations, collections, err := session.Organizations(vault)
-	if err != nil {
-		return err
-	}
-	isolated, err := session.IsolatedOrganizations(vault)
-	if err != nil {
-		return err
-	}
-	orgEntries, err := session.OrganizationEntries(vault)
-	if err != nil {
-		return err
-	}
-	entries = append(entries, orgEntries...)
+	entries, folders := view.entries, view.folders
+	organizations, collections, isolated := view.organizations, view.collections, view.isolated
 	items := make([]localstore.DisplayCredential, 0, len(entries))
 	for _, e := range entries {
 		items = append(items, localstore.DisplayCredential{

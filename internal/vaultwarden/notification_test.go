@@ -242,3 +242,39 @@ func FuzzNotificationDecoder(f *testing.F) {
 		}
 	})
 }
+
+func TestNotificationOriginMarksOnlyOwnSyncHints(t *testing.T) {
+	scope := Scope{Server: "http://127.0.0.1", Account: "account"}
+	device := "4f0a2c1e-6b5d-4e3a-9c8b-7d6e5f4a3b21"
+	frame := func(typ int, context any) []byte {
+		m := map[string]any{"Type": typ, "Payload": map[string]any{"UserId": scope.Account, "Id": "b6d98b09-e6b1-42b0-93f1-d7f77aab9543"}, "ContextId": context}
+		return notificationPack([]any{1, map[string]any{}, nil, "ReceiveMessage", []any{m}})
+	}
+	for _, tc := range []struct {
+		name    string
+		typ     int
+		context any
+		device  string
+		own     bool
+	}{
+		{"own cipher update", 0, device, device, true},
+		{"own echo case-insensitive", 5, "4F0A2C1E-6B5D-4E3A-9C8B-7D6E5F4A3B21", device, true},
+		{"other device", 0, "00000000-0000-4000-8000-000000000000", device, false},
+		{"unknown origin", 0, nil, device, false},
+		{"non-string origin", 0, 7, device, false},
+		{"empty device id", 0, "", "", false},
+		{"logout is never skipped", 11, device, device, false},
+		{"auth request is never skipped", 15, device, device, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			event, err := decodeNotification(frame(tc.typ, tc.context), scope, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			event.markOrigin(tc.device)
+			if event.FromThisDevice != tc.own || event.contextID != "" {
+				t.Fatalf("origin %+v", event)
+			}
+		})
+	}
+}
