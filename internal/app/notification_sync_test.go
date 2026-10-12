@@ -72,7 +72,7 @@ func TestOwnEchoAfterDetachedSyncIsKept(t *testing.T) {
 type failingSyncSession struct{ syncs int }
 
 func (s *failingSyncSession) Close() {}
-func (s *failingSyncSession) SyncWithCheckpoint(context.Context, func(vaultwarden.SessionCheckpoint) error) (vaultwarden.SyncResult, error) {
+func (s *failingSyncSession) SyncWithWindow(context.Context, func(vaultwarden.SessionCheckpoint) error, vaultwarden.SyncWindow) (vaultwarden.SyncResult, error) {
 	s.syncs++
 	return vaultwarden.SyncResult{}, vaultwarden.ErrNetwork
 }
@@ -119,7 +119,11 @@ func TestOwnEchoWithoutSyncInFlightStillSyncs(t *testing.T) {
 func TestSyncViewLoadedOffUIIsDiscardedAfterLock(t *testing.T) {
 	f := newResourceControllerFixture(t)
 	f.refresh()
-	(<-f.q)() // network and publication done; authority accepted on the UI thread
+	// The read window opens and closes around the download; the third callback
+	// follows publication and accepts the authority on the UI thread.
+	for i := 0; i < 3; i++ {
+		(<-f.q)()
+	}
 	if f.a.pending != 1 {
 		t.Fatal("sync released pending before its view was adopted")
 	}

@@ -281,6 +281,9 @@ type Session struct {
 	// would allow responses to commit against stale security state. The cost is
 	// serialized session operations; operationMu lets Close cancel an in-flight
 	// request before waiting for mu, without weakening this ordering.
+	// The one exception is the GET of SyncWithWindow: it is read-only, and its
+	// response is discarded unless the authorization epoch, access token and
+	// lifecycle are unchanged when mu is reacquired.
 	mu                                       sync.Mutex
 	client                                   *Client
 	email, account, wrapped, access, refresh string
@@ -294,7 +297,8 @@ type Session struct {
 	closed                                   bool
 	checkpointPending                        bool
 	operationMu                              sync.Mutex
-	cancelOperation                          context.CancelFunc
+	operations                               map[uint64]context.CancelFunc // by operationMu
+	operationSeq                             uint64
 	stopping                                 bool
 	authorizationRevision                    string
 	authorizationEpoch                       uint64
@@ -310,8 +314,8 @@ func (s *Session) Close() {
 	}
 	s.operationMu.Lock()
 	s.stopping = true
-	if s.cancelOperation != nil {
-		s.cancelOperation()
+	for _, cancel := range s.operations {
+		cancel()
 	}
 	s.operationMu.Unlock()
 	s.mu.Lock()
@@ -379,13 +383,96 @@ func (s *Session) SyncWithCheckpoint(ctx context.Context, persist func(SessionCh
 	return s.syncLocked(ctx, persist)
 }
 
-func (s *Session) syncLocked(ctx context.Context, persist func(SessionCheckpoint) error) (SyncResult, error) {
-	// Starting a replacement sync revokes the previous offline authority even
-	// when download, identity validation or policy migration subsequently fails.
+// SyncWindow brackets the download of SyncWithWindow, during which the Session
+// lock is released. Both hooks run on the sync goroutine without the lock.
+type SyncWindow struct {
+	// Open runs once the request is prepared, after any token checkpoint was
+	// persisted. Reads of the installed snapshot may proceed from then on.
+	Open func()
+	// Close runs after the download and before the response is applied. It
+	// must return only once the caller has stopped those reads, or when ctx is
+	// done.
+	Close func(ctx context.Context)
+}
+
+// SyncWithWindow is SyncWithCheckpoint for a sync that must not block the
+// caller's reads of the installed snapshot while /api/sync downloads. Only the
+// GET runs without s.mu; refresh, checkpoint, revocation and all parsing,
+// decryption and authority changes stay serialized under it.
+func (s *Session) SyncWithWindow(ctx context.Context, persist func(SessionCheckpoint) error, window SyncWindow) (SyncResult, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	ctx, finish, err := s.beginOperationLocked(ctx)
+	if err != nil {
+		return SyncResult{}, err
+	}
+	defer finish()
+	status, data, err := s.downloadSyncReleasingLocked(ctx, persist, window)
+	return s.applySyncLocked(ctx, status, data, err)
+}
+
+// downloadSyncReleasingLocked revokes the previous offline authority like
+// syncLocked, but only once the download has returned, so the installed
+// snapshot stays readable meanwhile. It revokes on every outcome. A response
+// is used only when no authorization, token or lifecycle change happened while
+// s.mu was released; otherwise it is fetched again with the lock held.
+func (s *Session) downloadSyncReleasingLocked(ctx context.Context, persist func(SessionCheckpoint) error, window SyncWindow) (int, []byte, error) {
+	if err := s.prepareAuthenticatedDispatchLocked(ctx, false, persist, nil); err != nil {
+		s.revokeForSyncLocked()
+		return 0, nil, err
+	}
+	epoch, access := s.authorizationEpoch, s.access
+	s.mu.Unlock()
+	if window.Open != nil {
+		window.Open()
+	}
+	status, data, err := s.client.request(ctx, http.MethodGet, "/api/sync", "", "", access)
+	if window.Close != nil {
+		window.Close(ctx)
+	}
+	s.mu.Lock()
+	changed := s.authorizationEpoch != epoch || s.access != access
+	s.revokeForSyncLocked()
+	if ctx.Err() != nil || s.closingLocked() {
+		// Closing is the owner abandoning this sync, not a server-side expiry.
+		clear(data)
+		return 0, nil, ErrCancelled
+	}
+	if changed {
+		clear(data)
+		return s.authenticatedLocked(ctx, http.MethodGet, "/api/sync", "", "", persist)
+	}
+	if err != nil {
+		return status, nil, err
+	}
+	if status == http.StatusUnauthorized {
+		clear(data)
+		if err := s.refreshAndCheckpointLocked(ctx, persist); err != nil {
+			return status, nil, err
+		}
+		if err := s.prepareAuthenticatedDispatchLocked(ctx, false, persist, nil); err != nil {
+			return status, nil, err
+		}
+		return s.client.request(ctx, http.MethodGet, "/api/sync", "", "", s.access)
+	}
+	return status, data, nil
+}
+
+func (s *Session) revokeForSyncLocked() {
 	s.offlinePolicies = nil
 	s.checkpointPolicies = nil
 	s.advanceAuthorizationLocked()
+}
+
+func (s *Session) syncLocked(ctx context.Context, persist func(SessionCheckpoint) error) (SyncResult, error) {
+	// Starting a replacement sync revokes the previous offline authority even
+	// when download, identity validation or policy migration subsequently fails.
+	s.revokeForSyncLocked()
 	status, data, err := s.authenticatedLocked(ctx, http.MethodGet, "/api/sync", "", "", persist)
+	return s.applySyncLocked(ctx, status, data, err)
+}
+
+func (s *Session) applySyncLocked(ctx context.Context, status int, data []byte, err error) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, err
 	}

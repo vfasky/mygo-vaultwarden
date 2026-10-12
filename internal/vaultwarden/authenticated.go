@@ -52,7 +52,9 @@ func cipherUpdateStatusError(status int, data []byte) error {
 }
 
 // beginOperationLocked gives Close a way to cancel the network operation before
-// waiting for the session mutex. The caller owns mu for the operation's lifetime.
+// waiting for the session mutex. The caller owns mu for the operation's lifetime,
+// except while SyncWithWindow downloads; other operations may then begin, so
+// each operation keeps its own registration and Close cancels them all.
 func (s *Session) beginOperationLocked(ctx context.Context) (context.Context, func(), error) {
 	s.operationMu.Lock()
 	defer s.operationMu.Unlock()
@@ -63,15 +65,28 @@ func (s *Session) beginOperationLocked(ctx context.Context) (context.Context, fu
 		return nil, nil, ErrCancelled
 	}
 	operation, cancel := context.WithCancel(ctx)
-	s.cancelOperation = cancel
+	if s.operations == nil {
+		s.operations = map[uint64]context.CancelFunc{}
+	}
+	s.operationSeq++
+	id := s.operationSeq
+	s.operations[id] = cancel
 	s.writePolicies = nil
 	return operation, func() {
 		s.writePolicies = nil
 		cancel()
 		s.operationMu.Lock()
-		s.cancelOperation = nil
+		delete(s.operations, id)
 		s.operationMu.Unlock()
 	}, nil
+}
+
+// closingLocked reports whether Close has begun. Close sets stopping under
+// operationMu before it waits for mu, so mu alone does not guard it.
+func (s *Session) closingLocked() bool {
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	return s.stopping || s.closed
 }
 
 func (s *Session) persistPendingLocked(persist func(SessionCheckpoint) error) error {

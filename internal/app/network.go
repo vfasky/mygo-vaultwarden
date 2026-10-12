@@ -15,8 +15,16 @@ import (
 )
 
 type vaultSession interface {
-	SyncWithCheckpoint(context.Context, func(vaultwarden.SessionCheckpoint) error) (vaultwarden.SyncResult, error)
+	SyncWithWindow(context.Context, func(vaultwarden.SessionCheckpoint) error, vaultwarden.SyncWindow) (vaultwarden.SyncResult, error)
 	Close()
+}
+
+// readsBlocked reports whether the adopted snapshot must not be read now. Any
+// operation in flight blocks reads, except a background sync while it is
+// downloading: the Session then still authorizes the adopted snapshot, and no
+// storage revision changes until the sync closes that window again.
+func (a *app) readsBlocked() bool {
+	return a.pending != 0 && !(a.pending == 1 && a.syncReads && a.syncEpoch == a.epoch)
 }
 
 // Only this session's successful publication/checkpoint or a fresh authenticated
@@ -188,7 +196,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 	}
 	a.cancel = cancel
 	a.pending++
-	a.syncEpoch = epoch
+	a.syncEpoch, a.syncReads = epoch, false
 	// This download starts after every hint received so far, so it covers them.
 	// The hint is handed back below unless this sync's result is adopted.
 	coveredHint := !login && a.notificationSyncPending
@@ -271,7 +279,11 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 					return err
 				}
 			}
-			result, workErr = session.SyncWithCheckpoint(ctx, persist)
+			var window vaultwarden.SyncWindow
+			if !login {
+				window = a.syncReadWindow(epoch, dispatch, func() *localstore.SnapshotStatus { return checkpointState })
+			}
+			result, workErr = session.SyncWithWindow(ctx, persist, window)
 		}
 		if workErr == nil && ctx.Err() == nil {
 			metadata = make([]localstore.DisplayCredential, 0, len(result.Credentials))
@@ -329,7 +341,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 		finish := func(adopted bool) {
 			a.pending--
 			if a.syncEpoch == epoch {
-				a.syncEpoch = 0
+				a.syncEpoch, a.syncReads = 0, false
 			}
 			// A stopped or replaced session already discarded its hints.
 			if coveredHint && !adopted && a.session != nil && a.session == existing {
@@ -437,6 +449,41 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			}()
 		})
 	}()
+}
+
+// syncReadWindow lets the UI keep reading the adopted snapshot while the sync
+// of epoch downloads. checkpoint reports, on the sync goroutine, the token
+// checkpoint persisted so far; reads must use its revision.
+func (a *app) syncReadWindow(epoch uint64, dispatch func(func()), checkpoint func() *localstore.SnapshotStatus) vaultwarden.SyncWindow {
+	return vaultwarden.SyncWindow{
+		Open: func() {
+			state := checkpoint()
+			dispatch(func() {
+				if a.epoch != epoch || a.syncEpoch != epoch {
+					return
+				}
+				// A failed adoption keeps reads closed; the sync's final
+				// callback adopts the same checkpoint again and reports it.
+				if state != nil && !a.adoptSessionCheckpoint(state) {
+					return
+				}
+				a.syncReads = true
+			})
+		},
+		Close: func(ctx context.Context) {
+			closed := make(chan struct{})
+			dispatch(func() {
+				if a.syncEpoch == epoch {
+					a.syncReads = false
+				}
+				close(closed)
+			})
+			select {
+			case <-closed:
+			case <-ctx.Done():
+			}
+		},
+	}
 }
 
 // syncSummaryStatus remembers the numbers behind the status line a sync left,

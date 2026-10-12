@@ -34,7 +34,7 @@ func (a *app) copyDetailSecret(item localstore.DisplayCredential, kind string, s
 // protected native path, which clears it after its deadline. Callers revoke
 // earlier runtime secrets first (prepareRuntimeSecret).
 func (a *app) copyItemSecret(id string, organization bool, kind string, grant *vaultwarden.ItemAuthorization, storage func(localstore.Request) localstore.Reply) {
-	if a.pending != 0 || id == "" || !a.sessionOwnsSnapshot() {
+	if a.readsBlocked() || id == "" || !a.sessionOwnsSnapshot() {
 		return
 	}
 	s, ok := a.session.(*vaultwarden.Session)
@@ -67,7 +67,7 @@ func (a *app) copyItemSecret(id string, organization bool, kind string, grant *v
 func (a *app) showPersonalSecret(kind string, storage func(localstore.Request) localstore.Reply) {
 	a.prepareRuntimeSecret()
 	e := a.editor
-	if a.pending != 0 || e == nil || e.fields.ID == "" || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
+	if a.readsBlocked() || e == nil || e.fields.ID == "" || e.uncertain || !a.sessionOwnsSnapshot() || e.revision != a.sessionRevision {
 		return
 	}
 	s, ok := a.session.(*vaultwarden.Session)

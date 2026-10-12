@@ -8,6 +8,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -220,8 +221,9 @@ func TestAuthenticatedSnapshotBoundsAndAmbiguousSession(t *testing.T) {
 }
 
 func TestSyncReplacementRevokesInstalledSnapshot(t *testing.T) {
-	for _, scenario := range []string{"success", "missing-policy", "network-failure", "wrong-identity"} {
-		t.Run(scenario, func(t *testing.T) {
+	for _, name := range []string{"success", "missing-policy", "network-failure", "wrong-identity", "window/success", "window/missing-policy", "window/network-failure", "window/wrong-identity"} {
+		scenario, windowed := strings.TrimPrefix(name, "window/"), strings.HasPrefix(name, "window/")
+		t.Run(name, func(t *testing.T) {
 			body := emptyPolicySyncFixture()
 			raw, _ := json.Marshal(body)
 			switch scenario {
@@ -244,7 +246,11 @@ func TestSyncReplacementRevokesInstalledSnapshot(t *testing.T) {
 			if err := s.AcceptAuthenticatedSnapshot(v, "r"); err != nil {
 				t.Fatal(err)
 			}
-			result, err := s.Sync(context.Background())
+			sync := s.Sync
+			if windowed {
+				sync = func(ctx context.Context) (SyncResult, error) { return s.SyncWithWindow(ctx, nil, SyncWindow{}) }
+			}
+			result, err := sync(context.Background())
 			defer clear(result.Session)
 			if result.PasswordUnlock != nil {
 				defer clear(result.PasswordUnlock.Key)

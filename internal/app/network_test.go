@@ -19,7 +19,7 @@ type testVaultSession struct {
 }
 
 func (s *testVaultSession) Close() { s.once.Do(func() { close(s.closed) }) }
-func (s *testVaultSession) SyncWithCheckpoint(context.Context, func(vaultwarden.SessionCheckpoint) error) (vaultwarden.SyncResult, error) {
+func (s *testVaultSession) SyncWithWindow(context.Context, func(vaultwarden.SessionCheckpoint) error, vaultwarden.SyncWindow) (vaultwarden.SyncResult, error) {
 	panic("revoked session must never sync")
 }
 func onlineTestApp() (*app, *testVaultSession) {

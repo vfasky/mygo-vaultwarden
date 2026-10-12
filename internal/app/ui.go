@@ -692,7 +692,7 @@ func (a *app) credentialSecrets(c *ui.Context, item localstore.DisplayCredential
 	if item.Type != 0 && item.Type != 1 {
 		return
 	}
-	secretsLocked := a.pending != 0 || a.vault == nil || !a.sessionOwnsSnapshot() || item.OrganizationID != ""
+	secretsLocked := a.readsBlocked() || a.vault == nil || !a.sessionOwnsSnapshot() || item.OrganizationID != ""
 	hint := ""
 	if item.RequiresPassword {
 		hint = i18n.T("app.detail.reprompt_copy_hint")

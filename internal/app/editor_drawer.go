@@ -127,7 +127,7 @@ func (a *app) drawerHeader(c *ui.Context, title, subtitle string) bool {
 }
 
 func (a *app) canCloseDrawerEditor() bool {
-	if a.pending != 0 {
+	if a.readsBlocked() {
 		return false
 	}
 	if a.bulkEditor != nil || a.organizationEditor != nil || a.folderEditor != nil {

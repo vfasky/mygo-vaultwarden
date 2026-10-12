@@ -522,16 +522,16 @@ func (a *app) cipherEditorView(c *ui.Context) {
 				if e.fields.Type == 1 {
 					if e.fields.ID != "" {
 						ui.Row(c).Gap(8).Wrap().Children(func() {
-							if kit.Button(c, i18n.T("vault.editor.show_saved_password"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+							if kit.Button(c, i18n.T("vault.editor.show_saved_password"), "", kit.ButtonQuiet, a.readsBlocked() || e.uncertain).Clicked() {
 								a.showPersonalSecret("password", callStorage)
 							}
-							if kit.Button(c, i18n.T("vault.editor.show_current_code"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+							if kit.Button(c, i18n.T("vault.editor.show_current_code"), "", kit.ButtonQuiet, a.readsBlocked() || e.uncertain).Clicked() {
 								a.showPersonalSecret("totp", callStorage)
 							}
-							if kit.Button(c, i18n.T("vault.editor.copy_saved_password"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+							if kit.Button(c, i18n.T("vault.editor.copy_saved_password"), "", kit.ButtonQuiet, a.readsBlocked() || e.uncertain).Clicked() {
 								a.copyPersonalSecret("password", callStorage)
 							}
-							if kit.Button(c, i18n.T("vault.editor.copy_current_code"), "", kit.ButtonQuiet, a.pending != 0 || e.uncertain).Clicked() {
+							if kit.Button(c, i18n.T("vault.editor.copy_current_code"), "", kit.ButtonQuiet, a.readsBlocked() || e.uncertain).Clicked() {
 								a.copyPersonalSecret("totp", callStorage)
 							}
 						})

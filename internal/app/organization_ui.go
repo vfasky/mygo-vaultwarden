@@ -103,16 +103,16 @@ func (a *app) readOnlyOrganizationCipherView(c *ui.Context, e *cipherEditor) {
 				}
 			}
 			if e.fields.Type == 1 {
-				if kit.Action(c, i18n.T("org.share.show_password"), "", false, a.pending != 0).Clicked() {
+				if kit.Action(c, i18n.T("org.share.show_password"), "", false, a.readsBlocked()).Clicked() {
 					a.showPersonalSecret("password", callStorage)
 				}
-				if kit.Action(c, i18n.T("org.share.copy_password"), "", false, a.pending != 0).Clicked() {
+				if kit.Action(c, i18n.T("org.share.copy_password"), "", false, a.readsBlocked()).Clicked() {
 					a.copyPersonalSecret("password", callStorage)
 				}
-				if kit.Action(c, i18n.T("org.share.show_totp"), "", false, a.pending != 0).Clicked() {
+				if kit.Action(c, i18n.T("org.share.show_totp"), "", false, a.readsBlocked()).Clicked() {
 					a.showPersonalSecret("totp", callStorage)
 				}
-				if kit.Action(c, i18n.T("org.share.copy_totp"), "", false, a.pending != 0).Clicked() {
+				if kit.Action(c, i18n.T("org.share.copy_totp"), "", false, a.readsBlocked()).Clicked() {
 					a.copyPersonalSecret("totp", callStorage)
 				}
 			}

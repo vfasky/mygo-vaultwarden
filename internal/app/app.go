@@ -80,6 +80,7 @@ type app struct {
 	notifications                             *controllerNotifications
 	notificationSyncPending                   bool
 	syncEpoch                                 uint64 // epoch of the sync in flight, or 0
+	syncReads                                 bool   // that sync is downloading; see readsBlocked
 	session                                   vaultSession
 	sessionRevision                           string
 	liveScope                                 *vaultwarden.Scope
