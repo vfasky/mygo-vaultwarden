@@ -7,6 +7,7 @@ import (
 
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/organization"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/uitest"
 )
 
 func preparedResourceTrash(t *testing.T) *resourceControllerFixture {
@@ -60,8 +61,16 @@ func TestResourceControllerTrashPreflightCanBeExplicitlyRetried(t *testing.T) {
 			}
 			form := resourceTrashForm(f)
 			form.Frame()
+			if form.HasText("全部文件核验后，确认将目标移入原计划的回收站：card-1") {
+				t.Fatal("deletion confirmation is still inline")
+			}
+			uitest.Click(t, form, "确认移入回收站")
 			if !form.HasText("全部文件核验后，确认将目标移入原计划的回收站：card-1") || !form.HasText(m.rows[0].Problem) {
 				t.Fatal("confirmation/error hidden")
+			}
+			uitest.Click(t, form, "取消")
+			if m.confirmTrash != "" || f.trashes != 0 {
+				t.Fatal("cancel submitted a deletion")
 			}
 			f.mu.Lock()
 			f.failLease, f.failDownload = false, false

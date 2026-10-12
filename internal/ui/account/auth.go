@@ -5,6 +5,7 @@ import (
 	"context"
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -101,11 +102,16 @@ func AuthFormView(c *ui.Context, f *AuthForm, providers map[int]string) {
 	if f.remember {
 		ui.Text(c, i18n.T("account.mfa.remember_device_hint"))
 	}
-	label := i18n.T("account.mfa.continue_verification")
 	if f.Confirming {
-		label = i18n.T("account.mfa.confirm_disable_all_login")
+		kit.ConfirmDialog(c, "mfa-recovery", i18n.T("account.mfa.use_recovery_code"), i18n.T("account.mfa.confirm_recovery_code_impact"), i18n.T("account.mfa.confirm_disable_all_login"), i18n.T("common.cancel"), f.Busy,
+			f.Dispatch, func() {
+				if !f.Busy {
+					f.Confirming = false
+					f.Status = ""
+				}
+			})
 	}
-	if ui.Button(c, label).Disabled(f.Busy).Clicked() {
+	if ui.Button(c, i18n.T("account.mfa.continue_verification")).Disabled(f.Busy || f.Confirming).Clicked() {
 		f.Dispatch()
 	}
 	if ui.Button(c, i18n.T("account.mfa.cancel_clear_input")).Clicked() {

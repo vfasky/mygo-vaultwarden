@@ -99,9 +99,11 @@ func (a *app) cipherComparisonView(c *ui.Context) {
 		}
 	}
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		if a.drawerHeader(c, i18n.T("vault.compare.title"), i18n.T("vault.compare.description")) {
+			return
+		}
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(16).Padding(20).Children(func() {
-				kit.PageHeader(c, i18n.T("vault.compare.title"), i18n.T("vault.compare.description"), nil)
 				if e.uncertain {
 					kit.Notice(c, kit.ToneWarning, i18n.T("vault.compare.uncertain_hint"))
 				}

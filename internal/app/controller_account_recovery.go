@@ -12,6 +12,7 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/platform/sysauth"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -62,10 +63,15 @@ func (a *app) accountRecoveryView(c *ui.Context) {
 	}
 	ui.Text(c, i18n.T("account.recovery.delete_local_copy_hint")).MaxLines(3)
 	if ui.Button(c, i18n.T("account.recovery.confirm_delete_local_copy")).Disabled(f.busy).Clicked() {
-		f.deleteConfirmed = !f.deleteConfirmed
+		f.deleteConfirmed = true
 	}
-	if f.deleteConfirmed && ui.Button(c, i18n.T("account.recovery.delete_local_copy")).Disabled(f.busy || f.oldPassword == "").Clicked() {
-		a.resolveAccountRecoveryWith(true, a.postUI, localstore.Call)
+	if f.deleteConfirmed {
+		kit.ConfirmDialog(c, "recovery-delete", i18n.T("account.recovery.delete_local_copy"), i18n.T("account.recovery.delete_local_copy_hint"), i18n.T("account.recovery.delete_local_copy"), i18n.T("common.cancel"), f.busy || f.oldPassword == "",
+			func() { a.resolveAccountRecoveryWith(true, a.postUI, localstore.Call) }, func() {
+				if !f.busy {
+					f.deleteConfirmed = false
+				}
+			})
 	}
 	if ui.Button(c, i18n.T("account.recovery.cancel_keep_records")).Clicked() {
 		a.runStorage(localstore.OperationLock)

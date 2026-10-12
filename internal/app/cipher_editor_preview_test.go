@@ -127,15 +127,15 @@ func TestVaultEditorFooterStaysVisibleAndPendingBlocksCancel(t *testing.T) {
 	}
 	a.pending = 1
 	tt.Frame()
-	uitest.Click(t, tt, i18n.T("common.cancel"))
+	tt.ClickAt(1245, 49)
 	if a.editor == nil {
-		t.Fatal("pending cancel discarded draft")
+		t.Fatal("pending close discarded draft")
 	}
 	a.pending = 0
 	tt.Frame()
-	uitest.Click(t, tt, i18n.T("common.cancel"))
+	tt.ClickAt(1245, 49)
 	if a.editor != nil {
-		t.Fatal("cancel did not close draft")
+		t.Fatal("close did not close draft")
 	}
 }
 

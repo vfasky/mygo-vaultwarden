@@ -22,6 +22,7 @@ type backupResourceEditor struct {
 	rows         []organization.ResourceRow
 	targets      map[string]string
 	trash        []string
+	confirmTrash string
 	finalized    map[string]bool
 	trashPending map[string]bool
 	password     string
@@ -272,12 +273,19 @@ func (a *app) backupResourceRestoreView(c *ui.Context, e *backupEditor) {
 			ui.Text(c, i18n.Tf("backup.resource.status_trash_pending", target))
 			continue
 		}
-		kit.Notice(c, kit.ToneWarning, i18n.Tf("backup.resource.confirm_trash", target))
 		ui.Row(c).Children(func() {
 			if kit.Button(c, i18n.T("backup.resource.move_to_trash"), "", kit.ButtonDanger, busy || !ready).Clicked() {
-				a.runResourceRestore(0, false, source)
+				m.confirmTrash = source
 			}
 		})
+		if m.confirmTrash == source {
+			kit.ConfirmDialog(c, "resource-trash", i18n.T("backup.resource.move_to_trash"), i18n.Tf("backup.resource.confirm_trash", target), i18n.T("common.confirm"), i18n.T("common.cancel"), busy || !ready,
+				func() { a.runResourceRestore(0, false, source); m.confirmTrash = "" }, func() {
+					if !busy {
+						m.confirmTrash = ""
+					}
+				})
+		}
 	}
 }
 func resourceTrashTarget(m *backupResourceEditor, source string) (string, bool) {

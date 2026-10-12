@@ -13,10 +13,14 @@ import (
 	"github.com/vfasky/mygo-vaultwarden/internal/localstore"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/send"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/websiteicons"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
 type app struct {
+	websiteIcons                              *websiteicons.Cache
+	websiteIconScope                          vaultwarden.Scope
+	websiteIconsEnabled                       bool
 	category, selectedID                      string
 	showLogin                                 bool
 	sidebarCollapsed                          bool
@@ -245,6 +249,7 @@ func Run() {
 	a := &app{
 		status:                  i18n.T("app.sync.status_reading_storage"),
 		notificationsEnabled:    true,
+		websiteIconsEnabled:     true,
 		sidebarTypesCollapsed:   true,
 		sidebarFoldersCollapsed: true,
 	}

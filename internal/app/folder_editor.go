@@ -91,21 +91,20 @@ func (a *app) folderPicker(c *ui.Context, selected **string, disabled bool) {
 func (a *app) folderEditorView(c *ui.Context) {
 	e := a.folderEditor
 	ui.Column(c.Key("folder-editor")).Grow(1).MinHeight(0).Children(func() {
+		title := i18n.T("vault.folder.add_title")
+		if e.id != "" {
+			title = i18n.T("vault.folder.manage_title")
+		}
+		if a.drawerHeader(c, title, i18n.T("vault.folder.description")) {
+			return
+		}
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Padding(20).Gap(16).Children(func() {
-				title := i18n.T("vault.folder.add_title")
-				if e.id != "" {
-					title = i18n.T("vault.folder.manage_title")
-				}
-				kit.PageHeader(c, title, i18n.T("vault.folder.description"), nil)
 				kit.Section(c, i18n.T("vault.editor.basic_information"), func() {
 					kit.Field(c, i18n.T("vault.folder.name"), "", func() {
 						kit.Input(ui.TextInput(c, &e.name).Label(i18n.T("vault.folder.name")).Disabled(a.pending != 0 || e.uncertain))
 					})
 				})
-				if e.confirm {
-					kit.Notice(c, kit.ToneWarning, i18n.T("vault.folder.confirm_delete_hint"))
-				}
 				if e.uncertain {
 					kit.Notice(c, kit.ToneWarning, i18n.T("vault.folder.uncertain_hint"))
 					if kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
@@ -115,28 +114,23 @@ func (a *app) folderEditorView(c *ui.Context) {
 			})
 		})
 		kit.ActionBar(c, func() {
-			if e.confirm {
-				if kit.Button(c, i18n.T("vault.folder.confirm_delete"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
-					a.mutateFolder(true)
-				}
-				ui.Spacer(c)
-				if kit.Action(c, i18n.T("vault.folder.cancel_delete"), "", false, a.pending != 0).Clicked() {
-					e.confirm = false
-				}
-			} else {
-				if e.id != "" && kit.Button(c, i18n.T("vault.folder.delete"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
-					e.confirm = true
-				}
-				ui.Spacer(c)
+			if e.id != "" && kit.Button(c, i18n.T("vault.folder.delete"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
+				e.confirm = true
 			}
-			if kit.Action(c, i18n.T("vault.folder.close"), "", false, a.pending != 0).Clicked() {
-				a.folderEditor = nil
-			}
+			ui.Spacer(c)
 			if !e.confirm && kit.Action(c, i18n.T("vault.folder.save"), "", true, a.pending != 0 || e.uncertain || e.name == "").Clicked() {
 				a.mutateFolder(false)
 			}
 		}).Margin(0, 20) // in line with the padded content above
 	})
+	if e.confirm {
+		kit.ConfirmDialog(c, "folder-delete", i18n.T("vault.folder.delete"), e.name+"\n\n"+i18n.T("vault.folder.confirm_delete_hint"), i18n.T("vault.folder.confirm_delete"), i18n.T("vault.folder.cancel_delete"), a.pending != 0 || e.uncertain,
+			func() { a.mutateFolder(true) }, func() {
+				if a.pending == 0 {
+					e.confirm = false
+				}
+			})
+	}
 }
 
 func (a *app) mutateFolder(remove bool) {

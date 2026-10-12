@@ -187,9 +187,6 @@ func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
 			}
 		})
 		label := i18n.T("common.continue")
-		if f.confirming {
-			label = i18n.T("account.mfa.confirm_operation")
-		}
 		kit.Section(c, i18n.T("account.mfa.configuration_title"), func() {
 			accountInput(c, &f.password, i18n.T("account.mfa.master_password_hint")).Password().Disabled(f.busy)
 			accountInput(c, &f.otp, i18n.T("account.mfa.sensitive_email_otp")).Password().Disabled(f.busy)
@@ -220,14 +217,20 @@ func AuthManagementView(c *ui.Context, f *AuthManagementForm) {
 			}
 		})
 		if f.confirming {
-			kit.Notice(c, kit.ToneWarning, i18n.T("account.mfa.confirm_settings_impact"))
+			kit.ConfirmDialog(c, "mfa-change", i18n.T("account.mfa.configuration_title"), i18n.T("account.mfa.confirm_settings_impact"), i18n.T("account.mfa.confirm_operation"), i18n.T("common.cancel"), f.busy || f.uncertain,
+				f.dispatch, func() {
+					if !f.busy {
+						f.confirming = false
+						f.status = ""
+					}
+				})
 		}
 		kit.ActionBar(c, func() {
 			ui.Text(c, f.status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0)
 			if kit.Button(c, i18n.T("account.mfa.cancel_clear_authentication"), "", kit.ButtonSecondary, false).Clicked() {
 				f.Close()
 			}
-			if kit.Button(c, label, "", kit.ButtonPrimary, f.busy || (f.uncertain && f.operation != vaultwarden.MFAList)).Clicked() {
+			if kit.Button(c, label, "", kit.ButtonPrimary, f.busy || f.confirming || (f.uncertain && f.operation != vaultwarden.MFAList)).Clicked() {
 				f.dispatch()
 			}
 		})

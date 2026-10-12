@@ -221,7 +221,7 @@ func (a *app) sidebarToggle(c *ui.Context) {
 	if a.sidebarCollapsed {
 		label = i18n.T("app.sidebar.expand")
 	}
-	if kit.TitleBarButton(c, label, "panel-left").Key("sidebar-toggle").Clicked() {
+	if kit.TitleBarButton(c.Key("sidebar-toggle"), label, "panel-left").Clicked() {
 		a.sidebarCollapsed = !a.sidebarCollapsed
 	}
 }
@@ -243,27 +243,15 @@ func (a *app) header(c *ui.Context) {
 			a.sidebarToggle(c)
 		}
 		ui.Spacer(c)
-		if kit.ToolbarButton(c, i18n.T("app.toolbar.import_export"), "vault", false, a.pending != 0 || a.vault == nil || a.mainEditorOpen()).Clicked() {
-			a.runMenuCommand(menuBackup)
-		}
-		if kit.ToolbarButton(c, i18n.T("app.toolbar.add"), "key", false, a.pending != 0 || a.vault == nil || a.mainEditorOpen()).Clicked() {
-			a.runMenuCommand(menuNew)
-		}
-		if kit.ToolbarButton(c, i18n.T("vault.bulk.title"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
-			a.openBulkEditor(false)
-		}
-		if a.category == "trash" && kit.ToolbarButton(c, i18n.T("app.toolbar.empty_trash"), "vault", false, a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil).Clicked() {
-			a.openBulkEditor(true)
-		}
+		// Only app-wide state lives here; list actions sit on the list header
+		// and import/export beside the account center.
 		if kit.ToolbarButton(c, i18n.T("common.sync"), "sync", false, a.pending != 0 || !a.sessionOwnsSnapshot()).Clicked() {
 			a.runMenuCommand(menuSync)
 		}
 		if kit.ToolbarButton(c, i18n.T("common.lock"), "lock", true, false).Clicked() {
 			a.runMenuCommand(menuLock)
 		}
-		if ui.Button(c, "").Label(i18n.T("app.window.settings_title")).Tooltip(i18n.T("app.window.settings_title")).Size(32, 32).Padding(7).Radius(16).
-			Border(1, ui.RGBA(255, 255, 255, .7)).Background(ui.RGBA(255, 255, 255, .55)).
-			Children(func() { kit.Icon(c, "settings", 16) }).Clicked() {
+		if kit.ToolbarIconButton(c, i18n.T("app.window.settings_title"), "settings", false).Clicked() {
 			a.showSettingsWindow("")
 		}
 	})
@@ -472,9 +460,20 @@ func (a *app) sidebarContent(c *ui.Context, width float32) {
 	})
 	ui.Column(c).Gap(6).Shrink(0).Padding(0, inset).Children(func() {
 		ui.Box(c).Height(1).Margin(0, 4).Background(ui.RGBA(38, 30, 62, .08))
-		if navItem(c, i18n.T("app.window.account_center_title"), "user", "", false, !a.unlocked() || a.showLogin).Clicked() {
-			a.runMenuCommand(menuAccount)
+		// Import/export is rare: a bare symbol beside the account center, or
+		// a rail icon of its own while the sidebar is collapsed.
+		backupBusy := a.pending != 0 || a.vault == nil || a.mainEditorOpen()
+		if collapsed && navItem(c, i18n.T("app.toolbar.import_export"), "transfer", "", false, backupBusy).Clicked() {
+			a.runMenuCommand(menuBackup)
 		}
+		ui.Row(c).Gap(4).AlignItems(ui.Center).Children(func() {
+			if navItem(c, i18n.T("app.window.account_center_title"), "user", "", false, !a.unlocked() || a.showLogin).Grow(1).MinWidth(0).Clicked() {
+				a.runMenuCommand(menuAccount)
+			}
+			if !collapsed && kit.IconAction(c, i18n.T("app.toolbar.import_export"), "transfer", backupBusy).Clicked() {
+				a.runMenuCommand(menuBackup)
+			}
+		})
 	})
 }
 
@@ -489,10 +488,17 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 		width = 330
 	}
 	ui.Column(c).Width(width).Shrink(0).Padding(12).Gap(12).Background(kit.Panel).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65)).Children(func() {
-		ui.Row(c).Padding(10, 8, 0, 8).Children(func() {
-			ui.Text(c, a.currentCategory().title).FontSize(22).FontWeight(650)
+		ui.Row(c).Padding(10, 4, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, a.currentCategory().title).FontSize(22).FontWeight(650).MinWidth(0).SingleLine()
 			ui.Spacer(c)
 			kit.Pill(c, fmt.Sprint(len(items)), kit.White, kit.Muted)
+			busy := a.pending != 0 || a.vault == nil || a.editor != nil || a.folderEditor != nil || a.bulkEditor != nil || a.backupEditor != nil
+			if a.category == "trash" && kit.IconAction(c, i18n.T("app.toolbar.empty_trash"), "trash", busy).Clicked() {
+				a.openBulkEditor(true)
+			}
+			if kit.IconAction(c, i18n.T("vault.bulk.title"), "select", busy).Clicked() {
+				a.openBulkEditor(false)
+			}
 		})
 		field := ui.Row(c.Key("vault-search")).Background(kit.White).Radius(22).Padding(0, 12).Height(43).Gap(8)
 		field.Children(func() {
@@ -546,7 +552,7 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 					row.Background(ui.RGBA(255, 255, 255, .55))
 				}
 				row.Children(func() {
-					credentialAvatar(c, item, 40)
+					a.credentialAvatar(c, item, 40)
 					ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
 						ui.Text(c, displayTitle(item)).FontSize(14).FontWeight(600).SingleLine()
 						subtitle := item.Username
@@ -602,12 +608,17 @@ func safeWebsite(raw string) bool {
 	return err == nil && u.Hostname() != "" && (u.Scheme == "https" || u.Scheme == "http")
 }
 
-func credentialAvatar(c *ui.Context, item localstore.DisplayCredential, size float32) {
+func (a *app) credentialAvatar(c *ui.Context, item localstore.DisplayCredential, size float32) {
+	bitmap := a.websiteIcon(c, item)
 	colors := []ui.Color{ui.Hex("#E9E2F7"), ui.Hex("#E0EAE9"), ui.Hex("#F2E7DE"), ui.Hex("#DFE7F2")}
 	r, _ := utf8.DecodeRuneInString(displayTitle(item))
 	index := int(r) % len(colors)
-	ui.Row(c).Size(size, size).Shrink(0).Justify(ui.Center).Radius(size * .31).Background(colors[index]).Children(func() {
-		ui.Text(c, strings.ToUpper(string(r))).FontSize(size * .43).FontWeight(650).TextColor(kit.Ink)
+	ui.Row(c).Size(size, size).Shrink(0).Justify(ui.Center).AlignItems(ui.Center).Radius(size * .31).Background(colors[index]).Children(func() {
+		if bitmap != nil {
+			ui.Image(c, bitmap).Size(size*.7, size*.7).Fit(ui.Contain)
+		} else {
+			ui.Text(c, strings.ToUpper(string(r))).FontSize(size * .43).FontWeight(650).TextColor(kit.Ink)
+		}
 	})
 }
 
@@ -623,20 +634,23 @@ func (a *app) credentialDetail(c *ui.Context, item localstore.DisplayCredential)
 				}
 				ui.Text(c, kind).FontSize(12).TextColor(kit.Muted)
 				ui.Spacer(c)
-				if kit.Action(c, i18n.T("app.detail.view_edit"), "", false, a.pending != 0 || (!item.Editable && !item.Readable && !item.RequiresPassword) || a.vault == nil).Clicked() {
-					a.openCipherEditor(item.ID, item.Type)
-				}
+				a.addButton(c)
 			})
 			ui.Row(c).Gap(16).AlignItems(ui.Center).Children(func() {
-				credentialAvatar(c, item, 60)
+				a.credentialAvatar(c, item, 60)
 				ui.Column(c).Grow(1).MinWidth(0).Gap(6).Children(func() {
 					ui.Text(c, displayTitle(item)).FontSize(29).FontWeight(650).MaxLines(2).Tooltip(displayTitle(item))
 					ui.Text(c, websiteHost(item.URL)).FontSize(13).TextColor(kit.Muted).SingleLine()
 				})
 			})
-			if kit.Action(c, i18n.T("app.detail.open_website"), "external", true, !safeWebsite(item.URL)).AlignSelf(ui.Start).Clicked() {
-				c.OpenURL(item.URL)
-			}
+			ui.Row(c).Gap(8).AlignItems(ui.Center).Children(func() {
+				if kit.Action(c, i18n.T("app.detail.open_website"), "external", true, !safeWebsite(item.URL)).Clicked() {
+					c.OpenURL(item.URL)
+				}
+				if kit.Action(c, i18n.T("app.detail.edit"), "edit", false, a.pending != 0 || (!item.Editable && !item.Readable && !item.RequiresPassword) || a.vault == nil).Clicked() {
+					a.openCipherEditor(item.ID, item.Type)
+				}
+			})
 			kit.DetailCard(c, i18n.T("app.detail.login_information"), func() { a.credentialSecrets(c, item) })
 			kit.DetailCard(c, i18n.T("vault.field.website"), func() { kit.DetailField(c, i18n.T("app.detail.login_url"), item.URL, i18n.T("app.detail.no_website")) })
 			kit.Section(c, i18n.T("app.detail.secure_autofill"), func() {
@@ -713,7 +727,17 @@ func detailCopyRow(c *ui.Context, label, value string, empty bool, copyLabel str
 	return clicked
 }
 
+func (a *app) addButton(c *ui.Context) {
+	if kit.Action(c, i18n.T("app.toolbar.add"), "plus", false, a.pending != 0 || a.vault == nil || a.mainEditorOpen()).Clicked() {
+		a.runMenuCommand(menuNew)
+	}
+}
+
 func (a *app) emptyDetail(c *ui.Context) {
+	ui.Row(c).Padding(20, 20, 0, 20).Children(func() {
+		ui.Spacer(c)
+		a.addButton(c)
+	})
 	kit.EmptyState(c, "vault", i18n.T("app.detail.select_item"), i18n.T("app.detail.empty_hint"))
 }
 

@@ -36,6 +36,7 @@ type ResourceRestorePanel struct {
 	running, Closed, NeedsRefresh bool
 	cancel                        context.CancelFunc
 	status                        string
+	confirmTrash                  string
 }
 
 func NewResourceRestorePanel(plan *vaultwarden.ResourceImportPlan, targets map[string]string, copyOnly bool, callbacks ResourceCallbacks) *ResourceRestorePanel {
@@ -126,7 +127,7 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 		ui.Text(c, i18n.Tf("org.resource.file_source_status", row.Resource.FileName, row.Resource.CipherID, row.Resource.AttachmentID, ResourceStateText(row.State))).MaxLines(3)
 		ui.TextInput(c, &row.Target).Label(i18n.T("org.resource.target_item")).Disabled(busy || row.State == ResourceVerified)
 		ui.TextInput(c, &row.AttachmentID).Label(i18n.T("org.resource.target_attachment")).Disabled(busy || row.State == ResourceVerified)
-		if kit.Action(c, i18n.T("org.resource.confirm_upload_once"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.State != ResourceNotStarted || p.Callbacks.File == nil).Key(fmt.Sprintf("org-resource-upload-%d", i)).Clicked() {
+		if kit.Action(c.Key(fmt.Sprintf("org-resource-upload-%d", i)), i18n.T("org.resource.confirm_upload_once"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.State != ResourceNotStarted || p.Callbacks.File == nil).Clicked() {
 			index, target := i, row.Target
 			plan, execute := p.plan, p.Callbacks.File
 			p.Run(func(ctx context.Context) (func(), error) {
@@ -142,7 +143,7 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 				}, err
 			})
 		}
-		if kit.Action(c, i18n.T("org.resource.download_verify"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.AttachmentID == "" || row.State == ResourceVerified || p.Callbacks.File == nil).Key(fmt.Sprintf("org-resource-verify-%d", i)).Clicked() {
+		if kit.Action(c.Key(fmt.Sprintf("org-resource-verify-%d", i)), i18n.T("org.resource.download_verify"), "", false, busy || p.NeedsRefresh || row.Target == "" || row.AttachmentID == "" || row.State == ResourceVerified || p.Callbacks.File == nil).Clicked() {
 			index, target, id := i, row.Target, row.AttachmentID
 			plan, execute := p.plan, p.Callbacks.File
 			p.Run(func(ctx context.Context) (func(), error) {
@@ -171,7 +172,7 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 			labels := map[string]string{"folder": i18n.T("org.resource.folder_mapping"), "archive": i18n.T("org.resource.archive_state"), "trash": i18n.T("org.resource.trash_state")}
 			ui.Text(c, fmt.Sprintf("%s: %s", labels[step], ResourceStateText(row.steps[step])))
 			disabled := busy || p.NeedsRefresh || !p.filesVerified(row.source.SourceID, row.target) || p.Callbacks.State == nil || (step == "folder" && row.folder == "")
-			if kit.Action(c, i18n.Tf("org.resource.confirm_restore_state", labels[step]), "", false, disabled || row.steps[step] != "").Clicked() {
+			restoreState := func() {
 				index, source, target, folder, operation := i, row.source, row.target, row.folder, step
 				execute, fileExecute, plan := p.Callbacks.State, p.Callbacks.File, p.plan
 				files := []struct {
@@ -211,6 +212,21 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 					}, err
 				})
 			}
+			if kit.Action(c, i18n.Tf("org.resource.confirm_restore_state", labels[step]), "", false, disabled || row.steps[step] != "").Clicked() {
+				if step == "trash" {
+					p.confirmTrash = row.source.SourceID
+				} else {
+					restoreState()
+				}
+			}
+			if step == "trash" && p.confirmTrash == row.source.SourceID {
+				kit.ConfirmDialog(c, "org-resource-trash", i18n.T("org.ops.move_to_trash"), i18n.Tf("backup.resource.confirm_trash", row.target), i18n.T("common.confirm"), i18n.T("common.cancel"), disabled || row.steps[step] != "",
+					func() { restoreState(); p.confirmTrash = "" }, func() {
+						if !p.running {
+							p.confirmTrash = ""
+						}
+					})
+			}
 			if kit.Action(c, i18n.Tf("org.resource.verify_state", labels[step]), "", false, disabled || row.steps[step] == ResourceVerified).Clicked() {
 				index, source, target, folder, operation := i, row.source, row.target, row.folder, step
 				execute := p.Callbacks.State
@@ -225,7 +241,7 @@ func (p *ResourceRestorePanel) View(c *ui.Context) {
 			}
 		}
 	}
-	if kit.Action(c, i18n.T("org.resource.sync_refresh"), "sync", false, busy || p.Callbacks.Refresh == nil).Key("org-resource-refresh").Clicked() {
+	if kit.Action(c.Key("org-resource-refresh"), i18n.T("org.resource.sync_refresh"), "sync", false, busy || p.Callbacks.Refresh == nil).Clicked() {
 		execute := p.Callbacks.Refresh
 		p.Run(func(ctx context.Context) (func(), error) {
 			err := execute(ctx)

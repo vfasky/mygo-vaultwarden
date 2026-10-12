@@ -248,6 +248,7 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 	if p.emergency {
 		title = i18n.T("account.emergency.title")
 	}
+	deleting := p.Plan != nil && (p.operation == "delete" || p.operation == "withdraw")
 	ui.Column(c).Gap(16).Children(func() {
 		kit.Section(c, title, func() {
 			disabled := p.blocked() || p.Plan != nil
@@ -283,7 +284,7 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 						if p.selected == i {
 							kind = kit.ButtonSecondary
 						}
-						if kit.Button(c, i18n.T("account.emergency.select_contact"), "", kind, disabled).Key("emergency-contact-" + row.ID).Clicked() {
+						if kit.Button(c.Key("emergency-contact-"+row.ID), i18n.T("account.emergency.select_contact"), "", kind, disabled).Clicked() {
 							p.selected = i
 						}
 					})
@@ -317,7 +318,7 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 						if o.action == "delete" || o.action == "reject" {
 							kind = kit.ButtonDanger
 						}
-						if kit.Button(c, o.label, "", kind, disabled || !allowed).Key("emergency-action-" + o.action).Clicked() {
+						if kit.Button(c.Key("emergency-action-"+o.action), o.label, "", kind, disabled || !allowed).Clicked() {
 							p.operation = o.action
 							p.clearSecrets()
 						}
@@ -353,7 +354,7 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 						if o.action == "withdraw" {
 							kind = kit.ButtonDanger
 						}
-						if kit.Button(c, o.label, "", kind, disabled).Key("recovery-action-" + o.action).Clicked() {
+						if kit.Button(c.Key("recovery-action-"+o.action), o.label, "", kind, disabled).Clicked() {
 							p.operation = o.action
 							p.clearSecrets()
 						}
@@ -375,7 +376,7 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 				accountInput(c, &p.newPassword, i18n.T("account.recovery.target_new_password")).Password().Disabled(disabled)
 				accountInput(c, &p.repeatPassword, i18n.T("account.form.repeat_password")).Password().Disabled(disabled)
 			}
-			if p.Plan != nil {
+			if p.Plan != nil && !deleting {
 				summary := p.Plan.Summary()
 				ui.Text(c, i18n.Tf("account.recovery.verified_target", summary.TargetEmail, summary.Target.Account))
 				if summary.OrganizationID != "" {
@@ -397,21 +398,39 @@ func (p *RecoveryPanel) View(c *ui.Context) {
 			if p.operation == "delete" || p.operation == "reject" || p.operation == "withdraw" || p.operation == "takeover" {
 				kind = kit.ButtonDanger
 			}
-			if p.Plan != nil {
-				if kit.Button(c, i18n.T("account.recovery.confirm_authorization"), "", kind, p.blocked()).Key("recovery-confirm").Clicked() {
+			if p.Plan != nil && !deleting {
+				if kit.Button(c.Key("recovery-confirm"), i18n.T("account.recovery.confirm_authorization"), "", kind, p.blocked()).Clicked() {
 					p.CommitPlan()
 				}
-				if kit.Button(c, i18n.T("account.recovery.cancel_plan"), "", kit.ButtonSecondary, p.blocked()).Key("recovery-discard").Clicked() {
+				if kit.Button(c.Key("recovery-discard"), i18n.T("account.recovery.cancel_plan"), "", kit.ButtonSecondary, p.blocked()).Clicked() {
 					p.Plan.Close()
 					p.Plan = nil
 					p.Status = i18n.T("account.recovery.status_cancelled")
 				}
-			} else if kit.Button(c, i18n.T("account.recovery.prepare"), "", kind, p.blocked()).Key("recovery-prepare").Clicked() {
+			} else if p.Plan == nil && kit.Button(c.Key("recovery-prepare"), i18n.T("account.recovery.prepare"), "", kind, p.blocked()).Clicked() {
 				p.PreparePlan()
 			}
-			if p.running && kit.Button(c, i18n.T("account.recovery.cancel_check_result"), "", kit.ButtonSecondary, false).Key("recovery-cancel").Clicked() {
+			if p.running && kit.Button(c.Key("recovery-cancel"), i18n.T("account.recovery.cancel_check_result"), "", kit.ButtonSecondary, false).Clicked() {
 				p.cancelOperation()
 			}
 		})
 	})
+	if deleting {
+		summary := p.Plan.Summary()
+		message := i18n.Tf("account.recovery.verified_target", summary.TargetEmail, summary.Target.Account)
+		if summary.OrganizationID != "" {
+			message += "\n" + i18n.Tf("account.recovery.target_membership", summary.OrganizationID, summary.MembershipID)
+		}
+		if summary.CounterpartyEmail != "" {
+			message += "\n" + summary.CounterpartyEmail
+		}
+		message += "\n\n" + p.Plan.Impact()
+		kit.ConfirmDialog(c, "recovery", title, message, i18n.T("account.recovery.confirm_authorization"), i18n.T("account.recovery.cancel_plan"), p.blocked(), p.CommitPlan, func() {
+			if !p.blocked() {
+				p.Plan.Close()
+				p.Plan = nil
+				p.Status = i18n.T("account.recovery.status_cancelled")
+			}
+		})
+	}
 }

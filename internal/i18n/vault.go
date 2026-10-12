@@ -54,7 +54,6 @@ var vaultAttachment = map[string]text{
 var vaultBulk = map[string]text{
 	"vault.bulk.action":                 {"操作", "Action"},
 	"vault.bulk.cancel_confirmation":    {"取消批量确认", "Cancel bulk confirmation"},
-	"vault.bulk.close":                  {"关闭批量管理", "Close bulk management"},
 	"vault.bulk.confirm_action":         {"确认执行批量操作", "Confirm bulk action"},
 	"vault.bulk.confirm_action_hint":    {"确认对选中的项目执行操作？", "Apply this action to the selected items?"},
 	"vault.bulk.confirm_delete_hint":    {"永久删除选中的回收站项目及其附件，无法恢复。确认继续？", "Permanently delete the selected items in Trash and their attachments? This cannot be undone."},
@@ -226,7 +225,6 @@ var vaultField = map[string]text{
 var vaultFolder = map[string]text{
 	"vault.folder.add_title":            {"新建文件夹", "New folder"},
 	"vault.folder.cancel_delete":        {"取消删除", "Cancel deletion"},
-	"vault.folder.close":                {"关闭文件夹编辑", "Close folder editor"},
 	"vault.folder.confirm_delete":       {"确认删除文件夹", "Confirm folder deletion"},
 	"vault.folder.confirm_delete_hint":  {"删除文件夹后，项目会变为无文件夹，项目本身不会删除。确认继续？", "Deleting this folder moves its items to No folder. The items themselves are not deleted. Continue?"},
 	"vault.folder.delete":               {"删除文件夹", "Delete folder"},

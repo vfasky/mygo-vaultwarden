@@ -16,6 +16,7 @@ type cipherAttachmentMigrationEditor struct {
 	rows                  []vaultwarden.CipherAttachmentMigrationInfo
 	original, replacement string
 	result                string
+	confirmDelete         bool
 }
 
 func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
@@ -62,7 +63,15 @@ func (a *app) cipherAttachmentMigrationView(c *ui.Context, e *cipherEditor) {
 			a.runCipherAttachmentMigration(false)
 		}
 		if kit.Button(c, i18n.T("vault.attachment.migration.confirm_delete_original"), "", kit.ButtonDanger, busy || e.uncertain || m.original == "" || m.replacement == "").AlignSelf(ui.Start).Clicked() {
-			a.runCipherAttachmentMigration(true)
+			m.confirmDelete = true
+		}
+		if m.confirmDelete {
+			kit.ConfirmDialog(c, "migration-delete", i18n.T("vault.attachment.migration.confirm_delete_original"), i18n.T("vault.attachment.migration.description"), i18n.T("vault.attachment.migration.confirm_delete_original"), i18n.T("common.cancel"), busy || e.uncertain,
+				func() { a.runCipherAttachmentMigration(true); m.confirmDelete = false }, func() {
+					if !busy {
+						m.confirmDelete = false
+					}
+				})
 		}
 		if m.result != "" {
 			kit.Notice(c, kit.ToneInfo, m.result)

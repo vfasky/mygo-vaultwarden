@@ -222,7 +222,7 @@ func TestRestoredSidebarBaselineNavigationAndRevocation(t *testing.T) {
 		if a.category != "collection:collection-1" {
 			t.Fatal("collapsed collection navigation lost destination")
 		}
-		uitest.Click(t, tt, "查看与编辑")
+		uitest.Click(t, tt, "编辑")
 		if a.editor == nil || a.editor.inputs[1].value != "org secret" {
 			t.Fatal("collapsed navigation lost authorized editor")
 		}
@@ -324,7 +324,7 @@ func TestVaultSettingsAndSafeLinks(t *testing.T) {
 	if !a.windows.settingsOpen || slices.Contains(tt.Texts(), "连接密码库") {
 		t.Fatal("settings did not open in its own window")
 	}
-	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	settings := ui.NewTester(a.settingsWindowView, 860, 600)
 	if !slices.Contains(settings.Texts(), "连接密码库") {
 		t.Fatal("settings window content missing")
 	}

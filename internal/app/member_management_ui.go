@@ -57,7 +57,7 @@ func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disable
 	ui.Text(c, i18n.T("org.member.invite_accept_hint")).MaxLines(4)
 	if e.invitationAcceptance == nil {
 		ui.TextInput(c, &e.invitationLink).Label(i18n.T("org.member.invite_link")).Password().Disabled(disabled)
-		if kit.Action(c, i18n.T("org.member.verify_invitation_policy"), "", true, disabled || e.invitationLink == "").Key("member-accept").Clicked() {
+		if kit.Action(c.Key("member-accept"), i18n.T("org.member.verify_invitation_policy"), "", true, disabled || e.invitationLink == "").Clicked() {
 			a.runOrganizationManagement("invitation-load")
 		}
 	}
@@ -69,7 +69,7 @@ func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disable
 			ui.TextInput(c, &e.trustedRecoveryKey).Label(i18n.T("org.member.trusted_recovery_public_key")).Disabled(disabled)
 			label = i18n.T("org.member.accept_invitation_with_recovery")
 		}
-		if kit.Action(c, label, "", true, disabled || (e.invitationAcceptance.RecoveryRequired() && e.trustedRecoveryKey != e.invitationAcceptance.RecoveryPublicKey())).Key("member-accept-confirm").Clicked() {
+		if kit.Action(c.Key("member-accept-confirm"), label, "", true, disabled || (e.invitationAcceptance.RecoveryRequired() && e.trustedRecoveryKey != e.invitationAcceptance.RecoveryPublicKey())).Clicked() {
 			e.confirmation = "member-accept"
 			a.runOrganizationManagement("member-accept")
 		}
@@ -80,7 +80,7 @@ func (a *app) memberInvitationView(c *ui.Context, e *organizationEditor, disable
 			a.secretInputVersion++
 		}
 	}
-	if kit.Action(c, i18n.T("org.member.show_sharing_public_key"), "", false, disabled).Key("member-own-public-key").Clicked() {
+	if kit.Action(c.Key("member-own-public-key"), i18n.T("org.member.show_sharing_public_key"), "", false, disabled).Clicked() {
 		if session, ok := a.session.(*vaultwarden.Session); ok && a.sessionOwnsSnapshot() {
 			public, err := session.AccountSharingPublicKey(a.vault)
 			if err != nil {
@@ -128,7 +128,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 	}
 	ui.Text(c, i18n.T("org.member.title")).FontSize(18)
 	if e.members == nil {
-		if kit.Action(c, i18n.T("org.member.manage_members"), "", false, disabled).Key("member-load").Clicked() {
+		if kit.Action(c.Key("member-load"), i18n.T("org.member.manage_members"), "", false, disabled).Clicked() {
 			a.runOrganizationManagement("member-load")
 		}
 		return
@@ -138,13 +138,13 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 	ui.Text(c, i18n.Tf("org.member.invite_role", i18n.T(memberRoleName(e.inviteRole))))
 	if e.owner {
 		for _, role := range []int{2, 4, 1, 0} {
-			if kit.Action(c, i18n.Tf("org.member.select_role", i18n.T(memberRoleName(role))), "", false, disabled).Key("member-role-" + strconv.Itoa(role)).Clicked() {
+			if kit.Action(c.Key("member-role-"+strconv.Itoa(role)), i18n.Tf("org.member.select_role", i18n.T(memberRoleName(role))), "", false, disabled).Clicked() {
 				e.inviteRole = role
 			}
 		}
 	}
 	ui.Text(c, i18n.T("org.member.invite_permissions_hint")).MaxLines(3)
-	if kit.Action(c, i18n.T("org.member.send_invitation"), "", true, disabled || e.inviteEmail == "").Key("member-invite").Clicked() {
+	if kit.Action(c.Key("member-invite"), i18n.T("org.member.send_invitation"), "", true, disabled || e.inviteEmail == "").Clicked() {
 		e.confirmation = "member-invite"
 		e.memberID = ""
 	}
@@ -152,7 +152,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 		ui.Text(c, member.Name+" · "+member.Email).MaxLines(2)
 		ui.Text(c, i18n.T(memberRoleName(member.Type))+" · "+memberStatusName(member.Status))
 		if e.owner || member.Type != 0 {
-			if kit.Action(c, i18n.T("org.member.change_role"), "", false, disabled).Key("member-role-load-" + member.ID).Clicked() {
+			if kit.Action(c.Key("member-role-load-"+member.ID), i18n.T("org.member.change_role"), "", false, disabled).Clicked() {
 				e.memberID = member.ID
 				e.confirmation = ""
 				a.runOrganizationManagement("member-role-load")
@@ -163,7 +163,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 			operations = append(operations, struct{ operation, label string }{"member-reinvite", i18n.T("org.member.resend_invitation")})
 		}
 		if member.Status == 1 && (e.owner || member.Type == 2) {
-			if kit.Action(c, i18n.T("org.member.verify_member_key"), "", false, disabled).Key("member-prepare-" + member.ID).Clicked() {
+			if kit.Action(c.Key("member-prepare-"+member.ID), i18n.T("org.member.verify_member_key"), "", false, disabled).Clicked() {
 				e.memberID = member.ID
 				e.confirmation = ""
 				e.memberProof.Close()
@@ -183,7 +183,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 			operations = append(operations, struct{ operation, label string }{"member-remove", i18n.T("org.member.remove_member")})
 		}
 		for _, op := range operations {
-			if kit.Action(c, op.label, "", false, disabled).Key(op.operation + "-" + member.ID).Clicked() {
+			if kit.Action(c.Key(op.operation+"-"+member.ID), op.label, "", false, disabled).Clicked() {
 				e.memberID = member.ID
 				e.confirmation = op.operation
 				e.memberProof.Close()
@@ -214,7 +214,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 				ui.Text(c, entry.Name+" · "+collectionPermissionLabel(i18n.T("org.collection.read_only"), entry.ReadOnly)+" · "+collectionPermissionLabel(i18n.T("org.collection.hide_passwords"), entry.HidePasswords)+" · "+collectionPermissionLabel(i18n.T("org.collection.manage"), entry.Manage)).MaxLines(3)
 			}
 		}
-		if kit.Action(c, i18n.T("org.member.save_role"), "", true, disabled).Key("member-role-save").Clicked() {
+		if kit.Action(c.Key("member-role-save"), i18n.T("org.member.save_role"), "", true, disabled).Clicked() {
 			e.memberID = draft.Member().ID
 			e.confirmation = "member-role-save"
 		}
@@ -230,7 +230,7 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 		ui.Text(c, i18n.T("org.member.verify_public_key_hint")).MaxLines(5)
 		ui.Text(c, e.memberProof.PublicKey()).MaxLines(30)
 		ui.TextInput(c, &e.verifiedSPKI).Label(i18n.T("org.member.trusted_public_key")).Disabled(disabled)
-		if kit.Action(c, i18n.T("org.member.confirm_verified_key"), "", true, disabled || e.verifiedSPKI != e.memberProof.PublicKey()).Key("member-confirm").Clicked() {
+		if kit.Action(c.Key("member-confirm"), i18n.T("org.member.confirm_verified_key"), "", true, disabled || e.verifiedSPKI != e.memberProof.PublicKey()).Clicked() {
 			e.confirmation = "member-confirm"
 			a.runOrganizationManagement("member-confirm")
 		}
@@ -248,8 +248,17 @@ func (a *app) memberManagementView(c *ui.Context, e *organizationEditor, disable
 				target = member.Email
 			}
 		}
+		if e.confirmation == "member-remove" {
+			kit.ConfirmDialog(c, "member-action", i18n.T("org.member.remove_member"), i18n.Tf("org.member.confirm_operation_hint", target), i18n.T("org.member.confirm_operation"), i18n.T("org.member.cancel_operation"), disabled,
+				func() { a.runOrganizationManagement("member-remove") }, func() {
+					if !disabled {
+						e.confirmation = ""
+					}
+				})
+			return
+		}
 		ui.Text(c, i18n.Tf("org.member.confirm_operation_hint", target)).MaxLines(4)
-		if kit.Action(c, i18n.T("org.member.confirm_operation"), "", true, disabled).Key("member-action-confirm").Clicked() {
+		if kit.Action(c.Key("member-action-confirm"), i18n.T("org.member.confirm_operation"), "", true, disabled).Clicked() {
 			if e.confirmation == "member-role-save" && e.memberRole != nil {
 				e.memberRoleConsent.Close()
 				e.memberRoleConsent = e.memberRole.ConfirmCollectionReset()

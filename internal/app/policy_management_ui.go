@@ -57,7 +57,7 @@ func (a *app) pendingPolicyRecoveryView(c *ui.Context, e *organizationEditor, di
 	}
 	ui.Text(c, i18n.T("org.policy.pending_recovery_hint")).MaxLines(5)
 	if e.policyRecovery == nil {
-		if kit.Action(c, i18n.T("org.policy.review_server_policy"), "sync", false, disabled).Key("policy-review").Clicked() {
+		if kit.Action(c.Key("policy-review"), i18n.T("org.policy.review_server_policy"), "sync", false, disabled).Clicked() {
 			a.runOrganizationManagement("policy-review")
 		}
 		return
@@ -67,7 +67,7 @@ func (a *app) pendingPolicyRecoveryView(c *ui.Context, e *organizationEditor, di
 	}
 	ui.Text(c, collectionPermissionLabel(i18n.T("org.policy.server_policy_enabled"), e.policyRecovery.Enabled()))
 	ui.Text(c, i18n.T("org.policy.confirm_recovery_hint")).MaxLines(6)
-	if kit.Action(c, i18n.T("org.policy.confirm_restore_access"), "", true, disabled).Key("policy-restore").Clicked() {
+	if kit.Action(c.Key("policy-restore"), i18n.T("org.policy.confirm_restore_access"), "", true, disabled).Clicked() {
 		e.confirmation = "policy-restore"
 		a.runOrganizationManagement("policy-restore")
 	}
@@ -90,7 +90,7 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 	ui.Text(c, i18n.T("org.policy.title")).FontSize(18)
 	defs := vaultwarden.OrganizationPolicyDefinitions()
 	if e.policyDraft == nil {
-		if kit.Action(c, i18n.T("org.policy.load_policies"), "", false, disabled).Key("policy-list").Clicked() {
+		if kit.Action(c.Key("policy-list"), i18n.T("org.policy.load_policies"), "", false, disabled).Clicked() {
 			a.runOrganizationManagement("policy-list")
 		}
 		for _, entry := range e.policies {
@@ -98,7 +98,7 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 				if def.Type != entry.Type {
 					continue
 				}
-				if kit.Action(c, collectionPermissionLabel(def.Name, entry.Enabled), "", false, disabled).Key("policy-edit-" + strconv.Itoa(entry.Type)).Clicked() {
+				if kit.Action(c.Key("policy-edit-"+strconv.Itoa(entry.Type)), collectionPermissionLabel(def.Name, entry.Enabled), "", false, disabled).Clicked() {
 					e.policyType = entry.Type
 					a.runOrganizationManagement("policy-load")
 				}
@@ -115,7 +115,7 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 		}
 	}
 	ui.Text(c, i18n.T("org.policy.fields_hint")).MaxLines(4)
-	if kit.Action(c, collectionPermissionLabel(i18n.T("org.policy.enable_policy"), d.Enabled), "", false, disabled || confirming).Key("policy-enabled").Clicked() {
+	if kit.Action(c.Key("policy-enabled"), collectionPermissionLabel(i18n.T("org.policy.enable_policy"), d.Enabled), "", false, disabled || confirming).Clicked() {
 		d.Enabled = !d.Enabled
 	}
 	for i := range d.Fields {
@@ -147,13 +147,13 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 			}
 		}
 		for _, option := range options {
-			if kit.Action(c, collectionPermissionLabel(option.label, f.Value == option.value), "", false, disabled || confirming).Key("policy-field-" + f.Key + "-" + option.value).Clicked() {
+			if kit.Action(c.Key("policy-field-"+f.Key+"-"+option.value), collectionPermissionLabel(option.label, f.Value == option.value), "", false, disabled || confirming).Clicked() {
 				f.Value = option.value
 			}
 		}
 	}
 	if !confirming {
-		if kit.Action(c, i18n.T("org.policy.save_policy"), "", true, disabled).Key("policy-save").Clicked() {
+		if kit.Action(c.Key("policy-save"), i18n.T("org.policy.save_policy"), "", true, disabled).Clicked() {
 			e.policyConsent.Close()
 			e.policyConsent = d.Confirm()
 			if e.policyConsent == nil {
@@ -165,7 +165,7 @@ func (a *app) policyManagementView(c *ui.Context, e *organizationEditor, disable
 	} else {
 		ui.Text(c, i18n.T("org.policy.confirm_save_hint")).MaxLines(6)
 		ui.Text(c, i18n.T("org.policy.member_revocation_hint")).MaxLines(6)
-		if kit.Action(c, i18n.T("org.policy.confirm_save"), "", true, disabled).Key("policy-confirm").Clicked() {
+		if kit.Action(c.Key("policy-confirm"), i18n.T("org.policy.confirm_save"), "", true, disabled).Clicked() {
 			a.runOrganizationManagement("policy-save")
 		}
 		if kit.Action(c, i18n.T("org.policy.cancel_confirmation"), "", false, disabled).Clicked() {

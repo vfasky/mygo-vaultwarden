@@ -118,7 +118,7 @@ func (p *OperationsPanel) View(c *ui.Context) {
 	ui.Text(c, i18n.T("org.ops.description"))
 	for _, entry := range p.entries {
 		blocked := p.running || p.terminal || !entry.Editable || !entry.Readable || entry.RequiresPassword
-		if kit.Action(c, entry.Title, "", p.Selected[entry.ID], blocked).Key("org-operation-item-" + entry.ID).Clicked() {
+		if kit.Action(c.Key("org-operation-item-"+entry.ID), entry.Title, "", p.Selected[entry.ID], blocked).Clicked() {
 			p.selectItem(entry.ID)
 		}
 	}
@@ -132,23 +132,26 @@ func (p *OperationsPanel) View(c *ui.Context) {
 		{i18n.T("common.unarchive"), vaultwarden.CipherUnarchive},
 		{i18n.T("common.delete_permanently"), vaultwarden.CipherDeletePermanently},
 	} {
-		if kit.Action(c, option.label, "", p.action == option.action, p.running || p.terminal).Key("org-operation-" + string(option.action)).Clicked() {
+		if kit.Action(c.Key("org-operation-"+string(option.action)), option.label, "", p.action == option.action, p.running || p.terminal).Clicked() {
 			p.action = option.action
 			p.Confirmation = false
 		}
 	}
 	if p.Confirmation {
-		ui.Text(c, i18n.Tf("org.ops.confirm_selected", len(p.ids())))
-		if kit.Action(c, i18n.T("org.services.confirm_submit_request"), "", true, p.running).Key("org-operation-confirm").Clicked() {
-			p.Start()
+		message := i18n.Tf("org.ops.confirm_selected", len(p.ids()))
+		if p.action == vaultwarden.CipherDeletePermanently {
+			message += "\n\n" + i18n.T("vault.bulk.confirm_delete_hint")
 		}
-		if kit.Action(c, i18n.T("org.ops.back_to_selection"), "", false, p.running).Key("org-operation-back").Clicked() {
-			p.Confirmation = false
-		}
-	} else if kit.Action(c, i18n.T("org.ops.review_selected"), "", true, p.running || p.terminal || len(p.ids()) == 0 || p.execute == nil || p.dispatch == nil).Key("org-operation-review").Clicked() {
+		kit.ConfirmDialog(c, "org-operation", i18n.T("org.ops.title"), message, i18n.T("org.services.confirm_submit_request"), i18n.T("org.ops.back_to_selection"), p.running,
+			p.Start, func() {
+				if !p.running {
+					p.Confirmation = false
+				}
+			})
+	} else if kit.Action(c.Key("org-operation-review"), i18n.T("org.ops.review_selected"), "", true, p.running || p.terminal || len(p.ids()) == 0 || p.execute == nil || p.dispatch == nil).Clicked() {
 		p.Confirmation = true
 	}
-	if p.running && kit.Action(c, i18n.T("org.ops.cancel_review_results"), "", false, false).Key("org-operation-cancel").Clicked() {
+	if p.running && kit.Action(c.Key("org-operation-cancel"), i18n.T("org.ops.cancel_review_results"), "", false, false).Clicked() {
 		if p.cancel != nil {
 			p.cancel()
 		}

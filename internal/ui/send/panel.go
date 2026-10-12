@@ -39,6 +39,7 @@ type Panel struct {
 	ctx                                                                     context.Context
 	cancel                                                                  context.CancelFunc
 	generation                                                              uint64
+	confirmRemovePassword                                                   bool
 	Closed, Busy, Uncertain, confirmDelete, showText                        bool
 	Status, Link, Password, ReceivePassword, Deletion, expiration, maxCount string
 	newKind                                                                 int
@@ -94,6 +95,7 @@ func (p *Panel) clearViews() {
 	p.ReceivePassword = ""
 	p.showText = false
 	p.confirmDelete = false
+	p.confirmRemovePassword = false
 }
 
 type Result struct {
@@ -502,14 +504,25 @@ func (p *Panel) View(c *ui.Context) {
 					}
 				})
 				if p.Draft.HasPassword() {
-					button(i18n.T("send.editor.remove_password"), kit.ButtonDanger, disabled, func() { p.change(false) })
+					button(i18n.T("send.editor.remove_password"), kit.ButtonDanger, disabled, func() { p.confirmRemovePassword = true })
+				}
+				if p.confirmRemovePassword {
+					kit.ConfirmDialog(c, "send-remove-password", i18n.T("send.editor.remove_password"), i18n.T("send.editor.remove_access_hint"), i18n.T("common.confirm"), i18n.T("common.cancel"), disabled,
+						func() { p.change(false); p.confirmRemovePassword = false }, func() {
+							if !p.Busy {
+								p.confirmRemovePassword = false
+							}
+						})
 				}
 				if !p.confirmDelete {
 					button(i18n.T("send.editor.delete"), kit.ButtonDanger, disabled, func() { p.confirmDelete = true })
 				} else {
-					kit.Notice(c, kit.ToneWarning, i18n.T("send.editor.confirm_delete_hint"))
-					button(i18n.T("send.editor.confirm_delete"), kit.ButtonDanger, disabled, func() { p.change(true) })
-					button(i18n.T("send.editor.cancel_delete"), kit.ButtonSecondary, p.Busy, func() { p.confirmDelete = false })
+					kit.ConfirmDialog(c, "send-delete", i18n.T("send.editor.delete"), i18n.T("send.editor.confirm_delete_hint"), i18n.T("send.editor.confirm_delete"), i18n.T("send.editor.cancel_delete"), disabled,
+						func() { p.change(true) }, func() {
+							if !p.Busy {
+								p.confirmDelete = false
+							}
+						})
 				}
 			}
 		}

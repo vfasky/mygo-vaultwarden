@@ -10,6 +10,8 @@ func init() {
 		"download": `<path d="M12 3v12m-5-5 5 5 5-5M4 20h16"/>`,
 		"upload":   `<path d="M12 16V4M7 9l5-5 5 5M4 20h16"/>`,
 		"file":     `<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8Z"/><path d="M14 3v5h5"/>`,
+		"transfer": `<path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/><path d="M8 3v10m-3-3 3 3 3-3M16 13V3m-3 3 3-3 3 3"/>`,
+		"select":   `<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12.3 2.8 2.7L16 9.5"/>`,
 	} {
 		if _, ok := Icons[name]; !ok {
 			Icons[name] = lineIcon(paths)

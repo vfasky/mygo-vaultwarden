@@ -1,5 +1,32 @@
 # MyGo Vaultwarden
 
+一款为 macOS 打造的原生 Vaultwarden 密码管理客户端。连接你自托管的 Vaultwarden 服务器，在 Mac 上浏览、搜索和编辑密码库，用 Touch ID 解锁，并在 Safari 中通过系统自动填充输入密码。
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshot-vault.png" alt="密码库主窗口：左侧导航，中间项目列表，右侧项目详情"></td>
+    <td width="50%"><img src="docs/images/screenshot-unlock.png" alt="锁定界面：输入主密码或使用 Touch ID 解锁"></td>
+  </tr>
+  <tr>
+    <td align="center">密码库主窗口</td>
+    <td align="center">主密码与 Touch ID 解锁</td>
+  </tr>
+</table>
+
+截图中的个人数据已打码。
+
+## 主要功能
+
+- 原生界面：Go + MyGo Native UI 与 Swift/AppKit，主窗口不使用 WebView，遵循 macOS 的窗口、菜单与快捷键习惯。
+- 个人密码库：登录、支付卡、身份、安全笔记、SSH 密钥等八种项目，支持收藏、文件夹、归档、回收站与批量管理，`⌘F` 即时搜索，并显示网站图标。
+- 安全解锁：主密码或 Touch ID 解锁本机加密快照；锁屏、睡眠或空闲 15 分钟后自动锁定。
+- 系统自动填充：在 macOS“自动填充与密码”中启用后，可在 Safari 选择凭据并经系统认证后填充。
+- 导入导出：使用 Bitwarden 兼容 JSON，可在官方客户端与本应用之间迁移数据。
+- 账号中心：Send、设备登录与审批、两步验证、账号安全和紧急访问。
+- 自动更新，界面支持简体中文与英文。
+
+## 本版范围
+
 使用 Go + MyGo Native UI 和 Swift/AppKit 构建的 macOS Vaultwarden 客户端，采用 GPL-3.0-only。主窗口不使用 HTML、JavaScript 或 WebView。
 
 本版聚焦个人密码库。支持八种个人项目的保存、搜索、编辑、复制、同步，以及文件夹、收藏、归档和回收站。自定义字段、密码历史、URI 匹配和逐字段冲突核对沿用完整加密模型。
@@ -114,7 +141,7 @@ Xcode 管理主应用和扩展两个 target；Go build phase 生成主可执行�
 ## 使用与安全边界
 
 1. 输入服务器、邮箱和主密码，按服务器实际要求完成 MFA。使用 HTTPS，仅本机回环允许 HTTP。
-2. 个人项目按类型、文件夹、收藏、归档或回收站筛选。使用 `⌘F` 搜索，键盘上下键选择；详情可复制用户名或打开 HTTP(S) 网站。
+2. 个人项目按类型、文件夹、收藏、归档或回收站筛选。使用 `⌘F` 搜索，键盘上下键选择；详情可复制用户名或打开 HTTP(S) 网站。列表与详情会向当前 Vaultwarden 服务器的 `/icons/{域名}/icon.png` 请求网站图标，只发送公开网址的域名，不携带登录令牌、网址路径或查询参数；不跟随图标接口重定向。内网 IP、本地域名、再次验证条目及读取失败时保留首字母。成功图标自动以 PNG 缓存到系统用户缓存目录下的 `MyGo Vaultwarden/WebsiteIcons`（macOS 为 `~/Library/Caches/MyGo Vaultwarden/WebsiteIcons`，沙盒路径由系统决定），按服务器、账号和域名哈希命名，保存 7 天、最多 1024 张；这些可删除的图片缓存未加密，不写入密码条目或同步快照。
 3. 锁定立即隐藏列表、详情和敏感输入，并撤销内存权限。重启后可用主密码或系统认证解锁持久快照。已解锁状态默认在系统用户空闲 15 分钟后锁定；后台同步不续期，其他应用的键鼠活动计入系统活动，UI 阻塞可能延迟执行。
 4. 在 macOS“自动填充与密码”启用 MyGo Vaultwarden，再实际核验 Safari 填充。严格 Host / Exact 规则只在系统给出可核对来源时匹配。
 5. 账号变更、紧急接管或未知切换若留下恢复记录，使用对应专用入口核验；取消、重启、普通登录或 HTTP 200 本身都不能代替完整证明。

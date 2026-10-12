@@ -106,7 +106,7 @@ func (p *EventsPanel) View(c *ui.Context) {
 	ui.Text(c, i18n.T("org.events.title")).FontSize(22)
 	ui.TextInput(c, &p.startDate).Label(i18n.T("org.events.start_date")).Disabled(p.running)
 	ui.TextInput(c, &p.endDate).Label(i18n.T("org.events.end_date")).Disabled(p.running)
-	if kit.Action(c, i18n.T("org.events.load"), "", true, p.running || p.fetch == nil || p.dispatch == nil).Key("org-events-load").Clicked() {
+	if kit.Action(c.Key("org-events-load"), i18n.T("org.events.load"), "", true, p.running || p.fetch == nil || p.dispatch == nil).Clicked() {
 		p.load(false)
 	}
 	for i, event := range p.events {
@@ -122,10 +122,10 @@ func (p *EventsPanel) View(c *ui.Context) {
 			ui.Text(c, i18n.Tf("org.events.item", *event.CipherID))
 		}
 	}
-	if kit.Action(c, i18n.T("org.events.load_next"), "", false, p.running || p.next == nil).Key("org-events-next").Clicked() {
+	if kit.Action(c.Key("org-events-next"), i18n.T("org.events.load_next"), "", false, p.running || p.next == nil).Clicked() {
 		p.load(true)
 	}
-	if p.running && kit.Action(c, i18n.T("org.events.cancel_load"), "", false, false).Key("org-events-cancel").Clicked() {
+	if p.running && kit.Action(c.Key("org-events-cancel"), i18n.T("org.events.cancel_load"), "", false, false).Clicked() {
 		if p.cancel != nil {
 			p.cancel()
 		}

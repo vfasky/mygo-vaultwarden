@@ -145,19 +145,17 @@ func (a *app) passwordHistoryView(c *ui.Context, e *cipherEditor) {
 	}
 	kit.Section(c, i18n.T("vault.history.title"), func() {
 		if e.confirmHistoryDelete {
-			kit.Notice(c, kit.ToneWarning, i18n.T("vault.history.confirm_clear_hint"))
-			ui.Row(c).Gap(8).Children(func() {
-				if kit.Button(c, i18n.T("vault.history.confirm_clear"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).Clicked() {
+			kit.ConfirmDialog(c, "history-clear", i18n.T("vault.history.clear"), i18n.T("vault.history.confirm_clear_hint"), i18n.T("vault.history.confirm_clear"), i18n.T("vault.history.keep"), a.pending != 0 || e.uncertain,
+				func() {
 					e.fields.PasswordHistory = nil
 					e.confirmHistoryDelete, e.showHistory = false, false
 					clear(e.shownHistory)
 					e.shownHistory = nil
-				}
-				if kit.Action(c, i18n.T("vault.history.keep"), "", false, a.pending != 0).Clicked() {
-					e.confirmHistoryDelete = false
-				}
-			})
-			return
+				}, func() {
+					if a.pending == 0 {
+						e.confirmHistoryDelete = false
+					}
+				})
 		}
 		if kit.Button(c, i18n.T("vault.history.clear"), "", kit.ButtonDanger, a.pending != 0 || e.uncertain).AlignSelf(ui.Start).Clicked() {
 			e.confirmHistoryDelete = true

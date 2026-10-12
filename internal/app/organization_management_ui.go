@@ -161,14 +161,15 @@ func (a *app) openOrganizationEditor(id string) {
 
 func (a *app) organizationEditorView(c *ui.Context) {
 	e := a.organizationEditor
-	ui.Scroll(c).Grow(1).Children(func() {
-		ui.Column(c.Key("organization-management")).Padding(18).Gap(12).Children(func() {
-			title := i18n.T("org.settings.title")
-			if e.id == "" {
-				title = i18n.T("org.settings.create_title")
-			}
-			ui.Text(c, title).FontSize(23)
-			ui.Text(c, i18n.T("org.settings.form_hint")).MaxLines(3)
+	title := i18n.T("org.settings.title")
+	if e.id == "" {
+		title = i18n.T("org.settings.create_title")
+	}
+	if a.drawerHeader(c, title, i18n.T("org.settings.form_hint")) {
+		return
+	}
+	ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
+		ui.Column(c.Key("organization-management")).Padding(20).Gap(12).Children(func() {
 			disabled := a.pending != 0 || e.uncertain
 			if e.id == "" {
 				a.memberInvitationView(c, e, disabled)
@@ -179,7 +180,7 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				if e.id == "" {
 					ui.TextInput(c, &e.collection).Label(i18n.T("org.collection.default_name_label")).Disabled(disabled)
 				}
-				if kit.Action(c, i18n.T("org.settings.save_organization"), "", true, disabled || !e.loaded || e.name == "" || e.email == "").Key("organization-save").Clicked() {
+				if kit.Action(c.Key("organization-save"), i18n.T("org.settings.save_organization"), "", true, disabled || !e.loaded || e.name == "" || e.email == "").Clicked() {
 					a.runOrganizationManagement("save")
 				}
 				if !e.loaded && kit.Action(c, i18n.T("org.settings.reload_profile"), "sync", false, disabled).Clicked() {
@@ -205,27 +206,39 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				a.groupManagementView(c, e, disabled)
 				a.memberManagementView(c, e, disabled)
 				if e.confirmation == "" {
-					if kit.Action(c, i18n.T("org.settings.leave_organization"), "", false, disabled).Key("organization-leave").Clicked() {
+					if kit.Action(c.Key("organization-leave"), i18n.T("org.settings.leave_organization"), "", false, disabled).Clicked() {
 						e.confirmation = "leave"
 					}
-					if e.owner && kit.Action(c, i18n.T("org.settings.delete_organization"), "", false, disabled).Key("organization-delete").Clicked() {
+					if e.owner && kit.Action(c.Key("organization-delete"), i18n.T("org.settings.delete_organization"), "", false, disabled).Clicked() {
 						e.confirmation = "delete"
 					}
 				} else if e.confirmation == "leave" || e.confirmation == "delete" {
-					label := i18n.T("org.settings.confirm_leave")
+					dangerControls := func() {
+						label := i18n.T("org.settings.confirm_leave")
+						if e.confirmation == "delete" {
+							label = i18n.T("org.settings.confirm_delete")
+							ui.Text(c, i18n.T("org.settings.confirm_delete_hint")).MaxLines(4)
+							ui.TextInput(c, &e.password).Label(i18n.T("org.settings.master_password")).Password().Disabled(disabled)
+						} else {
+							ui.Text(c, i18n.T("org.settings.confirm_leave_hint")).MaxLines(4)
+						}
+						if kit.Action(c.Key("organization-danger-confirm"), label, "", true, disabled || (e.confirmation == "delete" && e.password == "")).Clicked() {
+							a.runOrganizationManagement(e.confirmation)
+						}
+						if kit.Action(c, i18n.T("org.settings.cancel_operation"), "", false, a.pending != 0).Clicked() {
+							e.confirmation, e.password = "", ""
+							a.secretInputVersion++
+						}
+					}
 					if e.confirmation == "delete" {
-						label = i18n.T("org.settings.confirm_delete")
-						ui.Text(c, i18n.T("org.settings.confirm_delete_hint")).MaxLines(4)
-						ui.TextInput(c, &e.password).Label(i18n.T("org.settings.master_password")).Password().Disabled(disabled)
+						kit.ConfirmationDialog(c, "organization-delete", i18n.T("org.settings.delete_organization"), func() {
+							if a.pending == 0 {
+								e.confirmation, e.password = "", ""
+								a.secretInputVersion++
+							}
+						}, dangerControls)
 					} else {
-						ui.Text(c, i18n.T("org.settings.confirm_leave_hint")).MaxLines(4)
-					}
-					if kit.Action(c, label, "", true, disabled || (e.confirmation == "delete" && e.password == "")).Key("organization-danger-confirm").Clicked() {
-						a.runOrganizationManagement(e.confirmation)
-					}
-					if kit.Action(c, i18n.T("org.settings.cancel_operation"), "", false, a.pending != 0).Clicked() {
-						e.confirmation, e.password = "", ""
-						a.secretInputVersion++
+						dangerControls()
 					}
 				}
 			}
@@ -239,8 +252,6 @@ func (a *app) organizationEditorView(c *ui.Context) {
 				if kit.Action(c, i18n.T("org.settings.cancel_and_lock"), "", false, false).Clicked() {
 					a.runStorage(localstore.OperationLock)
 				}
-			} else if kit.Action(c, i18n.T("org.settings.close_management"), "", false, false).Clicked() {
-				a.clearOrganizationEditor()
 			}
 		})
 	})

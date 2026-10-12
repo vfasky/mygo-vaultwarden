@@ -65,7 +65,7 @@ func TestNativeOrganizationNavigationReadWriteAndLock(t *testing.T) {
 	if len(a.filteredItems()) != 1 || a.filteredItems()[0].Title != "组织条目" {
 		t.Fatal("organization filter")
 	}
-	uitest.Click(t, tt, "查看与编辑")
+	uitest.Click(t, tt, "编辑")
 	if a.editor == nil || a.editor.fields.OrganizationID == nil || a.editor.inputs[1].value != "org secret" {
 		t.Fatal("organization editor")
 	}

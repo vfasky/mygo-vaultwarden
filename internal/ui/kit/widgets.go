@@ -45,9 +45,16 @@ func Action(c *ui.Context, label, symbol string, primary, disabled bool) ui.Elem
 
 // IconButton is a quiet square button showing only a symbol.
 func IconButton(c *ui.Context, label, symbol string) ui.Element {
+	return IconAction(c, label, symbol, false)
+}
+
+// IconAction is an IconButton that can be disabled.
+func IconAction(c *ui.Context, label, symbol string, disabled bool) ui.Element {
 	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(30, 30).Padding(7).Radius(ControlRadius - 1).Shrink(0).
-		Justify(ui.Center).AlignItems(ui.Center).TextColor(Muted)
-	if b.Pressed() {
+		Justify(ui.Center).AlignItems(ui.Center).TextColor(Muted).Disabled(disabled)
+	if disabled {
+		b.Opacity(.45)
+	} else if b.Pressed() {
 		b.Background(press).TextColor(Ink)
 	} else if b.Hovered() {
 		b.Background(hover).TextColor(Ink)
@@ -73,8 +80,24 @@ func ToolbarButton(c *ui.Context, label, symbol string, primary, disabled bool) 
 	if primary {
 		return Button(c, label, symbol, ButtonPrimary, disabled).Padding(0, 12)
 	}
-	b := Button(c, label, symbol, ButtonSecondary, disabled).Padding(0, 12).
-		Border(1, ui.RGBA(255, 255, 255, .75)).Background(ui.RGBA(255, 255, 255, .6))
+	return toolbarFill(Button(c, label, symbol, ButtonSecondary, disabled).Padding(0, 12), disabled)
+}
+
+// ToolbarIconButton is a symbol-only secondary ToolbarButton: square, with
+// the same height, corner radius and fill as its labelled neighbours.
+func ToolbarIconButton(c *ui.Context, label, symbol string, disabled bool) ui.Element {
+	b := ui.ButtonBase(c).Label(label).Tooltip(label).Size(ControlHeight, ControlHeight).Padding(8).Radius(ControlRadius).
+		Shrink(0).Justify(ui.Center).AlignItems(ui.Center).TextColor(Ink).Disabled(disabled)
+	if disabled {
+		b.Opacity(.45)
+	}
+	return toolbarFill(b, disabled).Children(func() { Icon(c, symbol, 16) })
+}
+
+// toolbarFill makes a secondary toolbar button translucent over the
+// window's gradient.
+func toolbarFill(b ui.Element, disabled bool) ui.Element {
+	b.Border(1, ui.RGBA(255, 255, 255, .75)).Background(ui.RGBA(255, 255, 255, .6))
 	if !disabled && b.Pressed() {
 		b.Background(ui.RGBA(255, 255, 255, .95))
 	} else if !disabled && b.Hovered() {

@@ -14,7 +14,7 @@ var AppLogo = func() *ui.Bitmap {
 	return b
 }()
 
-// Small, local vector icons avoid remote favicon requests from a private vault.
+// Local vector icons for application controls; website favicons load separately.
 func lineIcon(paths string) *ui.SVG {
 	return ui.MustParseSVG([]byte(`<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round">` + paths + `</svg>`))
 }
@@ -49,6 +49,7 @@ var Icons = map[string]*ui.SVG{
 	"settings":    lineIcon(`<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="white"/><circle cx="16" cy="12" r="2" fill="white"/><circle cx="8" cy="18" r="2" fill="white"/>`),
 	"copy":        lineIcon(`<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>`),
 	"external":    lineIcon(`<path d="M14 3h7v7m0-7L10 14m-1-9H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/>`),
+	"edit":        lineIcon(`<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>`),
 	"chevron":     lineIcon(`<path d="m9 5 7 7-7 7"/>`),
 	"close":       lineIcon(`<path d="m6 6 12 12M6 18 18 6"/>`),
 }

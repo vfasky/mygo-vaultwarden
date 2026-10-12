@@ -68,7 +68,7 @@ func TestServerLoginCanReturnWithoutSwitchingAccount(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1280, 820)
 	uitest.Click(t, tt, "设置")
-	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	settings := ui.NewTester(a.settingsWindowView, 860, 600)
 	uitest.Click(t, settings, "登录服务器")
 	tt.Frame()
 	assertVaultHidden(t, tt)

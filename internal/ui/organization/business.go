@@ -75,18 +75,25 @@ func (f *orgBusinessFlow) run(work func(context.Context) ([]string, error)) {
 	}()
 }
 func (f *orgBusinessFlow) footer(c *ui.Context, key, warning string, ready bool, start func()) {
-	if f.confirm {
+	if f.confirm && key == "org-dir" {
+		kit.ConfirmDialog(c, key, i18n.T("org.services.review_and_continue"), warning, i18n.T("org.services.confirm_submit_request"), i18n.T("org.services.back_to_edit"), f.blocked() || !ready,
+			start, func() {
+				if !f.blocked() {
+					f.confirm = false
+				}
+			})
+	} else if f.confirm {
 		ui.Text(c, warning)
-		if kit.Action(c, i18n.T("org.services.confirm_submit_request"), "", true, f.blocked() || !ready).Key(key + "-confirm").Clicked() {
+		if kit.Action(c.Key(key+"-confirm"), i18n.T("org.services.confirm_submit_request"), "", true, f.blocked() || !ready).Clicked() {
 			start()
 		}
-		if kit.Action(c, i18n.T("org.services.back_to_edit"), "", false, f.blocked()).Key(key + "-back").Clicked() {
+		if kit.Action(c.Key(key+"-back"), i18n.T("org.services.back_to_edit"), "", false, f.blocked()).Clicked() {
 			f.confirm = false
 		}
-	} else if kit.Action(c, i18n.T("org.services.review_and_continue"), "", true, f.blocked() || !ready || f.dispatch == nil).Key(key + "-review").Clicked() {
+	} else if kit.Action(c.Key(key+"-review"), i18n.T("org.services.review_and_continue"), "", true, f.blocked() || !ready || f.dispatch == nil).Clicked() {
 		f.confirm = true
 	}
-	if f.running && kit.Action(c, i18n.T("org.services.cancel_review"), "", false, false).Key(key+"-cancel").Clicked() {
+	if f.running && kit.Action(c.Key(key+"-cancel"), i18n.T("org.services.cancel_review"), "", false, false).Clicked() {
 		f.cancel()
 		f.status = i18n.T("org.services.status_cancelling")
 	}
@@ -170,11 +177,11 @@ func (p *CopyPanel) View(c *ui.Context) {
 		ui.Text(c, i18n.T("org.transfer.copy_reprompt_hint"))
 	}
 	for i, choice := range p.choices {
-		if kit.Action(c, choice.Name, "", p.target == i, p.Flow.blocked() || p.Flow.confirm || !choice.Writable).Key("org-copy-" + choice.ID).Clicked() {
+		if kit.Action(c.Key("org-copy-"+choice.ID), choice.Name, "", p.target == i, p.Flow.blocked() || p.Flow.confirm || !choice.Writable).Clicked() {
 			p.target = i
 		}
 	}
-	if kit.Action(c, i18n.T("org.transfer.copy_resources"), "", p.resources, p.Flow.blocked() || p.Flow.confirm || p.prepareResources == nil || p.resourcesReady == nil).Key("org-copy-resources").Clicked() {
+	if kit.Action(c.Key("org-copy-resources"), i18n.T("org.transfer.copy_resources"), "", p.resources, p.Flow.blocked() || p.Flow.confirm || p.prepareResources == nil || p.resourcesReady == nil).Clicked() {
 		p.resources = !p.resources
 	}
 	p.Flow.footer(c, "org-copy", i18n.T("org.transfer.confirm_copy"), p.ready(), p.start)
@@ -229,7 +236,7 @@ func (p *CollectionPanel) View(c *ui.Context) {
 	ui.Text(c, i18n.T("org.transfer.collections_title")).FontSize(22)
 	ui.Text(c, p.item.Title)
 	for _, choice := range p.choices {
-		if kit.Action(c, choice.Name, "", p.selected[choice.ID], p.Flow.blocked() || p.Flow.confirm || !choice.Writable).Key("org-assign-" + choice.ID).Clicked() {
+		if kit.Action(c.Key("org-assign-"+choice.ID), choice.Name, "", p.selected[choice.ID], p.Flow.blocked() || p.Flow.confirm || !choice.Writable).Clicked() {
 			p.selected[choice.ID] = !p.selected[choice.ID]
 		}
 	}
@@ -377,11 +384,11 @@ func (p *ImportPanel) View(c *ui.Context) {
 		for _, source := range p.plan.Collections() {
 			ui.Text(c, i18n.Tf("org.transfer.source_collection", source.Name))
 			value, set := p.mappings[source.ID]
-			if kit.Action(c, i18n.T("org.transfer.create_matching_collection"), "", set && value == "", p.Flow.confirm || !p.createAllowed).Key("org-map-new-" + source.ID).Clicked() {
+			if kit.Action(c.Key("org-map-new-"+source.ID), i18n.T("org.transfer.create_matching_collection"), "", set && value == "", p.Flow.confirm || !p.createAllowed).Clicked() {
 				p.mappings[source.ID] = ""
 			}
 			for _, target := range p.choices {
-				if kit.Action(c, target.Name, "", set && value == target.ID, p.Flow.confirm || !target.Writable).Key("org-map-" + source.ID + "-" + target.ID).Clicked() {
+				if kit.Action(c.Key("org-map-"+source.ID+"-"+target.ID), target.Name, "", set && value == target.ID, p.Flow.confirm || !target.Writable).Clicked() {
 					p.mappings[source.ID] = target.ID
 				}
 			}
@@ -438,13 +445,13 @@ func (p *ExportPanel) View(c *ui.Context) {
 	ui.Text(c, i18n.Tf("org.transfer.export_title", p.organizationName)).FontSize(22)
 	disabled := p.Flow.blocked() || p.Flow.confirm || !p.allowed
 	ui.TextInput(c, &p.path).Label(i18n.T("org.transfer.export_path")).Disabled(disabled)
-	if kit.Action(c, i18n.T("org.transfer.format_mygo_v1"), "", !p.official && !p.resources, disabled).Key("org-export-mygo").Clicked() {
+	if kit.Action(c.Key("org-export-mygo"), i18n.T("org.transfer.format_mygo_v1"), "", !p.official && !p.resources, disabled).Clicked() {
 		p.official, p.resources = false, false
 	}
-	if kit.Action(c, i18n.T("org.transfer.format_official"), "", p.official && !p.resources, disabled).Key("org-export-official").Clicked() {
+	if kit.Action(c.Key("org-export-official"), i18n.T("org.transfer.format_official"), "", p.official && !p.resources, disabled).Clicked() {
 		p.official, p.resources = true, false
 	}
-	if kit.Action(c, i18n.T("org.transfer.format_resources_export"), "", p.resources, disabled || p.executeResources == nil).Key("org-export-resources").Clicked() {
+	if kit.Action(c.Key("org-export-resources"), i18n.T("org.transfer.format_resources_export"), "", p.resources, disabled || p.executeResources == nil).Clicked() {
 		p.resources = true
 		p.official = false
 	}

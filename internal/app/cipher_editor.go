@@ -449,15 +449,15 @@ func (a *app) cipherEditorView(c *ui.Context) {
 		return
 	}
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		title := i18n.Tf("vault.editor.edit_title", i18n.T(cipherTypeNames[e.fields.Type]))
+		if e.fields.ID == "" {
+			title = i18n.Tf("vault.editor.add_title", i18n.T(cipherTypeNames[e.fields.Type]))
+		}
+		if a.drawerHeader(c, title, i18n.T("vault.editor.description")) {
+			return
+		}
 		ui.Scroll(c.Key(fmt.Sprintf("cipher-editor-%d", a.secretInputVersion))).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(16).Padding(20).Children(func() {
-				title := i18n.Tf("vault.editor.edit_title", i18n.T(cipherTypeNames[e.fields.Type]))
-				if e.fields.ID == "" {
-					title = i18n.Tf("vault.editor.add_title", i18n.T(cipherTypeNames[e.fields.Type]))
-				}
-				kit.PageHeader(c, title, i18n.T("vault.editor.description"), func() {
-					kit.Pill(c, i18n.T(cipherTypeNames[e.fields.Type]), kit.Lavender, kit.Purple)
-				})
 				if e.fields.OrganizationID != nil || e.organizationID != "" {
 					kit.Notice(c, kit.ToneInfo, i18n.T("vault.editor.organization_sync_hint"))
 				}
@@ -610,9 +610,6 @@ func (a *app) cipherEditorView(c *ui.Context) {
 			if e.uncertain && kit.Action(c, i18n.T("vault.editor.sync_verify"), "sync", false, a.pending != 0).Clicked() {
 				a.syncVault(false)
 			}
-			if kit.Action(c, i18n.T("common.cancel"), "", false, a.pending != 0).Clicked() {
-				a.editor = nil
-			}
 			if kit.Action(c, i18n.T("common.save"), "", true, a.pending != 0 || e.conflict || e.revision != a.sessionRevision || e.uncertain || e.fields.Name == "").Clicked() {
 				a.saveCipher()
 			}
@@ -623,21 +620,23 @@ func (a *app) cipherEditorView(c *ui.Context) {
 const copyCipherAction vaultwarden.CipherAction = "copyDraft"
 
 func (a *app) cipherStateButtons(c *ui.Context, e *cipherEditor) {
-	if e.confirm != "" {
-		text := i18n.T("vault.editor.confirm_trash")
+	if e.confirm == vaultwarden.CipherTrash || e.confirm == vaultwarden.CipherDeletePermanently {
+		message, title := i18n.T("vault.editor.confirm_trash"), i18n.T("vault.editor.move_to_trash")
 		if e.confirm == vaultwarden.CipherDeletePermanently {
-			text = i18n.T("vault.editor.confirm_delete_permanently")
+			message, title = i18n.T("vault.editor.confirm_delete_permanently"), i18n.T("common.delete_permanently")
 		}
-		if e.confirm == copyCipherAction {
-			text = i18n.T("vault.copy.confirm_copy")
-		}
-		kit.Notice(c, kit.ToneWarning, text)
+		kit.ConfirmDialog(c, "cipher-delete", title, e.fields.Name+"\n\n"+message, i18n.T("common.confirm"), i18n.T("vault.editor.cancel_operation"), a.pending != 0 || e.uncertain,
+			func() { a.mutateCipher(e.confirm) }, func() {
+				if a.pending == 0 {
+					e.confirm = ""
+				}
+			})
+		return
+	}
+	if e.confirm == copyCipherAction {
+		kit.Notice(c, kit.ToneWarning, i18n.T("vault.copy.confirm_copy"))
 		ui.Row(c).Gap(8).Children(func() {
-			kind := kit.ButtonDanger
-			if e.confirm == copyCipherAction {
-				kind = kit.ButtonPrimary
-			}
-			if kit.Button(c, i18n.T("common.confirm"), "", kind, a.pending != 0 || e.uncertain).Clicked() {
+			if kit.Button(c, i18n.T("common.confirm"), "", kit.ButtonPrimary, a.pending != 0 || e.uncertain).Clicked() {
 				a.mutateCipher(e.confirm)
 			}
 			if kit.Action(c, i18n.T("vault.editor.cancel_operation"), "", false, a.pending != 0).Clicked() {

@@ -275,9 +275,10 @@ func FormView(c *ui.Context, f *Form) {
 	if f == nil || f.closed {
 		return
 	}
+	deleting := f.confirming && f.plan != nil && (f.plan.Kind() == vaultwarden.AccountDelete || f.plan.Kind() == vaultwarden.AccountPurge)
 	kit.Section(c, accountModeLabel(f.Mode), func() {
-		disabled := f.busy || f.uncertain
-		if f.confirming {
+		disabled := f.busy || f.uncertain || deleting
+		if f.confirming && !deleting {
 			if f.confirmAction != "" {
 				kit.Notice(c, kit.ToneWarning, i18n.T("account.apikey.confirm_impact"))
 			} else {
@@ -387,7 +388,7 @@ func FormView(c *ui.Context, f *Form) {
 	kit.ActionBar(c, func() {
 		ui.Text(c, f.Status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0)
 		disabled := f.busy || f.uncertain
-		if f.confirming {
+		if f.confirming && !deleting {
 			if kit.Button(c, i18n.T("common.cancel"), "", kit.ButtonSecondary, f.busy).Clicked() {
 				f.cancel()
 			}
@@ -398,7 +399,7 @@ func FormView(c *ui.Context, f *Form) {
 					f.dispatch("commit")
 				}
 			}
-		} else {
+		} else if !f.confirming {
 			if kit.Button(c, i18n.T("account.form.cancel_clear_secrets"), "", kit.ButtonSecondary, f.busy).Clicked() {
 				f.cancel()
 			}
@@ -423,6 +424,14 @@ func FormView(c *ui.Context, f *Form) {
 			}
 		}
 	})
+	if deleting {
+		kit.ConfirmDialog(c, "account-delete", accountModeLabel(f.Mode), accountImpact(f.plan.Kind())+"\n\n"+i18n.T("account.form.confirm_submission_impact"), i18n.T("account.form.confirm_security_change"), i18n.T("common.cancel"), f.busy || f.uncertain,
+			func() { f.dispatch("commit") }, func() {
+				if !f.busy {
+					f.cancel()
+				}
+			})
+	}
 }
 
 // accountInput keeps page fields labeled while allowing callers to preserve

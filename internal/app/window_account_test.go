@@ -108,7 +108,7 @@ func TestAccountCenterLoginFromSettingsRevokesPanel(t *testing.T) {
 	panel.New(0)
 	panel.Fields.Text = "private send"
 	main := ui.NewTester(a.view, 1280, 820)
-	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	settings := ui.NewTester(a.settingsWindowView, 860, 600)
 	uitest.Click(t, settings, "登录服务器")
 	main.Frame()
 	if !a.showLogin || a.sendPanel != nil || !panel.Closed || panel.Fields.Text != "" {

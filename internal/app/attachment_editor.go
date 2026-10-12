@@ -51,16 +51,13 @@ func (a *app) attachmentView(c *ui.Context, e *cipherEditor) {
 						e.attachmentDelete = attachment.ID
 					}
 				})
-				if e.fields.Edit {
-					if e.attachmentDelete == attachment.ID {
-						kit.Notice(c, kit.ToneWarning, i18n.T("vault.attachment.confirm_delete_hint"))
-						if kit.Button(c, i18n.T("vault.attachment.confirm_delete"), "", kit.ButtonDanger, busy || e.uncertain).AlignSelf(ui.Start).Clicked() {
-							a.runAttachmentOperation("delete", attachment)
-						}
-						if kit.Action(c, i18n.T("vault.attachment.keep"), "", false, busy).AlignSelf(ui.Start).Clicked() {
-							e.attachmentDelete = ""
-						}
-					}
+				if e.fields.Edit && e.attachmentDelete == attachment.ID {
+					kit.ConfirmDialog(c, "attachment-delete", i18n.T("vault.attachment.delete"), attachment.FileName+"\n\n"+i18n.T("vault.attachment.confirm_delete_hint"), i18n.T("vault.attachment.confirm_delete"), i18n.T("vault.attachment.keep"), busy || e.uncertain,
+						func() { a.runAttachmentOperation("delete", attachment) }, func() {
+							if !busy {
+								e.attachmentDelete = ""
+							}
+						})
 				}
 			})
 		}

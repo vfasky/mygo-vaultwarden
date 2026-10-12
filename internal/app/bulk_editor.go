@@ -66,9 +66,11 @@ func (a *app) bulkEditorView(c *ui.Context) {
 		}
 	}
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		if a.drawerHeader(c, i18n.T("vault.bulk.title"), i18n.T("vault.bulk.selection_hint")) {
+			return
+		}
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Padding(20).Gap(16).Children(func() {
-				kit.PageHeader(c, i18n.T("vault.bulk.title"), i18n.T("vault.bulk.selection_hint"), nil)
 				if e.submitted {
 					kit.Notice(c, kit.ToneInfo, i18n.T("vault.bulk.submitted_hint"))
 					for _, result := range e.results {
@@ -116,39 +118,34 @@ func (a *app) bulkEditorView(c *ui.Context) {
 						}
 					})
 					kit.Notice(c, kit.ToneInfo, i18n.T("vault.bulk.description"))
-					if e.confirm {
-						message := i18n.T("vault.bulk.confirm_action_hint")
-						if e.action == vaultwarden.CipherDeletePermanently {
-							message = i18n.T("vault.bulk.confirm_delete_hint")
-						}
-						kit.Notice(c, kit.ToneWarning, message)
-					}
 				}
 			})
 		})
 		kit.ActionBar(c, func() {
 			ui.Spacer(c)
-			if kit.Action(c, i18n.T("vault.bulk.close"), "", false, a.pending != 0).Clicked() {
-				a.bulkEditor = nil
-			}
-			if !e.submitted {
-				if e.confirm {
-					if kit.Action(c, i18n.T("vault.bulk.cancel_confirmation"), "", false, a.pending != 0).Clicked() {
-						e.confirm = false
-					}
-					kind := kit.ButtonPrimary
-					if e.action == vaultwarden.CipherTrash || e.action == vaultwarden.CipherDeletePermanently {
-						kind = kit.ButtonDanger
-					}
-					if kit.Button(c, i18n.T("vault.bulk.confirm_action"), "", kind, a.pending != 0).Clicked() {
-						a.mutateBulk()
-					}
-				} else if kit.Action(c, i18n.T("vault.bulk.continue"), "", true, a.pending != 0).Clicked() {
-					e.confirm = true
-				}
+			if !e.submitted && kit.Action(c, i18n.T("vault.bulk.continue"), "", true, a.pending != 0 || e.confirm || selected == 0).Clicked() {
+				e.confirm = true
 			}
 		}).Margin(0, 20) // in line with the padded content above
 	})
+	if e.confirm && !e.submitted {
+		message := i18n.T("vault.bulk.confirm_action_hint")
+		if e.action == vaultwarden.CipherDeletePermanently {
+			message = i18n.T("vault.bulk.confirm_delete_hint")
+		}
+		for _, op := range bulkActions {
+			if op.action == e.action {
+				message = i18n.T(op.label) + "\n" + i18n.Tf("vault.bulk.selected_count", selected, len(e.candidates)) + "\n\n" + message
+				break
+			}
+		}
+		kit.ConfirmDialog(c, "bulk-confirm", i18n.T("vault.bulk.title"), message, i18n.T("vault.bulk.confirm_action"), i18n.T("vault.bulk.cancel_confirmation"), a.pending != 0,
+			a.mutateBulk, func() {
+				if a.pending == 0 {
+					e.confirm = false
+				}
+			})
+	}
 }
 
 func (a *app) mutateBulk() {

@@ -134,6 +134,7 @@ var send = map[string]text{
 	"send.editor.password":                  {"访问口令", "Access password"},
 	"send.editor.password_hint":             {"留空保留现有访问口令。", "Leave blank to keep the current access password."},
 	"send.editor.private_notes":             {"私人备注", "Private notes"},
+	"send.editor.remove_access_hint":        {"移除后，访问此 Send 将不再需要口令。确认移除访问口令？", "Accessing this Send will no longer require a password. Remove its access password?"},
 	"send.editor.remove_password":           {"移除访问口令", "Remove access password"},
 	"send.editor.save":                      {"保存 Send", "Save Send"},
 	"send.editor.shared_text":               {"分享文本", "Send text"},

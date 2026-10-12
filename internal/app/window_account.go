@@ -93,7 +93,7 @@ func (a *app) accountWindowView(c *ui.Context) {
 				ui.Column(c).Padding(8, 12).Gap(4).Children(func() {
 					ui.Text(c, i18n.T("app.window.account_center_title")).Padding(4, 10, 12, 10).FontSize(11).FontWeight(600).TextColor(kit.SidebarFaint)
 					for _, page := range accountPages {
-						if kit.SidebarItem(c, i18n.T(page.title), page.symbol, "", a.windows.accountTab == page.tab, false, false).Key("account-nav-" + string(page.tab)).Clicked() {
+						if kit.SidebarItem(c.Key("account-nav-"+string(page.tab)), i18n.T(page.title), page.symbol, "", a.windows.accountTab == page.tab, false, false).Clicked() {
 							a.openAccountPage(page.tab)
 						}
 					}

@@ -91,10 +91,10 @@ func (p *APIKeyPanel) View(c *ui.Context) {
 	}
 	disabled := p.Flow.blocked() || p.Flow.confirm || !p.allowed
 	ui.TextInput(c, &p.password).Label(i18n.T("common.current_master_password")).Password().Disabled(disabled)
-	if kit.Action(c, i18n.T("org.apikey.read"), "", !p.rotate, disabled).Key("org-key-read").Clicked() {
+	if kit.Action(c.Key("org-key-read"), i18n.T("org.apikey.read"), "", !p.rotate, disabled).Clicked() {
 		p.rotate = false
 	}
-	if kit.Action(c, i18n.T("org.apikey.rotate"), "", p.rotate, disabled).Key("org-key-rotate").Clicked() {
+	if kit.Action(c.Key("org-key-rotate"), i18n.T("org.apikey.rotate"), "", p.rotate, disabled).Clicked() {
 		p.rotate = true
 	}
 	p.Flow.footer(c, "org-key", i18n.T("org.apikey.confirm_read_rotate"), p.allowed && p.execute != nil && p.password != "", p.start)
@@ -104,10 +104,10 @@ func (p *APIKeyPanel) View(c *ui.Context) {
 		if !p.reveal {
 			field.Password()
 		}
-		if kit.Action(c, i18n.T("org.apikey.toggle_visibility"), "", p.reveal, false).Key("org-key-reveal").Clicked() {
+		if kit.Action(c.Key("org-key-reveal"), i18n.T("org.apikey.toggle_visibility"), "", p.reveal, false).Clicked() {
 			p.reveal = !p.reveal
 		}
-		if kit.Action(c, i18n.T("org.apikey.clear"), "", false, false).Key("org-key-clear").Clicked() {
+		if kit.Action(c.Key("org-key-clear"), i18n.T("org.apikey.clear"), "", false, false).Clicked() {
 			p.key = ""
 			p.clientID = ""
 			p.reveal = false
@@ -227,10 +227,10 @@ func (p *DirectoryPanel) View(c *ui.Context) {
 	ui.TextInput(c, &p.secret).Label(i18n.T("org.directory.temporary_api_key")).Password().Disabled(disabled)
 	ui.TextInput(c, &p.email).Label(i18n.T("org.directory.member_email")).Disabled(disabled)
 	ui.TextInput(c, &p.external).Label(i18n.T("org.directory.member_external_id")).Disabled(disabled)
-	if kit.Action(c, i18n.T("org.directory.mark_member_deleted"), "", p.deleted, disabled).Key("org-dir-deleted").Clicked() {
+	if kit.Action(c.Key("org-dir-deleted"), i18n.T("org.directory.mark_member_deleted"), "", p.deleted, disabled).Clicked() {
 		p.deleted = !p.deleted
 	}
-	if kit.Action(c, i18n.T("org.directory.add_member_preview"), "", true, disabled).Key("org-dir-add").Clicked() {
+	if kit.Action(c.Key("org-dir-add"), i18n.T("org.directory.add_member_preview"), "", true, disabled).Clicked() {
 		p.addMember()
 	}
 	for i, m := range p.members {
@@ -239,7 +239,7 @@ func (p *DirectoryPanel) View(c *ui.Context) {
 			label = i18n.Tf("org.directory.revoked_member", label)
 		}
 		ui.Text(c, label)
-		if kit.Action(c, i18n.T("org.directory.remove_member_row"), "", false, disabled || len(p.groups) > 0).Key("org-dir-remove-" + m.ExternalID).Clicked() {
+		if kit.Action(c.Key("org-dir-remove-"+m.ExternalID), i18n.T("org.directory.remove_member_row"), "", false, disabled || len(p.groups) > 0).Clicked() {
 			p.members = append(p.members[:i], p.members[i+1:]...)
 			delete(p.groupMembers, m.ExternalID)
 			break
@@ -249,22 +249,22 @@ func (p *DirectoryPanel) View(c *ui.Context) {
 		ui.TextInput(c, &p.name).Label(i18n.T("org.directory.group_name")).Disabled(disabled)
 		ui.TextInput(c, &p.groupExternal).Label(i18n.T("org.directory.group_external_id")).Disabled(disabled)
 		for _, m := range p.members {
-			if kit.Action(c, m.Email, "", p.groupMembers[m.ExternalID], disabled).Key("org-dir-group-member-" + m.ExternalID).Clicked() {
+			if kit.Action(c.Key("org-dir-group-member-"+m.ExternalID), m.Email, "", p.groupMembers[m.ExternalID], disabled).Clicked() {
 				p.groupMembers[m.ExternalID] = !p.groupMembers[m.ExternalID]
 			}
 		}
-		if kit.Action(c, i18n.T("org.directory.add_group_preview"), "", true, disabled).Key("org-dir-add-group").Clicked() {
+		if kit.Action(c.Key("org-dir-add-group"), i18n.T("org.directory.add_group_preview"), "", true, disabled).Clicked() {
 			p.addGroup()
 		}
 		for i, g := range p.groups {
 			ui.Text(c, g.Name+" · "+g.ExternalID+" · "+strings.Join(g.MemberExternalIDs, ", "))
-			if kit.Action(c, i18n.T("org.directory.remove_group"), "", false, disabled).Key("org-dir-remove-group-" + g.ExternalID).Clicked() {
+			if kit.Action(c.Key("org-dir-remove-group-"+g.ExternalID), i18n.T("org.directory.remove_group"), "", false, disabled).Clicked() {
 				p.groups = append(p.groups[:i], p.groups[i+1:]...)
 				break
 			}
 		}
 	}
-	if kit.Action(c, i18n.T("org.directory.revoke_absent_members"), "", p.overwrite, disabled).Key("org-dir-overwrite").Clicked() {
+	if kit.Action(c.Key("org-dir-overwrite"), i18n.T("org.directory.revoke_absent_members"), "", p.overwrite, disabled).Clicked() {
 		p.overwrite = !p.overwrite
 	}
 	p.Flow.footer(c, "org-dir", i18n.T("org.directory.confirm_import"), p.allowed && p.execute != nil && p.secret != "" && len(p.members)+len(p.groups) > 0, p.start)

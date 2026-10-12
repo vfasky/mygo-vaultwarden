@@ -31,7 +31,7 @@ func TestPersonalReleaseHidesOrganizationUIWithoutDroppingSyncData(t *testing.T)
 	if !a.windows.settingsOpen {
 		t.Fatal("settings window did not open")
 	}
-	settings := ui.NewTester(a.settingsWindowView, 720, 560)
+	settings := ui.NewTester(a.settingsWindowView, 860, 600)
 	if settings.HasText("组织条目、资源与审计") || settings.HasText("组织恢复登记与管理员恢复") {
 		t.Fatal("organization management entry exposed")
 	}

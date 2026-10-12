@@ -178,7 +178,7 @@ func (v *EmergencyViewer) View(c *ui.Context) {
 		kit.Section(c, i18n.T("account.emergency.view_title"), func() {
 			ui.Text(c, v.contact.Name+" · "+v.contact.Email)
 			kit.Notice(c, kit.ToneWarning, i18n.T("account.emergency.view_hint"))
-			if accountButton(c, i18n.T("account.emergency.confirm_view"), kit.ButtonPrimary).Disabled(v.running || v.terminal || !vaultwarden.EmergencyActionAllowed(v.contact, false, "view")).Key("emergency-view-consent").Clicked() {
+			if accountButton(c.Key("emergency-view-consent"), i18n.T("account.emergency.confirm_view"), kit.ButtonPrimary).Disabled(v.running || v.terminal || !vaultwarden.EmergencyActionAllowed(v.contact, false, "view")).Clicked() {
 				v.load()
 			}
 			if v.terminal && len(v.rows) == 0 {
@@ -188,14 +188,14 @@ func (v *EmergencyViewer) View(c *ui.Context) {
 				ui.Row(c).Gap(12).AlignItems(ui.Center).Children(func() {
 					kit.Icon(c, "vault", 18).TextColor(kit.Purple)
 					ui.Text(c, row.Name).Grow(1).MinWidth(0).SingleLine()
-					if kit.Button(c, i18n.T("account.emergency.select_item"), "", kit.ButtonQuiet, false).Key("emergency-view-item-" + row.ID).Clicked() {
+					if kit.Button(c.Key("emergency-view-item-"+row.ID), i18n.T("account.emergency.select_item"), "", kit.ButtonQuiet, false).Clicked() {
 						v.selected = i
 						v.revealed = false
 					}
 				})
 			}
 			if v.selected >= 0 && v.selected < len(v.rows) {
-				if accountButton(c, i18n.T("account.emergency.toggle_sensitive_data"), kit.ButtonQuiet).Key("emergency-view-reveal").Clicked() {
+				if accountButton(c.Key("emergency-view-reveal"), i18n.T("account.emergency.toggle_sensitive_data"), kit.ButtonQuiet).Clicked() {
 					v.revealed = !v.revealed
 				}
 				if v.revealed {
@@ -229,7 +229,7 @@ func (v *EmergencyViewer) View(c *ui.Context) {
 					}
 				}
 			}
-			if v.running && accountButton(c, i18n.T("account.emergency.cancel_view"), kit.ButtonSecondary).Key("emergency-view-cancel").Clicked() {
+			if v.running && accountButton(c.Key("emergency-view-cancel"), i18n.T("account.emergency.cancel_view"), kit.ButtonSecondary).Clicked() {
 				v.cancelLoad()
 			}
 		})

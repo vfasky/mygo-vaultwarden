@@ -43,7 +43,7 @@ func TestNativeEditorUsesAuthenticatedVaultAndClearsOnLock(t *testing.T) {
 	a := writableUIFixture(t)
 	tt := ui.NewTester(a.view, 1280, 820)
 	uitest.Click(t, tt, "支付卡")
-	uitest.Click(t, tt, "查看与编辑")
+	uitest.Click(t, tt, "编辑")
 	if a.editor == nil || !tt.HasText("编辑支付卡") {
 		t.Fatal("editor unreachable")
 	}

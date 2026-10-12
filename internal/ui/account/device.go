@@ -172,6 +172,9 @@ func (p *DevicePanel) View(c *ui.Context) {
 		ui.Row(c).Children(func() {
 			button(i18n.T("account.device.refresh_requests"), kit.ButtonSecondary, p.Busy, p.Refresh)
 		})
+		if p.Status != "" && p.Status != i18n.T("account.device.status_completed") && p.Status != i18n.T("account.device.status_push_removal_requested") {
+			kit.Notice(c, kit.ToneWarning, p.Status)
+		}
 		kit.Section(c, i18n.T("account.device.devices_title"), func() {
 			if len(p.Devices) == 0 {
 				kit.EmptyState(c, "shield", i18n.T("account.device.empty_devices"), "")
@@ -193,11 +196,12 @@ func (p *DevicePanel) View(c *ui.Context) {
 				}
 			})
 			if p.Confirm == "push" {
-				kit.Notice(c, kit.ToneWarning, i18n.T("account.device.clear_push_hint"))
-				ui.Row(c).Gap(8).Children(func() {
-					button(i18n.T("account.device.confirm_clear_push"), kit.ButtonDanger, p.Busy, p.clearPush)
-					button(i18n.T("common.cancel"), kit.ButtonSecondary, p.Busy, func() { p.Confirm = "" })
-				})
+				kit.ConfirmDialog(c, "device-clear-push", i18n.T("account.device.clear_push"), i18n.T("account.device.clear_push_hint"), i18n.T("account.device.confirm_clear_push"), i18n.T("common.cancel"), p.Busy || p.Uncertain,
+					p.clearPush, func() {
+						if !p.Busy {
+							p.Confirm = ""
+						}
+					})
 			}
 		})
 		kit.Section(c, i18n.T("account.device.requests_title"), func() {
@@ -231,10 +235,6 @@ func (p *DevicePanel) View(c *ui.Context) {
 					button(i18n.T("account.device.confirm_approve_login"), kit.ButtonPrimary, p.Busy || p.Uncertain || !p.Verified, func() { p.Respond(true) })
 				})
 			}
-		})
-		kit.ActionBar(c, func() {
-			ui.Text(c, p.Status).FontSize(12).TextColor(kit.Muted).Grow(1).MinWidth(0)
-			button(i18n.T("common.close"), kit.ButtonSecondary, false, p.Close)
 		})
 	})
 }

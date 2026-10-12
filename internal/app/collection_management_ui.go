@@ -20,7 +20,7 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 	}
 	ui.Text(c, i18n.T("org.collection.title")).FontSize(18)
 	if e.collectionDraft == nil {
-		if canCreate && kit.Action(c, i18n.T("org.collection.create_collection"), "", false, disabled).Key("collection-create").Clicked() {
+		if canCreate && kit.Action(c.Key("collection-create"), i18n.T("org.collection.create_collection"), "", false, disabled).Clicked() {
 			e.collectionID = ""
 			a.runOrganizationManagement("collection-load")
 		}
@@ -28,7 +28,7 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 			if collection.OrganizationID != e.id || !collection.Manage {
 				continue
 			}
-			if kit.Action(c, i18n.Tf("org.collection.manage_title", collection.Name), "", false, disabled).Key("collection-manage-" + collection.ID).Clicked() {
+			if kit.Action(c.Key("collection-manage-"+collection.ID), i18n.Tf("org.collection.manage_title", collection.Name), "", false, disabled).Clicked() {
 				e.collectionID = collection.ID
 				a.runOrganizationManagement("collection-load")
 			}
@@ -39,7 +39,7 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 	ui.TextInput(c, &draft.Name).Label(i18n.T("org.collection.name")).Disabled(disabled)
 	ui.Text(c, i18n.T("org.collection.rename_hint")).MaxLines(4)
 	if !draft.AccessLoaded {
-		if kit.Action(c, i18n.T("org.collection.configure_access"), "", false, disabled).Key("collection-access-load").Clicked() {
+		if kit.Action(c.Key("collection-access-load"), i18n.T("org.collection.configure_access"), "", false, disabled).Clicked() {
 			a.runOrganizationManagement("collection-access")
 		}
 	} else {
@@ -59,23 +59,23 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 			if entry.Assigned {
 				assigned = i18n.T("org.collection.remove_access")
 			}
-			if kit.Action(c, assigned, "", false, disabled).Key("collection-access-assigned-" + entry.ID).Clicked() {
+			if kit.Action(c.Key("collection-access-assigned-"+entry.ID), assigned, "", false, disabled).Clicked() {
 				entry.Assigned = !entry.Assigned
 			}
 			if entry.Assigned {
-				if kit.Action(c, collectionPermissionLabel(i18n.T("org.collection.read_only"), entry.ReadOnly), "", false, disabled).Key("collection-access-read-" + entry.ID).Clicked() {
+				if kit.Action(c.Key("collection-access-read-"+entry.ID), collectionPermissionLabel(i18n.T("org.collection.read_only"), entry.ReadOnly), "", false, disabled).Clicked() {
 					entry.ReadOnly = !entry.ReadOnly
 					if entry.ReadOnly {
 						entry.Manage = false
 					}
 				}
-				if kit.Action(c, collectionPermissionLabel(i18n.T("org.collection.hide_passwords"), entry.HidePasswords), "", false, disabled).Key("collection-access-hide-" + entry.ID).Clicked() {
+				if kit.Action(c.Key("collection-access-hide-"+entry.ID), collectionPermissionLabel(i18n.T("org.collection.hide_passwords"), entry.HidePasswords), "", false, disabled).Clicked() {
 					entry.HidePasswords = !entry.HidePasswords
 					if entry.HidePasswords {
 						entry.Manage = false
 					}
 				}
-				if kit.Action(c, collectionPermissionLabel(i18n.T("org.collection.manage_collection"), entry.Manage), "", false, disabled).Key("collection-access-manage-" + entry.ID).Clicked() {
+				if kit.Action(c.Key("collection-access-manage-"+entry.ID), collectionPermissionLabel(i18n.T("org.collection.manage_collection"), entry.Manage), "", false, disabled).Clicked() {
 					entry.Manage = !entry.Manage
 					if entry.Manage {
 						entry.ReadOnly, entry.HidePasswords = false, false
@@ -84,7 +84,7 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 			}
 		}
 	}
-	if kit.Action(c, i18n.T("org.collection.save_collection"), "", true, disabled || draft.Name == "").Key("collection-save").Clicked() {
+	if kit.Action(c.Key("collection-save"), i18n.T("org.collection.save_collection"), "", true, disabled || draft.Name == "").Clicked() {
 		if draft.AccessChanged() {
 			e.confirmation = "collection-access-save"
 		} else {
@@ -93,7 +93,7 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 	}
 	if e.confirmation == "collection-access-save" {
 		ui.Text(c, i18n.T("org.collection.confirm_access_hint")).MaxLines(4)
-		if kit.Action(c, i18n.T("org.collection.confirm_save_access"), "", true, disabled).Key("collection-access-confirm").Clicked() {
+		if kit.Action(c.Key("collection-access-confirm"), i18n.T("org.collection.confirm_save_access"), "", true, disabled).Clicked() {
 			a.runOrganizationManagement("collection-save")
 		}
 		if kit.Action(c, i18n.T("org.collection.cancel_access_confirmation"), "", false, disabled).Clicked() {
@@ -102,17 +102,16 @@ func (a *app) collectionManagementView(c *ui.Context, e *organizationEditor, dis
 	}
 	if draft.ID() != "" {
 		if e.confirmation != "collection-delete" {
-			if kit.Action(c, i18n.T("org.collection.delete_collection"), "", false, disabled).Key("collection-delete").Clicked() {
+			if kit.Action(c.Key("collection-delete"), i18n.T("org.collection.delete_collection"), "", false, disabled).Clicked() {
 				e.confirmation = "collection-delete"
 			}
 		} else {
-			ui.Text(c, i18n.T("org.collection.confirm_delete_hint")).MaxLines(4)
-			if kit.Action(c, i18n.T("org.collection.confirm_delete"), "", true, disabled).Key("collection-delete-confirm").Clicked() {
-				a.runOrganizationManagement("collection-delete")
-			}
-			if kit.Action(c, i18n.T("org.collection.cancel_delete"), "", false, disabled).Clicked() {
-				e.confirmation = ""
-			}
+			kit.ConfirmDialog(c, "collection-delete", i18n.T("org.collection.delete_collection"), draft.Name+"\n\n"+i18n.T("org.collection.confirm_delete_hint"), i18n.T("org.collection.confirm_delete"), i18n.T("org.collection.cancel_delete"), disabled,
+				func() { a.runOrganizationManagement("collection-delete") }, func() {
+					if !disabled {
+						e.confirmation = ""
+					}
+				})
 		}
 	}
 	if kit.Action(c, i18n.T("org.collection.back_to_list"), "", false, a.pending != 0).Clicked() {

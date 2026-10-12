@@ -14,9 +14,11 @@ import (
 func (a *app) itemAuthorizationView(c *ui.Context) {
 	e := a.editor
 	ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+		if a.drawerHeader(c, i18n.T("app.reprompt.title"), "") {
+			return
+		}
 		ui.Scroll(c).Grow(1).MinHeight(0).Children(func() {
 			ui.Column(c).Gap(16).Padding(20).Children(func() {
-				kit.PageHeader(c, i18n.T("app.reprompt.title"), "", nil)
 				kit.Notice(c, kit.ToneInfo, i18n.T("app.reprompt.hint"))
 				kit.Section(c, i18n.T("login.master_password"), func() {
 					kit.Field(c, "", "", func() {
@@ -27,11 +29,6 @@ func (a *app) itemAuthorizationView(c *ui.Context) {
 		})
 		kit.ActionBar(c, func() {
 			ui.Spacer(c)
-			if kit.Action(c, i18n.T("common.cancel"), "", false, a.pending != 0).Clicked() {
-				*e = cipherEditor{}
-				a.editor = nil
-				a.secretInputVersion++
-			}
 			if kit.Action(c, i18n.T("app.reprompt.verify_open"), "", true, a.pending != 0 || e.repromptPassword == "").Clicked() {
 				a.authorizePersonalItem()
 			}

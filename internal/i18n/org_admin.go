@@ -170,7 +170,6 @@ var orgSettingsCatalog = map[string]text{
 	"org.settings.billing_email":              {"账单邮箱", "Billing email"},
 	"org.settings.cancel_and_lock":            {"取消并锁定密码库", "Cancel and lock vault"},
 	"org.settings.cancel_operation":           {"取消组织操作", "Cancel organization operation"},
-	"org.settings.close_management":           {"关闭组织管理", "Close organization management"},
 	"org.settings.confirm_delete":             {"确认永久删除组织", "Confirm permanent deletion"},
 	"org.settings.confirm_delete_hint":        {"这会永久删除整个组织及其密码库，影响所有成员，无法恢复。继续将立即隔离本机此组织访问，其他密码库保留。请输入当前账号主密码确认。", "This permanently deletes the entire organization and its vault for all members. It cannot be undone. Continuing immediately quarantines access to this organization on this Mac; other vaults are retained. Enter your current account's master password to confirm."},
 	"org.settings.confirm_leave":              {"确认退出组织", "Confirm leave organization"},

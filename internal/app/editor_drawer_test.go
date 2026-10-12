@@ -2,6 +2,7 @@
 package app
 
 import (
+	"image/color"
 	"testing"
 	"time"
 
@@ -19,7 +20,7 @@ func TestEditorDrawer(t *testing.T) {
 	defer a.stopNetwork()
 	tt := ui.NewTester(a.view, 1280, 820)
 	uitest.Click(t, tt, "Fixture card")
-	uitest.Click(t, tt, i18n.T("app.detail.view_edit"))
+	uitest.Click(t, tt, i18n.T("app.detail.edit"))
 	if a.editor == nil || !tt.HasText("编辑支付卡") || !tt.HasText("Fixture card") {
 		t.Fatal("editor did not open over the vault")
 	}
@@ -47,12 +48,12 @@ func TestEditorDrawer(t *testing.T) {
 
 	a.openFolderEditor("")
 	tt.Frame()
-	if !tt.HasText(i18n.T("vault.folder.close")) {
+	if _, ok := tt.Find(i18n.T("common.close")); !ok || !tt.HasText(i18n.T("vault.folder.add_title")) {
 		t.Fatal("folder editor not in the drawer")
 	}
 	a.lockInterface()
 	tt.Frame()
-	if a.folderEditor != nil || tt.HasText(i18n.T("vault.folder.close")) {
+	if _, ok := tt.Find(i18n.T("common.close")); a.folderEditor != nil || ok {
 		t.Fatal("lock left the drawer on screen")
 	}
 }
@@ -120,5 +121,69 @@ func TestEditorDrawerFooterShowsOnlyEditorStatus(t *testing.T) {
 	tt.Frame()
 	if !footer() {
 		t.Fatal("the editor footer hid its own status")
+	}
+}
+
+// The title bar keeps only app-wide state, its buttons alike in height; list
+// actions sit on the list header and import/export at the sidebar's foot.
+func TestToolbarActionPlacement(t *testing.T) {
+	a := writableUIFixture(t)
+	defer a.stopNetwork()
+	tt := ui.NewTester(a.view, 1280, 820)
+	tt.Frame()
+	sync, _ := tt.Find(i18n.T("common.sync"))
+	lock, _ := tt.Find(i18n.T("common.lock"))
+	settings, ok := tt.Find(i18n.T("app.window.settings_title"))
+	if !ok || sync.H != lock.H || settings.H != sync.H || settings.W != settings.H {
+		t.Fatalf("title bar buttons differ: sync=%+v lock=%+v settings=%+v", sync, lock, settings)
+	}
+	backup, ok := tt.Find(i18n.T("app.toolbar.import_export"))
+	account, _ := tt.Find(i18n.T("app.window.account_center_title"))
+	if !ok || backup.X+backup.W > a.sidebarWidth(nil) || backup.X < account.X+account.W || backup.Y+backup.H/2 < account.Y || backup.Y+backup.H/2 > account.Y+account.H {
+		t.Fatalf("import/export not beside the account center: %+v account=%+v", backup, account)
+	}
+	bulk, ok := tt.Find(i18n.T("vault.bulk.title"))
+	if !ok || bulk.Y > sync.Y+sync.H+80 || bulk.X < a.sidebarWidth(nil) || bulk.X > 700 {
+		t.Fatalf("bulk action not on the list header: %+v", bulk)
+	}
+	if _, ok := tt.Find(i18n.T("app.toolbar.empty_trash")); ok {
+		t.Fatal("empty trash shown outside the trash")
+	}
+	uitest.Click(t, tt, i18n.T("vault.bulk.title"))
+	if a.bulkEditor == nil {
+		t.Fatal("bulk action did not open the editor")
+	}
+	a.bulkEditor = nil
+	a.category = "trash"
+	tt.Frame()
+	uitest.Click(t, tt, i18n.T("app.toolbar.empty_trash"))
+	if a.bulkEditor == nil {
+		t.Fatal("empty trash did not open the editor")
+	}
+	a.bulkEditor = nil
+	tt.Frame()
+	uitest.Click(t, tt, i18n.T("app.toolbar.import_export"))
+	if a.backupEditor == nil {
+		t.Fatal("import/export did not open the editor")
+	}
+}
+
+// The drawer's close button tints under the pointer like other icon buttons.
+func TestEditorDrawerCloseHover(t *testing.T) {
+	a := writableUIFixture(t)
+	defer a.stopNetwork()
+	a.openBulkEditor(false)
+	tt := ui.NewTester(a.view, 1280, 820)
+	tt.Frame()
+	r, ok := tt.Find(i18n.T("common.close"))
+	if !ok {
+		t.Fatal("close button missing")
+	}
+	at := func() color.Color { return tt.Image().At(int(r.X+r.W/2), int(r.Y+3)) }
+	before := at()
+	tt.Move(r.X+r.W/2, r.Y+r.H/2)
+	tt.Frame()
+	if after := at(); after == before {
+		t.Fatalf("close button did not react to hover: %v", after)
 	}
 }

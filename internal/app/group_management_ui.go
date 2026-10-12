@@ -28,15 +28,15 @@ func (a *app) groupManagementView(c *ui.Context, e *organizationEditor, disabled
 		return
 	}
 	if e.groupDraft == nil {
-		if kit.Action(c, i18n.T("org.group.load_groups"), "", false, disabled).Key("group-list").Clicked() {
+		if kit.Action(c.Key("group-list"), i18n.T("org.group.load_groups"), "", false, disabled).Clicked() {
 			a.runOrganizationManagement("group-list")
 		}
-		if kit.Action(c, i18n.T("org.group.create_group"), "", false, disabled).Key("group-create").Clicked() {
+		if kit.Action(c.Key("group-create"), i18n.T("org.group.create_group"), "", false, disabled).Clicked() {
 			e.groupID = ""
 			a.runOrganizationManagement("group-load")
 		}
 		for _, row := range e.groups {
-			if kit.Action(c, i18n.Tf("org.group.manage_title", row.Name), "", false, disabled).Key("group-edit-" + row.ID).Clicked() {
+			if kit.Action(c.Key("group-edit-"+row.ID), i18n.Tf("org.group.manage_title", row.Name), "", false, disabled).Clicked() {
 				e.groupID = row.ID
 				a.runOrganizationManagement("group-load")
 			}
@@ -69,25 +69,25 @@ func (a *app) groupManagementView(c *ui.Context, e *organizationEditor, disabled
 			label = i18n.Tf("org.collection.collection_label", entry.Label)
 		}
 		ui.Text(c, label).MaxLines(2)
-		if kit.Action(c, collectionPermissionLabel(i18n.T("org.group.assign"), entry.Assigned), "", false, disabled || confirming).Key("group-assign-" + entry.ID).Clicked() {
+		if kit.Action(c.Key("group-assign-"+entry.ID), collectionPermissionLabel(i18n.T("org.group.assign"), entry.Assigned), "", false, disabled || confirming).Clicked() {
 			entry.Assigned = !entry.Assigned
 		}
 		if !entry.Collection || !entry.Assigned {
 			continue
 		}
-		if kit.Action(c, collectionPermissionLabel(i18n.T("org.collection.read_only"), entry.ReadOnly), "", false, disabled || confirming).Key("group-read-" + entry.ID).Clicked() {
+		if kit.Action(c.Key("group-read-"+entry.ID), collectionPermissionLabel(i18n.T("org.collection.read_only"), entry.ReadOnly), "", false, disabled || confirming).Clicked() {
 			entry.ReadOnly = !entry.ReadOnly
 			if entry.ReadOnly {
 				entry.Manage = false
 			}
 		}
-		if kit.Action(c, collectionPermissionLabel(i18n.T("org.collection.hide_passwords"), entry.HidePasswords), "", false, disabled || confirming).Key("group-hide-" + entry.ID).Clicked() {
+		if kit.Action(c.Key("group-hide-"+entry.ID), collectionPermissionLabel(i18n.T("org.collection.hide_passwords"), entry.HidePasswords), "", false, disabled || confirming).Clicked() {
 			entry.HidePasswords = !entry.HidePasswords
 			if entry.HidePasswords {
 				entry.Manage = false
 			}
 		}
-		if kit.Action(c, collectionPermissionLabel(i18n.T("org.collection.manage_collection"), entry.Manage), "", false, disabled || confirming).Key("group-manage-" + entry.ID).Clicked() {
+		if kit.Action(c.Key("group-manage-"+entry.ID), collectionPermissionLabel(i18n.T("org.collection.manage_collection"), entry.Manage), "", false, disabled || confirming).Clicked() {
 			entry.Manage = !entry.Manage
 			if entry.Manage {
 				entry.ReadOnly = false
@@ -96,7 +96,7 @@ func (a *app) groupManagementView(c *ui.Context, e *organizationEditor, disabled
 		}
 	}
 	if !confirming {
-		if kit.Action(c, i18n.T("org.group.save_group"), "", true, disabled || d.Name == "" || d.AccessScope == vaultwarden.GroupScopeUnset).Key("group-save").Clicked() {
+		if kit.Action(c.Key("group-save"), i18n.T("org.group.save_group"), "", true, disabled || d.Name == "" || d.AccessScope == vaultwarden.GroupScopeUnset).Clicked() {
 			e.groupConsent.Close()
 			e.groupConsent = d.Confirm()
 			e.confirmation = "group-save"
@@ -104,9 +104,18 @@ func (a *app) groupManagementView(c *ui.Context, e *organizationEditor, disabled
 		if d.ID() != "" && kit.Action(c, i18n.T("org.group.delete_group"), "", false, disabled).Clicked() {
 			e.confirmation = "group-delete"
 		}
+	} else if e.confirmation == "group-delete" {
+		kit.ConfirmDialog(c, "group", i18n.T("org.group.delete_group"), d.Name+"\n\n"+i18n.T("org.group.confirm_operation_hint"), i18n.T("org.group.confirm_operation"), i18n.T("org.group.cancel_confirmation"), disabled,
+			func() { a.runOrganizationManagement("group-delete") }, func() {
+				if !disabled {
+					e.groupConsent.Close()
+					e.groupConsent = nil
+					e.confirmation = ""
+				}
+			})
 	} else {
 		ui.Text(c, i18n.T("org.group.confirm_operation_hint")).MaxLines(5)
-		if kit.Action(c, i18n.T("org.group.confirm_operation"), "", true, disabled).Key("group-confirm").Clicked() {
+		if kit.Action(c.Key("group-confirm"), i18n.T("org.group.confirm_operation"), "", true, disabled).Clicked() {
 			a.runOrganizationManagement(e.confirmation)
 		}
 		if kit.Action(c, i18n.T("org.group.cancel_confirmation"), "", false, disabled).Clicked() {

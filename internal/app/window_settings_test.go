@@ -27,6 +27,7 @@ func TestWindowsVisualPreviews(t *testing.T) {
 	export := func(name string, view func(*ui.Context), width, height int) {
 		t.Helper()
 		tt := ui.NewTester(view, width, height)
+		tt.SetTitleBar(ui.TitleBar{Height: 50, Left: 88})
 		if strings.HasSuffix(name, "-bottom") {
 			tt.Scroll(float32(width-40), float32(height/2), 0, 1000)
 		}
@@ -46,27 +47,36 @@ func TestWindowsVisualPreviews(t *testing.T) {
 	for _, tab := range []settingsTab{settingsTabGeneral, settingsTabAccount, settingsTabStorage, settingsTabUpdates, settingsTabAbout} {
 		a := previewApp()
 		a.windows.settingsTab = tab
-		export("settings-"+string(tab), a.settingsWindowView, 720, 560)
+		export("settings-"+string(tab), a.settingsWindowView, 860, 600)
 		if tab == settingsTabAccount {
-			export("settings-account-full", a.settingsWindowView, 720, 1000)
-			export("settings-account-bottom", a.settingsWindowView, 720, 560)
+			export("settings-account-full", a.settingsWindowView, 860, 1000)
+			export("settings-account-bottom", a.settingsWindowView, 860, 600)
 		}
 	}
-	for _, tab := range []settingsTab{settingsTabAccount, settingsTabUpdates} {
+	for _, tab := range []settingsTab{settingsTabGeneral, settingsTabAccount, settingsTabStorage, settingsTabUpdates, settingsTabAbout} {
 		i18n.Set(i18n.English)
 		a := previewApp()
 		a.windows.settingsTab = tab
-		export("settings-"+string(tab)+"-en-min", a.settingsWindowView, 620, 460)
-		export("settings-"+string(tab)+"-en-min-bottom", a.settingsWindowView, 620, 460)
+		export("settings-"+string(tab)+"-en-min", a.settingsWindowView, 720, 500)
+		export("settings-"+string(tab)+"-en-min-bottom", a.settingsWindowView, 720, 500)
 		i18n.Set(language)
 	}
 	a := previewApp()
 	a.windows.settingsTab = settingsTabStorage
 	a.snapshot.IndexPending, a.snapshot.CleanupPending = true, true
-	export("settings-storage-pending", a.settingsWindowView, 720, 560)
+	export("settings-storage-pending", a.settingsWindowView, 860, 600)
 	a = passwordLockedApp()
 	a.windows.settingsTab = settingsTabAccount
-	export("settings-account-locked", a.settingsWindowView, 720, 560)
+	export("settings-account-locked", a.settingsWindowView, 860, 600)
+	for _, locale := range []i18n.Lang{i18n.Chinese, i18n.English} {
+		i18n.Set(locale)
+		for _, tab := range []settingsTab{settingsTabAccount, settingsTabStorage} {
+			a := passwordLockedApp()
+			a.windows.settingsTab = tab
+			export("settings-"+string(tab)+"-locked-"+string(locale)+"-min", a.settingsWindowView, 720, 500)
+		}
+	}
+	i18n.Set(language)
 	for _, page := range accountPages {
 		a := previewApp()
 		a.windows.accountTab = page.tab
@@ -89,7 +99,7 @@ func TestWindowsVisualPreviews(t *testing.T) {
 
 func TestSettingsWindowTabs(t *testing.T) {
 	a := previewApp()
-	tt := ui.NewTester(a.settingsWindowView, 720, 560)
+	tt := ui.NewTester(a.settingsWindowView, 860, 600)
 	if !tt.HasText(i18n.T("app.settings.connect_vault")) || tt.HasText(i18n.T("app.settings.refresh_status")) {
 		t.Fatal("default tab must show only account settings")
 	}
@@ -97,6 +107,7 @@ func TestSettingsWindowTabs(t *testing.T) {
 		tab            settingsTab
 		label, content string
 	}{
+		{settingsTabGeneral, i18n.T("settings.tab.general"), i18n.T("app.language.hint")},
 		{settingsTabStorage, i18n.T("app.settings.local_storage_autofill"), i18n.T("app.settings.refresh_status")},
 		{settingsTabUpdates, i18n.T("settings.tab.updates"), i18n.T("settings.updates.automatic_checks")},
 		{settingsTabAbout, i18n.T("settings.tab.about"), i18n.T("settings.about.license")},
@@ -119,7 +130,7 @@ func TestSettingsWindowHidesAccountWhileLockedOrLoggingIn(t *testing.T) {
 			}
 			a.serverURL, a.email, a.masterPassword = "https://private.example.invalid", "private@example.invalid", "private-input"
 			a.windows.settingsTab = tab
-			tt := ui.NewTester(a.settingsWindowView, 720, 560)
+			tt := ui.NewTester(a.settingsWindowView, 860, 600)
 			if !tt.HasText(i18n.T("settings.show_main_window")) || !tt.HasText(i18n.T("app.list.status_locked")) {
 				t.Fatal("locked settings must offer the main window")
 			}
@@ -144,7 +155,7 @@ func TestSettingsWindowUpdatesWithoutPlugin(t *testing.T) {
 	}
 	a := passwordLockedApp()
 	a.windows.settingsTab = settingsTabUpdates
-	tt := ui.NewTester(a.settingsWindowView, 720, 560)
+	tt := ui.NewTester(a.settingsWindowView, 860, 600)
 	for _, text := range []string{i18n.T("settings.updates.unavailable_hint"), i18n.T("settings.updates.last_check"), i18n.T("settings.updates.never_checked"), i18n.T("settings.version_label"), "—"} {
 		if !tt.HasText(text) {
 			t.Fatalf("missing update state: %s", text)
@@ -168,7 +179,7 @@ func TestSettingsWindowAccountServicesDisabled(t *testing.T) {
 		} else {
 			a.pending = 1
 		}
-		tt := ui.NewTester(a.settingsWindowView, 720, 560)
+		tt := ui.NewTester(a.settingsWindowView, 860, 600)
 		if !tt.HasText(reason) {
 			t.Fatal("disabled account services need an explanation")
 		}
@@ -186,7 +197,7 @@ func TestSettingsWindowLoginServer(t *testing.T) {
 	a := previewApp()
 	a.status = "previous status"
 	a.masterPassword = "previous secret"
-	tt := ui.NewTester(a.settingsWindowView, 720, 560)
+	tt := ui.NewTester(a.settingsWindowView, 860, 600)
 	uitest.Click(t, tt, i18n.T("login.title"))
 	if !a.showLogin || a.status != "" || a.masterPassword != "" {
 		t.Fatal("server login did not reset the form and open login")
@@ -202,7 +213,7 @@ func TestSettingsWindowGeneralLanguage(t *testing.T) {
 	defer i18n.SetPreference("")
 	a := passwordLockedApp()
 	a.windows.language = i18n.Current()
-	tt := ui.NewTester(a.frame(func() *mygo.Window { return nil }, a.settingsWindowView), 720, 560)
+	tt := ui.NewTester(a.frame(func() *mygo.Window { return nil }, a.settingsWindowView), 860, 600)
 	uitest.Click(t, tt, "通用")
 	if a.windows.settingsTab != settingsTabGeneral || !tt.HasText("简体中文") {
 		t.Fatalf("general tab missing while locked: %q", tt.Texts())

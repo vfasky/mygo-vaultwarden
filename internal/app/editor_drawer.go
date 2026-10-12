@@ -102,30 +102,50 @@ func drawerTitle(kind string) string {
 	return i18n.T("app.detail.view_edit")
 }
 
-// cancelDrawerEditor is Escape: what the editor's own Cancel or Close does,
-// and nothing where it has none (the comparison of a conflict, an
-// organization) or while an operation runs.
-func (a *app) cancelDrawerEditor() {
+// drawerHeader stays outside the scrolling body in every editor variant.
+// Closing and Escape share the same guards and sensitive-state cleanup.
+func (a *app) drawerHeader(c *ui.Context, title, subtitle string) bool {
+	closed := false
+	ui.Column(c).Padding(20, 20, 0, 20).Shrink(0).Children(func() {
+		kit.PageHeader(c, title, subtitle, func() {
+			// Key the context, not the built button: keying it afterwards
+			// moves its identity past the hover and press lookups.
+			if kit.IconAction(c.Key("drawer-close"), i18n.T("common.close"), "close", !a.canCloseDrawerEditor()).Clicked() {
+				a.cancelDrawerEditor()
+				closed = true
+			}
+		})
+	})
+	return closed
+}
+
+func (a *app) canCloseDrawerEditor() bool {
 	if a.pending != 0 {
+		return false
+	}
+	if a.bulkEditor != nil || a.organizationEditor != nil || a.folderEditor != nil {
+		return true
+	}
+	return a.editor != nil && (a.editor.comparison == nil || a.editor.repromptID != "")
+}
+
+// A conflict comparison keeps its explicit choices; verification can still be
+// cancelled, clearing the complete draft just as its former Cancel button did.
+func (a *app) cancelDrawerEditor() {
+	if !a.canCloseDrawerEditor() {
 		return
 	}
 	switch {
 	case a.bulkEditor != nil:
 		a.bulkEditor = nil
 	case a.organizationEditor != nil:
+		a.clearOrganizationEditor()
 	case a.folderEditor != nil:
 		a.folderEditor = nil
 	case a.editor != nil:
-		e := a.editor
-		switch {
-		case e.comparison != nil:
-		case e.fields.OrganizationID != nil && !e.fields.Edit && e.repromptID == "":
-		case e.repromptID != "" && !e.compareAuthorization:
-			*e = cipherEditor{}
-			a.editor = nil
-			a.secretInputVersion++
-		default:
-			a.editor = nil
-		}
+		clearCipherRowReveal(a.editor)
+		*a.editor = cipherEditor{}
+		a.editor = nil
+		a.secretInputVersion++
 	}
 }

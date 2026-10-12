@@ -67,6 +67,9 @@ func (a *app) syncFailed(reply localstore.Reply, err error) {
 }
 
 func (a *app) stopNetwork() {
+	a.websiteIcons.Close()
+	a.websiteIcons = nil
+	a.websiteIconScope = vaultwarden.Scope{}
 	a.idleLock.stop()
 	a.runtimeReplaceConfirmed = false
 	a.switchReceipt = nil
