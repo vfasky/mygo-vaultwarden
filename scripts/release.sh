@@ -79,21 +79,32 @@ if [[ "$skip_tests" == false ]]; then
   "$go_bin" test -tags headless -count=1 ./...
 fi
 
-step "Building, signing and notarizing"
-bash scripts/build-macos.sh release --notarize
-app="build/release/MyGo Vaultwarden.app"
-
-step "Writing the update and download files"
 dist="build/updates/$version"
 # Files of an earlier attempt at this version are written again.
 rm -rf "$dist"
-bash scripts/release-update.sh -version "$version" -out "$dist" > /dev/null
-download="MyGo-Vaultwarden-$version-macOS.dmg"
-bash scripts/make-dmg.sh "$app" "$dist/$download" --notarize
-manifest="$(ls "$dist"/update-*.json)"
-archive="$(ls "$dist"/*-"$version"-*.tar.gz)"
-(cd "$dist" && shasum -a 256 "$download" "$(basename "$archive")" > SHA256SUMS.txt)
-plutil -extract notes raw -o "$dist/notes.md" "$manifest"
+mkdir -p "$dist"
+# Each architecture gets its own app, DMG, update archive and manifest
+# (update-darwin-arm64.json, update-darwin-amd64.json), so a download holds
+# the code of one processor only.
+downloads=()
+for arch in arm64 x86_64; do
+  case "$arch" in
+    arm64) label=AppleSilicon ;;
+    x86_64) label=Intel ;;
+  esac
+  step "Building, signing and notarizing ($arch)"
+  bash scripts/build-macos.sh release --notarize --arch "$arch"
+  app="build/release-$arch/MyGo Vaultwarden.app"
+  step "Writing the update and download files ($arch)"
+  bash scripts/release-update.sh -app "$app" -version "$version" -out "$dist" > /dev/null
+  download="MyGo-Vaultwarden-$version-macOS-$label.dmg"
+  bash scripts/make-dmg.sh "$app" "$dist/$download" --notarize
+  downloads+=("$download")
+done
+manifests=("$dist"/update-*.json)
+archives=("$dist"/*-"$version"-*.tar.gz)
+(cd "$dist" && shasum -a 256 "${downloads[@]}" "${archives[@]##*/}" > SHA256SUMS.txt)
+plutil -extract notes raw -o "$dist/notes.md" "${manifests[0]}"
 ls -l "$dist"
 if [[ "$upload" == false ]]; then
   printf '\nRelease files are in %s; nothing was uploaded.\n' "$dist"
@@ -118,9 +129,9 @@ if ! gh release view "$tag" --repo "$repo" > /dev/null 2>&1; then
   if [[ "$prerelease" == true ]]; then arguments+=(--prerelease); fi
   gh release create "$tag" "${arguments[@]}"
 fi
-# The manifest goes last, so it never names an archive that is missing.
-gh release upload "$tag" --repo "$repo" --clobber "$dist/$download" "$archive" "$dist/SHA256SUMS.txt"
-gh release upload "$tag" --repo "$repo" --clobber "$manifest"
+# The manifests go last, so they never name an archive that is missing.
+gh release upload "$tag" --repo "$repo" --clobber "${downloads[@]/#/$dist/}" "${archives[@]}" "$dist/SHA256SUMS.txt"
+gh release upload "$tag" --repo "$repo" --clobber "${manifests[@]}"
 if [[ "$publish" == true ]]; then
   if [[ "$prerelease" == true ]]; then
     gh release edit "$tag" --repo "$repo" --draft=false

@@ -13,6 +13,7 @@ for architecture in $ARCHS; do
     -Xlinker -install_name -Xlinker @rpath/libSnapshotBridge.dylib \
     -framework AuthenticationServices \
     "$project_root"/macos/Shared/*.swift "$project_root"/macos/Bridge/*.swift \
+    "$project_root"/macos/UpdateHelper/UpdateHelperProtocol.swift \
     "$project_root"/macos/Authentication/VaultAuthentication.swift \
     "$project_root"/macos/Authentication/AuthenticationBridge.swift -o "$binary"
   binaries+=("$binary")

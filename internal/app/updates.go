@@ -2,6 +2,7 @@
 package app
 
 import (
+	"log"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/egoist/mygo/plugins/updater"
 	"github.com/egoist/mygo/plugins/updater/native"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
+	"github.com/vfasky/mygo-vaultwarden/internal/platform/updatehelper"
 	"github.com/vfasky/mygo-vaultwarden/resources"
 )
 
@@ -30,6 +32,23 @@ func useUpdater(changed func()) {
 	mygo.Use(native.New(updater.Options{Language: string(i18n.Current()), Icon: resources.AppLogo}))
 	updaterUsed.Store(true)
 	updater.OnChange(changed)
+	// The app runs in App Sandbox, so the bundle an update installs carries a
+	// quarantine that keeps it from opening. The update helper, started now
+	// from the current bundle, removes it from the verified new bundle before
+	// the app quits or relaunches (internal/platform/updatehelper).
+	go func() {
+		if updatesEnabled() {
+			updatehelper.Start()
+		}
+	}()
+	mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		if !updatesEnabled() {
+			return
+		}
+		if result := updatehelper.RepairInstalled(); result.Failed() {
+			log.Printf("update helper: the installed app may keep its quarantine (%d)", result)
+		}
+	})
 }
 
 // updatesEnabled caches mygo.Updater.Enabled, which probes the install location.

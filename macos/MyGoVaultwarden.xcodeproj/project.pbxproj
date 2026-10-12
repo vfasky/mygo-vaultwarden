@@ -33,6 +33,13 @@
         A10000000000000000000004 = {isa = PBXBuildFile; fileRef = A20000000000000000000005; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
         A10000000000000000000005 = {isa = PBXBuildFile; fileRef = A20000000000000000000008; };
         A10000000000000000000022 = {isa = PBXBuildFile; fileRef = A20000000000000000000008; };
+        A10000000000000000000040 = {isa = PBXBuildFile; fileRef = A20000000000000000000040; };
+        A10000000000000000000041 = {isa = PBXBuildFile; fileRef = A20000000000000000000041; };
+        A10000000000000000000042 = {isa = PBXBuildFile; fileRef = A20000000000000000000043; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+        A20000000000000000000040 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateHelper/main.swift; sourceTree = "<group>"; };
+        A20000000000000000000041 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateHelper/UpdateHelperProtocol.swift; sourceTree = "<group>"; };
+        A20000000000000000000042 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = UpdateHelper/Info.plist; sourceTree = "<group>"; };
+        A20000000000000000000043 = {isa = PBXFileReference; explicitFileType = "wrapper.xpc-service"; includeInIndex = 0; path = UpdateHelper.xpc; sourceTree = BUILT_PRODUCTS_DIR; };
         A20000000000000000000008 = {isa = PBXFileReference; lastKnownFileType = image.icns; path = App/AppIcon.icns; sourceTree = "<group>"; };
         A20000000000000000000001 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFill/CredentialProviderViewController.swift; sourceTree = "<group>"; };
         A20000000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Shared/VaultCredential.swift; sourceTree = "<group>"; };
@@ -42,14 +49,14 @@
         A20000000000000000000007 = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = AutoFill/Info.plist; sourceTree = "<group>"; };
         A20000000000000000000030 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/VaultAuthentication.swift; sourceTree = "<group>"; };
         A20000000000000000000031 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Authentication/AuthenticationBridge.swift; sourceTree = "<group>"; };
-        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000030, A20000000000000000000031, A20000000000000000000001, A20000000000000000000002, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A20000000000000000000015, A20000000000000000000016, A20000000000000000000017, A20000000000000000000018, A20000000000000000000019, A20000000000000000000020, A20000000000000000000021, A30000000000000000000002, ); sourceTree = "<group>"; };
-        A30000000000000000000002 = {isa = PBXGroup; name = Products; children = (A20000000000000000000004, A20000000000000000000005, ); sourceTree = "<group>"; };
+        A30000000000000000000001 = {isa = PBXGroup; children = (A20000000000000000000030, A20000000000000000000031, A20000000000000000000001, A20000000000000000000002, A20000000000000000000006, A20000000000000000000007, A20000000000000000000008, A20000000000000000000010, A20000000000000000000011, A20000000000000000000012, A20000000000000000000013, A20000000000000000000014, A20000000000000000000015, A20000000000000000000016, A20000000000000000000017, A20000000000000000000018, A20000000000000000000019, A20000000000000000000020, A20000000000000000000021, A20000000000000000000040, A20000000000000000000041, A20000000000000000000042, A30000000000000000000002, ); sourceTree = "<group>"; };
+        A30000000000000000000002 = {isa = PBXGroup; name = Products; children = (A20000000000000000000004, A20000000000000000000005, A20000000000000000000043, ); sourceTree = "<group>"; };
         A40000000000000000000001 = {
             isa = PBXNativeTarget;
             buildConfigurationList = A80000000000000000000002;
-            buildPhases = (A50000000000000000000001, A50000000000000000000005, A50000000000000000000004, );
+            buildPhases = (A50000000000000000000001, A50000000000000000000005, A50000000000000000000004, A50000000000000000000007, );
             buildRules = ();
-            dependencies = (A60000000000000000000002, );
+            dependencies = (A60000000000000000000002, A60000000000000000000004, );
             name = MyGoVaultwarden;
             productName = "MyGo Vaultwarden";
             productReference = A20000000000000000000004;
@@ -66,6 +73,21 @@
             productReference = A20000000000000000000005;
             productType = "com.apple.product-type.app-extension";
         };
+        A40000000000000000000003 = {
+            isa = PBXNativeTarget;
+            buildConfigurationList = A80000000000000000000004;
+            buildPhases = (A50000000000000000000006, );
+            buildRules = ();
+            dependencies = ();
+            name = UpdateHelper;
+            productName = UpdateHelper;
+            productReference = A20000000000000000000043;
+            productType = "com.apple.product-type.xpc-service";
+        };
+        A50000000000000000000006 = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000000000000000000040, A10000000000000000000041, ); runOnlyForDeploymentPostprocessing = 0; };
+        A50000000000000000000007 = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = "$(CONTENTS_FOLDER_PATH)/XPCServices"; dstSubfolderSpec = 16; files = (A10000000000000000000042, ); name = "Embed update helper"; runOnlyForDeploymentPostprocessing = 0; };
+        A60000000000000000000003 = {isa = PBXContainerItemProxy; containerPortal = A70000000000000000000001; proxyType = 1; remoteGlobalIDString = A40000000000000000000003; remoteInfo = UpdateHelper; };
+        A60000000000000000000004 = {isa = PBXTargetDependency; target = A40000000000000000000003; targetProxy = A60000000000000000000003; };
         A50000000000000000000001 = {
             isa = PBXShellScriptBuildPhase;
             alwaysOutOfDate = 1;
@@ -91,6 +113,7 @@
                 LastUpgradeCheck = 2700;
                 TargetAttributes = {
                     A40000000000000000000001 = {CreatedOnToolsVersion = 27.0; SystemCapabilities = {com.apple.AutoFillCredentialProvider = {enabled = 1; }; com.apple.Sandbox = {enabled = 1; }; }; };
+                    A40000000000000000000003 = {CreatedOnToolsVersion = 27.0; };
                     A40000000000000000000002 = {CreatedOnToolsVersion = 27.0; SystemCapabilities = {com.apple.AutoFillCredentialProvider = {enabled = 1; }; com.apple.Sandbox = {enabled = 1; }; }; };
                 };
             };
@@ -103,11 +126,12 @@
             productRefGroup = A30000000000000000000002;
             projectDirPath = "";
             projectRoot = "";
-            targets = (A40000000000000000000001, A40000000000000000000002, );
+            targets = (A40000000000000000000001, A40000000000000000000002, A40000000000000000000003, );
         };
         A80000000000000000000001 = {isa = XCConfigurationList; buildConfigurations = (A90000000000000000000001, A90000000000000000000002, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
         A80000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (A90000000000000000000003, A90000000000000000000004, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
         A80000000000000000000003 = {isa = XCConfigurationList; buildConfigurations = (A90000000000000000000005, A90000000000000000000006, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+        A80000000000000000000004 = {isa = XCConfigurationList; buildConfigurations = (A90000000000000000000007, A90000000000000000000008, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
         A90000000000000000000001 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {
             CLANG_ENABLE_MODULES = YES; SDKROOT = macosx; MACOSX_DEPLOYMENT_TARGET = 14.0;
             SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; ONLY_ACTIVE_ARCH = YES; ENABLE_DEBUG_DYLIB = NO;
@@ -147,6 +171,16 @@
             APPLICATION_EXTENSION_API_ONLY = YES; ENABLE_HARDENED_RUNTIME = YES;
             SKIP_INSTALL = YES; GENERATE_INFOPLIST_FILE = NO;
             LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks";
+        }; };
+        A90000000000000000000007 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {
+            PRODUCT_NAME = UpdateHelper; PRODUCT_BUNDLE_IDENTIFIER = "yz.sh.mygo-vaultwarden.update-helper";
+            INFOPLIST_FILE = UpdateHelper/Info.plist; GENERATE_INFOPLIST_FILE = NO;
+            ENABLE_HARDENED_RUNTIME = YES; SKIP_INSTALL = YES;
+        }; };
+        A90000000000000000000008 = {isa = XCBuildConfiguration; name = Release; buildSettings = {
+            PRODUCT_NAME = UpdateHelper; PRODUCT_BUNDLE_IDENTIFIER = "yz.sh.mygo-vaultwarden.update-helper";
+            INFOPLIST_FILE = UpdateHelper/Info.plist; GENERATE_INFOPLIST_FILE = NO;
+            ENABLE_HARDENED_RUNTIME = YES; SKIP_INSTALL = YES;
         }; };
     };
     rootObject = A70000000000000000000001;

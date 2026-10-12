@@ -2,7 +2,11 @@
 
 MyGo 原生更新窗口负责检查版本、展示发布说明、下载进度、安装及重新启动。用户可在“设置 › 更新”调整自动检查、自动下载，或通过应用菜单“检查更新…”主动检查。仅已配置更新 feed 与公钥的 Release 构建启用；Debug 和 `mygo dev` 永不自动更新。未配置时构建仍成功，应用会说明此构建不会自动更新。
 
-更新先读取平台 manifest，再下载完整归档，核对大小，并使用应用内置的 Ed25519 公钥验证归档 SHA-256 摘要的签名；校验成功后解压并替换整个 `.app` bundle。更新器需要对安装目录及应用旁的临时目录有写权限，推荐安装到当前用户可写的 `~/Applications`。只读磁盘映像、不可写位置无法自更新。应用启用了 App Sandbox，沙盒默认禁止写入自身所在目录，因此 `App.entitlements` 为 `/Applications/` 与 `~/Applications/` 声明了临时例外（`com.apple.security.temporary-exception.files.*.read-write`，仅限 Developer ID 分发，不适用于 Mac App Store）。安装在其他目录的构建会提示“无法自行更新”。更新签名与 Apple 代码签名用途不同，两者都需要；发布工具不替代签名、公证或安装验收。
+更新先读取平台 manifest，再下载完整归档，核对大小，并使用应用内置的 Ed25519 公钥验证归档 SHA-256 摘要的签名；校验成功后解压并替换整个 `.app` bundle。更新器需要对安装目录及应用旁的临时目录有写权限，推荐安装到当前用户可写的 `~/Applications`。只读磁盘映像、不可写位置无法自更新。应用启用了 App Sandbox，沙盒默认禁止写入自身所在目录，因此 `App.entitlements` 为 `/Applications/` 与 `~/Applications/` 声明了临时例外（`com.apple.security.temporary-exception.files.*.read-write`，仅限 Developer ID 分发，不适用于 Mac App Store）。安装在其他目录的构建会提示“无法自行更新”。
+
+沙盒进程写出的文件会被系统打上带“沙盒创建”标记的 `com.apple.quarantine`，沙盒内无法去除；带这个标记的应用 Gatekeeper 拒绝打开（`spctl` 报 “File created by an AppSandbox, exec/open not allowed”）。因此应用内置了不开沙盒的 XPC 服务 `Contents/XPCServices/UpdateHelper.xpc`（`macos/UpdateHelper`）：启用更新的构建在启动时从当前 bundle 拉起它，并用一个不回复的请求让它保持运行，使 bundle 被替换后它仍是旧版的代码；应用退出前（包括更新后的“重新启动”）在 `OnBeforeQuit` 中调用它。服务只处理自身所在的 bundle，不接收路径参数：该 bundle 没有隔离标记时什么也不做；有标记时，只有签名满足“Apple 签发、标识符 `yz.sh.mygo-vaultwarden`、与服务同一团队、已公证”并通过严格的嵌套代码校验，才逐个文件移除标记，否则保持原样交给 Gatekeeper。服务只接受同团队主应用的连接。服务若在更新前意外退出，会从替换后的 bundle 重启失败，此时新版本仍需手动执行 `xattr -dr com.apple.quarantine`。0.1.2 及更早版本没有这个服务，从它们更新后的应用打不开，需手动用 DMG 安装一次。
+
+更新签名与 Apple 代码签名用途不同，两者都需要；发布工具不替代签名、公证或安装验收。
 
 ## 密钥与配置
 
@@ -55,7 +59,7 @@ GO=$(bash scripts/resolve-go.sh)
 bash scripts/release.sh
 ```
 
-脚本依次：检查三处版本一致、CHANGELOG 有该版本、tag 未指向其他提交、同版本 release 未公开；运行 `go vet` 与 `go test`；`build-macos.sh release --notarize` 构建、签名、公证并 staple；生成更新归档、manifest、首次安装用的 `MyGo-Vaultwarden-<版本>-macOS.dmg`（`scripts/make-dmg.sh` 用 `create-dmg` 制作，窗口内有拖到“应用程序”的提示，已签名、公证并 staple；需要 `brew install create-dmg`，且需在有登录会话的 Mac 上运行以生成 Finder 布局） 与 `SHA256SUMS.txt`（`build/updates/<版本>/`）。随后询问确认，再创建并推送 tag `v<版本>`，创建草稿 release，先上传 dmg、归档与校验文件，最后上传 manifest。
+脚本依次：检查三处版本一致、CHANGELOG 有该版本、tag 未指向其他提交、同版本 release 未公开；运行 `go vet` 与 `go test`；然后对 Apple 芯片（arm64）与 Intel（x86_64）各执行一遍：`build-macos.sh release --notarize --arch <架构>` 构建、签名、公证并 staple 到 `build/release-<架构>/`，生成该架构的更新归档与 manifest（`update-darwin-arm64.json`、`update-darwin-amd64.json`），以及首次安装用的 `MyGo-Vaultwarden-<版本>-macOS-AppleSilicon.dmg` / `MyGo-Vaultwarden-<版本>-macOS-Intel.dmg`（`scripts/make-dmg.sh` 用 `create-dmg` 制作，窗口内有拖到“应用程序”的提示，已签名、公证并 staple；需要 `brew install create-dmg`，且需在有登录会话的 Mac 上运行以生成 Finder 布局） 与 `SHA256SUMS.txt`（`build/updates/<版本>/`）。随后询问确认，再创建并推送 tag `v<版本>`，创建草稿 release，先上传 dmg、归档与校验文件，最后上传 manifest。
 
 草稿不会进入应用的更新通道。在 GitHub 上检查发布说明与文件后公开：
 
@@ -81,13 +85,13 @@ gh release edit v<版本> --repo vfasky/mygo-vaultwarden --draft=false --latest
 `scripts/release.sh` 按以下步骤执行，也可以手动分步运行。先同步 `mygo.json`、Xcode `MARKETING_VERSION` 和 `CHANGELOG.md` 的版本；当前为 `0.1.0`。发布说明取 `## 0.1.0` 下直到下一个二级标题的 Markdown，支持 `## [0.1.0] - 日期`，缺失或内容为空会失败。
 
 ```sh
-# 配置与密钥就绪后，构建、签名、公证并 staple
-bash scripts/build-macos.sh release --notarize
+# 配置与密钥就绪后，按架构构建、签名、公证并 staple（arm64 或 x86_64）
+bash scripts/build-macos.sh release --notarize --arch arm64
 # 检查已生成的 app，生成更新文件；不签名、不上传
-bash scripts/release-update.sh
+bash scripts/release-update.sh -app "build/release-arm64/MyGo Vaultwarden.app"
 ```
 
-第二个脚本执行 `codesign --verify --deep --strict` 和 `xcrun stapler validate`，任一步失败都停止。随后 Go 工具读取 `Info.plist` 的 `CFBundleShortVersionString`，并使用 `debug/macho` 检测 `CFBundleExecutable`：arm64 对应 `darwin-arm64`，x86_64 对应 `darwin-amd64`，同时含这两种架构的 Fat Mach-O 对应 `darwin-universal`。Xcode 链接注入使用 `$ARCHS` 得到相同目标，不依赖构建主机架构。
+第二个脚本执行 `codesign --verify --deep --strict` 和 `xcrun stapler validate`，任一步失败都停止。随后 Go 工具读取 `Info.plist` 的 `CFBundleShortVersionString`，并使用 `debug/macho` 检测 `CFBundleExecutable`：arm64 对应 `darwin-arm64`，x86_64 对应 `darwin-amd64`，同时含这两种架构的 Fat Mach-O 对应 `darwin-universal`。正式发布按架构分别构建，不再发布 `darwin-universal`；0.1.2 及更早的通用版读取 `update-darwin-universal.json`，从 0.1.3 起收不到应用内更新（它们装上的更新也会因隔离标记打不开），需手动安装对应架构的 DMG。不带 `--arch` 时 `build-macos.sh` 仍按 Xcode 默认构建通用版到 `build/<mode>/`。Xcode 链接注入使用 `$ARCHS` 得到相同目标，不依赖构建主机架构。
 
 可显式指定路径和版本（覆盖值须与实际应用及发布平台一致）：
 

@@ -8,12 +8,23 @@ mode="${1:-debug}"
 case "$mode" in
   debug) configuration=Debug ;;
   release) configuration=Release ;;
-  *) echo "Usage: $0 [debug|release] [--notarize]" >&2; exit 2 ;;
+  *) echo "Usage: $0 [debug|release] [--notarize] [--arch arm64|x86_64]" >&2; exit 2 ;;
 esac
-notarize="${2:-}"
-if [[ -n "$notarize" && "$notarize" != --notarize ]]; then
-  echo "Unknown option: $notarize" >&2; exit 2
-fi
+shift || true
+notarize="" arch=""
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --notarize) notarize=--notarize; shift ;;
+    --arch)
+      [[ $# -ge 2 ]] || { echo "Missing --arch value." >&2; exit 2; }
+      arch="$2"; shift 2 ;;
+    *) echo "Unknown option: $1" >&2; exit 2 ;;
+  esac
+done
+case "$arch" in
+  ""|arm64|x86_64) ;;
+  *) echo "Unsupported architecture: $arch (arm64 or x86_64)" >&2; exit 2 ;;
+esac
 if [[ "$notarize" == --notarize && "$mode" != release ]]; then
   echo "Notarization requires release mode." >&2; exit 2
 fi
@@ -37,11 +48,15 @@ if [[ -z "$identity_hash" ]]; then
   echo "Missing signing identity: $identity" >&2; exit 1
 fi
 export GO_BIN="$(bash scripts/resolve-go.sh)"
-output="$project_root/build/$mode"
+# One architecture per build: build/release-arm64, build/release-x86_64.
+# Without --arch Xcode builds the default (universal) app into build/<mode>.
+output="$project_root/build/$mode${arch:+-$arch}"
+arch_settings=()
+if [[ -n "$arch" ]]; then arch_settings=("ARCHS=$arch" ONLY_ACTIVE_ARCH=NO); fi
 mkdir -p "$output"
 staging="$(mktemp -d "$output/.staging.XXXXXX")"
 trap 'rm -rf "$staging"' EXIT
-archive="$project_root/build/MyGoVaultwarden-$mode.xcarchive"
+archive="$project_root/build/MyGoVaultwarden-$mode${arch:+-$arch}.xcarchive"
 
 # Both targets carry restricted AutoFill entitlements. Xcode first provisions
 # the app IDs for development, then issues/reuses Developer ID profiles during
@@ -50,7 +65,7 @@ archive="$project_root/build/MyGoVaultwarden-$mode.xcarchive"
 xcodebuild -project macos/MyGoVaultwarden.xcodeproj -scheme MyGoVaultwarden \
   -configuration "$configuration" -derivedDataPath build/ArchiveDerivedData \
   -archivePath "$archive" -destination 'generic/platform=macOS' \
-  "DEVELOPMENT_TEAM=$team" -allowProvisioningUpdates archive
+  "DEVELOPMENT_TEAM=$team" ${arch_settings[@]+"${arch_settings[@]}"} -allowProvisioningUpdates archive
 cp macos/ExportOptions.plist "$staging/ExportOptions.plist"
 plutil -replace teamID -string "$team" "$staging/ExportOptions.plist"
 plutil -replace signingCertificate -string "$identity_hash" "$staging/ExportOptions.plist"

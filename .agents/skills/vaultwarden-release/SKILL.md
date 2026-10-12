@@ -69,13 +69,13 @@ git commit -m "发布 <版本>"
 bash scripts/release.sh --yes
 ```
 
-整个过程约 2–5 分钟（测试、Xcode 归档与导出、Apple 公证、生成文件、推 tag、上传），用足够长的超时。它会：
+整个过程约 8–15 分钟（两个架构各公证应用与 DMG）（测试、Xcode 归档与导出、Apple 公证、生成文件、推 tag、上传），用足够长的超时。它会：
 
 1. 核对三处版本、CHANGELOG、tag 未指向其他提交、同版本 release 未公开。
 2. `go vet` 与 `go test -tags headless`。
-3. `scripts/build-macos.sh release --notarize`：Developer ID 签名、公证、staple。
-4. 生成 `build/updates/<版本>/`：`mygo-vaultwarden-<版本>-darwin-universal.tar.gz`、`update-darwin-universal.json`、`MyGo-Vaultwarden-<版本>-macOS.dmg`、`SHA256SUMS.txt`、`notes.md`。
-5. 创建并推送 tag `v<版本>`，创建草稿 release；先上传 dmg、归档、校验文件，最后上传 manifest。
+3. 对 arm64 与 x86_64 各执行 `scripts/build-macos.sh release --notarize --arch <架构>`：Developer ID 签名、公证、staple，输出到 `build/release-<架构>/`。
+4. 生成 `build/updates/<版本>/`：每个架构一份更新归档 `mygo-vaultwarden-<版本>-darwin-arm64.tar.gz` / `-darwin-amd64.tar.gz`、manifest `update-darwin-arm64.json` / `update-darwin-amd64.json`、DMG `MyGo-Vaultwarden-<版本>-macOS-AppleSilicon.dmg` / `-macOS-Intel.dmg`，以及 `SHA256SUMS.txt`、`notes.md`。
+5. 创建并推送 tag `v<版本>`，创建草稿 release；先上传 DMG、归档、校验文件，最后上传两个 manifest。
 
 用户只想先检查产物时用 `--no-upload`（不打 tag、不上传）。其他选项：`--skip-tests`、`--publish`（见下）。
 
@@ -87,7 +87,7 @@ bash scripts/release.sh --yes
 gh release view v<版本> --repo vfasky/mygo-vaultwarden --json isDraft,isPrerelease,assets --jq '{isDraft, isPrerelease, assets: [.assets[].name]}'
 ```
 
-应为草稿，含上述四个文件（dmg、tar.gz、SHA256SUMS.txt、update-darwin-universal.json）。把 release 页面地址 `https://github.com/vfasky/mygo-vaultwarden/releases` 告诉用户，请用户检查说明和文件。
+应为草稿，含上述七个文件（两个 DMG、两个 tar.gz、SHA256SUMS.txt、两个 manifest）。把 release 页面地址 `https://github.com/vfasky/mygo-vaultwarden/releases` 告诉用户，请用户检查说明和文件。
 
 ### 5. 公开（需用户再次明确同意）
 
@@ -98,10 +98,12 @@ gh release edit v<版本> --repo vfasky/mygo-vaultwarden --draft=false --latest
 prerelease 不加 `--latest`。公开后核对应用实际读取的更新源：
 
 ```sh
-curl -sL https://github.com/vfasky/mygo-vaultwarden/releases/latest/download/update-darwin-universal.json | plutil -extract version raw -o - -
+for target in arm64 amd64; do
+  curl -sL https://github.com/vfasky/mygo-vaultwarden/releases/latest/download/update-darwin-$target.json | plutil -extract version raw -o - -
+done
 ```
 
-输出应为新版本号。旧版本应用会在下次自动检查（每天一次）或用户点“检查更新…”时收到更新。
+两行输出都应为新版本号。旧版本应用会在下次自动检查（每天一次）或用户点“检查更新…”时收到更新。
 
 ## 出错时
 
