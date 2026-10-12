@@ -401,7 +401,27 @@ type syncSummaryStatus struct {
 }
 
 func syncSummaryText(count int, s vaultwarden.Summary) string {
-	return i18n.Tf("app.sync.summary", count, s.Logins, s.Organizations, s.OtherTypes, s.Reprompt, s.Archived, s.Restricted, s.UnsupportedURIs)
+	text := i18n.Tf("app.sync.summary", count, s.Logins)
+	var skipped []string
+	for _, e := range []struct {
+		key string
+		n   int
+	}{
+		{"app.sync.skip_organizations", s.Organizations},
+		{"app.sync.skip_other_types", s.OtherTypes},
+		{"app.sync.skip_reprompt", s.Reprompt},
+		{"app.sync.skip_archived", s.Archived},
+		{"app.sync.skip_restricted", s.Restricted},
+		{"app.sync.skip_uri_rules", s.UnsupportedURIs},
+	} {
+		if e.n > 0 {
+			skipped = append(skipped, i18n.Tf(e.key, e.n))
+		}
+	}
+	if len(skipped) == 0 {
+		return text
+	}
+	return text + i18n.Tf("app.sync.skipped", strings.Join(skipped, i18n.T("app.sync.skip_separator")))
 }
 
 // retranslateStatus rewords the sync summary in the language now in force and
