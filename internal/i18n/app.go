@@ -60,7 +60,7 @@ var app = map[string]text{
 	"app.settings.end_temporary_session":        {"结束临时在线会话（保留原缓存）", "End temporary session (keep original cache)"},
 	"app.settings.err_credentials_changed":      {"登录凭据已更新，请重新打开此页面。", "Login credentials have changed. Reopen this page."},
 	"app.settings.last_synced":                  {"最近同步：%s", "Last synced: %s"},
-	"app.settings.local_storage_autofill":       {"本机存储与自动填充", "Storage & AutoFill on this Mac"},
+	"app.settings.local_storage_autofill":       {"本机存储与自动填充", "Storage & AutoFill"},
 	"app.settings.log_out":                      {"退出账号", "Log out"},
 	"app.settings.no_snapshot":                  {"尚无本机快照", "No local snapshot yet"},
 	"app.settings.open_account_security":        {"打开账号与安全", "Open account & security"},
