@@ -86,7 +86,7 @@ func clearSyncSecrets(result *vaultwarden.SyncResult) {
 		result.PasswordUnlock = nil
 	}
 	for i := range result.Credentials {
-		result.Credentials[i].Password = ""
+		result.Credentials[i].Password, result.Credentials[i].TOTP = "", ""
 	}
 	result.Credentials = nil
 }

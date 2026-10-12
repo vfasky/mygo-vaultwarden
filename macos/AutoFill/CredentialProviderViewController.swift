@@ -285,6 +285,14 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
                                 throw SnapshotError.stale
                             }
                             try store.withCurrentLease(unlocked) {
+                                if AutoFillPreferences.copyTOTP, let totp = credential.totp, !totp.isEmpty {
+                                    do {
+                                        let code = try TOTP.generate(totp, now: Date()).code
+                                        if !NativeSensitivePasteboard(NSPasteboard.general).replace(secret: code, owner: UUID().uuidString) {
+                                            self.logger.error("Verification code clipboard write failed")
+                                        }
+                                    } catch { self.logger.error("Verification code generation failed") }
+                                }
                                 self.finished = true; self.lease = nil
                                 self.extensionContext.completeRequest(withSelectedCredential: ASPasswordCredential(user: credential.username, password: credential.password), completionHandler: nil)
                                 self.logger.notice("Authenticated snapshot credential submitted to system")

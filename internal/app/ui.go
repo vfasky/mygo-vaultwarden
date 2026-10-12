@@ -481,13 +481,16 @@ func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disa
 	return kit.SidebarItem(c, title, symbol, count, selected, disabled, a.sidebarCollapsed)
 }
 
+// listFade is the height of the fades at the credential list's edges.
+const listFade = 14
+
 func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential) {
 	w, _ := c.Size()
 	width := float32(304)
 	if w >= 1240 {
 		width = 330
 	}
-	ui.Column(c).Width(width).Shrink(0).Padding(12).Gap(12).Background(kit.Panel).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65)).Children(func() {
+	ui.Column(c).Width(width).Shrink(0).Padding(12, 12, 6, 12).Gap(12).Background(kit.Panel).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65)).Children(func() {
 		ui.Row(c).Padding(10, 4, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, a.currentCategory().title).FontSize(22).FontWeight(650).MinWidth(0).SingleLine()
 			ui.Spacer(c)
@@ -524,56 +527,65 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 				ui.Text(c, "⌘ F").FontSize(10).TextColor(kit.Muted)
 			}
 		})
-		ui.Row(c).Padding(0, 8).Children(func() {
-			ui.Text(c, i18n.T("common.name")).FontSize(11).TextColor(kit.Muted)
-			ui.Spacer(c)
-			ui.Text(c, "A – Z").FontSize(10).TextColor(kit.Muted)
-		})
-		if len(items) == 0 {
-			ui.Column(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Gap(12).Padding(20).Children(func() {
-				kit.Icon(c, "search", 30).TextColor(kit.Purple)
-				title, subtitle := a.emptyListMessage()
-				ui.Text(c, title).FontSize(15).FontWeight(550).TextAlign(ui.Center)
-				ui.Text(c, subtitle).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
+		// The column header sits flush on the list, whose padded edges hold
+		// the fades that rows scroll under.
+		ui.Column(c).Grow(1).MinHeight(0).Children(func() {
+			ui.Row(c).Padding(0, 8).Children(func() {
+				ui.Text(c, i18n.T("common.name")).FontSize(11).TextColor(kit.Muted)
+				ui.Spacer(c)
+				ui.Text(c, "A – Z").FontSize(10).TextColor(kit.Muted)
 			})
-		} else {
-			a.listState.Key = func(i int) any { return items[i].ID }
-			a.listState.Label = func(i int) string { return items[i].Title }
-			a.listState.Selected = &a.selectedRow
-			listTheme := *kit.Theme
-			listTheme.Accent, listTheme.AccentText, listTheme.Radius = kit.White, kit.Ink, 19
-			c.SetTheme(&listTheme)
-			list := ui.List(c, &a.listState, len(items), func(i int) {
-				item := items[i]
-				row := ui.Row(c.Key(item.ID)).TextColor(kit.Ink).Padding(12).Gap(12).Height(78).Radius(19)
-				if a.selectedRow == i {
-					row.Background(kit.White).Border(1, ui.Hex("#DDD5EE"))
-				} else if row.Hovered() {
-					row.Background(ui.RGBA(255, 255, 255, .55))
-				}
-				row.Children(func() {
-					a.credentialAvatar(c, item, 40)
-					ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
-						ui.Text(c, displayTitle(item)).FontSize(14).FontWeight(600).SingleLine()
-						subtitle := item.Username
-						if subtitle == "" {
-							subtitle = websiteHost(item.URL)
-						}
-						if subtitle == "" {
-							subtitle = i18n.T("app.detail.no_username")
-						}
-						ui.Text(c, subtitle).FontSize(12).TextColor(kit.Muted).SingleLine()
-					})
-					if a.selectedRow == i {
-						kit.Icon(c, "chevron", 13).TextColor(kit.Purple)
-					}
+			if len(items) == 0 {
+				ui.Column(c).Grow(1).Justify(ui.Center).AlignItems(ui.Center).Gap(12).Padding(20).Children(func() {
+					kit.Icon(c, "search", 30).TextColor(kit.Purple)
+					title, subtitle := a.emptyListMessage()
+					ui.Text(c, title).FontSize(15).FontWeight(550).TextAlign(ui.Center)
+					ui.Text(c, subtitle).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center)
 				})
-			}).Label(i18n.T("app.list.items")).Grow(1).MinHeight(0).Gap(5)
-			c.SetTheme(kit.Theme)
-			if list.Changed() && a.selectedRow >= 0 && a.selectedRow < len(items) {
-				a.selectedID = items[a.selectedRow].ID
+			} else {
+				a.listState.Key = func(i int) any { return items[i].ID }
+				a.listState.Label = func(i int) string { return items[i].Title }
+				a.listState.Selected = &a.selectedRow
+				listTheme := *kit.Theme
+				listTheme.Accent, listTheme.AccentText, listTheme.Radius = kit.White, kit.Ink, 19
+				c.SetTheme(&listTheme)
+				list := ui.List(c, &a.listState, len(items), func(i int) {
+					item := items[i]
+					row := ui.Row(c.Key(item.ID)).TextColor(kit.Ink).Padding(12).Gap(12).Height(78).Radius(19)
+					if a.selectedRow == i {
+						row.Background(kit.White).Border(1, ui.Hex("#DDD5EE"))
+					} else if row.Hovered() {
+						row.Background(ui.RGBA(255, 255, 255, .55))
+					}
+					row.Children(func() {
+						a.credentialAvatar(c, item, 40)
+						ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
+							ui.Text(c, displayTitle(item)).FontSize(14).FontWeight(600).SingleLine()
+							subtitle := item.Username
+							if subtitle == "" {
+								subtitle = websiteHost(item.URL)
+							}
+							if subtitle == "" {
+								subtitle = i18n.T("app.detail.no_username")
+							}
+							ui.Text(c, subtitle).FontSize(12).TextColor(kit.Muted).SingleLine()
+						})
+						if a.selectedRow == i {
+							kit.Icon(c, "chevron", 13).TextColor(kit.Purple)
+						}
+					})
+				}).Label(i18n.T("app.list.items")).Grow(1).MinHeight(0).Gap(5).PaddingY(listFade)
+				// Rows fade into the panel at both edges rather than being cut off.
+				list.DrawOver(func(p *ui.Painter, r ui.Rect) {
+					p.FillGradient(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: listFade}, ui.LinearGradient{From: kit.Panel, To: kit.Panel.Alpha(0), Angle: 180}, 0)
+					p.FillGradient(ui.Rect{X: r.X, Y: r.Y + r.H - listFade, W: r.W, H: listFade}, ui.LinearGradient{From: kit.Panel.Alpha(0), To: kit.Panel, Angle: 180}, 0)
+				})
+				c.SetTheme(kit.Theme)
+				if list.Changed() && a.selectedRow >= 0 && a.selectedRow < len(items) {
+					a.selectedID = items[a.selectedRow].ID
+				}
 			}
-		}
+		})
 	})
 }
 

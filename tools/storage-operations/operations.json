@@ -1,6 +1,7 @@
 [
   {"name":"status","control":true},
   {"name":"settings","control":true},
+  {"name":"autofillSettings","control":true},
   {"name":"lock","control":true},
   {"name":"logout","control":true},
   {"name":"retryCleanup","control":true},

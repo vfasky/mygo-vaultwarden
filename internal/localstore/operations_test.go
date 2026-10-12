@@ -24,7 +24,7 @@ func TestOperationSchemaAndWire(t *testing.T) {
 	}
 	// This compatibility assertion deliberately pins the seven existing publishers.
 	publishers := map[Operation]bool{OperationPublishBoundAccount: true, OperationPublishVault: true, OperationRestoreOrganizationAccess: true, OperationRestorePolicyAccess: true, OperationAccountRecoveryResolve: true, OperationTargetRecoveryResolve: true, OperationTargetRecoveryResolveLocal: true}
-	if len(entries) != 33 {
+	if len(entries) != 34 {
 		t.Fatalf("operation inventory changed: %d", len(entries))
 	}
 	for _, entry := range entries {

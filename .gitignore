@@ -13,3 +13,7 @@ xcuserdata/
 # Local notes and signing configuration (never commit)
 /.local/
 macos/Authentication/.build
+
+# web 介绍网站
+/web/node_modules/
+/web/.cloudflare/

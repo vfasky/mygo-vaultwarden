@@ -155,7 +155,7 @@ func radioMark(c *ui.Context, on bool) {
 	mark := ui.Row(c).Size(18, 18).Shrink(0).Radius(9).Justify(ui.Center).AlignItems(ui.Center).Border(1.5, ui.Hex("#C4BFD3")).Background(White)
 	if on {
 		mark.Border(0, ui.Transparent).Background(Purple).Children(func() {
-			ui.Box(c).Size(7, 7).Radius(3.5).Background(White)
+			ui.Box(c).Size(8, 8).Radius(4).Background(White)
 		})
 	}
 }

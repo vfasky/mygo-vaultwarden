@@ -222,6 +222,7 @@ func (a *app) settings(c *ui.Context) {
 				})
 			}
 			if a.windows.settingsTab == settingsTabStorage {
+				a.loadAutofillSettings()
 				ui.Text(c, i18n.T("settings.storage.description")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
 				kit.Section(c, i18n.T("settings.storage.snapshot_title"), func() {
 					ui.Column(c).Gap(12).Children(func() {
@@ -253,6 +254,13 @@ func (a *app) settings(c *ui.Context) {
 								a.runStorage(localstore.OperationReindex)
 							}
 						})
+						copyTOTP := a.autofillSettings.copyTOTP
+						if kit.SwitchRow(c, &copyTOTP, i18n.T("settings.storage.copy_totp"), i18n.T("settings.storage.copy_totp_hint"), !a.autofillSettings.loaded || a.autofillSettings.busy).Changed() {
+							a.requestAutofillSettings(&copyTOTP)
+						}
+						if a.autofillSettings.message != "" {
+							kit.Notice(c, kit.ToneWarning, a.autofillSettings.message)
+						}
 						if a.snapshot != nil && a.snapshot.CleanupPending {
 							kit.Notice(c, kit.ToneWarning, i18n.T("app.settings.cleanup_pending_hint"))
 							ui.Row(c).Children(func() {

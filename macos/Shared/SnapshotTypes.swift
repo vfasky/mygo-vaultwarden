@@ -321,6 +321,7 @@ func validateCredentials(_ credentials: [VaultCredential]) throws {
           credentials.allSatisfy({
               !$0.id.isEmpty && $0.id.utf8.count <= 256 && !$0.id.contains(":") &&
               $0.title.utf8.count <= 4096 && $0.username.utf8.count <= 4096 && $0.password.utf8.count <= 65536 &&
+              ($0.totp?.utf8.count ?? 0) <= 4096 &&
               ($0.uris.map { $0.count <= 128 && $0.allSatisfy(\.valid) } ?? (!$0.hosts.isEmpty && $0.hosts.allSatisfy({ ["localhost", "127.0.0.1"].contains($0) })))
           }) else { throw SnapshotError.invalidInput }
 }

@@ -18,6 +18,7 @@ import (
 )
 
 type app struct {
+	autofillSettings                          autofillSettingsState
 	websiteIcons                              *websiteicons.Cache
 	websiteIconScope                          vaultwarden.Scope
 	websiteIconsEnabled                       bool

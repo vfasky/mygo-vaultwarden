@@ -52,7 +52,7 @@ GO=$(bash scripts/resolve-go.sh)
 在本机执行 `scripts/release.sh`，使用 `.local/signing.env` 中的 Developer ID 证书与公证 profile，以及本机的更新签名私钥；不依赖 CI，私钥与证书不离开这台 Mac。
 
 1. 修改版本号：`mygo.json` 的 `version`，以及 Xcode 工程中两处 `MARKETING_VERSION`（`macos/MyGoVaultwarden.xcodeproj/project.pbxproj`）。
-2. 在 `CHANGELOG.md` 顶部新增 `## <版本>` 小节，它就是 release 与更新窗口里的发布说明。
+2. 在 `CHANGELOG.md` 顶部新增 `## <版本>` 小节，内含 `### 中文` 与 `### English` 两段，它就是 release 与更新窗口里的发布说明；介绍网站（`web/`）按这两个标题拆分语言。
 3. 提交，并在 `main`、工作区干净时运行：
 
 ```sh

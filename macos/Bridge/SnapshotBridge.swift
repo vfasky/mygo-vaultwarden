@@ -4,6 +4,7 @@ import LocalAuthentication
 
 private struct BridgeRequest: Decodable {
     let operation: StorageOperation
+    let autofillCopyTOTP: Bool?
     let expectedRevision: String?
     let credentials: [VaultCredential]?
     let scope: SnapshotScope?
@@ -76,6 +77,7 @@ private struct BridgeReply: Encodable {
     var items: [DisplayCredential]? = nil
     var truncated: Bool? = nil
     var deviceID: String? = nil
+    var autofillCopyTOTP: Bool? = nil
     var session: Data? = nil
     var vault: VaultData? = nil
     var targetProtection: TargetRecoveryProtection? = nil
@@ -241,6 +243,9 @@ private func execute(_ request: BridgeRequest) -> BridgeReply {
             let state = try vault.state()
             // Repair legacy/late candidates on a signed-out vault without authentication.
             if state.snapshot == nil && state.indexPending { scheduleBridgeIndex(store: vault, lease: nil) }
+        case .autofillSettings:
+            if let value = request.autofillCopyTOTP { try AutoFillPreferences.setCopyTOTP(value) }
+            return BridgeReply(ok:true,code:"ok",message:"",state:BridgeStatus(try vault.state()),autofillCopyTOTP:AutoFillPreferences.copyTOTP)
         case .settings:
             let settings = UserDefaults.standard
             let deviceID = settings.string(forKey: "vaultwardenDeviceID") ?? UUID().uuidString

@@ -22,7 +22,7 @@ Personal data in the screenshots has been redacted.
 - **Native UI**: built with Go + MyGo Native UI and Swift/AppKit. The main window uses no WebView and follows macOS conventions for windows, menus and shortcuts.
 - **Personal vault**: eight item types (logins, payment cards, identities, secure notes, SSH keys and more), with favorites, folders, archive, trash and bulk management. Instant search with `⌘F` and website icons.
 - **Secure unlock**: unlock the encrypted local snapshot with your master password or Touch ID. The vault locks automatically on screen lock, sleep, or after 15 minutes of inactivity.
-- **System AutoFill**: enable it under macOS "AutoFill & Passwords", then pick a credential in Safari and fill it after system authentication.
+- **System AutoFill**: enable it under macOS "AutoFill & Passwords", then pick a credential in Safari and fill it after system authentication. When the login has a verification code (TOTP), its current code is copied to the clipboard after filling by default; turn this off under Settings → Storage & AutoFill.
 - **Import and export**: uses Bitwarden-compatible JSON, so you can move data between the official clients and this app.
 - **Account center**: Send, login with another device and approval, two-step verification, account security and emergency access.
 - **Automatic updates**, with a UI available in Simplified Chinese and English.
@@ -31,7 +31,7 @@ Personal data in the screenshots has been redacted.
 
 - **Runs in the macOS App Sandbox**: both the main app and the AutoFill extension are sandboxed. File access is limited to the files and folders you explicitly choose, and exports are published without overwriting existing files.
 - **Encrypted at rest**: the full vault is stored only as a local AES-GCM snapshot protected by the Keychain and your master password.
-- **Least-privilege AutoFill**: the system extension runs in its own sandboxed process and reads a separate Login projection filtered by permissions and policy. A credential is filled only after you select it and complete system authentication.
+- **Least-privilege AutoFill**: the system extension runs in its own sandboxed process and reads a separate Login projection (username, password, URIs and TOTP secret) filtered by permissions and policy. A credential is filled only after you select it and complete system authentication.
 - **Strong key derivation and locking**: weak KDF settings are rejected before any online request. The vault locks on screen lock, sleep, or after 15 minutes of inactivity.
 - **Verified updates**: updates are checked against an Ed25519 signature and the archive SHA-256 digest before they are installed.
 - **Safe by design**: no WebView in the main window, and unknown write results are never replayed automatically.

@@ -29,6 +29,7 @@ type encryptedCipher struct {
 	Login          *struct {
 		Username *string        `json:"username"`
 		Password *string        `json:"password"`
+		Totp     *string        `json:"totp"`
 		URIs     []encryptedURI `json:"uris"`
 	} `json:"login"`
 }
@@ -177,8 +178,12 @@ func decryptCipher(item encryptedCipher, userKey []byte, defaultMatch ...int) (C
 	if err != nil {
 		return Credential{}, 0, err
 	}
-	credential := Credential{ID: item.ID, Title: name, Username: username, Password: password, Hosts: []string{}, URIs: []URI{}}
-	if len(username) > 4096 || len(password) > 65536 || len(name) > 4096 {
+	totp, err := vaultcrypto.DecryptText(item.Login.Totp, key)
+	if err != nil {
+		return Credential{}, 0, err
+	}
+	credential := Credential{ID: item.ID, Title: name, Username: username, Password: password, TOTP: totp, Hosts: []string{}, URIs: []URI{}}
+	if len(username) > 4096 || len(password) > 65536 || len(name) > 4096 || len(totp) > 4096 {
 		return Credential{}, 0, ErrProtocol
 	}
 	skipped := 0

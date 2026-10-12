@@ -8,6 +8,24 @@ final class VaultCredentialTests: XCTestCase {
                         password: "test-password", hosts: ["localhost", "127.0.0.1"], url: "http://localhost/")
     }
 
+    func testTOTPWireAndLimits() throws {
+        let legacy = try fixture()
+        let data = try JSONEncoder().encode(legacy)
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertNil(object["totp"])
+        XCTAssertNil(try JSONDecoder().decode(VaultCredential.self, from: data).totp)
+        for seed in ["", "MY======", String(repeating: "é", count: 2048)] {
+            object["totp"] = seed
+            let credential = try JSONDecoder().decode(VaultCredential.self, from: JSONSerialization.data(withJSONObject: object))
+            XCTAssertEqual(credential.totp, seed)
+            XCTAssertNoThrow(try validateCredentials([credential]))
+            XCTAssertEqual(try JSONDecoder().decode(VaultCredential.self, from: JSONEncoder().encode(credential)), credential)
+        }
+        object["totp"] = String(repeating: "é", count: 2048) + "a"
+        let oversized = try JSONDecoder().decode(VaultCredential.self, from: JSONSerialization.data(withJSONObject: object))
+        XCTAssertThrowsError(try validateCredentials([oversized]))
+    }
+
     func testAcceptsOnlyExactLoopbackDomainIdentities() throws {
         let credential = try fixture()
         XCTAssertTrue(credential.matches(serviceIdentifier: "localhost", isURL: false))

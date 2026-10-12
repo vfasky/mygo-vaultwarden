@@ -14,6 +14,8 @@ var settings = map[string]text{
 	"settings.app_name":                    {"MyGo Vaultwarden", "MyGo Vaultwarden"},
 	"settings.locked_hint":                 {"解锁密码库后查看账号与本机存储设置。", "Unlock your vault to view account and local storage settings."},
 	"settings.show_main_window":            {"前往主窗口", "Go to main window"},
+	"settings.storage.copy_totp":           {"填充后自动复制验证码", "Copy verification code after filling"},
+	"settings.storage.copy_totp_hint":      {"通过系统自动填充填入账号密码后，把该条目的当前验证码复制到剪贴板。", "After AutoFill fills a login, copy its current verification code to the clipboard."},
 	"settings.storage.description":         {"管理本机快照与系统自动填充。", "Manage your local snapshot and system AutoFill."},
 	"settings.storage.snapshot_title":      {"本机快照与自动填充", "Local snapshot and AutoFill"},
 	"settings.tab.about":                   {"关于", "About"},

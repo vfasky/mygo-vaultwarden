@@ -58,6 +58,7 @@ type Credential struct {
 	Title    string   `json:"title"`
 	Username string   `json:"username"`
 	Password string   `json:"password"`
+	TOTP     string   `json:"totp,omitempty"`
 	Hosts    []string `json:"hosts"`
 	URL      string   `json:"url"`
 	URIs     []URI    `json:"uris"`

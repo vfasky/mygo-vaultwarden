@@ -307,7 +307,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 			result.PasswordUnlock = nil
 		}
 		for i := range result.Credentials {
-			result.Credentials[i].Password = ""
+			result.Credentials[i].Password, result.Credentials[i].TOTP = "", ""
 		}
 		result.Credentials = nil
 		if errors.Is(workErr, vaultwarden.ErrExpired) || errors.Is(workErr, vaultwarden.ErrIdentity) {

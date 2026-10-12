@@ -1,0 +1,15 @@
+{
+  "name": "mygo-vaultwarden-web",
+  "private": true,
+  "type": "module",
+  "description": "MyGo Vaultwarden 介绍网站（Cloudflare Workers 静态资源）",
+  "scripts": {
+    "sync": "bun scripts/sync-releases.mjs",
+    "dev": "bun scripts/dev.mjs",
+    "deploy": "bun scripts/sync-releases.mjs && cf deploy"
+  },
+  "devDependencies": {
+    "cf": "1.0.0-beta.14",
+    "wrangler": "^4.149.0"
+  }
+}

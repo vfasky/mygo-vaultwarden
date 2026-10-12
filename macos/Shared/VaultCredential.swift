@@ -90,9 +90,10 @@ struct VaultCredential: Codable, Equatable {
     let password: String
     let hosts: [String]
     let url: String
+    let totp: String?
     let uris: [CredentialURI]?
-    init(id: String, title: String, username: String, password: String, hosts: [String], url: String, uris: [CredentialURI]? = nil) {
-        self.id=id; self.title=title; self.username=username; self.password=password; self.hosts=hosts; self.url=url; self.uris=uris
+    init(id: String, title: String, username: String, password: String, hosts: [String], url: String, uris: [CredentialURI]? = nil, totp: String? = nil) {
+        self.id=id; self.title=title; self.username=username; self.password=password; self.hosts=hosts; self.url=url; self.uris=uris; self.totp=totp
     }
     func matches(serviceIdentifier: String, isURL: Bool) -> Bool {
         if let uris { return uris.contains { $0.matches(serviceIdentifier: serviceIdentifier, isURL: isURL) } }

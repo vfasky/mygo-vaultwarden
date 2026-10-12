@@ -7,6 +7,7 @@ type Operation string
 const (
 	OperationStatus                       Operation = "status"
 	OperationSettings                     Operation = "settings"
+	OperationAutofillSettings             Operation = "autofillSettings"
 	OperationLock                         Operation = "lock"
 	OperationLogout                       Operation = "logout"
 	OperationRetryCleanup                 Operation = "retryCleanup"
@@ -45,6 +46,8 @@ func (o Operation) Valid() bool {
 	case OperationStatus:
 		return true
 	case OperationSettings:
+		return true
+	case OperationAutofillSettings:
 		return true
 	case OperationLock:
 		return true

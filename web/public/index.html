@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="zh-CN" data-lang="zh">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MyGo Vaultwarden — 为 macOS 打造的原生 Vaultwarden 客户端</title>
+  <meta name="description" content="连接你自托管的 Vaultwarden，在 Mac 上浏览、搜索、编辑密码库，Touch ID 解锁，Safari 系统自动填充。原生界面，开源，运行在 App 沙盒中。">
+  <meta property="og:title" content="MyGo Vaultwarden">
+  <meta property="og:description" content="A native macOS client for Vaultwarden. Touch ID, system AutoFill, open source.">
+  <meta property="og:image" content="https://mygo-vault.vfasky.com/img/vault.webp">
+  <meta property="og:url" content="https://mygo-vault.vfasky.com/">
+  <meta name="theme-color" content="#f8e2eb">
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="bg" aria-hidden="true"><i class="orb o1"></i><i class="orb o2"></i><i class="orb o3"></i></div>
+
+  <header class="nav">
+    <a class="brand" href="#top">
+      <img src="/img/icon-256.png" alt="" width="32" height="32">
+      <span>MyGo Vaultwarden</span>
+    </a>
+    <nav>
+      <a href="#features"><span data-l="zh">功能</span><span data-l="en">Features</span></a>
+      <a href="#security"><span data-l="zh">安全</span><span data-l="en">Security</span></a>
+      <a class="keep" href="#download"><span data-l="zh">下载</span><span data-l="en">Download</span></a>
+      <a href="#changelog"><span data-l="zh">更新日志</span><span data-l="en">Changelog</span></a>
+      <a href="https://github.com/vfasky/mygo-vaultwarden" rel="noopener">GitHub</a>
+      <button class="lang" id="lang" type="button" aria-label="Switch language">
+        <span data-l="zh">EN</span><span data-l="en">中文</span>
+      </button>
+    </nav>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <span class="pill">
+        <span data-l="zh">原生 macOS · 开源</span><span data-l="en">Native macOS · Open source</span>
+      </span>
+      <h1>
+        <span data-l="zh">你的 Vaultwarden，<br>在 Mac 上原生运行</span>
+        <span data-l="en">Your Vaultwarden,<br>native on your Mac</span>
+      </h1>
+      <p class="lead">
+        <span data-l="zh">连接自托管的 Vaultwarden 服务器，用 Touch ID 解锁，在 Safari 中通过系统自动填充输入密码。</span>
+        <span data-l="en">Connect to your self-hosted Vaultwarden, unlock with Touch ID, and fill passwords in Safari through system AutoFill.</span>
+      </p>
+      <div class="cta">
+        <a class="btn primary" data-dl="appleSilicon" href="https://github.com/vfasky/mygo-vaultwarden/releases/latest">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+          <span data-l="zh">下载 Apple 芯片版</span><span data-l="en">Download for Apple silicon</span>
+        </a>
+        <a class="btn" data-dl="intel" href="https://github.com/vfasky/mygo-vaultwarden/releases/latest">
+          <span data-l="zh">Intel 版</span><span data-l="en">Intel build</span>
+        </a>
+      </div>
+      <p class="meta">
+        <span data-version>v0.1.3</span> · macOS 14+ ·
+        <a href="#download"><span data-l="zh">不确定芯片？</span><span data-l="en">Not sure which chip?</span></a>
+      </p>
+
+      <div class="shot hero-shot">
+        <img src="/img/vault.webp" width="2120" height="1468" alt="MyGo Vaultwarden vault window">
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <h2><span data-l="zh">你的数字保险库</span><span data-l="en">Your personal digital vault</span></h2>
+      <p class="sub">
+        <span data-l="zh">八种项目类型，完整的整理与搜索，一切都在原生三栏界面里。</span>
+        <span data-l="en">Eight item types, full organization and search, all in a native three-pane window.</span>
+      </p>
+      <div class="chips">
+        <span class="chip"><span data-l="zh">登录</span><span data-l="en">Logins</span></span>
+        <span class="chip"><span data-l="zh">支付卡</span><span data-l="en">Cards</span></span>
+        <span class="chip"><span data-l="zh">身份</span><span data-l="en">Identities</span></span>
+        <span class="chip"><span data-l="zh">安全笔记</span><span data-l="en">Secure notes</span></span>
+        <span class="chip">SSH <span data-l="zh">密钥</span><span data-l="en">keys</span></span>
+        <span class="chip"><span data-l="zh">附件</span><span data-l="en">Attachments</span></span>
+      </div>
+
+      <div class="grid">
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 11c1.7 0 3-1.3 3-3S13.7 5 12 5 9 6.3 9 8s1.3 3 3 3Zm0 0v4m-3 0h6m-7.5 5h9a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 16.5 8"/></svg></div>
+          <h3><span data-l="zh">Touch ID 解锁</span><span data-l="en">Unlock with Touch ID</span></h3>
+          <p><span data-l="zh">主密码或 Touch ID 解锁本机加密快照；锁屏、睡眠或空闲 15 分钟后自动锁定。</span><span data-l="en">Unlock the encrypted local snapshot with your master password or Touch ID. Locks on screen lock, sleep, or after 15 idle minutes.</span></p>
+        </article>
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h7m6-1 2 2 3-4"/></svg></div>
+          <h3><span data-l="zh">系统自动填充</span><span data-l="en">System AutoFill</span></h3>
+          <p><span data-l="zh">在 Safari 中选择凭据，通过系统认证后填充；有验证码时可自动复制当前 TOTP。</span><span data-l="en">Pick a credential in Safari and fill after system authentication. The current TOTP code can be copied automatically.</span></p>
+        </article>
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M4 6a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6Z"/></svg></div>
+          <h3><span data-l="zh">整理与批量管理</span><span data-l="en">Organize in bulk</span></h3>
+          <p><span data-l="zh">文件夹、收藏、归档、回收站与批量操作，<kbd>⌘F</kbd> 即时搜索，并显示网站图标。</span><span data-l="en">Folders, favorites, archive, trash and bulk actions. Instant search with <kbd>⌘F</kbd> and website icons.</span></p>
+        </article>
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M7 7h10M7 12h10M7 17h6M5 3h14a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/></svg></div>
+          <h3><span data-l="zh">导入导出</span><span data-l="en">Import &amp; export</span></h3>
+          <p><span data-l="zh">使用 Bitwarden 兼容 JSON，在官方客户端与本应用之间自由迁移。</span><span data-l="en">Bitwarden-compatible JSON lets you move data freely between the official client and this app.</span></p>
+        </article>
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 4.5 3.2 7.7 8 9 4.8-1.3 8-4.5 8-9V6l-8-3Zm-3 9 2 2 4-4"/></svg></div>
+          <h3><span data-l="zh">账号中心</span><span data-l="en">Account Center</span></h3>
+          <p><span data-l="zh">Send、设备登录与审批、两步验证、账号安全和紧急访问，集中在独立窗口。</span><span data-l="en">Send, device login and approval, two-step verification, account security and emergency access in a dedicated window.</span></p>
+        </article>
+        <article class="card">
+          <div class="ico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.7 3.7 5.7 3.7 9S14.500 18.300 12 21c-2.500-2.700-3.700-5.700-3.700-9S9.500 5.700 12 3Z"/></svg></div>
+          <h3><span data-l="zh">中英双语 · 自动更新</span><span data-l="en">Bilingual · Auto-update</span></h3>
+          <p><span data-l="zh">界面支持简体中文与英文；更新包经 Ed25519 签名校验，应用内一键更新。</span><span data-l="en">Simplified Chinese and English UI. Updates are verified with Ed25519 signatures and install in one click.</span></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="section split">
+      <div class="copy">
+        <span class="pill"><span data-l="zh">Apple 芯片 &amp; Intel</span><span data-l="en">Apple silicon &amp; Intel</span></span>
+        <h2><span data-l="zh">原生、轻快，<br>像系统自带的一样</span><span data-l="en">Truly native,<br>fast like a system app</span></h2>
+        <p>
+          <span data-l="zh">使用 Go + MyGo Native UI 与 Swift/AppKit 构建，主窗口不使用 WebView，遵循 macOS 的窗口、菜单与快捷键习惯。</span>
+          <span data-l="en">Built with Go + MyGo Native UI and Swift/AppKit. No WebView in the main window, and it follows macOS conventions for windows, menus and shortcuts.</span>
+        </p>
+      </div>
+      <div class="shot small">
+        <img src="/img/unlock.webp" width="2120" height="1468" alt="Lock screen with master password and Touch ID" loading="lazy">
+      </div>
+    </section>
+
+    <section class="section" id="security">
+      <div class="panel">
+        <h2><span data-l="zh">经得起检验的安全设计</span><span data-l="en">Security designed to be verified</span></h2>
+        <p class="sub">
+          <span data-l="zh">完整源码以 GPL-3.0 开放，任何人都可以检查与验证。</span>
+          <span data-l="en">The full source is open under GPL-3.0 so anyone can inspect and verify it.</span>
+        </p>
+        <ul class="points">
+          <li><b><span data-l="zh">App 沙盒</span><span data-l="en">App Sandbox</span></b><span data-l="zh">主应用与自动填充扩展均启用沙盒，文件访问仅限你明确选择的文件和目录。</span><span data-l="en">The app and its AutoFill extension both run sandboxed. File access is limited to what you explicitly choose.</span></li>
+          <li><b><span data-l="zh">静态加密</span><span data-l="en">Encrypted at rest</span></b><span data-l="zh">密码库以受 Keychain 与主密码保护的 AES-GCM 本机快照保存。</span><span data-l="en">The vault is stored as an AES-GCM snapshot protected by Keychain and your master password.</span></li>
+          <li><b><span data-l="zh">最小权限自动填充</span><span data-l="en">Least-privilege AutoFill</span></b><span data-l="zh">扩展在独立沙盒进程中运行，只读取过滤后的登录信息，须你选择并通过系统认证。</span><span data-l="en">The extension runs in a separate sandboxed process, reads only filtered login data, and needs your choice plus system authentication.</span></li>
+          <li><b><span data-l="zh">强密钥派生</span><span data-l="en">Strong key derivation</span></b><span data-l="zh">弱 KDF 参数会在发起任何在线请求前被拒绝。</span><span data-l="en">Weak KDF parameters are rejected before any network request is made.</span></li>
+          <li><b><span data-l="zh">更新验签</span><span data-l="en">Verified updates</span></b><span data-l="zh">安装更新前校验 Ed25519 签名与归档 SHA-256 摘要。</span><span data-l="en">Updates are checked against an Ed25519 signature and the archive SHA-256 digest before installing.</span></li>
+        </ul>
+        <a class="btn" href="https://github.com/vfasky/mygo-vaultwarden" rel="noopener">
+          <svg viewBox="0 0 24 24"><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-3-10-2 12"/></svg>
+          <span data-l="zh">在 GitHub 查看源码</span><span data-l="en">View source on GitHub</span>
+        </a>
+      </div>
+    </section>
+
+    <section class="section" id="own">
+      <h2><span data-l="zh">数据归你自己</span><span data-l="en">You own your data</span></h2>
+      <p class="sub">
+        <span data-l="zh">应用只与你自己的 Vaultwarden 服务器同步；本机只保留加密快照。</span>
+        <span data-l="en">The app syncs only with your own Vaultwarden server and keeps just an encrypted snapshot locally.</span>
+      </p>
+    </section>
+
+    <section class="section" id="download">
+      <div class="panel dl">
+        <img src="/img/icon-256.png" alt="" width="96" height="96" class="app-icon">
+        <h2><span data-l="zh">下载 MyGo Vaultwarden</span><span data-l="en">Download MyGo Vaultwarden</span></h2>
+        <p class="sub"><span data-version>v0.1.3</span> · <span data-l="zh">需要 macOS 14 或更高版本，免费使用</span><span data-l="en">Requires macOS 14 or later · free</span></p>
+        <div class="cta">
+          <a class="btn primary" data-dl="appleSilicon" href="https://github.com/vfasky/mygo-vaultwarden/releases/latest">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+            <span data-l="zh">Apple 芯片（M 系列）</span><span data-l="en">Apple silicon (M-series)</span>
+          </a>
+          <a class="btn" data-dl="intel" href="https://github.com/vfasky/mygo-vaultwarden/releases/latest">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M5 20h14"/></svg>
+            <span data-l="zh">Intel 芯片</span><span data-l="en">Intel</span>
+          </a>
+        </div>
+        <p class="hint">
+          <span data-l="zh">不确定？点击屏幕左上角 Apple 菜单 › 关于本机，“芯片”显示 Apple M 即选 Apple 芯片版。</span>
+          <span data-l="en">Not sure? Open the Apple menu › About This Mac. If “Chip” says Apple M-something, choose Apple silicon.</span>
+        </p>
+        <p class="hint">
+          <a data-dl="checksums" href="https://github.com/vfasky/mygo-vaultwarden/releases/latest">SHA256SUMS</a> ·
+          <a href="https://github.com/vfasky/mygo-vaultwarden/releases" rel="noopener"><span data-l="zh">全部版本</span><span data-l="en">All releases</span></a>
+        </p>
+      </div>
+    </section>
+
+    <section class="section" id="changelog">
+      <h2><span data-l="zh">更新日志</span><span data-l="en">Changelog</span></h2>
+      <div class="log" id="log"><p class="sub"><span data-l="zh">正在加载…</span><span data-l="en">Loading…</span></p></div>
+      <p class="more"><button class="link" id="more" type="button" hidden>
+        <span data-l="zh">查看全部 →</span><span data-l="en">View all →</span>
+      </button></p>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="brand"><img src="/img/icon-256.png" alt="" width="28" height="28"><span>MyGo Vaultwarden</span></div>
+    <p>
+      <a href="https://github.com/vfasky/mygo-vaultwarden" rel="noopener">GitHub</a> ·
+      <a href="https://github.com/vfasky/mygo-vaultwarden/issues" rel="noopener"><span data-l="zh">反馈问题</span><span data-l="en">Issues</span></a> ·
+      <a href="https://github.com/vfasky/mygo-vaultwarden/blob/main/LICENSE" rel="noopener">GPL-3.0</a>
+    </p>
+    <p class="small">
+      <span data-l="zh">非官方客户端，与 Vaultwarden 及 Bitwarden 项目无隶属关系。</span>
+      <span data-l="en">An unofficial client, not affiliated with the Vaultwarden or Bitwarden projects.</span>
+    </p>
+  </footer>
+
+  <script src="/app.js" defer></script>
+</body>
+</html>

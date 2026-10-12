@@ -29,6 +29,7 @@ type SnapshotStatus struct {
 }
 
 type Request struct {
+	AutofillCopyTOTP   *bool                              `json:"autofillCopyTOTP,omitempty"`
 	SwitchBinding      *AccountSwitchBinding              `json:"switchBinding,omitempty"`
 	SwitchOperationID  string                             `json:"switchOperationID,omitempty"`
 	TargetRuntime      *TargetRecoveryRuntimeAuthority    `json:"targetRuntime,omitempty"`
@@ -96,6 +97,7 @@ type DisplayCredential struct {
 }
 
 type Reply struct {
+	AutofillCopyTOTP bool                      `json:"autofillCopyTOTP"`
 	AccountSwitch    *AccountSwitchReceipt     `json:"accountSwitch,omitempty"`
 	TargetProtection *TargetRecoveryProtection `json:"targetProtection,omitempty"`
 	TargetRecords    []TargetRecoveryRecord    `json:"targetRecords,omitempty"`

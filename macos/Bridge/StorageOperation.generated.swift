@@ -4,6 +4,7 @@ import Foundation
 enum StorageOperation: String, Codable, CaseIterable {
     case status
     case settings
+    case autofillSettings
     case lock
     case logout
     case retryCleanup
@@ -40,6 +41,7 @@ enum StorageOperation: String, Codable, CaseIterable {
         switch self {
         case .status: return false
         case .settings: return false
+        case .autofillSettings: return false
         case .lock: return false
         case .logout: return false
         case .retryCleanup: return false

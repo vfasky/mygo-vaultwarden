@@ -534,7 +534,7 @@ func (a *app) runOrganizationManagement(operation string) {
 					clear(synced.PasswordUnlock.Key)
 				}
 				for i := range synced.Credentials {
-					synced.Credentials[i].Password = ""
+					synced.Credentials[i].Password, synced.Credentials[i].TOTP = "", ""
 				}
 			case "load":
 				result, err = session.OrganizationProfile(ctx, vault, id, persist)

@@ -24,6 +24,6 @@ struct OperationProtocolTest {
                 fatalError("unknown operation accepted")
             } catch is DecodingError { }
         }
-        print("33 Swift operation wire names, transfer policy and unknown rejection passed")
+        print("\(StorageOperation.allCases.count) Swift operation wire names, transfer policy and unknown rejection passed")
     }
 }

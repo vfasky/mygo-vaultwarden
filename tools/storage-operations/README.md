@@ -1,6 +1,6 @@
 # Snapshot operation protocol
 
-`operations.json` is the single source for the 33 snapshot request operation wire
+`operations.json` is the single source for the 34 snapshot request operation wire
 names and their transfer/publish policies. It generates the distinct Go
 `localstore.Operation` type and Swift `StorageOperation` enum. Do not edit the
 generated files by hand.
