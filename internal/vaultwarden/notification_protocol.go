@@ -212,6 +212,11 @@ type NotificationEvent struct {
 	Scope       Scope
 	RequestID   string
 	Reconnected bool
+	// FromThisDevice marks a sync hint whose ContextId names this client's own
+	// device identifier: the echo of a change this device already submitted.
+	// It is a hint only and never authorizes or replaces a sync on its own.
+	FromThisDevice bool
+	contextID      string
 }
 
 func decodeNotification(frame []byte, scope Scope, anonymousID string) (NotificationEvent, error) {
@@ -263,6 +268,10 @@ func decodeNotification(frame []byte, scope Scope, anonymousID string) (Notifica
 	payload, ok := m["Payload"].(map[string]any)
 	if !ok {
 		return event, ErrProtocol
+	}
+	// Absent, null or non-string ContextId simply means "unknown origin".
+	if context, ok := m["ContextId"].(string); ok && len(context) <= 128 {
+		event.contextID = context
 	}
 	if user, exists := payload["UserId"]; exists && user != nil && user != scope.Account {
 		return event, ErrIdentity

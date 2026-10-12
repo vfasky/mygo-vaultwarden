@@ -188,6 +188,11 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 	}
 	a.cancel = cancel
 	a.pending++
+	a.syncEpoch = epoch
+	// This download starts after every hint received so far, so it covers them.
+	// The hint is handed back below unless this sync's result is adopted.
+	coveredHint := !login && a.notificationSyncPending
+	a.notificationSyncPending = false
 	a.status = i18n.T("login.status_syncing")
 	if !login {
 		a.status = i18n.T("app.sync.status_syncing")
@@ -321,6 +326,16 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 		}
 		dispatch(func() {
 			a.pending--
+			if a.syncEpoch == epoch {
+				a.syncEpoch = 0
+			}
+			adopted := false
+			defer func() {
+				// A stopped or replaced session already discarded its hints.
+				if coveredHint && !adopted && a.session != nil && a.session == existing {
+					a.notificationSyncPending = true
+				}
+			}()
 			if a.epoch != epoch {
 				if login && session != nil {
 					go session.Close()
@@ -370,6 +385,7 @@ func (a *app) syncVaultWith(login bool, dispatch func(func()), storage func(loca
 				a.status = vaultwarden.ErrorMessage(err)
 				return
 			}
+			adopted = true
 			if a.folderEditor != nil && a.folderEditor.saved {
 				a.folderEditor = nil
 			}

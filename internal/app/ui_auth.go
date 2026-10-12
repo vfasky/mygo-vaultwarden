@@ -27,6 +27,10 @@ func (a *app) authentication(c *ui.Context) {
 		page, title, subtitle = "login", i18n.T("login.title"), i18n.T("login.description")
 		if a.showVerification {
 			page, title, subtitle = "verification", i18n.T("login.mfa.title"), i18n.T("login.mfa.description")
+			// Naming the account tells the user which code to look for.
+			if a.email != "" {
+				subtitle = a.email + " · " + websiteHost(a.serverURL)
+			}
 		} else if a.accountForm != nil && a.accountForm.SignedOut() {
 			title, subtitle = a.accountForm.Heading()
 			page = "account-" + a.accountForm.Mode
@@ -235,7 +239,6 @@ func (a *app) twoFactorLogin(c *ui.Context) {
 	ready := a.loginChallenge != nil && a.loginChallenge.epoch == a.epoch && a.loginChallenge.ctx.Err() == nil
 	submitted := false
 	ui.Column(c.Key(a.secretInputVersion)).Gap(16).Children(func() {
-		ui.Text(c, a.email+" · "+websiteHost(a.serverURL)).FontSize(12).TextColor(kit.Muted).TextAlign(ui.Center).MaxLines(2)
 		ui.Field(c, i18n.T("common.verification_code"), func() {
 			field := ui.TextInput(c, &a.verificationCode).Password().Placeholder(i18n.T("login.mfa.code_placeholder")).
 				Height(38).Padding(0, 14).Radius(19).Background(kit.White).Disabled(!ready).AutoFocus()

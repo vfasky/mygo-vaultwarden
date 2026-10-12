@@ -291,17 +291,10 @@ func (p *DeviceLoginPanel) View(c *ui.Context) {
 			ui.Text(c, p.status).MaxLines(6)
 			ui.Text(c, i18n.T("account.device_login.unbound_session_hint")).MaxLines(6)
 			if p.auth != nil {
-				AuthFormView(c, p.auth, p.providers)
+				AuthFormView(c, p.auth, p.providers, AuthOptions{Platform: p.platformProviders, OnPlatform: p.platform})
 				if p.auth.Closed {
 					p.Cancel()
 					return
-				}
-				for _, id := range []int{2, 7} {
-					if label, ok := p.platformProviders[id]; ok {
-						if ui.Button(c, label).Disabled(p.auth.Busy).Clicked() {
-							p.platform(id)
-						}
-					}
 				}
 			}
 			if ui.Button(c, i18n.T("account.device_login.request_new_approval")).Disabled(p.busy || p.accepted).Clicked() {

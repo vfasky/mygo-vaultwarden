@@ -79,6 +79,8 @@ type app struct {
 	notificationsEnabled                      bool
 	notifications                             *controllerNotifications
 	notificationSyncPending                   bool
+	// syncEpoch is the epoch of the authenticated sync now in flight, or 0.
+	syncEpoch                                 uint64
 	session                                   vaultSession
 	sessionRevision                           string
 	liveScope                                 *vaultwarden.Scope

@@ -11,6 +11,7 @@ import (
 	"github.com/egoist/mygo/ui"
 	"github.com/vfasky/mygo-vaultwarden/internal/i18n"
 	"github.com/vfasky/mygo-vaultwarden/internal/ui/account"
+	"github.com/vfasky/mygo-vaultwarden/internal/ui/kit"
 	"github.com/vfasky/mygo-vaultwarden/internal/vaultwarden"
 )
 
@@ -186,23 +187,18 @@ func (a *app) mfaLoginView(c *ui.Context) {
 	if m == nil {
 		return
 	}
-	account.AuthFormView(c, m.form, m.providers)
+	account.AuthFormView(c, m.form, m.providers, account.AuthOptions{
+		Platform: m.platformProviders, OnPlatform: m.platform, SendEmail: m.sendEmail,
+		SubmitLabel: i18n.T("login.mfa.submit"),
+	})
 	if m.form.Closed {
 		m.cancel()
 		return
 	}
-	for _, id := range []int{2, 7} {
-		if label, ok := m.platformProviders[id]; ok {
-			if ui.Button(c, label).Disabled(m.form.Busy).Clicked() {
-				m.platform(id)
-			}
+	ui.Column(c).Gap(2).AlignItems(ui.Center).Children(func() {
+		ui.Text(c, i18n.T("account.mfa.no_device_token_hint")).FontSize(11.5).TextColor(kit.Muted).TextAlign(ui.Center).MaxLines(2)
+		if kit.TextLink(c, i18n.T("login.cancel"), false).Clicked() {
+			a.runStorage(localstore.OperationLock)
 		}
-	}
-	if m.sendEmail != nil && ui.Button(c, i18n.T("account.mfa.send_email_code")).Disabled(m.form.Busy).Clicked() {
-		m.sendEmail()
-	}
-	ui.Text(c, i18n.T("account.mfa.no_device_token_hint"))
-	if ui.Button(c, i18n.T("login.cancel")).Clicked() {
-		a.runStorage(localstore.OperationLock)
-	}
+	})
 }

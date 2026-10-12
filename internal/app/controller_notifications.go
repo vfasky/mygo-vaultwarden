@@ -127,10 +127,22 @@ func (a *app) startNotifications(dispatch func(func()), storage func(localstore.
 			a.runStorage(localstore.OperationLogout)
 			return
 		}
-		if a.pending != 0 {
-			a.notificationSyncPending = true
-			return
-		}
-		a.syncVaultWith(false, dispatch, storage)
+		a.notificationSync(event, dispatch, storage)
 	})
+}
+
+// notificationSync turns a change hint into at most one follow-up sync.
+func (a *app) notificationSync(event vaultwarden.NotificationEvent, dispatch func(func()), storage func(localstore.Request) localstore.Reply) {
+	// Server mutations and syncs are serialized by pending, so this device's
+	// own change was answered before the current sync started and that sync's
+	// download already contains it. A checkpoint that advanced the epoch has
+	// detached the in-flight sync, so its result cannot be relied on.
+	if event.FromThisDevice && a.syncEpoch != 0 && a.syncEpoch == a.epoch {
+		return
+	}
+	if a.pending != 0 {
+		a.notificationSyncPending = true
+		return
+	}
+	a.syncVaultWith(false, dispatch, storage)
 }
