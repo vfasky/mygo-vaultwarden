@@ -1,6 +1,6 @@
 ---
 name: vaultwarden-release
-description: 发布 MyGo Vaultwarden 新版本：改版本号与中英双语 CHANGELOG、在本机用 Developer ID 签名公证、生成签名更新包、推送 tag 并上传 GitHub 草稿 release，按确认公开后更新介绍网站。用户提到发布、发版、升级版本、打 tag、上传 release、推送更新、release a new version 时使用。
+description: 发布 MyGo Vaultwarden 新版本：改版本号与中英双语 CHANGELOG、在本机用 Developer ID 签名公证、生成签名更新包、推送 tag 并上传 GitHub 草稿 release，按确认公开后推送 main 并同步更新介绍网站。用户提到发布、发版、升级版本、打 tag、上传 release、推送更新、release a new version 时使用。
 ---
 
 # MyGo Vaultwarden 发布流程
@@ -12,7 +12,9 @@ description: 发布 MyGo Vaultwarden 新版本：改版本号与中英双语 CHA
 - 版本号和更新内容由用户决定。用户没给时先问，不要自己编版本号或 CHANGELOG 内容。
 - 更新说明必须中英双语，两段条目一一对应、意思一致。用户只给了一种语言时，由你翻译另一种，连同原文一起交给用户确认后再写入。
 - 推送 tag、上传草稿 release 是对外操作：执行前把版本、tag、仓库和将上传的文件告诉用户，得到同意后再执行。
-- 公开 release 会让所有已安装的应用收到更新：草稿上传后必须再次得到用户明确同意才公开。用户没有明确要求时不用 `--publish`。
+- 公开 release 会让所有已安装的应用收到更新：草稿上传后必须再次得到用户明确同意才公开。用户在请求中已明确要求“发布并公开/确认公布”时视为已同意。用户没有明确要求时不用 `--publish`。
+- 公开 release 后，推送 `main` 和部署介绍网站是发布的固定收尾，不再单独询问；同意公开即包含这两步。只推送已公开版本对应的 `main`，草稿未公开时不推 `main`、不部署网站。
+- 推送 `main` 只做快进（`git push origin main`），绝不 force push；被拒绝时停下告诉用户。
 - 绝不删除、移动或重打已推送的 tag，不 force push，不覆盖已公开的 release。发错版本时提高版本号重新发布。
 - 不输出、不复制、不记录更新签名私钥、证书或 `.local/` 内容；不提交 `.local/`、`*.key`、`*.p12`、描述文件。
 - 主检出目录可能有其他会话的未提交改动。不要替它们 stash、提交或还原；工作区不干净时停下来告诉用户，由用户处理。
@@ -27,10 +29,14 @@ description: 发布 MyGo Vaultwarden 新版本：改版本号与中英双语 CHA
 ```sh
 git branch --show-current          # 必须是 main
 git status --short                 # 必须为空，否则停下询问用户
+git fetch origin
+git rev-list --left-right --count origin/main...HEAD   # 左侧（落后数）必须为 0
 gh auth status                     # GitHub CLI 已登录
 gh release list --repo vfasky/mygo-vaultwarden --limit 5   # 已有版本
 plutil -extract version raw -o - mygo.json                 # 当前版本
 ```
+
+本地 `main` 落后或与 `origin/main` 分叉时（左侧数字不为 0），停下告诉用户，不要替用户 pull、rebase 或合并。领先是正常的，这些提交会随 tag 与第 6 步的 `main` 推送一起公开。
 
 新版本号必须大于已公开的最新 release（按语义化版本比较，例如 `0.1.10 > 0.1.9`）。版本号含 `-`（如 `0.2.0-beta.1`）会作为 prerelease 发布，不会推送给应用的更新通道。
 
@@ -94,7 +100,9 @@ bash scripts/release.sh --yes
 
 用户只想先检查产物时用 `--no-upload`（不打 tag、不上传）。其他选项：`--skip-tests`、`--publish`（见下）。
 
-推送 tag 会把它指向的提交一起推到 GitHub；本地 `main` 领先 `origin/main` 时，这些提交会一并公开。执行前提醒用户。
+推送 tag 会把它指向的提交一起推到 GitHub；本地 `main` 领先 `origin/main` 时，这些提交会一并公开。执行前提醒用户。脚本只推 tag，不推 `main`；`main` 在第 6 步（公开之后）推送。
+
+推送时若出现 `This repository moved` 提示，只是远程地址已迁移、GitHub 自动转发，推送照常成功，不需要处理。
 
 ### 4. 核对草稿
 
@@ -120,9 +128,21 @@ done
 
 两行输出都应为新版本号。旧版本应用会在下次自动检查（每天一次）或用户点“检查更新…”时收到更新。
 
-### 6. 更新介绍网站
+### 6. 推送 main
 
-介绍网站 https://mygo-vault.vfasky.com 的下载按钮和更新日志，在部署时从 GitHub 已公开的 release 生成，公开后要重新部署才会出现新版本。部署到 Cloudflare 是对外操作，release 公开后告诉用户并在同意后执行：
+公开后立即把发布提交推到 `main`，让 `origin/main` 与已公开的 tag 一致：
+
+```sh
+git fetch origin
+git push origin main
+git fetch -q origin && git rev-list --left-right --count origin/main...HEAD   # 应为 0 0
+```
+
+推送被拒绝（远端有新提交）时停下告诉用户，不要 force push，也不要替用户 rebase 或合并。
+
+### 7. 更新介绍网站
+
+介绍网站 https://mygo-vault.vfasky.com 的下载按钮和更新日志，在部署时从 GitHub 已公开的 release 生成，公开后要重新部署才会出现新版本。release 公开后紧接着部署，不再单独询问：
 
 ```sh
 cd web && bun install && bun run deploy   # 同步 GitHub release 数据，再 cf deploy
@@ -150,7 +170,8 @@ curl -s https://mygo-vault.vfasky.com/data/releases.json | grep -m1 '"version"'
 | 签名身份缺失、`Missing signing identity` | 检查 `.local/signing.env` 与钥匙串中的 Developer ID 证书，交给用户处理 |
 | 公证 `status: Invalid` | 用 `xcrun notarytool log <submission id> --keychain-profile "$MYGO_NOTARY_PROFILE"`（profile 名在 `.local/signing.env`）查看原因，报告给用户 |
 | 推送或上传中途失败 | 修复后直接重跑 `bash scripts/release.sh --yes`：同版本文件会重新生成，草稿中的文件会被覆盖，已存在且指向当前提交的 tag 会复用 |
+| `git push origin main` 被拒绝（non-fast-forward） | 远端 `main` 有本地没有的提交；停下告诉用户，不 force push、不替用户 rebase 或合并。release 与网站不受影响 |
 
 ## 汇报
 
-完成后告诉用户：版本与 tag、提交、草稿或公开状态、release 地址、上传的文件、网站是否已更新；以及哪些步骤未执行或失败。没有执行公开时明确说明应用还收不到更新，网站也不会显示新版本。
+完成后告诉用户：版本与 tag、提交、草稿或公开状态、release 地址、上传的文件、`main` 是否已与 `origin/main` 一致、网站是否已更新（附 `releases.json` 核对结果）；以及哪些步骤未执行或失败。没有执行公开时明确说明应用还收不到更新，`main` 未推送，网站也不会显示新版本。
