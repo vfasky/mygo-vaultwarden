@@ -2,6 +2,16 @@
 
 每个版本分“中文”和“English”两段，内容一一对应。这一节会写入 GitHub release 说明和应用的更新窗口，介绍网站也从 release 读取两种语言。
 
+## 0.1.6
+
+### 中文
+
+- 修复后台同步下载期间无法读取保险库秘密的问题，同步进行时仍可正常查看和使用凭据。
+
+### English
+
+- Fixed an issue where Vault secrets could not be read while a background sync was downloading; items can now be viewed and used during a sync.
+
 ## 0.1.5
 
 ### 中文

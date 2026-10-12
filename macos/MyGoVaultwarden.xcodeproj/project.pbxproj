@@ -141,14 +141,14 @@
             SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; ONLY_ACTIVE_ARCH = YES; ENABLE_DEBUG_DYLIB = NO;
             ENABLE_USER_SCRIPT_SANDBOXING = NO; DEVELOPMENT_TEAM = "";
             CODE_SIGN_STYLE = Automatic; CODE_SIGN_IDENTITY = "Apple Development";
-            MARKETING_VERSION = 0.1.5; CURRENT_PROJECT_VERSION = 6;
+            MARKETING_VERSION = 0.1.6; CURRENT_PROJECT_VERSION = 7;
         }; };
         A90000000000000000000002 = {isa = XCBuildConfiguration; name = Release; buildSettings = {
             CLANG_ENABLE_MODULES = YES; SDKROOT = macosx; MACOSX_DEPLOYMENT_TARGET = 14.0;
             SWIFT_VERSION = 5.0; SWIFT_OPTIMIZATION_LEVEL = "-O"; SWIFT_COMPILATION_MODE = wholemodule; ENABLE_DEBUG_DYLIB = NO;
             ENABLE_USER_SCRIPT_SANDBOXING = NO; DEVELOPMENT_TEAM = "";
             CODE_SIGN_STYLE = Automatic; CODE_SIGN_IDENTITY = "Apple Development";
-            MARKETING_VERSION = 0.1.5; CURRENT_PROJECT_VERSION = 6;
+            MARKETING_VERSION = 0.1.6; CURRENT_PROJECT_VERSION = 7;
         }; };
         A90000000000000000000003 = {isa = XCBuildConfiguration; name = Debug; buildSettings = {
             PRODUCT_NAME = "MyGo Vaultwarden"; PRODUCT_BUNDLE_IDENTIFIER = "yz.sh.mygo-vaultwarden";
