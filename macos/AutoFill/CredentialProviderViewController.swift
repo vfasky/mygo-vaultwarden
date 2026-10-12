@@ -24,6 +24,8 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
     private var serial = UUID()
     private var finished = false
     private var busy = false
+    // A single-credential fill starts system authentication once, as soon as the sheet is visible.
+    private var pendingAutoFill = false
     private var message = ""
     private var search = ""
     private var page = 0
@@ -38,7 +40,7 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         super.viewDidLoad()
         let distributed = DistributedNotificationCenter.default()
         let changes = distributed.addObserver(forName: SnapshotStore.changeNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.invalidateLocal(L10n.t("autofill.err_snapshot_changed"))
+            self?.snapshotChanged()
         }
         observers.append((distributed, changes))
         let screen = distributed.addObserver(forName: Notification.Name("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
@@ -54,8 +56,13 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         authentication?.invalidate()
         for (center, token) in observers { center.removeObserver(token) }
     }
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        startPendingAutoFill()
+    }
     override func viewDidDisappear() {
         super.viewDidDisappear()
+        pendingAutoFill = false
         serial = UUID()
         authentication?.invalidate()
         authentication = nil
@@ -68,6 +75,22 @@ final class CredentialProviderViewController: ASCredentialProviderViewController
         finished = false
         invalidateLocal("")
         logger.notice("Credential request opened; snapshot access requires authentication")
+        if case .identity = request {
+            pendingAutoFill = true
+            if view.window != nil { DispatchQueue.main.async { [weak self] in self?.startPendingAutoFill() } }
+        } else { pendingAutoFill = false }
+    }
+    private func startPendingAutoFill() {
+        guard pendingAutoFill, case .identity = request, !busy, !finished else { return }
+        pendingAutoFill = false
+        // Without a snapshot the sheet only explains the missing data; nothing to authenticate.
+        guard (try? SnapshotStore.sharedContainer().state().snapshot) != nil else { return }
+        authenticate(.fill(nil))
+    }
+    // Unlocked or in-flight work is discarded on any snapshot change; an idle sheet only refreshes.
+    private func snapshotChanged() {
+        guard !finished else { return }
+        if lease != nil || busy { invalidateLocal(L10n.t("autofill.err_snapshot_changed")) } else { render() }
     }
     override func prepareInterfaceForExtensionConfiguration() { begin(.configuration) }
     override func prepareCredentialList(for serviceIdentifiers: [ASCredentialServiceIdentifier]) {
