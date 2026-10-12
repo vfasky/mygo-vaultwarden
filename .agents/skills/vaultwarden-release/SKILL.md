@@ -74,8 +74,8 @@ bash scripts/release.sh --yes
 1. 核对三处版本、CHANGELOG、tag 未指向其他提交、同版本 release 未公开。
 2. `go vet` 与 `go test -tags headless`。
 3. `scripts/build-macos.sh release --notarize`：Developer ID 签名、公证、staple。
-4. 生成 `build/updates/<版本>/`：`mygo-vaultwarden-<版本>-darwin-universal.tar.gz`、`update-darwin-universal.json`、`MyGo-Vaultwarden-<版本>-macOS.zip`、`SHA256SUMS.txt`、`notes.md`。
-5. 创建并推送 tag `v<版本>`，创建草稿 release；先上传 zip、归档、校验文件，最后上传 manifest。
+4. 生成 `build/updates/<版本>/`：`mygo-vaultwarden-<版本>-darwin-universal.tar.gz`、`update-darwin-universal.json`、`MyGo-Vaultwarden-<版本>-macOS.dmg`、`SHA256SUMS.txt`、`notes.md`。
+5. 创建并推送 tag `v<版本>`，创建草稿 release；先上传 dmg、归档、校验文件，最后上传 manifest。
 
 用户只想先检查产物时用 `--no-upload`（不打 tag、不上传）。其他选项：`--skip-tests`、`--publish`（见下）。
 
@@ -87,7 +87,7 @@ bash scripts/release.sh --yes
 gh release view v<版本> --repo vfasky/mygo-vaultwarden --json isDraft,isPrerelease,assets --jq '{isDraft, isPrerelease, assets: [.assets[].name]}'
 ```
 
-应为草稿，含上述四个文件（zip、tar.gz、SHA256SUMS.txt、update-darwin-universal.json）。把 release 页面地址 `https://github.com/vfasky/mygo-vaultwarden/releases` 告诉用户，请用户检查说明和文件。
+应为草稿，含上述四个文件（dmg、tar.gz、SHA256SUMS.txt、update-darwin-universal.json）。把 release 页面地址 `https://github.com/vfasky/mygo-vaultwarden/releases` 告诉用户，请用户检查说明和文件。
 
 ### 5. 公开（需用户再次明确同意）
 

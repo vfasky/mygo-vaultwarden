@@ -88,8 +88,8 @@ dist="build/updates/$version"
 # Files of an earlier attempt at this version are written again.
 rm -rf "$dist"
 bash scripts/release-update.sh -version "$version" -out "$dist" > /dev/null
-download="MyGo-Vaultwarden-$version-macOS.zip"
-ditto -c -k --keepParent "$app" "$dist/$download"
+download="MyGo-Vaultwarden-$version-macOS.dmg"
+bash scripts/make-dmg.sh "$app" "$dist/$download" --notarize
 manifest="$(ls "$dist"/update-*.json)"
 archive="$(ls "$dist"/*-"$version"-*.tar.gz)"
 (cd "$dist" && shasum -a 256 "$download" "$(basename "$archive")" > SHA256SUMS.txt)

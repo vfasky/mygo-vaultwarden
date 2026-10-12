@@ -55,7 +55,7 @@ GO=$(bash scripts/resolve-go.sh)
 bash scripts/release.sh
 ```
 
-脚本依次：检查三处版本一致、CHANGELOG 有该版本、tag 未指向其他提交、同版本 release 未公开；运行 `go vet` 与 `go test`；`build-macos.sh release --notarize` 构建、签名、公证并 staple；生成更新归档、manifest、首次安装用的 `MyGo-Vaultwarden-<版本>-macOS.zip` 与 `SHA256SUMS.txt`（`build/updates/<版本>/`）。随后询问确认，再创建并推送 tag `v<版本>`，创建草稿 release，先上传 zip、归档与校验文件，最后上传 manifest。
+脚本依次：检查三处版本一致、CHANGELOG 有该版本、tag 未指向其他提交、同版本 release 未公开；运行 `go vet` 与 `go test`；`build-macos.sh release --notarize` 构建、签名、公证并 staple；生成更新归档、manifest、首次安装用的 `MyGo-Vaultwarden-<版本>-macOS.dmg`（`scripts/make-dmg.sh` 用 `create-dmg` 制作，窗口内有拖到“应用程序”的提示，已签名、公证并 staple；需要 `brew install create-dmg`，且需在有登录会话的 Mac 上运行以生成 Finder 布局） 与 `SHA256SUMS.txt`（`build/updates/<版本>/`）。随后询问确认，再创建并推送 tag `v<版本>`，创建草稿 release，先上传 dmg、归档与校验文件，最后上传 manifest。
 
 草稿不会进入应用的更新通道。在 GitHub 上检查发布说明与文件后公开：
 
