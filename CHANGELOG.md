@@ -2,6 +2,20 @@
 
 每个版本分“中文”和“English”两段，内容一一对应。这一节会写入 GitHub release 说明和应用的更新窗口，介绍网站也从 release 读取两种语言。
 
+## 0.1.5
+
+### 中文
+
+- 两步登录验证界面改版：先选择验证方式，再输入验证码；可随时返回切换其他方式，恢复码入口单独列出。
+- 编辑或保存条目后不再重复同步整个密码库，同步更快。
+- 同步完成时界面不再短暂卡顿。
+
+### English
+
+- Redesigned two-step login: choose a method first, then enter its code. You can go back to other methods at any time, and the recovery code option is listed separately.
+- Saving or editing an item no longer syncs the whole vault twice, so syncing is faster.
+- The app no longer briefly freezes when a sync finishes.
+
 ## 0.1.4
 
 ### 中文
