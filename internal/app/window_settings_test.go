@@ -219,11 +219,7 @@ func TestSettingsWindowGeneralLanguage(t *testing.T) {
 	if a.windows.settingsTab != settingsTabGeneral || !tt.HasText("简体中文") {
 		t.Fatalf("general tab missing while locked: %q", tt.Texts())
 	}
-	// The card is titled 语言 too; the picker shows the current language.
-	uitest.Click(t, tt, "简体中文")
-	if err := tt.ChooseMenuItem("English"); err != nil {
-		t.Fatal(err)
-	}
+	uitest.Click(t, tt, "English")
 	tt.Frame()
 	if i18n.Current() != i18n.English || !tt.HasText("General") || !tt.HasText("Account") || a.windows.language != i18n.English {
 		t.Fatalf("language did not apply to the window and its titles: %q", tt.Texts())

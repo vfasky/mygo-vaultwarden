@@ -30,6 +30,7 @@ var app = map[string]text{
 	"app.detail.view_edit":                      {"查看与编辑", "View & edit"},
 	"app.language.hint":                         {"选择后立即生效；Touch ID 等系统对话框从下次启动起使用所选语言。也可以在“系统设置 > 通用 > 语言与地区 > 应用”中设置。", "Takes effect immediately. System dialogs such as Touch ID use it from the next launch. You can also set it in System Settings > General > Language & Region > Applications."},
 	"app.language.system":                       {"跟随系统", "Follow system"},
+	"app.language.system_detail":                {"使用 macOS 的语言设置", "Use the macOS language setting"},
 	"app.language.title":                        {"语言", "Language"},
 	"app.list.clear_search":                     {"清除搜索", "Clear search"},
 	"app.list.empty_hint":                       {"同步后，项目会显示在这里", "Your items will appear here after syncing"},

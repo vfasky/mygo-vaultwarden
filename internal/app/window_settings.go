@@ -68,9 +68,27 @@ func (a *app) settingsAbout(c *ui.Context) {
 // settingsGeneral works while the vault is locked, as the language picker of
 // the login and unlock pages does.
 func (a *app) settingsGeneral(c *ui.Context) {
-	ui.Text(c, i18n.T("app.language.hint")).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
-	kit.Section(c, i18n.T("app.language.title"), func() {
-		ui.Row(c).Children(func() { languageMenu(c).Background(kit.Panel) })
+	ui.Column(c).Gap(8).Children(func() {
+		ui.Text(c, i18n.T("app.language.title")).Padding(0, 4).FontSize(12.5).FontWeight(600).TextColor(kit.Muted)
+		options := []struct {
+			value         i18n.Lang
+			title, detail string
+		}{{"", i18n.T("app.language.system"), i18n.T("app.language.system_detail")}}
+		for _, l := range i18n.Languages {
+			options = append(options, struct {
+				value         i18n.Lang
+				title, detail string
+			}{l, l.Name(), ""})
+		}
+		selected := i18n.Preference()
+		kit.ChoiceGroup(c, i18n.T("app.language.title"), func() {
+			for _, option := range options {
+				if kit.Choice(c, &selected, option.value, option.title, option.detail, "", false).Changed() {
+					i18n.SetPreference(selected)
+				}
+			}
+		})
+		ui.Text(c, i18n.T("app.language.hint")).Padding(0, 4).FontSize(12).LineHeight(1.5).TextColor(kit.Muted)
 	})
 }
 
