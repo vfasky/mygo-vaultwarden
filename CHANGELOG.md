@@ -2,6 +2,18 @@
 
 每个版本分“中文”和“English”两段，内容一一对应。这一节会写入 GitHub release 说明和应用的更新窗口，介绍网站也从 release 读取两种语言。
 
+## 0.1.7
+
+### 中文
+
+- 支持在搜索框中使用上下方向键切换结果，自动滚动到选中项，按 Enter 确认选择。
+- 支持按 Esc 清空搜索并返回搜索框。
+
+### English
+
+- Use the Up and Down arrow keys in the search field to navigate results, automatically scroll to the selected item, and press Enter to confirm.
+- Press Esc to clear the search and return focus to the search field.
+
 ## 0.1.6
 
 ### 中文
