@@ -3,7 +3,9 @@ package app
 
 import (
 	"image/color"
+	"runtime"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/egoist/mygo/ui"
@@ -73,27 +75,43 @@ func TestEditorDrawerEscapeKeepsComparison(t *testing.T) {
 
 // The drawer slides in from the right, and closing leaves no copy behind.
 func TestEditorDrawerSlidesIn(t *testing.T) {
-	// A slow slide keeps the drawer moving through the first frames on any machine.
-	drawerSlides, drawerSlideDuration = true, 10*time.Second
-	defer func() { drawerSlides, drawerSlideDuration = false, 240*time.Millisecond }()
+	slides := drawerSlides
+	drawerSlides = true
+	defer func() { drawerSlides = slides }()
 	a := writableUIFixture(t)
 	defer a.stopNetwork()
-	tt := ui.NewTester(a.view, 1280, 820)
-	a.openCipherEditor("card-1", 3)
-	tt.Frame()
-	start, ok := tt.Find("编辑支付卡")
-	if !ok {
-		t.Fatal("drawer missing")
-	}
-	// At rest the title is 20 inside the drawer, half of the 1280 window.
-	if start.X <= 1280-drawerWidthFor(1280)+20+40 {
-		t.Fatalf("drawer did not start to the right of where it rests: %v", start.X)
-	}
-	a.editor = nil
-	tt.Frame()
-	if tt.HasText("编辑支付卡") {
-		t.Fatal("closing left a copy of the editor on screen")
-	}
+	// MyGo's persistent raster workers wait on a process-wide channel.
+	// Render on one worker so they cannot keep the synctest bubble alive.
+	procs := runtime.GOMAXPROCS(1)
+	defer runtime.GOMAXPROCS(procs)
+	// Frame settles up to 20 rendered frames. Use virtual time so a slow
+	// renderer (especially under -race) cannot finish the animation before
+	// we inspect its starting position.
+	synctest.Test(t, func(t *testing.T) {
+		tt := ui.NewTester(a.view, 1280, 820)
+		a.openCipherEditor("card-1", 3)
+		tt.Frame()
+		start, ok := tt.Find("编辑支付卡")
+		if !ok {
+			t.Fatal("drawer missing")
+		}
+		// At rest the title is 20 inside the drawer.
+		restX := 1280 - drawerWidthFor(1280) + 20
+		if start.X <= restX+40 {
+			t.Fatalf("drawer did not start to the right of where it rests: %v", start.X)
+		}
+		time.Sleep(drawerSlideDuration)
+		tt.Frame()
+		end, ok := tt.Find("编辑支付卡")
+		if !ok || end.X != restX {
+			t.Fatalf("drawer did not settle at %v: %+v (found=%v)", restX, end, ok)
+		}
+		a.editor = nil
+		tt.Frame()
+		if tt.HasText("编辑支付卡") {
+			t.Fatal("closing left a copy of the editor on screen")
+		}
+	})
 }
 
 // The editor's footer shows what happened while it was open, not the main
