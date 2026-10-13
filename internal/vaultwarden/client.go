@@ -512,6 +512,12 @@ func (s *Session) applySyncLocked(ctx context.Context, status int, data []byte, 
 		return SyncResult{}, err
 	}
 	if err := s.appendOrganizationCredentialsLocked(&result, policies); err != nil {
+		// Close can start after the cancellation check above, while mu is
+		// still held. Its stopping flag makes organization reads expire;
+		// report the owner's cancellation instead of a server-side expiry.
+		if ctx.Err() != nil || s.closingLocked() {
+			return SyncResult{}, ErrCancelled
+		}
 		return SyncResult{}, err
 	}
 	if ctx.Err() != nil {

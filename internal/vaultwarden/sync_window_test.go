@@ -214,6 +214,71 @@ func TestSyncWithWindowCloseCancelsAfterAnotherOperationBegan(t *testing.T) {
 	}
 }
 
+// syncApplyCloseContext snapshots a successful cancellation check, then lets
+// Close cancel the registered operation before that check returns. This fixes
+// the interleaving between applySyncLocked's check and its organization read.
+type syncApplyCloseContext struct {
+	context.Context
+	once       sync.Once
+	afterCheck func()
+}
+
+func (c *syncApplyCloseContext) Err() error {
+	err := c.Context.Err()
+	c.once.Do(c.afterCheck)
+	return err
+}
+
+func TestSyncApplyCloseAfterCancellationCheck(t *testing.T) {
+	f := newSyncWindowFixture(t)
+	closed := make(chan struct{})
+	err := func() error {
+		f.s.mu.Lock()
+		defer f.s.mu.Unlock()
+		ctx, finish, err := f.s.beginOperationLocked(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer finish()
+		check := &syncApplyCloseContext{Context: ctx, afterCheck: func() {
+			go func() { f.s.Close(); close(closed) }()
+			select {
+			case <-ctx.Done():
+			case <-time.After(5 * time.Second):
+				t.Fatal("close did not cancel the active sync")
+			}
+		}}
+		f.s.revokeForSyncLocked()
+		result, err := f.s.applySyncLocked(check, http.StatusOK, f.v.Sync, nil)
+		if result.Vault != nil || result.Session != nil || result.PasswordUnlock != nil || len(result.Credentials) != 0 {
+			t.Fatal("cancelled sync returned credentials or session state")
+		}
+		return err
+	}()
+	if !errors.Is(err, ErrCancelled) {
+		t.Fatalf("close after cancellation check must cancel, not expire: %v", err)
+	}
+	select {
+	case <-closed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("close did not finish after sync released the lock")
+	}
+}
+
+func TestSyncApplyPreservesExpiry(t *testing.T) {
+	f := newSyncWindowFixture(t)
+	f.s.mu.Lock()
+	defer f.s.mu.Unlock()
+	// A runtime-only session can expire without the owner cancelling it.
+	f.s.runtimeOnly = true
+	f.s.expires = time.Now().Add(-time.Second)
+	f.s.revokeForSyncLocked()
+	_, err := f.s.applySyncLocked(context.Background(), http.StatusOK, f.v.Sync, nil)
+	if !errors.Is(err, ErrExpired) {
+		t.Fatalf("uncancelled runtime expiry must remain expired: %v", err)
+	}
+}
+
 func TestSyncWithWindowDownloadReturnRacesClose(t *testing.T) {
 	for i := 0; i < 20; i++ {
 		f := newSyncWindowFixture(t)
