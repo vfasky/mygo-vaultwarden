@@ -2,6 +2,16 @@
 
 每个版本分“中文”和“English”两段，内容一一对应。这一节会写入 GitHub release 说明和应用的更新窗口，介绍网站也从 release 读取两种语言。
 
+## 0.1.8
+
+### 中文
+
+- 修复同步过程中锁定密码库时，偶尔误报会话过期的问题。
+
+### English
+
+- Fixed an issue where locking the Vault during sync could incorrectly report that the session had expired.
+
 ## 0.1.7
 
 ### 中文
