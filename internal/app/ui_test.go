@@ -296,6 +296,95 @@ func TestVaultSelectionSearchAndRevocation(t *testing.T) {
 	}
 }
 
+func TestVaultSearchKeyboardNavigation(t *testing.T) {
+	a := previewApp()
+	tt := ui.NewTester(a.view, 1060, 700)
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Type("alex-dev")
+	if a.selectedID != "3" {
+		t.Fatalf("initial filtered selection = %s", a.selectedID)
+	}
+	tt.Key(0, ui.KeyDown)
+	if a.selectedID != "7" || !tt.Focused("搜索密码库") {
+		t.Fatal("down did not select the next search result while retaining typing focus")
+	}
+	tt.Key(0, ui.KeyDown)
+	if a.selectedID != "7" {
+		t.Fatal("down moved past the last result")
+	}
+	tt.Key(0, ui.KeyUp)
+	tt.Key(0, ui.KeyUp)
+	if a.selectedID != "3" {
+		t.Fatal("up did not stop at the first result")
+	}
+	tt.Key(0, ui.KeyDown)
+	tt.Key(0, ui.KeyEnter)
+	if a.selectedID != "7" || tt.Focused("搜索密码库") || len(tt.OpenedURLs()) != 0 || a.editor != nil {
+		t.Fatal("enter did not confirm the result without opening a website or editor")
+	}
+	tt.Key(0, ui.KeyUp)
+	if a.selectedID != "3" {
+		t.Fatal("enter did not transfer keyboard navigation to the results")
+	}
+	tt.Key(ui.Cmd, ui.KeyF)
+	tt.Type(" unmatched")
+	for _, key := range []ui.Key{ui.KeyDown, ui.KeyUp, ui.KeyEnter} {
+		tt.Key(0, key)
+		if a.selectedID != "" || !tt.Focused("搜索密码库") {
+			t.Fatal("empty results retained a selection or stole typing focus")
+		}
+	}
+}
+
+func TestVaultSearchEscapeClearsQuery(t *testing.T) {
+	for _, mode := range []string{"search", "results", "empty"} {
+		t.Run(mode, func(t *testing.T) {
+			a := previewApp()
+			tt := ui.NewTester(a.view, 1060, 700)
+			tt.Key(ui.Cmd, ui.KeyF)
+			query := "alex-dev"
+			if mode == "empty" {
+				query = "unmatched"
+			}
+			tt.Type(query)
+			if mode == "results" {
+				tt.Key(0, ui.KeyEnter)
+			}
+			tt.Key(0, ui.KeyEscape)
+			if a.query != "" || len(a.filteredItems()) != len(a.items) || !tt.Focused("搜索密码库") {
+				t.Fatal("escape did not clear the search and restore typing focus")
+			}
+			tt.Type("figma")
+			if a.query != "figma" || a.selectedID != "2" {
+				t.Fatal("typing after escape did not start a fresh search")
+			}
+		})
+	}
+}
+
+func TestVaultSearchKeyboardScrollAndComposition(t *testing.T) {
+	a := previewApp()
+	tt := ui.NewTester(a.view, 1060, 700)
+	tt.Key(ui.Cmd, ui.KeyF)
+	for range len(a.items) {
+		tt.Key(0, ui.KeyDown)
+	}
+	first, last := a.listState.Visible()
+	if a.selectedID != "8" || first == 0 || a.selectedRow < first || a.selectedRow > last {
+		t.Fatalf("selected result did not scroll into view: row=%d visible=%d..%d", a.selectedRow, first, last)
+	}
+	if !tt.HasText("alex@work.example.com") {
+		t.Fatal("keyboard selection did not update the detail pane")
+	}
+	tt.Compose("alex", 4)
+	for _, key := range []ui.Key{ui.KeyUp, ui.KeyDown, ui.KeyEnter} {
+		tt.Key(0, key)
+		if a.selectedID != "8" || !tt.Focused("搜索密码库") {
+			t.Fatalf("candidate key %v changed selection=%s query=%q focused=%v", key, a.selectedID, a.query, tt.Focused("搜索密码库"))
+		}
+	}
+}
+
 func TestVaultSelectionSurvivesReplacement(t *testing.T) {
 	a := previewApp()
 	tt := ui.NewTester(a.view, 1060, 700)

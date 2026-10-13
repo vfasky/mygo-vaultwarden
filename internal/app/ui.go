@@ -485,12 +485,14 @@ func (a *app) navItem(c *ui.Context, title, symbol, count string, selected, disa
 const listFade = 14
 
 func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential) {
+	focusResults := false
 	w, _ := c.Size()
 	width := float32(304)
 	if w >= 1240 {
 		width = 330
 	}
-	ui.Column(c).Width(width).Shrink(0).Padding(12, 12, 6, 12).Gap(12).Background(kit.Panel).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65)).Children(func() {
+	panel := ui.Column(c).Width(width).Shrink(0).Padding(12, 12, 6, 12).Gap(12).Background(kit.Panel).Radius(26).Border(1, ui.RGBA(255, 255, 255, .65))
+	panel.Children(func() {
 		ui.Row(c).Padding(10, 4, 0, 8).Gap(4).AlignItems(ui.Center).Children(func() {
 			ui.Text(c, a.currentCategory().title).FontSize(22).FontWeight(650).MinWidth(0).SingleLine()
 			ui.Spacer(c)
@@ -516,8 +518,33 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 					p.Stroke(outer, kit.Purple, 24, 2)
 				})
 			}
-			if search.Changed() {
+			composing := search.Composing()
+			changed := search.Changed()
+			submitted := search.Submitted()
+			if changed {
 				a.listState.ScrollTo(0, ui.Start)
+			}
+			// Keep typing focus while navigating the filtered results. Scoped
+			// shortcuts leave other fields and input-method candidates alone.
+			if !composing && !search.Composing() {
+				down := search.Shortcut(0, ui.KeyDown)
+				up := search.Shortcut(0, ui.KeyUp)
+				if !changed && len(items) > 0 && (down || up) {
+					delta := 1
+					if up {
+						delta = -1
+					}
+					a.selectedRow = max(0, min(len(items)-1, a.selectedRow+delta))
+					a.selectedID = items[a.selectedRow].ID
+					a.listState.ScrollIntoView(a.selectedRow)
+				}
+				focusResults = submitted && !changed && len(items) > 0
+				if a.query != "" && panel.Shortcut(0, ui.KeyEscape) {
+					a.query = ""
+					focusResults = false
+					search.Focus()
+					a.listState.ScrollTo(0, ui.Start)
+				}
 			}
 			if a.query != "" {
 				if kit.IconButton(c, i18n.T("app.list.clear_search"), "close").Size(25, 25).Padding(5).Clicked() {
@@ -575,6 +602,10 @@ func (a *app) credentialList(c *ui.Context, items []localstore.DisplayCredential
 						}
 					})
 				}).Label(i18n.T("app.list.items")).Grow(1).MinHeight(0).Gap(5).PaddingY(listFade)
+				if focusResults {
+					list.Focus()
+					a.listState.ScrollIntoView(a.selectedRow)
+				}
 				// Rows fade into the panel at both edges rather than being cut off.
 				list.DrawOver(func(p *ui.Painter, r ui.Rect) {
 					p.FillGradient(ui.Rect{X: r.X, Y: r.Y, W: r.W, H: listFade}, ui.LinearGradient{From: kit.Panel, To: kit.Panel.Alpha(0), Angle: 180}, 0)
